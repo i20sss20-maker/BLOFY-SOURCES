@@ -6,6 +6,7 @@ export const ROOT = path.resolve(HERE, '..');
 export const PORT = Number(process.env.PORT || 8080);
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
 export const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+export const XTREAM_PUBLIC_BASE_URL = String(process.env.XTREAM_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
 export const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 export const SESSION_SECRET = String(process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'));
 export const SYNC_INTERVAL_MS = Math.max(15 * 60_000, Number(process.env.SYNC_INTERVAL_MS || 6 * 60 * 60_000));
