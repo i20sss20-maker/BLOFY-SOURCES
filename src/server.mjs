@@ -3,7 +3,7 @@ import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS } from './config.mjs';
 import { catalog } from './context.mjs';
 import { baseUrl,json } from './http.mjs';
 import { adminApi,serveAdminAsset } from './admin.mjs';
-import { servePlayerApi,serveM3u,servePlayback } from './xtream.mjs';
+import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
 
 function logSync(label,result){
@@ -18,6 +18,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(url.pathname.startsWith('/api/admin/'))return adminApi(req,res,url);
   if(req.method==='GET'&&(url.pathname==='/player_api.php'||url.pathname==='/panel_api.php'))return servePlayerApi(req,res,url);
   if(req.method==='GET'&&url.pathname==='/get.php')return serveM3u(req,res,url);
+  if(req.method==='GET'&&url.pathname==='/xmltv.php')return serveXmltv(req,res,url);
   if(req.method==='GET'&&await servePlayback(req,res,url.pathname))return;
   return json(res,404,{ok:false,error:'not_found'});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{ok:false,error:'internal_error'});else res.end()}});
