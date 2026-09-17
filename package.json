@@ -1,15 +1,13 @@
 {
   "name": "blofy-sources-xtream",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "License-aware open-media catalog with Xtream Codes and M3U compatibility",
   "scripts": {
     "start": "node src/server.mjs",
-    "check": "node --check src/catalog.mjs && node --check src/config.mjs && node --check src/http.mjs && node --check src/context.mjs && node --check src/providers.mjs && node --check src/providers/common.mjs && node --check src/providers/internet-archive.mjs && node --check src/providers/wikimedia.mjs && node --check src/providers/peertube.mjs && node --check src/providers/nasa.mjs && node --check src/providers/free-tv.mjs && node --check src/providers/iptv-org.mjs && node --check src/providers/index.mjs && node --check src/providers/resolver.mjs && node --check src/sync.mjs && node --check src/xtream-format.mjs && node --check src/xtream.mjs && node --check src/admin.mjs && node --check src/server.mjs && node --check public/admin.js",
+    "check": "node --check src/storage.mjs && node --check src/catalog.mjs && node --check src/config.mjs && node --check src/http.mjs && node --check src/context.mjs && node --check src/providers.mjs && node --check src/providers/common.mjs && node --check src/providers/internet-archive.mjs && node --check src/providers/wikimedia.mjs && node --check src/providers/peertube.mjs && node --check src/providers/nasa.mjs && node --check src/providers/free-tv.mjs && node --check src/providers/iptv-org.mjs && node --check src/providers/index.mjs && node --check src/providers/resolver.mjs && node --check src/sync.mjs && node --check src/xtream-format.mjs && node --check src/xtream.mjs && node --check src/admin.mjs && node --check src/server.mjs && node --check public/admin.js",
     "test": "node --test test/*.test.mjs"
   },
-  "engines": {
-    "node": ">=22"
-  }
+  "engines": {"node": ">=22"}
 }
