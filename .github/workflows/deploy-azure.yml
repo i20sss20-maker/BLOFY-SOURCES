@@ -84,8 +84,11 @@ jobs:
         run: |
           set -euo pipefail
           BASE='https://${{ steps.azure.outputs.fqdn }}'
+          # Keep one replica for now so account mutations and catalog sync remain strongly consistent.
           az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP" \
             --image "$IMAGE" \
+            --min-replicas 1 \
+            --max-replicas 1 \
             --set-env-vars \
               PORT=8080 \
               NODE_ENV=production \
@@ -111,6 +114,8 @@ jobs:
               NASA_LIMIT=700 \
               FREE_TV_LIMIT=4000 \
               ENABLE_FREE_TV=true \
+              FREE_TV_VALIDATE_ARABIC=true \
+              FREE_TV_VALIDATE_CONCURRENCY=12 \
               ENABLE_IPTV_ORG=false \
             --only-show-errors >/dev/null
 
@@ -132,11 +137,23 @@ jobs:
             sleep 5
           done
           cat /tmp/health.json
+          grep -Fq '"mode":"azure-blob"' /tmp/health.json
+
           curl -fsS --max-time 15 "$BASE/xtream" >/tmp/xtream.html
           grep -Fq 'BLOFY XTREAM' /tmp/xtream.html
-          # Existing activation and releases are proxied by the unified gateway.
-          curl -sS --max-time 15 -o /dev/null -w 'portal=%{http_code}\n' "$BASE/portal"
-          curl -sS --max-time 15 -o /dev/null -w 'admin=%{http_code}\n' "$BASE/admin"
-          curl -sS --max-time 15 -o /dev/null -w 'downloads=%{http_code}\n' "$BASE/downloads"
+          curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/player-probe.json
+          grep -Fq '"auth":0' /tmp/player-probe.json
+
+          check_existing_route() {
+            local route="$1"
+            local code
+            code="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$BASE$route" || true)"
+            echo "$route=$code"
+            [ -n "$code" ] && [ "$code" -ge 200 ] && [ "$code" -lt 500 ]
+          }
+          check_existing_route /portal
+          check_existing_route /admin
+          check_existing_route /downloads
+
           echo "Xtream admin: $BASE/xtream"
           echo "Xtream host:  $BASE"
