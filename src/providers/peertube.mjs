@@ -3,7 +3,7 @@ import { fetchJson, envInt } from './common.mjs';
 
 const PEERTUBE_ALLOWED_LICENSE_IDS = new Set([1, 2, 7, 8]);
 const DEFAULT_SEEDS = [
-  'https://video.sadmin.io','https://framatube.org','https://video.tedomum.net','https://videos.domainepublic.net',
+  'https://framatube.org','https://video.tedomum.net','https://videos.domainepublic.net',
   'https://peertube.uno','https://tube-sciences-technologies.apps.education.fr','https://indymotion.fr'
 ];
 
@@ -48,7 +48,7 @@ async function collectSeed(seed, limit, { arabicOnly = false } = {}) {
     const params = new URLSearchParams({ count: String(count), start: String(start), sort: '-views' });
     if (arabicOnly) params.set('languageOneOf', 'ar');
     let data;
-    try { data = await fetchJson(`${seed}/api/v1/videos?${params}`, 25000); }
+    try { data = await fetchJson(`${seed}/api/v1/videos?${params}`, 20000); }
     catch (error) { console.warn(`PeerTube seed skipped ${seed}: ${String(error?.message || error)}`); break; }
     const rows = data?.data || []; if (!rows.length) break;
     for (const video of rows) {
@@ -68,9 +68,7 @@ export async function syncPeerTube() {
   const seeds = peertubeSeeds();
   const byId = new Map();
   const arabicPerSeed = Math.max(25, Math.ceil(arabicLimit / Math.max(1, seeds.length)));
-  for (const seed of seeds) {
-    for (const item of await collectSeed(seed, arabicPerSeed, { arabicOnly: true })) byId.set(item.sourceItemId, item);
-  }
+  for (const seed of seeds) for (const item of await collectSeed(seed, arabicPerSeed, { arabicOnly: true })) byId.set(item.sourceItemId, item);
   const perSeed = Math.max(100, Math.ceil(totalLimit / Math.max(1, seeds.length)));
   for (const seed of seeds) {
     for (const item of await collectSeed(seed, perSeed)) if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
