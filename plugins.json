@@ -10,9 +10,9 @@
     "tvTypes": ["Others"],
     "version": 1,
     "internalName": "InternetArchiveProvider",
-    "description": "Watch content from the Internet Archive at archive.org",
+    "description": "Open archive video and audio from Internet Archive; item rights vary.",
     "url": "https://raw.githubusercontent.com/recloudstream/extensions/builds/InternetArchiveProvider.cs3",
-    "name": "InternetArchiveProvider"
+    "name": "Internet Archive"
   },
   {
     "iconUrl": "https://www.google.com/s2/favicons?domain=twitch.tv&sz=%size%",
@@ -25,9 +25,9 @@
     "tvTypes": ["Live"],
     "version": 2,
     "internalName": "TwitchProvider",
-    "description": "Watch livestreams from Twitch",
+    "description": "Live streams from Twitch.",
     "url": "https://raw.githubusercontent.com/recloudstream/extensions/builds/TwitchProvider.cs3",
-    "name": "TwitchProvider"
+    "name": "Twitch"
   },
   {
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dailymotion.com&sz=%size%",
@@ -40,8 +40,80 @@
     "tvTypes": ["Others"],
     "version": 4,
     "internalName": "DailymotionProvider",
-    "description": "Watch content from Dailymotion",
+    "description": "Video catalog from Dailymotion.",
     "url": "https://raw.githubusercontent.com/recloudstream/extensions/builds/DailymotionProvider.cs3",
-    "name": "DailymotionProvider"
+    "name": "Dailymotion"
+  },
+  {
+    "iconUrl": "https://www.google.com/s2/favicons?domain=invidious.io&sz=%size%",
+    "fileHash": "sha256-a0a2ff7e8484f69118598d347458774935733399ba0f76ef0d4921886a7db4a9",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/recloudstream/extensions",
+    "fileSize": 13695,
+    "status": 1,
+    "authors": ["Cloudburst"],
+    "tvTypes": ["Others"],
+    "version": 9,
+    "internalName": "InvidiousProvider",
+    "description": "Video access through user-selected Invidious instances.",
+    "url": "https://raw.githubusercontent.com/recloudstream/extensions/builds/InvidiousProvider.cs3",
+    "name": "Invidious"
+  },
+  {
+    "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/3840px-YouTube_full-color_icon_%282017%29.svg.png",
+    "fileHash": "sha256-a246eb1584cec9e69ba8c50136b9e8dc11a2fc0ab225710c31ad66c2ec4f4efe",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/recloudstream/extensions",
+    "fileSize": 13152,
+    "status": 1,
+    "authors": ["KaifTaufiq"],
+    "tvTypes": ["Other", "Live", "TvSeries"],
+    "version": 1,
+    "internalName": "YoutubeProvider",
+    "description": "YouTube videos, live streams and series-style content.",
+    "url": "https://raw.githubusercontent.com/recloudstream/extensions/builds/YoutubeProvider.cs3",
+    "name": "YouTube"
+  },
+  {
+    "iconUrl": "https://librivox.org/wp-content/themes/librivox/images/librivox-logo.png",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension",
+    "status": 1,
+    "language": "en",
+    "authors": ["NivinCNC"],
+    "tvTypes": ["Others"],
+    "version": 33,
+    "internalName": "LibriVoxAudiobook",
+    "description": "Public-domain audiobooks from LibriVox.",
+    "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/LibriVoxAudiobook.cs3",
+    "name": "LibriVox Audiobooks"
+  },
+  {
+    "iconUrl": "https://play-lh.googleusercontent.com/G9s84Cm1TDnKDX2P8nipS_s60cuCnYtjBRRLespF8nivjXmbV9tF1fY37clZhXMLaA",
+    "fileHash": "sha256-5a89a7439c1180d762ce629be81eeb687314c2baf67b3ca3ee846dfd2636ed81",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension",
+    "fileSize": 103765,
+    "status": 3,
+    "language": "ta",
+    "authors": ["NivinCNC"],
+    "tvTypes": ["Anime", "Movies", "TvSeries", "Documentary"],
+    "version": 36,
+    "internalName": "BilibiliProvider",
+    "description": "Bilibili international catalog for anime, movies, series and documentary-style content; beta provider.",
+    "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/BilibiliProvider.cs3",
+    "name": "Bilibili (Beta)"
+  },
+  {
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/NivinCNC/CNCVerse-Cloud-Stream-Extension",
+    "status": 1,
+    "authors": ["NivinCNC"],
+    "tvTypes": ["Live"],
+    "version": 17,
+    "internalName": "M3UPlaylistPlayerProvider",
+    "description": "User-supplied M3U live playlist player; no bundled channels.",
+    "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/M3UPlaylistPlayerProvider.cs3",
+    "name": "M3U Playlist Player"
   }
 ]
