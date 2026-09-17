@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS } from './config.mjs';
+import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS,SYNC_ON_START } from './config.mjs';
 import { catalog } from './context.mjs';
 import { baseUrl,json } from './http.mjs';
 import { adminApi,serveAdminAsset } from './admin.mjs';
@@ -24,7 +24,13 @@ const server=http.createServer(async(req,res)=>{try{
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{ok:false,error:'internal_error'});else res.end()}});
 server.listen(PORT,()=>{console.log(`BLOFY SOURCES Xtream listening on :${PORT}`);if(!ADMIN_PASSWORD)console.warn('ADMIN_PASSWORD is empty; admin login disabled.')});
 setTimeout(()=>{
-  if(!catalog.lastSyncAt) syncAll().then(result=>logSync('initial',result)).catch(e=>console.error('initial sync failed:',e));
-  else console.log(`catalog restored: ${JSON.stringify(catalog.stats())}`);
+  if(SYNC_ON_START){
+    console.log(`startup catalog sync scheduled; restored=${catalog.items.size} lastSync=${catalog.lastSyncAt||'never'}`);
+    syncAll().then(result=>logSync('startup',result)).catch(e=>console.error('startup sync failed:',e));
+  } else if(!catalog.lastSyncAt) {
+    syncAll().then(result=>logSync('initial',result)).catch(e=>console.error('initial sync failed:',e));
+  } else {
+    console.log(`catalog restored without startup sync: ${JSON.stringify(catalog.stats())}`);
+  }
 },1500).unref();
 setInterval(()=>syncAll().then(result=>logSync('scheduled',result)).catch(e=>console.error('scheduled sync failed:',e)),SYNC_INTERVAL_MS).unref();
