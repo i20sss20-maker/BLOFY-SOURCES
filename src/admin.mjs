@@ -34,7 +34,10 @@ export async function adminApi(req,res,url){
   if(url.pathname==='/api/admin/sync'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));
     const source=String(body.source||'').trim();
-    return json(res,200,source?await syncSource(source):await syncAll());
+    if(syncState().syncing)return json(res,202,{ok:true,started:false,syncing:true,source:source||'all'});
+    const task=source?syncSource(source):syncAll();
+    task.catch(error=>console.error('admin background sync failed:',error));
+    return json(res,202,{ok:true,started:true,syncing:true,source:source||'all'});
   }
   if(url.pathname==='/api/admin/account/reset'&&req.method==='POST'){
     const creds=await resetAccount(),host=baseUrl(req);return json(res,200,{ok:true,host,...creds,m3u:`${host}/get.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`,xmltv:`${host}/xmltv.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`});
