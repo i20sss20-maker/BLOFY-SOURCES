@@ -31,7 +31,8 @@ export async function syncFreeTv() {
 
     const name = attrs.name || attrs['tvg-name'] || attrs['tvg-id'] || `Free TV ${items.length + 1}`;
     const category = attrs['group-title'] || 'Free TV';
-    const sourceItemId = attrs['tvg-id'] || `${name}\0${line}`;
+    const epgId = attrs['tvg-id'] || '';
+    const sourceItemId = epgId || `${name}\0${line}`;
 
     items.push({
       sourceItemId,
@@ -42,6 +43,7 @@ export async function syncFreeTv() {
       category,
       country: attrs['tvg-country'] || '',
       language: attrs['tvg-language'] || '',
+      epgId,
       licenseName: 'Free official stream · source policy verified',
       licenseUrl: 'https://github.com/Free-TV/IPTV',
       attribution: 'Free-TV / original broadcaster',
