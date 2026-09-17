@@ -1,8 +1,8 @@
 # BLOFY SOURCES — Open Media Xtream Gateway
 
-مشروع مستقل لتجميع **محتوى مفتوح أو قابل لإعادة الاستخدام وفق ترخيص/إرشادات واضحة** في كتالوج واحد، ثم تقديمه بصيغتي **Xtream Codes API** و **M3U** من Host واحد.
+مشروع مستقل لتجميع **محتوى مفتوح أو قابل لإعادة الاستخدام وفق ترخيص/إرشادات واضحة** في كتالوج واحد، ثم تقديمه بصيغ **Xtream Codes API + M3U + XMLTV** من Host واحد.
 
-> هذا المشروع ليس جزءًا من BLOFY PLAYER ولا يعتمد عليه.
+> هذا المشروع مستقل بالكامل ولا يعتمد على BLOFY PLAYER.
 
 ## ماذا يفعل؟
 
@@ -10,10 +10,11 @@
 - يوحّد التصنيفات والهوية والأرقام داخل Catalog واحد.
 - يوفر `player_api.php` / `panel_api.php` المتوافقة مع أشهر Xtream Players.
 - يوفر `get.php` لإخراج M3U Plus.
+- يوفر `xmltv.php` لقائمة قنوات XMLTV المتوافقة مع اللاعبين التي تطلب EPG endpoint.
 - يوفر مسارات `/live/...` و`/movie/...` و`/series/...`.
 - لا يعيد استضافة ملفات الفيديو افتراضيًا؛ يحل رابط المصدر ثم يرسل `302 Redirect` للمصدر الأصلي.
 - يحتفظ بمعلومات الترخيص والمصدر لكل عنصر.
-- لوحة إدارة عربية لإنشاء Server / Username / Password، المزامنة، فحص المصادر والبحث في الكتالوج.
+- لوحة إدارة عربية لإنشاء Server / Username / Password، المزامنة، فحص المصادر والبحث في الكتالوج ونسخ روابط Xtream/M3U/XMLTV.
 
 ## المصادر الحالية
 
@@ -28,6 +29,9 @@
 
 ### NASA Image and Video Library
 يستخدم API الرسمي. إرشادات NASA تنطبق، ويجب تجنب أي مادة موسومة بحقوق طرف ثالث.
+
+### Free-TV
+مصدر Live مفعّل افتراضيًا. المشروع الأصلي يركز على القنوات المجانية التي تُقدم رسميًا دون اشتراك خاص، ويستخدم كمصدر Live منظم عالي الجودة.
 
 ### IPTV-org
 مدعوم للبث المباشر لكنه **معطل افتراضيًا**. المشروع نفسه يجمع روابط بث متاحة للعامة، لكن هذا ليس ضمانًا لترخيص إعادة التوزيع لكل قناة. لا تفعله إلا بعد مراجعة الاستخدام المقصود.
@@ -63,6 +67,7 @@ Password: generated-password
 ```text
 GET /health
 GET /player_api.php?username=...&password=...
+GET /panel_api.php?username=...&password=...
 GET /player_api.php?username=...&password=...&action=get_live_categories
 GET /player_api.php?username=...&password=...&action=get_live_streams
 GET /player_api.php?username=...&password=...&action=get_vod_categories
@@ -72,6 +77,7 @@ GET /player_api.php?username=...&password=...&action=get_series
 GET /player_api.php?username=...&password=...&action=get_vod_info&vod_id=...
 GET /player_api.php?username=...&password=...&action=get_series_info&series_id=...
 GET /get.php?username=...&password=...&type=m3u_plus&output=ts
+GET /xmltv.php?username=...&password=...
 GET /live/:username/:password/:id.ts
 GET /movie/:username/:password/:id.mp4
 GET /series/:username/:password/:episodeId.mp4
@@ -81,6 +87,15 @@ GET /series/:username/:password/:episodeId.mp4
 
 الكتالوج وبيانات حساب Xtream تحفظ في `DATA_DIR` (افتراضيًا `./data`). في Railway/Azure/أي Container platform استخدم Volume إذا أردت بقاء بيانات الحساب عبر إعادة النشر. حتى بدون Volume يمكن إعادة مزامنة الكتالوج من المصادر.
 
-## ملاحظات الحجم
+## حجم الكتالوج الافتراضي
 
-ابدأ بالقيم الافتراضية ثم ارفع `IA_LIMIT`, `WIKIMEDIA_LIMIT`, `PEERTUBE_LIMIT` تدريجيًا بعد مراقبة الذاكرة وزمن المزامنة. Internet Archive وحده يحتوي على ملايين عناصر الفيديو، لذلك الهدف هو **مكتبة كبيرة لكن مُفلترة الحقوق** لا مجرد جمع أكبر عدد من الروابط.
+القيم الحالية في `.env.example`:
+
+- `IA_LIMIT=6000`
+- `WIKIMEDIA_LIMIT=1200`
+- `PEERTUBE_LIMIT=1800`
+- `NASA_LIMIT=700`
+- `FREE_TV_LIMIT=4000`
+- `IPTV_ORG_LIMIT=10000` (اختياري ومعطل افتراضيًا)
+
+يمكن رفع الحدود تدريجيًا بعد مراقبة الذاكرة وزمن المزامنة. الهدف هو **مكتبة ضخمة لكن مُفلترة الحقوق** لا مجرد جمع أكبر عدد من الروابط.
