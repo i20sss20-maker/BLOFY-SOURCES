@@ -9,16 +9,7 @@ export function stableNumericId(namespace, rawValue) {
 }
 
 export function stripHtml(value = '') {
-  return String(value)
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  return String(value).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/\s+/g, ' ').trim();
 }
 
 export function normalizeArray(value) {
@@ -38,198 +29,41 @@ export function parseEpisodeTitle(title = '') {
   for (let i = 0; i < patterns.length; i++) {
     const match = text.match(patterns[i]);
     if (!match) continue;
-    if (i === 3) {
-      return {
-        seriesTitle: (match[1] || 'Series').replace(/[._-]+$/g, '').trim(),
-        season: 1,
-        episode: Number(match[2]),
-        episodeTitle: (match[3] || text).trim()
-      };
-    }
-    return {
-      seriesTitle: (match[1] || 'Series').replace(/[._-]+$/g, '').trim(),
-      season: Math.max(1, Number(match[2]) || 1),
-      episode: Math.max(1, Number(match[3]) || 1),
-      episodeTitle: (match[4] || text).trim()
-    };
+    if (i === 3) return { seriesTitle: (match[1] || 'Series').replace(/[._-]+$/g, '').trim(), season: 1, episode: Number(match[2]), episodeTitle: (match[3] || text).trim() };
+    return { seriesTitle: (match[1] || 'Series').replace(/[._-]+$/g, '').trim(), season: Math.max(1, Number(match[2]) || 1), episode: Math.max(1, Number(match[3]) || 1), episodeTitle: (match[4] || text).trim() };
   }
   return null;
 }
 
 function sanitizeItem(raw) {
-  const source = String(raw.source || '').trim();
-  const sourceItemId = String(raw.sourceItemId || '').trim();
+  const source = String(raw.source || '').trim(), sourceItemId = String(raw.sourceItemId || '').trim();
   if (!source || !sourceItemId) throw new Error('catalog_item_missing_identity');
   const kind = ['live', 'movie', 'series_episode'].includes(raw.kind) ? raw.kind : 'movie';
-  return {
-    ...raw,
-    id: Number(raw.id) || stableNumericId(source, sourceItemId),
-    source,
-    sourceItemId,
-    kind,
-    title: String(raw.title || sourceItemId).trim().slice(0, 500),
-    description: stripHtml(raw.description || '').slice(0, 6000),
-    icon: String(raw.icon || '').trim().slice(0, 2000),
-    category: String(raw.category || 'Other').trim().slice(0, 160),
-    language: String(raw.language || '').trim().slice(0, 64),
-    country: String(raw.country || '').trim().slice(0, 8),
-    licenseName: String(raw.licenseName || '').trim().slice(0, 160),
-    licenseUrl: String(raw.licenseUrl || '').trim().slice(0, 2000),
-    attribution: stripHtml(raw.attribution || '').slice(0, 2000),
-    publishedAt: raw.publishedAt ? String(raw.publishedAt).slice(0, 64) : '',
-    seriesTitle: raw.seriesTitle ? String(raw.seriesTitle).trim().slice(0, 500) : '',
-    season: Number(raw.season) > 0 ? Number(raw.season) : 1,
-    episode: Number(raw.episode) > 0 ? Number(raw.episode) : 1,
-    stream: raw.stream && typeof raw.stream === 'object' ? raw.stream : null,
-    rights: raw.rights && typeof raw.rights === 'object' ? raw.rights : {}
-  };
+  return { ...raw, id: Number(raw.id) || stableNumericId(source, sourceItemId), source, sourceItemId, kind, title: String(raw.title || sourceItemId).trim().slice(0, 500), description: stripHtml(raw.description || '').slice(0, 6000), icon: String(raw.icon || '').trim().slice(0, 2000), category: String(raw.category || 'Other').trim().slice(0, 160), language: String(raw.language || '').trim().slice(0, 64), country: String(raw.country || '').trim().slice(0, 8), licenseName: String(raw.licenseName || '').trim().slice(0, 160), licenseUrl: String(raw.licenseUrl || '').trim().slice(0, 2000), attribution: stripHtml(raw.attribution || '').slice(0, 2000), publishedAt: raw.publishedAt ? String(raw.publishedAt).slice(0, 64) : '', seriesTitle: raw.seriesTitle ? String(raw.seriesTitle).trim().slice(0, 500) : '', season: Number(raw.season) > 0 ? Number(raw.season) : 1, episode: Number(raw.episode) > 0 ? Number(raw.episode) : 1, stream: raw.stream && typeof raw.stream === 'object' ? raw.stream : null, rights: raw.rights && typeof raw.rights === 'object' ? raw.rights : {} };
+}
+
+function isArabicItem(item) {
+  return String(item?.language || '').toLowerCase() === 'ar' || String(item?.category || '').startsWith('عربي ·') || item?.rights?.arabic === true || /[\u0600-\u06ff]/.test(String(item?.title || ''));
 }
 
 export class CatalogStore {
-  constructor({ dataDir = './data' } = {}) {
-    this.dataDir = path.resolve(dataDir);
-    this.catalogPath = path.join(this.dataDir, 'catalog.json');
-    this.items = new Map();
-    this.sources = {};
-    this.lastSyncAt = null;
-  }
-
-  async init() {
-    await mkdir(this.dataDir, { recursive: true });
-    try {
-      const saved = JSON.parse(await readFile(this.catalogPath, 'utf8'));
-      this.lastSyncAt = saved.lastSyncAt || null;
-      this.sources = saved.sources || {};
-      for (const item of saved.items || []) {
-        const normalized = sanitizeItem(item);
-        this.items.set(normalized.id, normalized);
-      }
-    } catch (error) {
-      if (error?.code !== 'ENOENT') console.warn('catalog load skipped:', error.message);
-    }
-    return this;
-  }
-
-  async persist() {
-    const payload = JSON.stringify({
-      schemaVersion: 1,
-      lastSyncAt: this.lastSyncAt,
-      sources: this.sources,
-      items: [...this.items.values()]
-    });
-    const tmp = `${this.catalogPath}.tmp`;
-    await writeFile(tmp, payload, 'utf8');
-    await rename(tmp, this.catalogPath);
-  }
-
-  replaceSource(sourceId, items, meta = {}) {
-    for (const [id, item] of this.items) {
-      if (item.source === sourceId) this.items.delete(id);
-    }
-    let accepted = 0;
-    for (const raw of items || []) {
-      try {
-        const item = sanitizeItem({ ...raw, source: sourceId });
-        this.items.set(item.id, item);
-        accepted++;
-      } catch {}
-    }
-    this.sources[sourceId] = {
-      ...(this.sources[sourceId] || {}),
-      ...meta,
-      id: sourceId,
-      count: accepted,
-      syncedAt: new Date().toISOString()
-    };
-    return accepted;
-  }
-
-  markSourceError(sourceId, error) {
-    this.sources[sourceId] = {
-      ...(this.sources[sourceId] || {}),
-      id: sourceId,
-      lastError: String(error?.message || error || 'unknown_error').slice(0, 500),
-      failedAt: new Date().toISOString()
-    };
-  }
-
-  finishSync() {
-    this.lastSyncAt = new Date().toISOString();
-  }
-
-  get(id) {
-    return this.items.get(Number(id)) || null;
-  }
-
-  listKind(kind) {
-    return [...this.items.values()].filter(item => item.kind === kind);
-  }
-
-  categoryRecords(kind) {
-    const names = new Set();
-    if (kind === 'series') {
-      for (const group of this.seriesGroups()) names.add(group.category || 'Series');
-    } else {
-      for (const item of this.listKind(kind)) names.add(item.category || 'Other');
-    }
-    return [...names]
-      .sort((a, b) => a.localeCompare(b))
-      .map(name => ({ id: stableNumericId(`category:${kind}`, name), name }));
-  }
-
-  categoryId(kind, name) {
-    return stableNumericId(`category:${kind}`, name || 'Other');
-  }
-
-  seriesGroups() {
-    const groups = new Map();
-    for (const item of this.listKind('series_episode')) {
-      const title = item.seriesTitle || item.title;
-      const key = `${item.source}\0${title.toLowerCase()}`;
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          id: stableNumericId('series', key),
-          key,
-          title,
-          source: item.source,
-          icon: item.icon,
-          description: item.description,
-          category: item.category || 'Series',
-          licenseName: item.licenseName,
-          licenseUrl: item.licenseUrl,
-          attribution: item.attribution,
-          episodes: []
-        };
-        groups.set(key, group);
-      }
-      group.episodes.push(item);
-      if (!group.icon && item.icon) group.icon = item.icon;
-      if (!group.description && item.description) group.description = item.description;
-    }
-    for (const group of groups.values()) {
-      group.episodes.sort((a, b) => (a.season - b.season) || (a.episode - b.episode) || a.title.localeCompare(b.title));
-    }
-    return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title));
-  }
-
-  seriesById(id) {
-    return this.seriesGroups().find(group => group.id === Number(id)) || null;
-  }
-
+  constructor({ dataDir = './data' } = {}) { this.dataDir = path.resolve(dataDir); this.catalogPath = path.join(this.dataDir, 'catalog.json'); this.items = new Map(); this.sources = {}; this.lastSyncAt = null; }
+  async init() { await mkdir(this.dataDir, { recursive: true }); try { const saved = JSON.parse(await readFile(this.catalogPath, 'utf8')); this.lastSyncAt = saved.lastSyncAt || null; this.sources = saved.sources || {}; for (const item of saved.items || []) { const normalized = sanitizeItem(item); this.items.set(normalized.id, normalized); } } catch (error) { if (error?.code !== 'ENOENT') console.warn('catalog load skipped:', error.message); } return this; }
+  async persist() { const payload = JSON.stringify({ schemaVersion: 1, lastSyncAt: this.lastSyncAt, sources: this.sources, items: [...this.items.values()] }); const tmp = `${this.catalogPath}.tmp`; await writeFile(tmp, payload, 'utf8'); await rename(tmp, this.catalogPath); }
+  replaceSource(sourceId, items, meta = {}) { for (const [id, item] of this.items) if (item.source === sourceId) this.items.delete(id); let accepted = 0; for (const raw of items || []) { try { const item = sanitizeItem({ ...raw, source: sourceId }); this.items.set(item.id, item); accepted++; } catch {} } this.sources[sourceId] = { ...(this.sources[sourceId] || {}), ...meta, id: sourceId, count: accepted, syncedAt: new Date().toISOString() }; return accepted; }
+  markSourceError(sourceId, error) { this.sources[sourceId] = { ...(this.sources[sourceId] || {}), id: sourceId, lastError: String(error?.message || error || 'unknown_error').slice(0, 500), failedAt: new Date().toISOString() }; }
+  finishSync() { this.lastSyncAt = new Date().toISOString(); }
+  get(id) { return this.items.get(Number(id)) || null; }
+  listKind(kind) { return [...this.items.values()].filter(item => item.kind === kind); }
+  categoryRecords(kind) { const names = new Set(); if (kind === 'series') { for (const group of this.seriesGroups()) names.add(group.category || 'Series'); } else { for (const item of this.listKind(kind)) names.add(item.category || 'Other'); } return [...names].sort((a, b) => a.localeCompare(b)).map(name => ({ id: stableNumericId(`category:${kind}`, name), name })); }
+  categoryId(kind, name) { return stableNumericId(`category:${kind}`, name || 'Other'); }
+  seriesGroups() { const groups = new Map(); for (const item of this.listKind('series_episode')) { const title = item.seriesTitle || item.title, key = `${item.source}\0${title.toLowerCase()}`; let group = groups.get(key); if (!group) { group = { id: stableNumericId('series', key), key, title, source: item.source, icon: item.icon, description: item.description, category: item.category || 'Series', licenseName: item.licenseName, licenseUrl: item.licenseUrl, attribution: item.attribution, episodes: [] }; groups.set(key, group); } group.episodes.push(item); if (!group.icon && item.icon) group.icon = item.icon; if (!group.description && item.description) group.description = item.description; } for (const group of groups.values()) group.episodes.sort((a, b) => (a.season - b.season) || (a.episode - b.episode) || a.title.localeCompare(b.title)); return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title)); }
+  seriesById(id) { return this.seriesGroups().find(group => group.id === Number(id)) || null; }
   stats() {
-    const seriesGroups = this.seriesGroups();
-    const live = this.listKind('live').length;
-    const movies = this.listKind('movie').length;
-    const episodes = this.listKind('series_episode').length;
-    return {
-      totalItems: this.items.size,
-      live,
-      movies,
-      series: seriesGroups.length,
-      episodes,
-      sources: Object.values(this.sources),
-      lastSyncAt: this.lastSyncAt
-    };
+    const values=[...this.items.values()],seriesGroups=this.seriesGroups();
+    const live=values.filter(x=>x.kind==='live').length,movies=values.filter(x=>x.kind==='movie').length,episodes=values.filter(x=>x.kind==='series_episode').length;
+    const arabicRows=values.filter(isArabicItem),arabicLive=arabicRows.filter(x=>x.kind==='live').length,arabicMovies=arabicRows.filter(x=>x.kind==='movie').length,arabicEpisodes=arabicRows.filter(x=>x.kind==='series_episode').length;
+    const arabicSeries=seriesGroups.filter(g=>String(g.category||'').startsWith('عربي ·')||/[\u0600-\u06ff]/.test(String(g.title||''))).length;
+    return { totalItems:this.items.size,live,movies,series:seriesGroups.length,episodes,arabic:{total:arabicRows.length,live:arabicLive,movies:arabicMovies,series:arabicSeries,episodes:arabicEpisodes},sources:Object.values(this.sources),lastSyncAt:this.lastSyncAt };
   }
 }
