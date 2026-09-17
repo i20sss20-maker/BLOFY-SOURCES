@@ -6,6 +6,10 @@ import { adminApi,serveAdminAsset } from './admin.mjs';
 import { servePlayerApi,serveM3u,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
 
+function logSync(label,result){
+  console.log(`${label} sync complete: ${JSON.stringify({stats:result.stats,log:result.log})}`);
+}
+
 const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url||'/',baseUrl(req));
   if(req.method==='GET'&&url.pathname==='/health')return json(res,200,{ok:true,service:'blofy-sources-xtream',stats:catalog.stats(),...syncState()});
@@ -18,5 +22,8 @@ const server=http.createServer(async(req,res)=>{try{
   return json(res,404,{ok:false,error:'not_found'});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{ok:false,error:'internal_error'});else res.end()}});
 server.listen(PORT,()=>{console.log(`BLOFY SOURCES Xtream listening on :${PORT}`);if(!ADMIN_PASSWORD)console.warn('ADMIN_PASSWORD is empty; admin login disabled.')});
-setTimeout(()=>{if(!catalog.lastSyncAt)syncAll().catch(e=>console.error('initial sync failed:',e))},1500).unref();
-setInterval(()=>syncAll().catch(e=>console.error('scheduled sync failed:',e)),SYNC_INTERVAL_MS).unref();
+setTimeout(()=>{
+  if(!catalog.lastSyncAt) syncAll().then(result=>logSync('initial',result)).catch(e=>console.error('initial sync failed:',e));
+  else console.log(`catalog restored: ${JSON.stringify(catalog.stats())}`);
+},1500).unref();
+setInterval(()=>syncAll().then(result=>logSync('scheduled',result)).catch(e=>console.error('scheduled sync failed:',e)),SYNC_INTERVAL_MS).unref();
