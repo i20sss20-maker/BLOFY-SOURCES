@@ -10,16 +10,28 @@ function looseEpisodeTitle(title) {
     /^(.*?)[\s._-]+S(\d{1,2})[\s._-]*E(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
     /^(.*?)(?:\s*[-–:]\s*)?(?:episode|ep\.?)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
     /^(.*?)(?:\s*[-–:]\s*)?season[\s#:_-]*(\d{1,2}).*?(?:episode|ep\.?)?[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
-    /^(.*?)[\s._-]+(?:part|pt\.?)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i
+    /^(.*?)[\s._-]+(?:part|pt\.?)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
+    /^(.*?)(?:\s*[-–:]\s*)?(?:الحلقة|حلقة)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
+    /^(.*?)(?:\s*[-–:]\s*)?(?:الموسم|موسم)[\s#:_-]*(\d{1,2}).*?(?:الحلقة|حلقة)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i,
+    /^(.*?)[\s._-]+(?:الجزء|جزء)[\s#:_-]*(\d{1,3})(?:\b|[\s._-])(.*)?$/i
   ];
   for (let i = 0; i < patterns.length; i++) {
     const match = text.match(patterns[i]);
     if (!match) continue;
-    if (i === 1 || i === 3) return { seriesTitle: (match[1] || 'Series').trim(), season: 1, episode: Number(match[2]) || 1, episodeTitle: (match[3] || text).trim() };
+    if ([1,3,4,6].includes(i)) return { seriesTitle: (match[1] || 'Series').trim(), season: 1, episode: Number(match[2]) || 1, episodeTitle: (match[3] || text).trim() };
     return { seriesTitle: (match[1] || 'Series').trim(), season: Math.max(1, Number(match[2]) || 1), episode: Math.max(1, Number(match[3]) || 1), episodeTitle: (match[4] || text).trim() };
   }
   return null;
 }
+
+function docLanguage(doc) {
+  const values = normalizeArray(doc.language).map(x => x.toLowerCase());
+  if (values.some(x => /^(ar|ara|arabic|العربية|عربي)$/.test(x))) return 'ar';
+  const text = `${doc.title || ''} ${normalizeArray(doc.subject).join(' ')} ${arrayFirst(doc.description) || ''}`;
+  return /[\u0600-\u06ff]/.test(text) ? 'ar' : String(arrayFirst(doc.language) || '');
+}
+
+function isArabicDoc(doc) { return docLanguage(doc) === 'ar'; }
 
 function classifyArchiveItem(doc) {
   const title = String(doc.title || doc.identifier || '').trim();
@@ -28,12 +40,14 @@ function classifyArchiveItem(doc) {
 
   const subjects = normalizeArray(doc.subject).join(' ').toLowerCase();
   const collections = normalizeArray(doc.collection).join(' ').toLowerCase();
-  const tvLike = /\b(tv|television|episode|series|serial|show|program|programme)\b/.test(`${subjects} ${collections}`);
+  const tvLike = /\b(tv|television|episode|series|serial|show|program|programme)\b/.test(`${subjects} ${collections}`) || /(تلفزيون|مسلسل|مسلسلات|حلقة|حلقات|برنامج|برامج)/.test(`${subjects} ${collections}`);
   if (tvLike) {
     const patterns = [
       /^(.*?)(?:\s*[-–:]\s*)?(?:episode|ep\.?)?[\s#:_-]*(\d{1,3})\s*$/i,
       /^(.*?)[\s._-]+(?:part|pt\.?)[\s#:_-]*(\d{1,3})\s*$/i,
-      /^(.*?)[\s._-]+(\d{1,3})(?:\s*[-–:]\s*.*)?$/i
+      /^(.*?)[\s._-]+(\d{1,3})(?:\s*[-–:]\s*.*)?$/i,
+      /^(.*?)(?:\s*[-–:]\s*)?(?:الحلقة|حلقة)[\s#:_-]*(\d{1,3})\s*$/i,
+      /^(.*?)[\s._-]+(?:الجزء|جزء)[\s#:_-]*(\d{1,3})\s*$/i
     ];
     for (const pattern of patterns) {
       const match = title.match(pattern);
@@ -43,14 +57,13 @@ function classifyArchiveItem(doc) {
   return { kind: 'movie' };
 }
 
-function genericQuery() {
-  return `mediatype:movies AND ${OPEN_LICENSE_QUERY}`;
-}
-
+function genericQuery() { return `mediatype:movies AND ${OPEN_LICENSE_QUERY}`; }
+function arabicQuery() { return `mediatype:movies AND (language:Arabic OR language:ara OR language:ar) AND ${OPEN_LICENSE_QUERY}`; }
 function seriesQueries() {
   return [
     `mediatype:movies AND (subject:television OR subject:"classic tv" OR subject:"tv series" OR subject:episode OR subject:serial) AND ${OPEN_LICENSE_QUERY}`,
-    `mediatype:movies AND (title:episode OR title:season OR title:" ep " OR title:" part ") AND ${OPEN_LICENSE_QUERY}`
+    `mediatype:movies AND (title:episode OR title:season OR title:" ep " OR title:" part ") AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (language:Arabic OR language:ara OR language:ar) AND (title:حلقة OR title:الحلقة OR title:موسم OR title:الموسم OR subject:مسلسل OR subject:تلفزيون) AND ${OPEN_LICENSE_QUERY}`
   ];
 }
 
@@ -71,30 +84,39 @@ async function archiveDocs(query, limit) {
   return docs;
 }
 
-function toCatalogItem(doc) {
+function toCatalogItem(doc, { forceArabic = false } = {}) {
   const licenseUrl = cleanLicenseUrl(doc.licenseurl);
   if (!allowedOpenLicense('', licenseUrl)) return null;
   const classification = classifyArchiveItem(doc);
   const creator = normalizeArray(doc.creator).join(', ');
+  const language = forceArabic || isArabicDoc(doc) ? 'ar' : docLanguage(doc);
+  const rawCategory = categoryFromMeta(doc.subject, doc.collection, classification.kind === 'series_episode' ? 'Series' : 'Public Domain & CC');
+  const category = language === 'ar' ? `عربي · ${rawCategory}` : rawCategory;
   return {
     sourceItemId: String(doc.identifier), ...classification, title: String(doc.title || doc.identifier),
     description: stripHtml(arrayFirst(doc.description) || ''), icon: `https://archive.org/services/img/${encodeURIComponent(doc.identifier)}`,
-    category: categoryFromMeta(doc.subject, doc.collection, classification.kind === 'series_episode' ? 'Series' : 'Public Domain & CC'),
-    language: String(arrayFirst(doc.language) || ''),
+    category, language,
     licenseName: licenseUrl.includes('/by-sa/') ? 'Creative Commons BY-SA' : licenseUrl.includes('/by/') ? 'Creative Commons BY' : licenseUrl.includes('/zero/') ? 'CC0' : 'Public Domain',
     licenseUrl, attribution: creator ? `Internet Archive · ${creator}` : 'Internet Archive', publishedAt: String(arrayFirst(doc.date) || ''),
-    stream: { resolver: 'internet-archive', identifier: String(doc.identifier) }, rights: { mode: 'license-filtered', redistributable: true, commercialCompatible: true }
+    stream: { resolver: 'internet-archive', identifier: String(doc.identifier) }, rights: { mode: 'license-filtered', redistributable: true, commercialCompatible: true, arabic: language === 'ar' }
   };
 }
 
 export async function syncInternetArchive() {
   const generalLimit = envInt('IA_LIMIT', 6000, 50, 10000);
   const seriesLimit = envInt('IA_SERIES_LIMIT', 2500, 100, 10000);
+  const arabicLimit = envInt('IA_ARABIC_LIMIT', 2500, 100, 10000);
   const byId = new Map();
 
   const generalDocs = await archiveDocs(genericQuery(), generalLimit);
   for (const doc of generalDocs) {
     const item = toCatalogItem(doc);
+    if (item) byId.set(item.sourceItemId, item);
+  }
+
+  const arabicDocs = await archiveDocs(arabicQuery(), arabicLimit);
+  for (const doc of arabicDocs) {
+    const item = toCatalogItem(doc, { forceArabic: true });
     if (item) byId.set(item.sourceItemId, item);
   }
 
@@ -107,5 +129,5 @@ export async function syncInternetArchive() {
     }
   }
 
-  return [...byId.values()];
+  return [...byId.values()].sort((a,b) => Number(b.language === 'ar') - Number(a.language === 'ar') || a.title.localeCompare(b.title, 'ar'));
 }
