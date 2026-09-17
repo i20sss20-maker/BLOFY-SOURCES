@@ -11,30 +11,24 @@
 <div id="login" class="login">
   <div class="login-card">
     <div class="brand brand-center"><span class="mark">B</span><span>BLOFY XTREAM</span></div>
-    <h2>دخول الإدارة</h2>
-    <p class="muted">أدخل كلمة مرور الإدارة فقط.</p>
+    <h2>دخول الإدارة</h2><p class="muted">أدخل كلمة مرور الإدارة فقط.</p>
     <form id="loginForm"><input id="adminPassword" class="input" type="password" autocomplete="current-password" placeholder="كلمة مرور الإدارة" required><button class="btn primary large">دخول</button></form>
   </div>
 </div>
-
 <div class="shell">
   <aside class="rail">
-    <div class="brand"><span class="mark">B</span><span>BLOFY XTREAM</span></div>
-    <p class="rail-sub">مكتبة مفتوحة + سيرفر واحد</p>
+    <div class="brand"><span class="mark">B</span><span>BLOFY XTREAM</span></div><p class="rail-sub">مكتبة مفتوحة + سيرفر واحد</p>
     <nav class="nav" aria-label="الأقسام">
       <button class="active" data-view="overview"><span>⌂</span>الرئيسية</button>
+      <button data-view="subscribers"><span>◎</span>المشتركون</button>
       <button data-view="arabic"><span>ع</span>العربي</button>
       <button data-view="catalog"><span>▦</span>المكتبة</button>
-      <button data-view="access"><span>◈</span>بيانات السيرفر</button>
+      <button data-view="access"><span>◈</span>اختبار السيرفر</button>
     </nav>
     <div class="rail-foot"><button id="logoutBtn" class="link-button">تسجيل الخروج</button></div>
   </aside>
-
   <main class="main">
-    <header class="top">
-      <div><span class="eyebrow">BLOFY OPEN MEDIA</span><h1 id="pageTitle">لوحة التحكم</h1><p class="muted" id="subtitle">جارٍ قراءة المكتبة…</p></div>
-      <div class="actions"><button id="refreshBtn" class="btn">تحديث</button><button id="syncBtn" class="btn primary">مزامنة المحتوى</button></div>
-    </header>
+    <header class="top"><div><span class="eyebrow">BLOFY OPEN MEDIA</span><h1 id="pageTitle">لوحة التحكم</h1><p class="muted" id="subtitle">جارٍ قراءة المكتبة…</p></div><div class="actions"><button id="refreshBtn" class="btn">تحديث</button><button id="syncBtn" class="btn primary">مزامنة المحتوى</button></div></header>
 
     <section id="view-overview" class="section active">
       <div class="metrics simple-metrics">
@@ -43,73 +37,33 @@
         <article class="card metric"><span>مسلسلات</span><strong id="mSeries">0</strong><small>مسلسل</small></article>
         <article class="card metric arabic-metric"><span>المحتوى العربي</span><strong id="mArabic">0</strong><small>عنصر عربي</small></article>
       </div>
-
       <div class="home-grid">
-        <article class="card primary-card">
-          <span class="eyebrow">البدء السريع</span><h2>شغّل السيرفر في أي Player</h2>
-          <p class="muted">خذ Host + Username + Password من صفحة بيانات السيرفر. إذا ما اشتغل، اضغط «اختبار البيانات» ويطلع السبب مباشرة.</p>
-          <button class="btn primary large jump" data-target="access">فتح بيانات السيرفر</button>
-        </article>
-        <article class="card">
-          <span class="eyebrow">العربي أولًا</span><h2 id="arabicSummary">جارٍ الحساب…</h2>
-          <p class="muted">قنوات ومحتوى عربي مصنف بشكل مستقل من المصادر المفتوحة والمجانية.</p>
-          <button class="btn large jump" data-target="arabic">تصفح العربي</button>
-        </article>
+        <article class="card primary-card"><span class="eyebrow">المشتركون</span><h2 id="subscriberSummary">جارٍ الحساب…</h2><p class="muted">أنشئ حسابات Xtream وجدّد المنتهي بدون تغيير كلمة السر.</p><button class="btn primary large jump" data-target="subscribers">إدارة المشتركين</button></article>
+        <article class="card"><span class="eyebrow">العربي أولًا</span><h2 id="arabicSummary">جارٍ الحساب…</h2><p class="muted">قنوات ومحتوى عربي مصنف بشكل مستقل من المصادر المفتوحة والمجانية.</p><button class="btn large jump" data-target="arabic">تصفح العربي</button></article>
       </div>
+      <article class="card sync-card"><div><span class="eyebrow">حالة المكتبة</span><h2 id="syncState">—</h2><p class="muted">آخر مزامنة: <span id="lastSync">—</span></p></div><div id="syncLog" class="sync-log"></div></article>
+      <details class="advanced card"><summary>إعدادات ومصادر متقدمة</summary><div class="advanced-head"><p class="muted">لا تحتاج هذا القسم للاستخدام العادي.</p><button id="syncBtn2" class="btn">مزامنة كل المصادر</button></div><div id="sourceList" class="source-list"></div></details>
+    </section>
 
-      <article class="card sync-card">
-        <div><span class="eyebrow">حالة المكتبة</span><h2 id="syncState">—</h2><p class="muted">آخر مزامنة: <span id="lastSync">—</span></p></div>
-        <div id="syncLog" class="sync-log"></div>
+    <section id="view-subscribers" class="section">
+      <div class="section-head"><div><span class="eyebrow">XTREAM USERS</span><h2>المشتركون</h2><p class="muted">المنتهي يتجدد على نفس Username وPassword. لا تحتاج إنشاء حساب جديد.</p></div><button id="openCreateSubscriber" class="btn primary">+ مشترك جديد</button></div>
+      <div class="subscriber-metrics">
+        <article class="card mini-metric"><span>النشط</span><strong id="sActive">0</strong></article><article class="card mini-metric danger-soft"><span>المنتهي</span><strong id="sExpired">0</strong></article><article class="card mini-metric"><span>قريب الانتهاء</span><strong id="sSoon">0</strong></article><article class="card mini-metric"><span>المعطل</span><strong id="sDisabled">0</strong></article>
+      </div>
+      <article id="createSubscriberCard" class="card create-subscriber" hidden>
+        <div class="section-head compact"><div><h3>إنشاء مشترك</h3><p class="muted">اترك Username وكلمة السر فارغة للتوليد التلقائي.</p></div><button id="closeCreateSubscriber" class="btn">إغلاق</button></div>
+        <div class="form-grid"><label>اسم/ملاحظة<input id="newLabel" class="input" placeholder="مثال: عميل واتساب"></label><label>Username اختياري<input id="newUsername" class="input ltr" placeholder="blofy123"></label><label>مدة الاشتراك<select id="newDuration"><option value="30">30 يوم</option><option value="90">90 يوم</option><option value="180">6 أشهر</option><option value="365" selected>سنة</option><option value="0">بدون انتهاء</option></select></label><label>عدد الاتصالات<select id="newConnections"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label></div>
+        <button id="createSubscriberBtn" class="btn primary large">إنشاء الحساب</button>
+        <div id="createdSubscriber" class="created-creds" hidden></div>
       </article>
-
-      <details class="advanced card">
-        <summary>إعدادات ومصادر متقدمة</summary>
-        <div class="advanced-head"><p class="muted">لا تحتاج هذا القسم للاستخدام العادي. هنا فقط حالة كل مصدر ومزامنته منفردًا.</p><button id="syncBtn2" class="btn">مزامنة كل المصادر</button></div>
-        <div id="sourceList" class="source-list"></div>
-      </details>
+      <article class="card catalog-card subscribers-card"><div class="table-tools"><input id="subscriberSearch" class="input grow" placeholder="بحث باسم المستخدم أو اسم العميل"><select id="subscriberStatus"><option value="">كل الحالات</option><option value="active">نشط</option><option value="expired">منتهي</option><option value="disabled">معطل</option></select></div><div class="catalog subscribers-table"><table><thead><tr><th>المشترك</th><th>الحالة</th><th>الانتهاء</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead><tbody id="subscriberRows"><tr><td colspan="5">جارٍ التحميل…</td></tr></tbody></table></div><p id="subscriberCount" class="muted small"></p></article>
     </section>
 
-    <section id="view-arabic" class="section">
-      <div class="section-head"><div><span class="eyebrow">ARABIC FIRST</span><h2>المحتوى العربي</h2><p class="muted">السعودية والخليج والعالم العربي + محتوى عربي مفتوح من الأرشيف والمنصات الحرة.</p></div></div>
-      <div class="filter-pills" id="arabicFilters">
-        <button class="active" data-kind="">الكل</button><button data-kind="live">قنوات مباشرة</button><button data-kind="movie">أفلام وفيديو</button><button data-kind="series_episode">حلقات</button>
-      </div>
-      <div class="card catalog-card">
-        <div class="table-tools"><input id="arabicSearch" class="input grow" placeholder="ابحث في العربي"><button id="arabicSearchBtn" class="btn">بحث</button></div>
-        <div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>المصدر</th><th>النوع</th></tr></thead><tbody id="arabicRows"><tr><td colspan="5">جارٍ التحميل…</td></tr></tbody></table></div>
-        <div class="pager"><button id="arabicPrev" class="btn">السابق</button><span id="arabicCount" class="muted"></span><button id="arabicNext" class="btn">التالي</button></div>
-      </div>
-    </section>
+    <section id="view-arabic" class="section"><div class="section-head"><div><span class="eyebrow">ARABIC FIRST</span><h2>المحتوى العربي</h2><p class="muted">السعودية والخليج والعالم العربي + محتوى عربي مفتوح.</p></div></div><div class="filter-pills" id="arabicFilters"><button class="active" data-kind="">الكل</button><button data-kind="live">قنوات مباشرة</button><button data-kind="movie">أفلام وفيديو</button><button data-kind="series_episode">حلقات</button></div><div class="card catalog-card"><div class="table-tools"><input id="arabicSearch" class="input grow" placeholder="ابحث في العربي"><button id="arabicSearchBtn" class="btn">بحث</button></div><div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>المصدر</th><th>النوع</th></tr></thead><tbody id="arabicRows"><tr><td colspan="5">جارٍ التحميل…</td></tr></tbody></table></div><div class="pager"><button id="arabicPrev" class="btn">السابق</button><span id="arabicCount" class="muted"></span><button id="arabicNext" class="btn">التالي</button></div></div></section>
 
-    <section id="view-catalog" class="section">
-      <div class="section-head"><div><span class="eyebrow">CATALOG</span><h2>المكتبة الكاملة</h2><p class="muted">فلتر وابحث بدون ما تحمل آلاف العناصر مرة وحدة.</p></div></div>
-      <article class="card catalog-card">
-        <div class="table-tools"><select id="sourceFilter"><option value="">كل المصادر</option></select><select id="kindFilter"><option value="">كل الأنواع</option><option value="live">مباشر</option><option value="movie">أفلام وفيديو</option><option value="series_episode">حلقات</option></select><input id="searchInput" class="input grow" placeholder="بحث بالاسم أو القسم"><button id="searchBtn" class="btn">بحث</button></div>
-        <div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>المصدر</th><th>النوع</th></tr></thead><tbody id="catalogRows"><tr><td colspan="5">اختر بحث أو فلتر</td></tr></tbody></table></div>
-        <div class="pager"><button id="catalogPrev" class="btn">السابق</button><span id="catalogCount" class="muted"></span><button id="catalogNext" class="btn">التالي</button></div>
-      </article>
-    </section>
+    <section id="view-catalog" class="section"><div class="section-head"><div><span class="eyebrow">CATALOG</span><h2>المكتبة الكاملة</h2><p class="muted">فلتر وابحث بدون تحميل آلاف العناصر دفعة واحدة.</p></div></div><article class="card catalog-card"><div class="table-tools"><select id="sourceFilter"><option value="">كل المصادر</option></select><select id="kindFilter"><option value="">كل الأنواع</option><option value="live">مباشر</option><option value="movie">أفلام وفيديو</option><option value="series_episode">حلقات</option></select><input id="searchInput" class="input grow" placeholder="بحث بالاسم أو القسم"><button id="searchBtn" class="btn">بحث</button></div><div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>المصدر</th><th>النوع</th></tr></thead><tbody id="catalogRows"><tr><td colspan="5">اختر بحث أو فلتر</td></tr></tbody></table></div><div class="pager"><button id="catalogPrev" class="btn">السابق</button><span id="catalogCount" class="muted"></span><button id="catalogNext" class="btn">التالي</button></div></article></section>
 
-    <section id="view-access" class="section">
-      <div class="section-head"><div><span class="eyebrow">XTREAM ACCESS</span><h2>بيانات السيرفر</h2><p class="muted">هذه هي البيانات الوحيدة التي تضعها داخل برنامج الـPlayer.</p></div></div>
-
-      <article class="card server-card">
-        <div class="server-status-row"><div><span class="label">Host التشغيل</span><code id="hostValue">—</code></div><span id="serverBadge" class="badge neutral">غير مختبر</span></div>
-        <p class="hint">موقع الإدارة قد يكون على Azure، لكن الـHost أعلاه هو عنوان Xtream الذي يجب أن يرد على player_api.php.</p>
-        <div class="server-fields">
-          <label><span>Username</span><div class="field-row"><input id="serverUsername" class="input ltr" autocomplete="username"><button class="btn copy-input" data-input="serverUsername">نسخ</button></div></label>
-          <label><span>Password</span><div class="field-row"><input id="serverPassword" class="input ltr" type="password" autocomplete="current-password" placeholder="أدخل كلمة السر أو أنشئ بيانات جديدة"><button id="togglePassword" class="btn" type="button">إظهار</button></div></label>
-        </div>
-        <div class="actions server-actions"><button id="testAccountBtn" class="btn primary large">اختبار البيانات</button><button id="resetAccountBtn" class="btn">إنشاء بيانات جديدة</button><button id="copyAllBtn" class="btn">نسخ الكل</button></div>
-        <div id="serverTestResult" class="test-result" hidden></div>
-      </article>
-
-      <div class="split secondary-links">
-        <article class="card"><span class="label">M3U</span><div class="codebox" id="m3uValue">يظهر بعد إدخال كلمة السر</div><button class="btn copy" data-copy="m3uValue">نسخ الرابط</button></article>
-        <article class="card"><span class="label">Player API</span><div class="codebox" id="playerApiValue">يظهر بعد إدخال كلمة السر</div><button class="btn copy" data-copy="playerApiValue">نسخ الرابط</button></article>
-      </div>
-      <details class="advanced card"><summary>روابط إضافية</summary><div class="credential"><span>XMLTV</span><code id="xmltvValue">—</code><button class="btn copy" data-copy="xmltvValue">نسخ</button></div><div class="credential"><span>موقع الإدارة</span><code id="adminHostValue">—</code></div></details>
-    </section>
+    <section id="view-access" class="section"><div class="section-head"><div><span class="eyebrow">XTREAM TEST</span><h2>اختبار السيرفر</h2><p class="muted">اختبر أي حساب مشترك قبل إرساله للعميل.</p></div></div><article class="card server-card"><div class="server-status-row"><div><span class="label">Host التشغيل</span><code id="hostValue">—</code></div><span id="serverBadge" class="badge neutral">غير مختبر</span></div><p class="hint">هذا هو عنوان Xtream. موقع الإدارة قد يكون على Azure بعنوان مختلف.</p><div class="server-fields"><label><span>Username</span><div class="field-row"><input id="serverUsername" class="input ltr" autocomplete="username"><button class="btn copy-input" data-input="serverUsername">نسخ</button></div></label><label><span>Password</span><div class="field-row"><input id="serverPassword" class="input ltr" type="password" autocomplete="current-password" placeholder="كلمة السر"><button id="togglePassword" class="btn" type="button">إظهار</button></div></label></div><div class="actions server-actions"><button id="testAccountBtn" class="btn primary large">اختبار البيانات</button><button id="copyAllBtn" class="btn">نسخ الكل</button></div><div id="serverTestResult" class="test-result" hidden></div></article><div class="split secondary-links"><article class="card"><span class="label">M3U</span><div class="codebox" id="m3uValue">يظهر بعد إدخال كلمة السر</div><button class="btn copy" data-copy="m3uValue">نسخ الرابط</button></article><article class="card"><span class="label">Player API</span><div class="codebox" id="playerApiValue">يظهر بعد إدخال كلمة السر</div><button class="btn copy" data-copy="playerApiValue">نسخ الرابط</button></article></div><details class="advanced card"><summary>روابط إضافية</summary><div class="credential"><span>XMLTV</span><code id="xmltvValue">—</code><button class="btn copy" data-copy="xmltvValue">نسخ</button></div><div class="credential"><span>موقع الإدارة</span><code id="adminHostValue">—</code></div></details></section>
   </main>
 </div>
 <div id="statusbar" class="statusbar"></div>
