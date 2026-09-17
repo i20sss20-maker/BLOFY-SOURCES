@@ -1,8 +1,11 @@
-import { PORT, PUBLIC_BASE_URL } from './config.mjs';
+import { PORT, PUBLIC_BASE_URL, XTREAM_PUBLIC_BASE_URL } from './config.mjs';
 export function baseUrl(req) {
   if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
   const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
   return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
+}
+export function xtreamBaseUrl(req) {
+  return XTREAM_PUBLIC_BASE_URL || PUBLIC_BASE_URL || baseUrl(req);
 }
 export function json(res, status, body, extra = {}) {
   res.writeHead(status, {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...extra});
