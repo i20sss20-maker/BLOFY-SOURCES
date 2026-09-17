@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS,SYNC_ON_START,ROOT } from './config.mjs';
 import { catalog,listAccounts } from './context.mjs';
 import { baseUrl,json,text } from './http.mjs';
+import { storageStatus } from './storage.mjs';
 import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
@@ -37,7 +38,7 @@ function proxy(req,res){
 const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url||'/',baseUrl(req)),pathname=cleanPath(url.pathname);
   if((req.method==='GET'||req.method==='HEAD')&&pathname==='/health'){
-    const body={ok:true,service:'blofy-gateway',xtream:{ok:true,stats:catalog.stats(),accounts:accountHealth(),...syncState()}};if(req.method==='HEAD'){res.writeHead(200,{'cache-control':'no-store',...securityHeaders()});return res.end()}return json(res,200,body,securityHeaders());
+    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:accountHealth(),...syncState()}};if(req.method==='HEAD'){res.writeHead(200,{'cache-control':'no-store',...securityHeaders()});return res.end()}return json(res,200,body,securityHeaders());
   }
   if(req.method==='GET'&&await serveXtreamUi(res,pathname))return;
   if(pathname.startsWith('/xtream-api/')){const adminUrl=new URL(url);adminUrl.pathname=`/api/admin/${pathname.slice('/xtream-api/'.length)}`;return adminApi(req,res,adminUrl)}
@@ -48,6 +49,6 @@ const server=http.createServer(async(req,res)=>{try{
   return proxy(req,res);
 }catch(e){console.error('gateway request error:',e?.message||String(e));if(!res.headersSent)json(res,500,{ok:false,error:'gateway_error'},securityHeaders());else res.end()}});
 server.on('clientError',(error,socket)=>{console.warn('gateway client error:',error.message);if(socket.writable)socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n')});
-server.listen(PORT,'0.0.0.0',()=>{console.log(`BLOFY unified gateway + Xtream listening on :${PORT}`);console.log(`activation upstream: ${ACTIVATION_URL}`);console.log(`releases upstream: ${RELEASE_URL}`);if(!ADMIN_PASSWORD)console.warn('ADMIN_PASSWORD is empty; Xtream admin login disabled.')});
+server.listen(PORT,'0.0.0.0',()=>{console.log(`BLOFY unified gateway + Xtream listening on :${PORT}`);console.log(`activation upstream: ${ACTIVATION_URL}`);console.log(`releases upstream: ${RELEASE_URL}`);console.log(`storage mode: ${storageStatus().mode}`);if(!ADMIN_PASSWORD)console.warn('ADMIN_PASSWORD is empty; Xtream admin login disabled.')});
 setTimeout(()=>{if(SYNC_ON_START){console.log(`startup catalog sync scheduled; restored=${catalog.items.size} lastSync=${catalog.lastSyncAt||'never'}`);syncAll().then(result=>logSync('startup',result)).catch(e=>console.error('startup sync failed:',e))}else if(!catalog.lastSyncAt){syncAll().then(result=>logSync('initial',result)).catch(e=>console.error('initial sync failed:',e))}else console.log(`catalog restored without startup sync: ${JSON.stringify(catalog.stats())}`)},1500).unref();
 setInterval(()=>syncAll().then(result=>logSync('scheduled',result)).catch(e=>console.error('scheduled sync failed:',e)),SYNC_INTERVAL_MS).unref();
