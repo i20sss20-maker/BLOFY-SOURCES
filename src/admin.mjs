@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
@@ -7,15 +8,30 @@ import { baseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
+const LOGIN_WINDOW_MS=10*60_000,LOGIN_MAX_ATTEMPTS=8,loginAttempts=new Map();
+function loginKey(req){return String(req.headers['cf-connecting-ip']||req.headers['x-real-ip']||req.headers['x-forwarded-for']||req.socket?.remoteAddress||'unknown').split(',')[0].trim().slice(0,120)}
+function loginState(key,now=Date.now()){const row=loginAttempts.get(key);if(!row||now-row.startedAt>=LOGIN_WINDOW_MS){const fresh={startedAt:now,count:0};loginAttempts.set(key,fresh);return fresh}return row}
+function safePasswordEqual(value){const a=Buffer.from(String(value||''),'utf8'),b=Buffer.from(String(ADMIN_PASSWORD||''),'utf8');return a.length===b.length&&a.length>0&&crypto.timingSafeEqual(a,b)}
+function pruneLoginAttempts(now=Date.now()){if(loginAttempts.size<1000)return;for(const [key,row] of loginAttempts)if(now-row.startedAt>=LOGIN_WINDOW_MS)loginAttempts.delete(key)}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+
 export async function serveAdminAsset(res,pathname){
   const file=pathname==='/admin'?'/admin.html':pathname; if(!['/admin.html','/admin.css','/admin.js'].includes(file))return false;
   const body=await readFile(path.join(ROOT,'public',file.slice(1)),'utf8');
-  text(res,200,body,contentTypes[path.extname(file)]||'text/plain; charset=utf-8',file.endsWith('.html')?{'content-security-policy':"default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",'x-frame-options':'DENY'}:{});return true;
+  text(res,200,body,contentTypes[path.extname(file)]||'text/plain; charset=utf-8',file.endsWith('.html')?{'content-security-policy':"default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",'x-frame-options':'DENY','referrer-policy':'no-referrer'}:{});return true;
 }
 export async function adminApi(req,res,url){
   if(url.pathname==='/api/admin/login'&&req.method==='POST'){
-    const body=await readJsonBody(req).catch(()=>({})); if(!ADMIN_PASSWORD||String(body.password||'')!==ADMIN_PASSWORD)return json(res,401,{ok:false,error:'invalid_admin_password'});
-    createAdminSession(res,req); return json(res,200,{ok:true});
+    pruneLoginAttempts();
+    const key=loginKey(req),attempt=loginState(key);
+    if(attempt.count>=LOGIN_MAX_ATTEMPTS){const retry=Math.max(1,Math.ceil((LOGIN_WINDOW_MS-(Date.now()-attempt.startedAt))/1000));return json(res,429,{ok:false,error:'too_many_login_attempts'},{'retry-after':String(retry)})}
+    const body=await readJsonBody(req).catch(()=>({}));
+    if(!ADMIN_PASSWORD||!safePasswordEqual(body.password)){
+      attempt.count++;
+      await sleep(Math.min(1200,150+(attempt.count*100)));
+      return json(res,401,{ok:false,error:'invalid_admin_password'});
+    }
+    loginAttempts.delete(key);createAdminSession(res,req);return json(res,200,{ok:true});
   }
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
   if(url.pathname==='/api/admin/logout'&&req.method==='POST'){clearAdminSession(res);return json(res,200,{ok:true})}
