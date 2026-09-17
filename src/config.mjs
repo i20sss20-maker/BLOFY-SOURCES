@@ -9,3 +9,4 @@ export const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || '').trim().
 export const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 export const SESSION_SECRET = String(process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'));
 export const SYNC_INTERVAL_MS = Math.max(15 * 60_000, Number(process.env.SYNC_INTERVAL_MS || 6 * 60 * 60_000));
+export const SYNC_ON_START = String(process.env.SYNC_ON_START || 'true').toLowerCase() !== 'false';
