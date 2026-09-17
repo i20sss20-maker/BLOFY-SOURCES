@@ -1,101 +1,156 @@
-# BLOFY SOURCES — Open Media Xtream Gateway
+# BLOFY SOURCES — Arabic-first Xtream Gateway
 
-مشروع مستقل لتجميع **محتوى مفتوح أو قابل لإعادة الاستخدام وفق ترخيص/إرشادات واضحة** في كتالوج واحد، ثم تقديمه بصيغ **Xtream Codes API + M3U + XMLTV** من Host واحد.
+مشروع مستقل لتجميع **محتوى مفتوح أو مجاني رسميًا وفق سياسة المصدر** في كتالوج واحد، ثم تقديمه من Host واحد بصيغ **Xtream Codes + M3U + XMLTV**.
 
-> هذا المشروع مستقل بالكامل ولا يعتمد على BLOFY PLAYER.
+> المشروع مستقل عن تطبيق BLOFY PLAYER. عند نشره على Azure يحافظ على بوابة BLOFY الحالية ويضيف Xtream بدون كسر مسارات الموقع القديمة.
 
-## ماذا يفعل؟
+## الواجهة
 
-- يجمع Live / Movies / Series Episodes من مصادر متعددة.
-- يوحّد التصنيفات والهوية والأرقام داخل Catalog واحد.
-- يوفر `player_api.php` / `panel_api.php` المتوافقة مع أشهر Xtream Players.
-- يوفر `get.php` لإخراج M3U Plus.
-- يوفر `xmltv.php` لقائمة قنوات XMLTV المتوافقة مع اللاعبين التي تطلب EPG endpoint.
-- يوفر مسارات `/live/...` و`/movie/...` و`/series/...`.
-- لا يعيد استضافة ملفات الفيديو افتراضيًا؛ يحل رابط المصدر ثم يرسل `302 Redirect` للمصدر الأصلي.
-- يحتفظ بمعلومات الترخيص والمصدر لكل عنصر.
-- لوحة إدارة عربية لإنشاء Server / Username / Password، المزامنة، فحص المصادر والبحث في الكتالوج ونسخ روابط Xtream/M3U/XMLTV.
-
-## المصادر الحالية
-
-### Internet Archive
-يُستخدم Advanced Search ويُقبل فقط المحتوى الذي يحمل `licenseurl` متوافقًا مع CC0 / CC BY / CC BY-SA / Public Domain. يتم استبعاد NC/ND في هذه النسخة.
-
-### Wikimedia Commons
-يتم قراءة `imageinfo + extmetadata` وفحص الترخيص آليًا قبل الإدخال.
-
-### PeerTube
-يتم قبول تراخيص PeerTube IDs: 1 (BY)، 2 (BY-SA)، 7 (Public Domain)، 8 (No known restrictions). المحتوى NSFW يُستبعد.
-
-### NASA Image and Video Library
-يستخدم API الرسمي. إرشادات NASA تنطبق، ويجب تجنب أي مادة موسومة بحقوق طرف ثالث.
-
-### Free-TV
-مصدر Live مفعّل افتراضيًا. المشروع الأصلي يركز على القنوات المجانية التي تُقدم رسميًا دون اشتراك خاص، ويستخدم كمصدر Live منظم عالي الجودة.
-
-### IPTV-org
-مدعوم للبث المباشر لكنه **معطل افتراضيًا**. المشروع نفسه يجمع روابط بث متاحة للعامة، لكن هذا ليس ضمانًا لترخيص إعادة التوزيع لكل قناة. لا تفعله إلا بعد مراجعة الاستخدام المقصود.
-
-## التشغيل
-
-```bash
-cp .env.example .env
-# اضبط ADMIN_PASSWORD و SESSION_SECRET و PUBLIC_BASE_URL
-node src/server.mjs
-```
-
-ثم افتح:
+عند تشغيله كخدمة مستقلة يمكن فتح لوحة الإدارة مباشرة. وعند دمجه مع بوابة Azure الحالية تكون لوحة Xtream على:
 
 ```text
-http://localhost:8080/admin
+/xtream
 ```
 
-## إعداد Player
+وتبقى المسارات القديمة مثل `/portal` و`/admin` و`/downloads` موجهة إلى خدمات BLOFY الحالية.
 
-من لوحة الإدارة أنشئ بيانات Xtream، ثم استخدم:
+لوحة Xtream مبسطة إلى:
+
+- الرئيسية
+- المشتركون
+- العربي
+- المكتبة
+- اختبار السيرفر
+
+## إدارة المشتركين
+
+يدعم أكثر من حساب Xtream في نفس الوقت:
+
+- إنشاء Username/Password تلقائيًا أو يدويًا.
+- مدة 30 / 90 / 180 / 365 يوم أو بدون انتهاء.
+- تجديد الاشتراك المنتهي **بنفس Username وPassword**.
+- تعطيل وتفعيل الحساب.
+- تحديد عدد الاتصالات.
+- حالة نشط / منتهي / قريب الانتهاء / معطل.
+- كلمة السر تحفظ كـ `scrypt hash + salt` ولا تحفظ كنص صريح.
+
+## Xtream / M3U
 
 ```text
-Server:   https://your-host.example
-Username: generated-user
-Password: generated-password
-```
-
-أو رابط M3U الذي يظهر في نفس الصفحة.
-
-## Endpoints
-
-```text
-GET /health
 GET /player_api.php?username=...&password=...
 GET /panel_api.php?username=...&password=...
-GET /player_api.php?username=...&password=...&action=get_live_categories
-GET /player_api.php?username=...&password=...&action=get_live_streams
-GET /player_api.php?username=...&password=...&action=get_vod_categories
-GET /player_api.php?username=...&password=...&action=get_vod_streams
-GET /player_api.php?username=...&password=...&action=get_series_categories
-GET /player_api.php?username=...&password=...&action=get_series
-GET /player_api.php?username=...&password=...&action=get_vod_info&vod_id=...
-GET /player_api.php?username=...&password=...&action=get_series_info&series_id=...
+GET /player_api.php?...&action=get_live_categories
+GET /player_api.php?...&action=get_live_streams
+GET /player_api.php?...&action=get_vod_categories
+GET /player_api.php?...&action=get_vod_streams
+GET /player_api.php?...&action=get_series_categories
+GET /player_api.php?...&action=get_series
+GET /player_api.php?...&action=get_vod_info&vod_id=...
+GET /player_api.php?...&action=get_series_info&series_id=...
 GET /get.php?username=...&password=...&type=m3u_plus&output=ts
+GET /get.php?username=...&password=...&type=m3u_plus&output=m3u8
 GET /xmltv.php?username=...&password=...
 GET /live/:username/:password/:id.ts
 GET /movie/:username/:password/:id.mp4
 GET /series/:username/:password/:episodeId.mp4
 ```
 
-## التخزين
+ردود Xtream الكبيرة تُضغط بـ gzip عند دعم اللاعب لذلك، و`category_id=0` / `all` / `*` تعامل كـ "كل المحتوى" لرفع التوافق مع اللاعبين.
 
-الكتالوج وبيانات حساب Xtream تحفظ في `DATA_DIR` (افتراضيًا `./data`). في Railway/Azure/أي Container platform استخدم Volume إذا أردت بقاء بيانات الحساب عبر إعادة النشر. حتى بدون Volume يمكن إعادة مزامنة الكتالوج من المصادر.
+## العربي أولًا
 
-## حجم الكتالوج الافتراضي
+### Live
 
-القيم الحالية في `.env.example`:
+`Free-TV` مصدر البث المجاني الأساسي. قبل إضافة القنوات:
 
-- `IA_LIMIT=6000`
-- `WIKIMEDIA_LIMIT=1200`
-- `PEERTUBE_LIMIT=1800`
-- `NASA_LIMIT=700`
-- `FREE_TV_LIMIT=4000`
-- `IPTV_ORG_LIMIT=10000` (اختياري ومعطل افتراضيًا)
+- تستبعد روابط صفحات YouTube / Twitch / Dailymotion / Facebook التي ليست stream مباشرًا.
+- تصنف السعودية والخليج والعالم العربي تحت `عربي · ...`.
+- القنوات العربية تمر بفحص وصول؛ 404/410 وصفحات HTML تستبعد.
+- الحجب الجغرافي أو timeout لا يؤدي إلى حذف القناة تلقائيًا حتى لا نستبعد بثًا قد يعمل عند المستخدم النهائي.
 
-يمكن رفع الحدود تدريجيًا بعد مراقبة الذاكرة وزمن المزامنة. الهدف هو **مكتبة ضخمة لكن مُفلترة الحقوق** لا مجرد جمع أكبر عدد من الروابط.
+### VOD / Series
+
+- Internet Archive: CC0 / CC BY / CC BY-SA / Public Domain مع بحث عربي مستقل وفهم صيغ `الحلقة` / `الموسم` / `الجزء`.
+- Wikimedia Commons: فيديو مفتوح مع بحث عربي مستقل ومواد عربية مرخصة.
+- PeerTube: تراخيص مفتوحة فقط، NSFW مستبعد، وبحث عربي أولًا عبر عدة instances.
+- NASA: مكتبة الفيديو الرسمية مع تطبيق إرشادات المصدر.
+- IPTV-org موجود لكنه معطل افتراضيًا لأن توفر رابط عام لا يساوي ضمان حق إعادة التوزيع.
+
+## التخزين الدائم
+
+محليًا يستخدم `DATA_DIR`.
+
+على Azure Container Apps يدعم Azure Blob تلقائيًا عبر **Managed Identity** بدون Storage Key داخل الكود. الملفات الدائمة:
+
+```text
+state.json    # حسابات Xtream المشفرة/المهشمة ومدة الاشتراك
+catalog.json  # الكتالوج وحالة المصادر
+```
+
+المتغيرات:
+
+```text
+AZURE_STORAGE_ACCOUNT=...
+AZURE_CLIENT_ID=...
+BLOFY_BLOB_CONTAINER=blofy-xtream
+```
+
+إذا Managed Identity غير متاح يرجع تلقائيًا للتخزين المحلي.
+
+## Azure
+
+الملف:
+
+```text
+.github/workflows/deploy-azure.yml
+```
+
+مصمم لتحديث **`blofy-gateway` الموجود** بدل إنشاء موقع بديل. يقوم بـ:
+
+1. تشغيل check + tests.
+2. تسجيل الدخول إلى Azure عبر OIDC.
+3. اكتشاف ACR / Storage / Key Vault / Managed Identity الحالية.
+4. بناء الصورة ودفعها إلى ACR.
+5. ربط أسرار الإدارة من Key Vault بدون كشف قيمها.
+6. تحديث صورة البوابة ومتغيراتها فقط.
+7. الإبقاء على `blofy-activation` و`blofy-releases` كخدمات upstream.
+8. فحص `/health` و`/xtream` ومسارات الموقع القديمة بعد النشر.
+
+يتطلب متغيرات GitHub Actions التالية في هذا المستودع:
+
+```text
+AZURE_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+BLOFY_AZURE_RG
+```
+
+ويجب أن يكون Federated Credential الخاص بـOIDC مسموحًا لمستودع `i20sss20-maker/BLOFY-SOURCES`.
+
+## التشغيل المحلي
+
+```bash
+cp .env.example .env
+npm ci
+npm run check
+npm test
+npm start
+```
+
+ثم استخدم `/xtream` في وضع البوابة الموحدة، أو API endpoints مباشرة.
+
+## الحجم الافتراضي
+
+```text
+IA_LIMIT=6000
+IA_SERIES_LIMIT=2500
+IA_ARABIC_LIMIT=2500
+WIKIMEDIA_LIMIT=1200
+WIKIMEDIA_ARABIC_LIMIT=800
+PEERTUBE_LIMIT=3000
+PEERTUBE_ARABIC_LIMIT=800
+NASA_LIMIT=700
+FREE_TV_LIMIT=4000
+```
+
+الهدف هو **مكتبة كبيرة قابلة للتشغيل ومفلترة الحقوق**، وليس مجرد أكبر عدد من الروابط.
