@@ -1,7 +1,7 @@
 import { catalog, getAccount } from './context.mjs';
-import { baseUrl } from './http.mjs';
-export function serverInfo(req){const u=new URL(baseUrl(req));return{url:u.hostname,port:u.port||(u.protocol==='https:'?'443':'80'),https_port:u.protocol==='https:'?(u.port||'443'):'',server_protocol:u.protocol.replace(':',''),rtmp_port:'0',timezone:'UTC',timestamp_now:Math.floor(Date.now()/1000),time_now:new Date().toISOString().replace('T',' ').slice(0,19)}}
-export function userInfo(username='',password=''){const a=getAccount();return{username:username||a?.username||'',password:String(password||''),message:'BLOFY open media gateway',auth:1,status:'Active',exp_date:null,is_trial:'0',active_cons:'0',created_at:String(Math.floor(new Date(a?.createdAt||Date.now()).getTime()/1000)),max_connections:'10',allowed_output_formats:['m3u8','ts','rtmp']}}
+import { xtreamBaseUrl } from './http.mjs';
+export function serverInfo(req){const u=new URL(xtreamBaseUrl(req));return{url:u.hostname,port:u.port||(u.protocol==='https:'?'443':'80'),https_port:u.protocol==='https:'?(u.port||'443'):'',server_protocol:u.protocol.replace(':',''),rtmp_port:'0',timezone:'UTC',timestamp_now:Math.floor(Date.now()/1000),time_now:new Date().toISOString().replace('T',' ').slice(0,19)}}
+export function userInfo(username='',password=''){const a=getAccount();return{username:username||a?.username||'',password:String(password||''),message:'BLOFY open media gateway',auth:1,status:'Active',exp_date:null,is_trial:'0',active_cons:'0',created_at:String(Math.floor(new Date(a?.createdAt||Date.now()).getTime()/1000)),max_connections:'10',allowed_output_formats:['m3u8','ts']}}
 export function categories(kind){return catalog.categoryRecords(kind).map(x=>({category_id:String(x.id),category_name:x.name,parent_id:0}))}
 const ts=x=>x?String(Math.floor(new Date(x).getTime()/1000)||''):'';
 export function liveObject(x){return{num:x.id,name:x.title,stream_type:'live',stream_id:x.id,stream_icon:x.icon||'',epg_channel_id:x.epgId||'',added:ts(x.publishedAt),category_id:String(catalog.categoryId('live',x.category)),custom_sid:'',tv_archive:0,direct_source:'',tv_archive_duration:0}}
