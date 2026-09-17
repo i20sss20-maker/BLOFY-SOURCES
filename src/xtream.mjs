@@ -6,7 +6,7 @@ import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,cate
 function auth(url){const username=url.searchParams.get('username')||'',password=url.searchParams.get('password')||'';return verifyAccount(username,password)?{username,password}:null}
 export function servePlayerApi(req,res,url){
   const a=auth(url); if(!a)return json(res,200,{user_info:{auth:0,status:'Disabled'},server_info:serverInfo(req)});
-  const action=url.searchParams.get('action')||''; if(!action)return json(res,200,{user_info:userInfo(),server_info:serverInfo(req)});
+  const action=url.searchParams.get('action')||''; if(!action)return json(res,200,{user_info:userInfo(a.username,a.password),server_info:serverInfo(req)});
   if(action==='get_live_categories')return json(res,200,categories('live'));
   if(action==='get_vod_categories')return json(res,200,categories('movie'));
   if(action==='get_series_categories')return json(res,200,categories('series'));
@@ -31,15 +31,16 @@ export function servePlayerApi(req,res,url){
     }
     return json(res,200,{seasons:[...seasons.values()],info:{name:g.title,cover:g.icon||'',plot:g.description||'',genre:g.category||'',releaseDate:'',last_modified:'',rating:'',backdrop_path:[],youtube_trailer:'',license:g.licenseName||'',license_url:g.licenseUrl||'',attribution:g.attribution||''},episodes});
   }
+  if(action==='get_short_epg'||action==='get_simple_data_table')return json(res,200,{epg_listings:[]});
   return json(res,200,[]);
 }
 function esc(v){return String(v??'').replace(/[\r\n]+/g,' ').replace(/"/g,"'")}
 function xmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]))}
-function m3uLine(req,a,x){const type=x.kind==='live'?'live':x.kind==='series_episode'?'series':'movie',ext=x.kind==='live'?'ts':(x.stream?.extension||'mp4');return `#EXTINF:-1 tvg-id="${x.id}" tvg-logo="${esc(x.icon||'')}" group-title="${esc(x.category||'Open Media')}",${esc(x.title)}\n${baseUrl(req)}/${type}/${encodeURIComponent(a.username)}/${encodeURIComponent(a.password)}/${x.id}.${ext}`}
+function m3uLine(req,a,x){const type=x.kind==='live'?'live':x.kind==='series_episode'?'series':'movie',ext=x.kind==='live'?'ts':(x.stream?.extension||'mp4'),tvgId=x.kind==='live'?(x.epgId||x.id):x.id;return `#EXTINF:-1 tvg-id="${esc(tvgId)}" tvg-name="${esc(x.title)}" tvg-logo="${esc(x.icon||'')}" group-title="${esc(x.category||'Open Media')}",${esc(x.title)}\n${baseUrl(req)}/${type}/${encodeURIComponent(a.username)}/${encodeURIComponent(a.password)}/${x.id}.${ext}`}
 export function serveM3u(req,res,url){const a=auth(url);if(!a)return text(res,401,'#EXTM3U\n# Authentication failed\n','audio/x-mpegurl; charset=utf-8');const lines=['#EXTM3U'];for(const k of ['live','movie','series_episode'])for(const x of catalog.listKind(k))lines.push(m3uLine(req,a,x));return text(res,200,`${lines.join('\n')}\n`,'audio/x-mpegurl; charset=utf-8')}
 export function serveXmltv(req,res,url){
   const a=auth(url); if(!a)return text(res,401,'<?xml version="1.0" encoding="UTF-8"?><tv></tv>','application/xml; charset=utf-8');
-  const channels=catalog.listKind('live').map(x=>{const icon=x.icon?`<icon src="${xmlEsc(x.icon)}"/>`:'';return `<channel id="${x.id}"><display-name>${xmlEsc(x.title)}</display-name>${icon}</channel>`}).join('');
+  const channels=catalog.listKind('live').map(x=>{const icon=x.icon?`<icon src="${xmlEsc(x.icon)}"/>`:'';const id=x.epgId||x.id;return `<channel id="${xmlEsc(id)}"><display-name>${xmlEsc(x.title)}</display-name>${icon}</channel>`}).join('');
   return text(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="BLOFY SOURCES">${channels}</tv>\n`,'application/xml; charset=utf-8');
 }
 export async function servePlayback(req,res,pathname){
