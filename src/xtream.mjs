@@ -1,5 +1,5 @@
 import { catalog, verifyAccount } from './context.mjs';
-import { baseUrl, json, text } from './http.mjs';
+import { xtreamBaseUrl, json, text } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilter } from './xtream-format.mjs';
 
@@ -36,7 +36,7 @@ export function servePlayerApi(req,res,url){
 }
 function esc(v){return String(v??'').replace(/[\r\n]+/g,' ').replace(/"/g,"'")}
 function xmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]))}
-function m3uLine(req,a,x){const type=x.kind==='live'?'live':x.kind==='series_episode'?'series':'movie',ext=x.kind==='live'?'ts':(x.stream?.extension||'mp4'),tvgId=x.kind==='live'?(x.epgId||x.id):x.id;return `#EXTINF:-1 tvg-id="${esc(tvgId)}" tvg-name="${esc(x.title)}" tvg-logo="${esc(x.icon||'')}" group-title="${esc(x.category||'Open Media')}",${esc(x.title)}\n${baseUrl(req)}/${type}/${encodeURIComponent(a.username)}/${encodeURIComponent(a.password)}/${x.id}.${ext}`}
+function m3uLine(req,a,x){const type=x.kind==='live'?'live':x.kind==='series_episode'?'series':'movie',ext=x.kind==='live'?'ts':(x.stream?.extension||'mp4'),tvgId=x.kind==='live'?(x.epgId||x.id):x.id;return `#EXTINF:-1 tvg-id="${esc(tvgId)}" tvg-name="${esc(x.title)}" tvg-logo="${esc(x.icon||'')}" group-title="${esc(x.category||'Open Media')}",${esc(x.title)}\n${xtreamBaseUrl(req)}/${type}/${encodeURIComponent(a.username)}/${encodeURIComponent(a.password)}/${x.id}.${ext}`}
 export function serveM3u(req,res,url){const a=auth(url);if(!a)return text(res,401,'#EXTM3U\n# Authentication failed\n','audio/x-mpegurl; charset=utf-8');const lines=['#EXTM3U'];for(const k of ['live','movie','series_episode'])for(const x of catalog.listKind(k))lines.push(m3uLine(req,a,x));return text(res,200,`${lines.join('\n')}\n`,'audio/x-mpegurl; charset=utf-8')}
 export function serveXmltv(req,res,url){
   const a=auth(url); if(!a)return text(res,401,'<?xml version="1.0" encoding="UTF-8"?><tv></tv>','application/xml; charset=utf-8');
