@@ -1,8 +1,0 @@
-{
-  "name": "BLOFY Sources",
-  "description": "BLOFY test source repository",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/i20sss20-maker/BLOFY-SOURCES/main/plugins.json"
-  ]
-}
