@@ -34,8 +34,14 @@ export function servePlayerApi(req,res,url){
   return json(res,200,[]);
 }
 function esc(v){return String(v??'').replace(/[\r\n]+/g,' ').replace(/"/g,"'")}
+function xmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]))}
 function m3uLine(req,a,x){const type=x.kind==='live'?'live':x.kind==='series_episode'?'series':'movie',ext=x.kind==='live'?'ts':(x.stream?.extension||'mp4');return `#EXTINF:-1 tvg-id="${x.id}" tvg-logo="${esc(x.icon||'')}" group-title="${esc(x.category||'Open Media')}",${esc(x.title)}\n${baseUrl(req)}/${type}/${encodeURIComponent(a.username)}/${encodeURIComponent(a.password)}/${x.id}.${ext}`}
 export function serveM3u(req,res,url){const a=auth(url);if(!a)return text(res,401,'#EXTM3U\n# Authentication failed\n','audio/x-mpegurl; charset=utf-8');const lines=['#EXTM3U'];for(const k of ['live','movie','series_episode'])for(const x of catalog.listKind(k))lines.push(m3uLine(req,a,x));return text(res,200,`${lines.join('\n')}\n`,'audio/x-mpegurl; charset=utf-8')}
+export function serveXmltv(req,res,url){
+  const a=auth(url); if(!a)return text(res,401,'<?xml version="1.0" encoding="UTF-8"?><tv></tv>','application/xml; charset=utf-8');
+  const channels=catalog.listKind('live').map(x=>{const icon=x.icon?`<icon src="${xmlEsc(x.icon)}"/>`:'';return `<channel id="${x.id}"><display-name>${xmlEsc(x.title)}</display-name>${icon}</channel>`}).join('');
+  return text(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="BLOFY SOURCES">${channels}</tv>\n`,'application/xml; charset=utf-8');
+}
 export async function servePlayback(req,res,pathname){
   const m=pathname.match(/^\/(live|movie|series)\/([^/]+)\/([^/]+)\/(\d+)(?:\.([A-Za-z0-9]+))?$/);if(!m)return false;
   const [,type,u,p,id]=m;if(!verifyAccount(decodeURIComponent(u),decodeURIComponent(p))){text(res,403,'Forbidden');return true}
