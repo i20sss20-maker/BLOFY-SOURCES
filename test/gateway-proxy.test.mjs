@@ -17,11 +17,11 @@ async function close(server){return new Promise(resolve=>server.close(resolve))}
 test('unified gateway preserves activation and releases routes while keeping Xtream local',async()=>{
   const [port,activationPort,releasesPort]=await Promise.all([freePort(),freePort(),freePort()]);
   const activation=await upstream(activationPort,'activation'),releases=await upstream(releasesPort,'releases');
-  const dataDir=mkdtempSync(path.join(os.tmpdir(),'blofy-gateway-')),base=`http://127.0.0.1:${port}`;
+  const dataDir=mkdtempSync(path.join(os.tmpdir(),'blofy-gateway-')),base=`http://127.0.0.1:${port}`,expectedHost=new URL(base).host;
   const child=spawn(process.execPath,['src/server.mjs'],{cwd:repoRoot,env:{...process.env,PORT:String(port),DATA_DIR:dataDir,PUBLIC_BASE_URL:base,XTREAM_PUBLIC_BASE_URL:base,ADMIN_PASSWORD:'AdminPass-123',SESSION_SECRET:'d'.repeat(64),XTREAM_USERNAME:'testuser',XTREAM_PASSWORD:'TestPass-123',SYNC_ON_START:'false',ACTIVATION_URL:`http://127.0.0.1:${activationPort}`,RELEASE_URL:`http://127.0.0.1:${releasesPort}`},stdio:['ignore','pipe','pipe']});
   try{
     await wait(base,child);
-    let r=await fetch(`${base}/portal?x=1`,{headers:{host:'blofy.example','x-forwarded-proto':'https'}});let j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/portal?x=1');assert.equal(j.forwardedHost,'blofy.example');assert.equal(j.forwardedProto,'https');
+    let r=await fetch(`${base}/portal?x=1`,{headers:{'x-forwarded-proto':'https'}});let j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/portal?x=1');assert.equal(j.forwardedHost,expectedHost);assert.equal(j.forwardedProto,'https');
     r=await fetch(`${base}/admin`);j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/admin');
     r=await fetch(`${base}/downloads/client.apk`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/downloads/client.apk');
     r=await fetch(`${base}/releases-admin/builds`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/admin/builds');
