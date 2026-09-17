@@ -47,11 +47,11 @@
     </section>
 
     <section id="view-sources" class="section">
-      <article class="card"><div style="display:flex;justify-content:space-between;gap:15px;align-items:center"><div><span class="eyebrow">SOURCE REGISTRY</span><h2>المصادر</h2><p class="muted">كل مصدر له حالة، عدد عناصر، وفلتر حقوق مستقل.</p></div><button id="syncBtn2" class="btn primary">مزامنة</button></div><div id="sourceList" class="source-list" style="margin-top:16px"></div></article>
+      <article class="card"><div style="display:flex;justify-content:space-between;gap:15px;align-items:center"><div><span class="eyebrow">SOURCE REGISTRY</span><h2>المصادر</h2><p class="muted">كل مصدر له حالة، عدد عناصر، وفلتر حقوق مستقل. تقدر تزامن مصدر واحد بدون إعادة بقية المكتبة.</p></div><button id="syncBtn2" class="btn primary">مزامنة الكل</button></div><div id="sourceList" class="source-list" style="margin-top:16px"></div></article>
     </section>
 
     <section id="view-catalog" class="section">
-      <article class="card"><span class="eyebrow">CATALOG</span><h2>تصفح المكتبة</h2><div class="table-tools"><select id="kindFilter"><option value="">الكل</option><option value="live">Live</option><option value="movie">Movies</option><option value="series_episode">Series Episodes</option></select><input id="searchInput" class="input" placeholder="بحث بالاسم أو المصدر أو القسم"><button id="searchBtn" class="btn">بحث</button></div><div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>النوع</th><th>المصدر</th><th>القسم</th><th>الترخيص</th></tr></thead><tbody id="catalogRows"><tr><td colspan="6">—</td></tr></tbody></table></div><p id="catalogCount" class="muted small"></p></article>
+      <article class="card"><span class="eyebrow">CATALOG</span><h2>تصفح المكتبة</h2><div class="table-tools"><select id="sourceFilter"><option value="">كل المصادر</option></select><select id="kindFilter"><option value="">كل الأنواع</option><option value="live">Live</option><option value="movie">Movies</option><option value="series_episode">Series Episodes</option></select><input id="searchInput" class="input" placeholder="بحث بالاسم أو المصدر أو القسم"><button id="searchBtn" class="btn">بحث</button></div><div class="catalog"><table><thead><tr><th>الصورة</th><th>الاسم</th><th>النوع</th><th>المصدر</th><th>القسم</th><th>الترخيص</th></tr></thead><tbody id="catalogRows"><tr><td colspan="6">—</td></tr></tbody></table></div><p id="catalogCount" class="muted small"></p></article>
     </section>
 
     <section id="view-access" class="section">
