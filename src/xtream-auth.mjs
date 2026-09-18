@@ -86,7 +86,7 @@ export async function legacyXtreamHealth(){
 
 
 const SMOKE_DEFAULT=process.env.NODE_ENV==='production'?'true':'false';
-let smokeState={enabled:String(process.env.ENABLE_XTREAM_SELF_TEST||SMOKE_DEFAULT).toLowerCase()==='true',running:false,ok:null,lastRunAt:null,elapsedMs:null,stage:'idle',error:null};
+let smokeState={enabled:String(process.env.ENABLE_XTREAM_SELF_TEST||SMOKE_DEFAULT).toLowerCase()==='true',running:false,ok:null,lastRunAt:null,elapsedMs:null,stage:'idle',error:null,timings:{},counts:{}};
 
 function smokeHeaders(){return{'content-type':'application/json','authorization':`Bearer ${SESSION_SECRET}`,'user-agent':'BLOFY-Xtream-SelfTest/1.0'}}
 
@@ -95,7 +95,7 @@ export function xtreamSmokeState(){return{...smokeState}}
 export async function runXtreamSelfTest(publicBaseUrl){
   if(!smokeState.enabled)return smokeState;
   if(smokeState.running)return smokeState;
-  const started=Date.now();smokeState={...smokeState,running:true,ok:null,lastRunAt:new Date().toISOString(),elapsedMs:null,stage:'create-account',error:null};
+  const started=Date.now();smokeState={...smokeState,running:true,ok:null,lastRunAt:new Date().toISOString(),elapsedMs:null,stage:'create-account',error:null,timings:{},counts:{}};
   let accountId='';
   try{
     if(!ACTIVATION_URL)throw new Error('activation_url_missing');
@@ -135,11 +135,28 @@ export async function runXtreamSelfTest(publicBaseUrl){
     j=await r.json();
     if(!Array.isArray(j))throw new Error('series_categories_invalid');
 
+    for(const [stage,action,countKey] of [
+      ['live-streams','get_live_streams','live'],
+      ['vod-streams','get_vod_streams','vod'],
+      ['series-list','get_series','series']
+    ]){
+      smokeState.stage=stage;
+      const t0=Date.now();
+      r=await fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${action}`,{headers:{'accept':'application/json','accept-encoding':'gzip, deflate'}});
+      if(!r.ok)throw new Error(`${stage}_http_${r.status}`);
+      const list=await r.json();
+      if(!Array.isArray(list))throw new Error(`${stage}_invalid`);
+      smokeState.timings[countKey]=Date.now()-t0;
+      smokeState.counts[countKey]=list.length;
+    }
+
     smokeState.stage='m3u';
-    r=await fetch(`${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,{headers:{'accept':'audio/x-mpegurl,*/*'}});
+    const m3uStarted=Date.now();
+    r=await fetch(`${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,{headers:{'accept':'audio/x-mpegurl,*/*','accept-encoding':'gzip, deflate'}});
     if(!r.ok)throw new Error(`m3u_http_${r.status}`);
     const m3u=await r.text();
     if(!m3u.startsWith('#EXTM3U'))throw new Error('m3u_invalid');
+    smokeState.timings.m3u=Date.now()-m3uStarted;
 
     smokeState.stage='playback-route';
     const directLive=catalog.listKind('live').find(item=>item?.stream?.resolver==='direct')||catalog.listKind('live')[0];
