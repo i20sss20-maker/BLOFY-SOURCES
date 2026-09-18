@@ -171,6 +171,7 @@ BLOFY_BLOB_CONTAINER=blofy-xtream
 6. تحديث صورة البوابة ومتغيراتها فقط.
 7. الإبقاء على `blofy-activation` و`blofy-releases` كخدمات upstream.
 8. فحص `/health` و`/xtream` ومسارات الموقع القديمة بعد النشر.
+9. يثبت أن `/health` صادر من نفس Git SHA الجاري نشره وأن الكتالوج أكمل sync بعد بدء تلك revision؛ أي Deploy أقدم/مكرر يُلغى لصالح أحدث commit.
 
 يتطلب متغيرات GitHub Actions التالية في هذا المستودع:
 
