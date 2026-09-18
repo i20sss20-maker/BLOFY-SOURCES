@@ -67,7 +67,8 @@ export function resolveAuthorizedXtreamTarget(stream,{allowHttp=envBool('AUTHORI
   const extension=sanitizeExtension(stream.extension,mediaType==='live'?'ts':'mp4');
   return{
     url:`${credentials.baseUrl}/${mediaType}/${encodeURIComponent(credentials.username)}/${encodeURIComponent(credentials.password)}/${encodeURIComponent(upstreamId)}.${extension}`,
-    extension
+    extension,
+    proxy:true
   };
 }
 
@@ -214,7 +215,9 @@ export async function syncAuthorizedXtreamFeed(feed={},{
 
   if(kinds.has('live')&&rows.length<itemLimit){
     const list=await xtreamJson(credentials,'get_live_streams');
-    const liveExt=sanitizeExtension(feed.liveOutput||feed.live_output||feed.liveExtension||feed.live_extension||'ts','ts');
+    // Keep licensed upstream Live opaque behind BLOFY. TS can be streamed through the gateway
+    // without exposing partner credentials; HLS playlist rewriting is intentionally not used here.
+    const liveExt='ts';
     for(const raw of Array.isArray(list)?list:[]){
       if(rows.length>=itemLimit)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
