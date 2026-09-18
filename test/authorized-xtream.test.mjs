@@ -51,6 +51,7 @@ test('authorized Xtream credentials stay in runtime env and resolve only at play
 
     const target=resolveAuthorizedXtreamTarget(stream);
     assert.equal(target.extension,'mkv');
+    assert.equal(target.proxy,true);
     assert.equal(
       target.url,
       'https://partner.example/base/movie/licensed-user/Secret%2FPass-123/88.mkv'
