@@ -4,7 +4,7 @@ import { fetchJson, envInt, envBool } from './common.mjs';
 const PEERTUBE_ALLOWED_LICENSE_IDS = new Set([1, 2, 7, 8]);
 
 
-const PEERTUBE_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|برمجة|سياسة|سياسي|نشاط|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|science|technology|activism|how to|quran|recitation)/i;
+const PEERTUBE_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|برمجة|سياسة|سياسي|نشاط|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|technology|activism|how to|quran|recitation)/i;
 const PEERTUBE_SERIES = /(?:مسلسل|مسلسلات|حلقة|حلقات|موسم|دراما|series|serial|episode|season|drama|tv show)/i;
 const PEERTUBE_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
 const PEERTUBE_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime|kids)/i;
