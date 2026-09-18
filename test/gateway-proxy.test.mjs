@@ -14,7 +14,7 @@ async function upstream(port,name){return new Promise((resolve,reject)=>{const s
 async function wait(base,child){for(let i=0;i<60;i++){if(child.exitCode!=null)throw new Error(`gateway exited ${child.exitCode}`);try{const r=await fetch(`${base}/health`);if(r.ok)return}catch{}await new Promise(r=>setTimeout(r,100))}throw new Error('gateway health timeout')}
 async function close(server){return new Promise(resolve=>server.close(resolve))}
 
-test('unified gateway preserves activation and releases routes while keeping Xtream local',async()=>{
+test('unified gateway serves new admin while preserving activation and releases routes',async()=>{
   const [port,activationPort,releasesPort]=await Promise.all([freePort(),freePort(),freePort()]);
   const activation=await upstream(activationPort,'activation'),releases=await upstream(releasesPort,'releases');
   const dataDir=mkdtempSync(path.join(os.tmpdir(),'blofy-gateway-')),base=`http://127.0.0.1:${port}`,expectedHost=new URL(base).host;
@@ -22,10 +22,11 @@ test('unified gateway preserves activation and releases routes while keeping Xtr
   try{
     await wait(base,child);
     let r=await fetch(`${base}/portal?x=1`,{headers:{'x-forwarded-proto':'https'}});let j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/portal?x=1');assert.equal(j.forwardedHost,expectedHost);assert.equal(j.forwardedProto,'https');
-    r=await fetch(`${base}/admin`);j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/admin');
+    r=await fetch(`${base}/admin`);assert.equal(r.status,200);let html=await r.text();assert.match(html,/BLOFY/);assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);
+    r=await fetch(`${base}/activation-admin`);j=await r.json();assert.equal(j.service,'activation');assert.equal(j.path,'/admin');
     r=await fetch(`${base}/downloads/client.apk`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/downloads/client.apk');
     r=await fetch(`${base}/releases-admin/builds`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/admin/builds');
     r=await fetch(`${base}/player_api.php?username=testuser&password=TestPass-123`);j=await r.json();assert.equal(j.user_info.auth,1);assert.notEqual(j.service,'activation');
-    r=await fetch(`${base}/xtream`);const html=await r.text();assert.match(html,/BLOFY XTREAM/);
+    r=await fetch(`${base}/xtream`);html=await r.text();assert.match(html,/BLOFY/);assert.match(html,/لوحة الإدارة/);
   } finally {child.kill('SIGTERM');await Promise.all([close(activation),close(releases)]);rmSync(dataDir,{recursive:true,force:true})}
 },15000);
