@@ -18,8 +18,8 @@ async function fetchProvider(provider){
 function applyResult(result){
   const provider=result.provider;
   if(result.status==='disabled'){
-    catalog.sources[provider.id]={...(catalog.sources[provider.id]||{}),id:provider.id,name:provider.name,enabled:false,rights:provider.rights,lastError:null};
-    return{source:provider.id,status:'disabled',count:0};
+    const count=catalog.replaceSource(provider.id,[],{id:provider.id,name:provider.name,enabled:false,kind:provider.kind,rights:provider.rights,lastError:null,failedAt:null});
+    return{source:provider.id,status:'disabled',count};
   }
   if(result.status==='error'){
     catalog.markSourceError(provider.id,result.error);
