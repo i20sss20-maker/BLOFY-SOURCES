@@ -6,6 +6,27 @@ const ARCHIVE_FIELDS = ['identifier','title','description','creator','subject','
 const FEDFLIX_QUERY = 'mediatype:movies AND collection:FedFlix';
 const PRELINGER_QUERY = `mediatype:movies AND collection:prelinger AND ${OPEN_LICENSE_QUERY}`;
 
+function openShardQueries() {
+  const currentYear = new Date().getUTCFullYear();
+  const ranges = [
+    ['2000-01-01','2009-12-31'],
+    ['2010-01-01','2014-12-31'],
+    ['2015-01-01','2019-12-31'],
+    ['2020-01-01','2022-12-31'],
+    ['2023-01-01','2024-12-31'],
+    ['2025-01-01',`${currentYear}-12-31`]
+  ];
+  return ranges.map(([from,to]) => `mediatype:movies AND addeddate:[${from} TO ${to}] AND ${OPEN_LICENSE_QUERY}`);
+}
+
+function arabicExpansionQueries() {
+  return [
+    `mediatype:movies AND (title:فيلم OR title:وثائقي OR title:مسلسل OR title:برنامج OR title:الحلقة OR title:موسم) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (subject:Arabic OR subject:"Arabic language" OR subject:"Arab world") AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND collection:opensource_movies AND (language:Arabic OR language:ara OR language:ar OR title:فيلم OR title:وثائقي OR title:مسلسل) AND ${OPEN_LICENSE_QUERY}`
+  ];
+}
+
 function looseEpisodeTitle(title) {
   const text = String(title || '').trim();
   const patterns = [
@@ -142,13 +163,18 @@ export async function syncInternetArchive() {
   const arabicLimit = envInt('IA_ARABIC_LIMIT', 4500, 100, 12000);
   const fedflixLimit = envInt('IA_FEDFLIX_LIMIT', 6000, 100, 7000);
   const prelingerLimit = envInt('IA_PRELINGER_LIMIT', 5000, 100, 10000);
+  const shardLimit = envInt('IA_SHARD_LIMIT', 18000, 1000, 30000);
+  const shardConcurrency = envInt('IA_SHARD_CONCURRENCY', 2, 1, 3);
+  const arabicExtraLimit = envInt('IA_ARABIC_EXTRA_LIMIT', 10000, 500, 20000);
   const byId = new Map();
 
-  const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs] = await Promise.all([
+  const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs, shardSets, arabicExtraSets] = await Promise.all([
     archiveDocs(genericQuery(), generalLimit),
     archiveDocs(arabicQuery(), arabicLimit),
     archiveDocs(FEDFLIX_QUERY, fedflixLimit),
-    archiveDocs(PRELINGER_QUERY, prelingerLimit)
+    archiveDocs(PRELINGER_QUERY, prelingerLimit),
+    mapLimit(openShardQueries(), shardConcurrency, query => archiveDocs(query, shardLimit)),
+    mapLimit(arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit))
   ]);
 
   for (const doc of generalDocs) {
@@ -168,6 +194,20 @@ export async function syncInternetArchive() {
     if (!item) continue;
     if (!String(item.category || '').startsWith('عربي ·')) item.category = `Prelinger · ${item.category}`;
     byId.set(item.sourceItemId, item);
+  }
+
+  for (const docs of shardSets) {
+    for (const doc of docs) {
+      const item = toCatalogItem(doc);
+      if (item) byId.set(item.sourceItemId, item);
+    }
+  }
+
+  for (const docs of arabicExtraSets) {
+    for (const doc of docs) {
+      const item = toCatalogItem(doc, { forceArabic: isArabicDoc(doc) || /[\u0600-\u06ff]/.test(String(doc.title || '')) });
+      if (item) byId.set(item.sourceItemId, item);
+    }
   }
 
   const seriesDocs = await mapLimit(seriesQueries(), 3, query => archiveDocs(query, seriesLimit));
