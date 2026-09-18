@@ -143,7 +143,7 @@ jobs:
           const arabic=Number(stats.arabic?.total||0);
           if(h.xtream?.syncing===true) throw new Error('catalog_sync_still_running');
           if(!nasa || nasa.enabled!==false || Number(nasa.count||0)!==0) throw new Error('nasa_not_purged');
-          if(!open || open.enabled!==true || Number(open.count||0)<1) throw new Error('open_arabic_films_missing');
+          if(!open || open.enabled!==true || Number(open.count||0)<=7) throw new Error('open_arabic_timedtext_missing');
           if(total>0 && arabic/total<0.95) throw new Error(`arabic_ratio_too_low_${arabic}_of_${total}`);
           console.log(`Arabic-first verified: ${arabic}/${total}; openFilms=${open.count}; NASA=0`);
           NODE
