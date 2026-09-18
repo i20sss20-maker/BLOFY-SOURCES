@@ -53,15 +53,18 @@ export async function syncWikimediaCommons() {
     { query: 'filetype:video incategory:"Al Jazeera videos"', category: 'الجزيرة · Creative Commons' },
     { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · غزة · Creative Commons' }
   ];
-  for (const entry of arabicQueries) {
-    try {
-      for (const item of await searchVideos(entry.query, arabicLimit, { arabic: true, category: entry.category })) byId.set(item.sourceItemId, item);
-    } catch (error) {
-      console.warn(`Wikimedia Arabic query skipped: ${String(error?.message || error)}`);
-    }
-  }
-
-  const general = await searchVideos('filetype:video', limit);
+  const [arabicSets, general] = await Promise.all([
+    Promise.all(arabicQueries.map(async entry => {
+      try {
+        return await searchVideos(entry.query, arabicLimit, { arabic: true, category: entry.category });
+      } catch (error) {
+        console.warn(`Wikimedia Arabic query skipped: ${String(error?.message || error)}`);
+        return [];
+      }
+    })),
+    searchVideos('filetype:video', limit)
+  ]);
+  for (const rows of arabicSets) for (const item of rows) byId.set(item.sourceItemId, item);
   for (const item of general) if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
 
   return [...byId.values()].sort((a,b) => Number(b.language === 'ar') - Number(a.language === 'ar') || a.title.localeCompare(b.title, 'ar'));
