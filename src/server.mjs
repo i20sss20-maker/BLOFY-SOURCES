@@ -9,6 +9,7 @@ import { storageStatus } from './storage.mjs';
 import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
+import { legacyXtreamHealth } from './xtream-auth.mjs';
 
 const ACTIVATION_URL=String(process.env.ACTIVATION_URL||'http://blofy-activation').replace(/\/+$/,'');
 const RELEASE_URL=String(process.env.RELEASE_URL||'http://blofy-releases').replace(/\/+$/,'');
@@ -62,7 +63,9 @@ function proxy(req,res){
 const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url||'/',baseUrl(req)),pathname=cleanPath(url.pathname);
   if((req.method==='GET'||req.method==='HEAD')&&pathname==='/health'){
-    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:accountHealth(),...syncState()}};
+    const legacy=await legacyXtreamHealth();
+    const localAccounts=accountHealth();
+    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:{...localAccounts,legacyActive:legacy.accounts,totalRecognized:localAccounts.active+legacy.accounts},legacyAuth:legacy,...syncState()}};
     if(req.method==='HEAD'){res.writeHead(200,{'cache-control':'no-store',...securityHeaders()});return res.end()}
     return json(res,200,body,securityHeaders());
   }
@@ -73,9 +76,9 @@ const server=http.createServer(async(req,res)=>{try{
     adminUrl.pathname=`/api/admin/${pathname.slice(prefix.length)}`;
     return adminApi(req,res,adminUrl);
   }
-  if(req.method==='GET'&&(pathname==='/player_api.php'||pathname==='/panel_api.php'))return servePlayerApi(req,res,url);
-  if(req.method==='GET'&&pathname==='/get.php')return serveM3u(req,res,url);
-  if(req.method==='GET'&&pathname==='/xmltv.php')return serveXmltv(req,res,url);
+  if((req.method==='GET'||req.method==='POST')&&(pathname==='/player_api.php'||pathname==='/panel_api.php'))return await servePlayerApi(req,res,url);
+  if(req.method==='GET'&&pathname==='/get.php')return await serveM3u(req,res,url);
+  if(req.method==='GET'&&pathname==='/xmltv.php')return await serveXmltv(req,res,url);
   if(req.method==='GET'&&await servePlayback(req,res,pathname))return;
   return proxy(req,res);
 }catch(e){
