@@ -15,6 +15,12 @@ const CURATED = [
     subtitleLanguages: ['ar']
   },
   {
+    file: 'Elephants Dream.ogv',
+    title: 'Elephants Dream · حلم الفيلة',
+    category: 'أجنبي مترجم · أفلام مفتوحة',
+    subtitleLanguages: ['ar']
+  },
+  {
     file: 'Tears of Steel in 4k - Official Blender Foundation release.webm',
     title: 'Tears of Steel · دموع الفولاذ',
     category: 'أجنبي مترجم · أفلام مفتوحة',
