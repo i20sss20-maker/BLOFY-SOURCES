@@ -75,6 +75,9 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = {
             { name: 'IA_PAGE_CONCURRENCY', value: '5' }
             { name: 'WIKIMEDIA_LIMIT', value: '8000' }
             { name: 'WIKIMEDIA_ARABIC_LIMIT', value: '3000' }
+            { name: 'WIKIMEDIA_SHARD_LIMIT', value: '1000' }
+            { name: 'WIKIMEDIA_ARABIC_SHARD_LIMIT', value: '250' }
+            { name: 'WIKIMEDIA_SHARD_CONCURRENCY', value: '4' }
             { name: 'PEERTUBE_LIMIT', value: '20000' }
             { name: 'PEERTUBE_ARABIC_LIMIT', value: '4000' }
             { name: 'PEERTUBE_SEED_CONCURRENCY', value: '4' }
