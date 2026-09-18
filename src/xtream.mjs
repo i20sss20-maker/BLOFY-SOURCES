@@ -48,7 +48,7 @@ export async function servePlayerApi(req,res,url){
     const x=catalog.get(url.searchParams.get('vod_id'));
     if(!x||x.kind!=='movie')return json(res,200,[]);
     return json(res,200,{
-      info:{movie_image:x.icon||'',name:x.title,plot:x.description||'',genre:x.category||'',releasedate:x.publishedAt||'',rating:'',duration:'',director:'',cast:'',backdrop_path:[],youtube_trailer:'',license:x.licenseName||'',license_url:x.licenseUrl||'',attribution:x.attribution||'',source:x.source},
+      info:{movie_image:x.icon||'',name:x.title,plot:x.description||'',genre:x.category||'',releasedate:x.publishedAt||'',rating:'',duration:'',director:'',cast:'',backdrop_path:[],youtube_trailer:'',license:x.licenseName||'',license_url:x.licenseUrl||'',attribution:x.attribution||'',source:x.source,subtitles:Array.isArray(x.subtitles)?x.subtitles:[]},
       movie_data:movieObject(x)
     });
   }
