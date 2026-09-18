@@ -101,7 +101,6 @@ jobs:
           set -euo pipefail
           BASE='${{ steps.deploy.outputs.base }}'
           az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP"             --set-env-vars               PUBLIC_BASE_URL="$BASE"               XTREAM_PUBLIC_BASE_URL="$BASE"             --only-show-errors >/dev/null
-          az containerapp ingress traffic set -g "$AZURE_RG" -n "$CONTAINER_APP"             --revision-weight latest=100 --only-show-errors >/dev/null
 
       - name: Verify standalone Xtream end to end
         shell: bash
