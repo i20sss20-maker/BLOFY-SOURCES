@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: blofy-xtream-azure-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   AZURE_RG: ${{ vars.BLOFY_AZURE_RG || 'rg-blofy-player' }}
@@ -100,7 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE='${{ steps.deploy.outputs.base }}'
-          az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP"             --set-env-vars               PUBLIC_BASE_URL="$BASE"               XTREAM_PUBLIC_BASE_URL="$BASE"             --only-show-errors >/dev/null
+          az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP"             --set-env-vars               PUBLIC_BASE_URL="$BASE"               XTREAM_PUBLIC_BASE_URL="$BASE"               BLOFY_BUILD_SHA="$GITHUB_SHA"             --only-show-errors >/dev/null
 
       - name: Verify standalone Xtream end to end
         shell: bash
@@ -116,8 +116,10 @@ jobs:
               smoke="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.ok))")"
               stage="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.stage||''))")"
               syncing="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.syncing===true))")"
-              echo "Attempt $attempt: standalone=$standalone smoke=$smoke stage=$stage syncing=$syncing"
-              if [ "$standalone" = true ] && [ "$smoke" = true ] && [ "$syncing" = false ]; then break; fi
+              build_sha="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.build?.sha||''))")"
+              synced_this_boot="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); const a=Date.parse(h.xtream?.stats?.lastSyncAt||''),b=Date.parse(h.build?.startedAt||''); process.stdout.write(String(Number.isFinite(a)&&Number.isFinite(b)&&a>=b))")"
+              echo "Attempt $attempt: build=$build_sha standalone=$standalone smoke=$smoke stage=$stage syncing=$syncing syncedThisBoot=$synced_this_boot"
+              if [ "$build_sha" = "$GITHUB_SHA" ] && [ "$standalone" = true ] && [ "$smoke" = true ] && [ "$syncing" = false ] && [ "$synced_this_boot" = true ]; then break; fi
             fi
             [ "$attempt" = 96 ] && { cat /tmp/health.json 2>/dev/null || true; exit 1; }
             sleep 5
@@ -131,6 +133,10 @@ jobs:
           const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
           const stats=h.xtream?.stats||{};
           const sources=Array.isArray(stats.sources)?stats.sources:[];
+          if(String(h.build?.sha||'')!==process.env.GITHUB_SHA) throw new Error('wrong_build_revision');
+          const started=Date.parse(h.build?.startedAt||'');
+          const synced=Date.parse(stats.lastSyncAt||'');
+          if(!Number.isFinite(started)||!Number.isFinite(synced)||synced<started) throw new Error('catalog_not_synced_this_boot');
           const nasa=sources.find(x=>x.id==='nasa');
           const open=sources.find(x=>x.id==='open-arabic-films');
           const total=Number(stats.totalItems||0);
