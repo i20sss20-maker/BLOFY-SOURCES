@@ -1,6 +1,25 @@
 import { stripHtml } from '../catalog.mjs';
 import { fetchJson, envInt, envBool, allowedOpenLicense } from './common.mjs';
 
+const WIKIMEDIA_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|سياسة|سياسي|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|science|technology|activism|quran|recitation|press conference)/i;
+const WIKIMEDIA_SERIES = /(?:مسلسل|مسلسلات|حلقة|حلقات|موسم|دراما|series|serial|episode|season|drama|tv show)/i;
+const WIKIMEDIA_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
+const WIKIMEDIA_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime|kids)/i;
+const WIKIMEDIA_THEATRE = /(?:مسرحية|مسرحيات|مسرح|theatre|theater|stage play)/i;
+const WIKIMEDIA_FILM = /(?:فيلم|أفلام|افلام|سينما|كوميديا|كوميدي|أكشن|اكشن|رعب|رومانسي|movie|movies|film|films|cinema|comedy|action|horror|romance|short film|feature film)/i;
+
+export function wikimediaEntertainmentProfile({ title = '', description = '', category = '' } = {}) {
+  const text = `${title} ${description} ${category}`;
+  if (!text.trim()) return { accepted:false, category:'', reason:'missing-metadata' };
+  if (WIKIMEDIA_NON_ENTERTAINMENT.test(text)) return { accepted:false, category:'', reason:'non-entertainment' };
+  if (WIKIMEDIA_ANIMATION.test(text)) return { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' };
+  if (WIKIMEDIA_DOCUMENTARY.test(text)) return { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' };
+  if (WIKIMEDIA_THEATRE.test(text)) return { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' };
+  if (WIKIMEDIA_SERIES.test(text)) return { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' };
+  if (WIKIMEDIA_FILM.test(text)) return { accepted:true, category:'عربي · أفلام عربية مفتوحة', reason:'film' };
+  return { accepted:false, category:'', reason:'not-entertainment' };
+}
+
 function wikimediaLicense(meta = {}) {
   const name = stripHtml(meta.LicenseShortName?.value || '');
   const url = stripHtml(meta.LicenseUrl?.value || '');
@@ -34,11 +53,13 @@ async function wikiJson(url){
   }
   throw lastError;
 }
-async function searchVideos(query, limit, { arabic = false, category = 'Wikimedia Commons' } = {}) {
+async function searchVideos(query, limit, { arabic = false, category = 'Wikimedia Commons', entertainmentOnly = false } = {}) {
   const batch = 50;
   let offset = 0;
+  let scanned = 0;
+  const scanCap = Math.max(500, limit * 8);
   const items = [];
-  while (items.length < limit) {
+  while (items.length < limit && scanned < scanCap) {
     const params = new URLSearchParams({
       action: 'query', format: 'json', formatversion: '2', generator: 'search', gsrsearch: query,
       gsrnamespace: '6', gsrlimit: String(batch), gsroffset: String(offset), prop: 'imageinfo',
@@ -48,16 +69,20 @@ async function searchVideos(query, limit, { arabic = false, category = 'Wikimedi
     const data = await wikiJson(`https://commons.wikimedia.org/w/api.php?${params}`);
     const pages = data?.query?.pages || [];
     if (!pages.length) break;
+    scanned += pages.length;
     for (const page of pages) {
       const info = page.imageinfo?.[0]; if (!info?.url) continue;
       const license = wikimediaLicense(info.extmetadata || {}); if (!license.allowed) continue;
       const title = String(page.title || '').replace(/^File:/i, '').replace(/\.[a-z0-9]{2,5}$/i, '');
       const ext = String(info.url).split('?')[0].split('.').pop()?.toLowerCase() || ''; if (!['webm','ogv','ogg','mp4'].includes(ext)) continue;
       const artist = stripHtml(info.extmetadata?.Artist?.value || info.extmetadata?.Credit?.value || 'Wikimedia Commons');
+      const description = stripHtml(info.extmetadata?.ImageDescription?.value || '');
+      const profile = entertainmentOnly ? wikimediaEntertainmentProfile({ title, description, category }) : null;
+      if (entertainmentOnly && !profile.accepted) continue;
       items.push({
         sourceItemId: String(page.pageid || page.title), kind: 'movie', title,
-        description: stripHtml(info.extmetadata?.ImageDescription?.value || ''), icon: '',
-        category: arabic ? `عربي · ${category}` : category,
+        description, icon: '',
+        category: profile?.category || (arabic ? `عربي · ${category}` : category),
         language: arabic ? 'ar' : '', licenseName: license.name, licenseUrl: license.url, attribution: artist,
         stream: { resolver: 'direct', url: info.url, extension: ext },
         rights: { mode: 'license-filtered', redistributable: true, commercialCompatible: true, arabic }
@@ -87,10 +112,10 @@ async function prefixVideoSets(limit, concurrency) {
     }
   });
 }
-async function arabicPrefixVideoSets(limit, concurrency) {
+async function arabicPrefixVideoSets(limit, concurrency, entertainmentOnly = false) {
   return mapLimit(arabicPrefixes(), concurrency, async prefix => {
     try {
-      return await searchVideos(`filetype:video prefix:File:${prefix}`, limit, { arabic: true, category: 'ويكيميديا · أسماء عربية' });
+      return await searchVideos(`filetype:video prefix:File:${prefix}`, limit, { arabic: true, category: 'ويكيميديا · أسماء عربية', entertainmentOnly });
     } catch (error) {
       console.warn(`Wikimedia Arabic prefix shard skipped ${prefix}: ${String(error?.message || error)}`);
       return [];
@@ -105,9 +130,17 @@ export async function syncWikimediaCommons() {
   const arabicShardLimit = envInt('WIKIMEDIA_ARABIC_SHARD_LIMIT', 250, 25, 1000);
   const shardConcurrency = envInt('WIKIMEDIA_SHARD_CONCURRENCY', 4, 1, 6);
   const arabicFirst = envBool('ARABIC_FIRST', true);
+  const entertainmentOnly = arabicFirst && envBool('ARABIC_FIRST_ENTERTAINMENT_ONLY', true);
   const byId = new Map();
 
-  const arabicQueries = [
+  const arabicQueries = entertainmentOnly ? [
+    { query: 'filetype:video incategory:"Videos in Arabic"', category: 'ويكيميديا عربي' },
+    { query: 'filetype:video فيلم', category: 'أفلام عربية' },
+    { query: 'filetype:video مسلسل', category: 'مسلسلات عربية' },
+    { query: 'filetype:video وثائقي', category: 'وثائقيات عربية' },
+    { query: 'filetype:video مسرحية', category: 'مسرحيات عربية' },
+    { query: 'filetype:video كرتون', category: 'أطفال وأنيميشن عربي' }
+  ] : [
     { query: 'filetype:video incategory:"Videos in Arabic"', category: 'ويكيميديا عربي' },
     { query: 'filetype:video incategory:"Al Jazeera videos"', category: 'الجزيرة · Creative Commons' },
     { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · غزة · Creative Commons' },
@@ -121,7 +154,7 @@ export async function syncWikimediaCommons() {
   const [arabicSets, general, prefixSets, arabicPrefixSets] = await Promise.all([
     Promise.all(arabicQueries.map(async entry => {
       try {
-        return await searchVideos(entry.query, arabicLimit, { arabic: true, category: entry.category });
+        return await searchVideos(entry.query, arabicLimit, { arabic: true, category: entry.category, entertainmentOnly });
       } catch (error) {
         console.warn(`Wikimedia Arabic query skipped: ${String(error?.message || error)}`);
         return [];
@@ -129,7 +162,7 @@ export async function syncWikimediaCommons() {
     })),
     arabicFirst ? [] : searchVideos('filetype:video', limit),
     arabicFirst ? [] : prefixVideoSets(shardLimit, shardConcurrency),
-    arabicPrefixVideoSets(arabicShardLimit, Math.min(3, shardConcurrency))
+    entertainmentOnly ? [] : arabicPrefixVideoSets(arabicShardLimit, Math.min(3, shardConcurrency), false)
   ]);
   for (const rows of arabicSets) for (const item of rows) byId.set(item.sourceItemId, item);
   for (const rows of arabicPrefixSets) for (const item of rows) byId.set(item.sourceItemId, item);
