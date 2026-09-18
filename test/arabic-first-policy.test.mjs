@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { envBool, arabicFirstEnabled } from '../src/providers/common.mjs';
 import { providerDefinitions } from '../src/providers/index.mjs';
 import { mediaFileFromArabicTimedText, localizedOpenEntertainmentProfile } from '../src/providers/open-arabic-films.mjs';
-import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
+import { normalizeAuthorizedManifest, normalizeAuthorizedM3u } from '../src/providers/authorized-partners.mjs';
 import { archiveEntertainmentProfile } from '../src/providers/internet-archive.mjs';
 import { peertubeEntertainmentProfile } from '../src/providers/peertube.mjs';
 import { wikimediaEntertainmentProfile } from '../src/providers/wikimedia.mjs';
@@ -243,4 +243,93 @@ test('Arabic-subtitled open-video discovery rejects translated talks, news and g
   ]) {
     assert.equal(localizedOpenEntertainmentProfile(item).accepted, false, item.title);
   }
+});
+
+
+test('authorized M3U requires Arabic localization and inherited Saudi/MENA rights', () => {
+  const m3u = [
+    '#EXTM3U',
+    '#EXTINF:-1 tvg-id="drama1" tvg-name="دراما 24" tvg-logo="https://cdn.example/logo.png" group-title="دراما",دراما 24',
+    'https://cdn.example/drama.m3u8'
+  ].join('\n');
+
+  assert.throws(
+    () => normalizeAuthorizedM3u(m3u, { partner:'Demo', territories:['SA'] }, { language:'ar' }),
+    /missing_rights_reference/
+  );
+
+  const manifest = {
+    partner:'Demo FAST',
+    rightsReference:'agreement-88',
+    territories:['GCC'],
+    expiresAt:'2030-12-31T23:59:59Z'
+  };
+
+  assert.throws(
+    () => normalizeAuthorizedM3u(m3u, manifest, { language:'en' }, { now:Date.parse('2026-09-18T00:00:00Z') }),
+    /arabic_localization_missing/
+  );
+
+  const rows = normalizeAuthorizedM3u(
+    m3u,
+    manifest,
+    { language:'ar', category:'قنوات رقمية' },
+    { now:Date.parse('2026-09-18T00:00:00Z') }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].kind, 'live');
+  assert.equal(rows[0].sourceItemId, 'drama1');
+  assert.equal(rows[0].title, 'دراما 24');
+  assert.equal(rows[0].category, 'عربي · دراما');
+  assert.equal(rows[0].epgId, 'drama1');
+  assert.equal(rows[0].rights.rightsReference, 'agreement-88');
+  assert.deepEqual(rows[0].rights.territories, ['GCC']);
+});
+
+test('authorized M3U supports foreign channels only when feed is explicitly Arabic-localized', () => {
+  const manifest = {
+    partner:'Movie Partner',
+    rightsReference:'movie-fast-1',
+    territories:['MENA']
+  };
+  const m3u = [
+    '#EXTM3U',
+    '#EXTINF:-1 tvg-name="Cinema Action" group-title="Movies",Cinema Action',
+    'https://cdn.example/action.m3u8'
+  ].join('\n');
+
+  const rows = normalizeAuthorizedM3u(m3u, manifest, {
+    language:'en',
+    subtitleLanguages:['ar']
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].category, 'أجنبي مترجم · Movies');
+  assert.equal(rows[0].rights.arabicAudio, false);
+  assert.equal(rows[0].rights.arabicSubtitle, true);
+});
+
+test('authorized M3U rejects custom header directives and unsafe HTTP by default', () => {
+  const manifest = {
+    partner:'Demo',
+    rightsReference:'deal-3',
+    territories:['SA']
+  };
+
+  const withHeader = [
+    '#EXTM3U',
+    '#EXTINF:-1,قناة',
+    '#EXTVLCOPT:http-user-agent=secret-agent',
+    'https://cdn.example/live.m3u8'
+  ].join('\n');
+  assert.throws(() => normalizeAuthorizedM3u(withHeader, manifest, { language:'ar' }), /custom_headers_unsupported/);
+
+  const plainHttp = [
+    '#EXTM3U',
+    '#EXTINF:-1,قناة',
+    'http://cdn.example/live.m3u8'
+  ].join('\n');
+  assert.equal(normalizeAuthorizedM3u(plainHttp, manifest, { language:'ar' }).length, 0);
+  assert.equal(normalizeAuthorizedM3u(plainHttp, manifest, { language:'ar' }, { allowHttp:true }).length, 1);
 });
