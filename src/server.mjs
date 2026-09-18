@@ -13,6 +13,7 @@ import { legacyXtreamHealth, runXtreamSelfTest, xtreamSmokeState } from './xtrea
 
 const ACTIVATION_URL=String(process.env.ACTIVATION_URL||'http://blofy-activation').replace(/\/+$/,'');
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
+const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
 const RELEASE_URL=String(process.env.RELEASE_URL||'http://blofy-releases').replace(/\/+$/,'');
 const RELEASE_PATH=/^(?:\/release\.json|\/download(?:\/|$)|\/downloads(?:\/|$)|\/releases(?:\/|$))/;
 const HOP_BY_HOP=new Set(['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade']);
@@ -105,3 +106,6 @@ setInterval(()=>{
   if(!SELF_TEST_BASE)return;
   runXtreamSelfTest(SELF_TEST_BASE).catch(error=>console.error('scheduled xtream self-test failed:',String(error?.message||error)));
 },30*60_000).unref();
+
+setTimeout(()=>{if(!SELF_TEST_BASE)return;runXtreamSelfTest(SELF_TEST_BASE).then(result=>console.log('xtream self-test:',JSON.stringify(result))).catch(error=>console.error('xtream self-test failed:',String(error?.message||error)))},7000).unref();
+setInterval(()=>{if(!SELF_TEST_BASE)return;runXtreamSelfTest(SELF_TEST_BASE).catch(error=>console.error('scheduled xtream self-test failed:',String(error?.message||error)))},30*60_000).unref();
