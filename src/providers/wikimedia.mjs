@@ -20,6 +20,20 @@ async function mapLimit(values, limit, fn) {
   return out;
 }
 
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function wikiJson(url){
+  let lastError;
+  for(let attempt=1;attempt<=4;attempt++){
+    try{return await fetchJson(url,30000)}
+    catch(error){
+      lastError=error;
+      const message=String(error?.message||error);
+      if(!message.includes('429'))throw error;
+      await sleep(attempt*1800);
+    }
+  }
+  throw lastError;
+}
 async function searchVideos(query, limit, { arabic = false, category = 'Wikimedia Commons' } = {}) {
   const batch = 50;
   let offset = 0;
@@ -31,7 +45,7 @@ async function searchVideos(query, limit, { arabic = false, category = 'Wikimedi
       iiprop: 'url|mime|mediatype|extmetadata',
       iiextmetadatafilter: 'LicenseShortName|LicenseUrl|Artist|Credit|ImageDescription|AttributionRequired', origin: '*'
     });
-    const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, 30000);
+    const data = await wikiJson(`https://commons.wikimedia.org/w/api.php?${params}`);
     const pages = data?.query?.pages || [];
     if (!pages.length) break;
     for (const page of pages) {
