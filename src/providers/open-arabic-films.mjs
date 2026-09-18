@@ -1,5 +1,6 @@
 import { stripHtml } from '../catalog.mjs';
 import { fetchJson, envInt, allowedOpenLicense } from './common.mjs';
+import { wikimediaEntertainmentProfile } from './wikimedia.mjs';
 
 const CURATED = [
   {
@@ -47,6 +48,24 @@ const CURATED = [
 ];
 
 const ARABIC_TIMEDTEXT_CODES = new Set(['ar','arb','arz','apc','ary','aeb','acm','acq']);
+
+
+const LOCALIZED_CATEGORY_BY_REASON = {
+  film:'أجنبي مترجم · أفلام مفتوحة',
+  series:'أجنبي مترجم · مسلسلات مفتوحة',
+  documentary:'أجنبي مترجم · وثائقيات مفتوحة',
+  theatre:'أجنبي مترجم · مسرح مفتوح',
+  animation:'أجنبي مترجم · أطفال وأنيميشن مفتوح'
+};
+
+export function localizedOpenEntertainmentProfile({ title = '', description = '' } = {}) {
+  const profile = wikimediaEntertainmentProfile({ title, description, category:'محتوى مترجم' });
+  if (!profile.accepted) return { accepted:false, category:'', reason:profile.reason };
+  const category = LOCALIZED_CATEGORY_BY_REASON[profile.reason] || '';
+  return category
+    ? { accepted:true, category, reason:profile.reason }
+    : { accepted:false, category:'', reason:'unsupported-entertainment-type' };
+}
 
 function mediaKey(value = '') {
   return String(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -146,6 +165,8 @@ async function discoverOpenArabicSubtitleFilms() {
     const artist = stripHtml(info.extmetadata?.Artist?.value || info.extmetadata?.Credit?.value || 'Wikimedia Commons');
     const description = stripHtml(info.extmetadata?.ImageDescription?.value || '');
     const title = entry.file.replace(/\.(?:webm|ogv|ogg|mp4)$/i, '').replace(/[_]+/g, ' ').trim();
+    const entertainment = localizedOpenEntertainmentProfile({ title, description });
+    if (!entertainment.accepted) continue;
     const subtitleUrl = `https://commons.wikimedia.org/w/index.php?title=${encodeURIComponent(entry.timedTextTitle)}&action=raw`;
 
     out.push({
@@ -154,7 +175,7 @@ async function discoverOpenArabicSubtitleFilms() {
       title,
       description,
       icon:info.thumburl || '',
-      category:'أجنبي مترجم · Wikimedia',
+      category:entertainment.category,
       language:'ar',
       licenseName:license.name,
       licenseUrl:license.url,
