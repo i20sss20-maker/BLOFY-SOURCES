@@ -20,6 +20,24 @@ test('episode parser handles SxxExx and season episode styles', () => {
   assert.equal(second.episode, 4);
 });
 
+test('catalog reuses derived indexes until content changes', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'blofy-cache-'));
+  try {
+    const store = await new CatalogStore({ dataDir: dir }).init();
+    store.replaceSource('one', [
+      { sourceItemId: 'e1', kind: 'series_episode', title: 'Ep 1', seriesTitle: 'Cached Show', season: 1, episode: 1, category: 'Series' },
+      { sourceItemId: 'm1', kind: 'movie', title: 'Movie 1', category: 'Films' }
+    ]);
+    const groups1=store.seriesGroups(),groups2=store.seriesGroups(),stats1=store.stats(),stats2=store.stats(),cats1=store.categoryRecords('movie'),cats2=store.categoryRecords('movie');
+    assert.equal(groups1,groups2);assert.equal(stats1,stats2);assert.equal(cats1,cats2);
+    store.replaceSource('one', [{ sourceItemId: 'm2', kind: 'movie', title: 'Movie 2', category: 'New Films' }]);
+    assert.notEqual(store.seriesGroups(),groups1);assert.notEqual(store.stats(),stats1);assert.notEqual(store.categoryRecords('movie'),cats1);
+    assert.equal(store.stats().movies,1);assert.equal(store.stats().episodes,0);assert.equal(store.categoryRecords('movie')[0].name,'New Films');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('catalog groups series episodes and persists', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'blofy-catalog-'));
   try {
