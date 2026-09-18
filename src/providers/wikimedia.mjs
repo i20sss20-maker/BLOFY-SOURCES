@@ -44,14 +44,20 @@ async function searchVideos(query, limit, { arabic = false, category = 'Wikimedi
 }
 
 export async function syncWikimediaCommons() {
-  const limit = envInt('WIKIMEDIA_LIMIT', 1200, 50, 5000);
-  const arabicLimit = envInt('WIKIMEDIA_ARABIC_LIMIT', 800, 25, 3000);
+  const limit = envInt('WIKIMEDIA_LIMIT', 8000, 100, 15000);
+  const arabicLimit = envInt('WIKIMEDIA_ARABIC_LIMIT', 3000, 100, 5000);
   const byId = new Map();
 
   const arabicQueries = [
     { query: 'filetype:video incategory:"Videos in Arabic"', category: 'ويكيميديا عربي' },
     { query: 'filetype:video incategory:"Al Jazeera videos"', category: 'الجزيرة · Creative Commons' },
-    { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · غزة · Creative Commons' }
+    { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · غزة · Creative Commons' },
+    { query: 'filetype:video incategory:"Videos by Middle East News Agency"', category: 'وكالة أنباء الشرق الأوسط' },
+    { query: 'filetype:video incategory:"Voice of America videos in Arabic"', category: 'صوت أمريكا · عربي' },
+    { query: 'filetype:video incategory:"Videos from Tasnim News Agency in Arabic"', category: 'تسنيم · عربي' },
+    { query: 'filetype:video incategory:"Wikimedia videos in Arabic"', category: 'ويكيميديا · عربي' },
+    { query: 'filetype:video incategory:"Wikitongues videos in Arabic"', category: 'Wikitongues · عربي' },
+    { query: 'filetype:video incategory:"CDC videos in Arabic"', category: 'CDC · عربي' }
   ];
   const [arabicSets, general] = await Promise.all([
     Promise.all(arabicQueries.map(async entry => {
