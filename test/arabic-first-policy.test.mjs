@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { envBool, arabicFirstEnabled } from '../src/providers/common.mjs';
 import { providerDefinitions } from '../src/providers/index.mjs';
 import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films.mjs';
+import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
 
 function withEnv(values, fn) {
   const before = new Map();
@@ -60,4 +61,52 @@ test('Arabic TimedText names resolve only to supported video files and Arabic la
   );
   assert.equal(mediaFileFromArabicTimedText('TimedText:Movie.webm.en.srt'), null);
   assert.equal(mediaFileFromArabicTimedText('TimedText:Poster.jpg.ar.srt'), null);
+});
+
+
+test('authorized partner manifests require a rights reference and Saudi/MENA territory', () => {
+  assert.throws(
+    () => normalizeAuthorizedManifest({ partner:'Demo', territories:['SA'], items:[] }),
+    /missing_rights_reference/
+  );
+  assert.throws(
+    () => normalizeAuthorizedManifest({ partner:'Demo', rightsReference:'contract-1', territories:['FR'], items:[] }),
+    /saudi_rights_missing/
+  );
+  assert.throws(
+    () => normalizeAuthorizedManifest({ partner:'Demo', rightsReference:'contract-1', territories:['SA'], expiresAt:'2020-01-01T00:00:00Z', items:[] }),
+    /rights_expired/
+  );
+});
+
+test('authorized partner manifests accept Arabic/localized media and reject foreign-only rows', () => {
+  const rows = normalizeAuthorizedManifest({
+    partner:'Demo Distributor',
+    rightsReference:'deal-2026-001',
+    territories:['MENA'],
+    expiresAt:'2030-01-01T00:00:00Z',
+    items:[
+      { id:'live-ar', kind:'live', title:'قناة عربية', language:'ar', url:'https://example.com/live.m3u8', category:'ترفيه' },
+      { id:'movie-sub', kind:'movie', title:'Foreign Movie', language:'en', url:'https://example.com/movie.mp4', subtitleLanguages:['ar'], category:'Movies' },
+      { id:'movie-no-ar', kind:'movie', title:'English Only', language:'en', url:'https://example.com/no-ar.mp4', category:'Movies' }
+    ]
+  }, { now: Date.parse('2026-09-18T00:00:00Z') });
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].sourceItemId, 'live-ar');
+  assert.equal(rows[0].category, 'عربي · ترفيه');
+  assert.equal(rows[1].sourceItemId, 'movie-sub');
+  assert.equal(rows[1].category, 'أجنبي مترجم · Movies');
+  assert.equal(rows[1].rights.rightsReference, 'deal-2026-001');
+});
+
+test('authorized partner manifests require HTTPS unless HTTP is explicitly allowed', () => {
+  const manifest = {
+    partner:'Demo',
+    rightsReference:'deal-2',
+    territories:['SA'],
+    items:[{ id:'x', kind:'live', title:'عربي', language:'ar', url:'http://example.com/live.m3u8' }]
+  };
+  assert.equal(normalizeAuthorizedManifest(manifest).length, 0);
+  assert.equal(normalizeAuthorizedManifest(manifest, { allowHttp:true }).length, 1);
 });

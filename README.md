@@ -87,6 +87,48 @@ GET /series/:username/:password/:episodeId.mp4
 - NASA: مكتبة الفيديو الرسمية مع تطبيق إرشادات المصدر، لكنها معطلة افتراضيًا أثناء Arabic-first.
 - IPTV-org موجود لكنه معطل افتراضيًا لأن توفر رابط عام لا يساوي ضمان حق إعادة التوزيع.
 
+## Partner Feeds المعتمدة
+
+يمكن ربط Feed من موزع صغير أو شريك مرخّص بدون كتابة Provider جديد. الميزة **مقفلة افتراضيًا** ولا تعمل إلا عند تفعيل:
+
+```text
+ENABLE_AUTHORIZED_PARTNERS=true
+AUTHORIZED_PARTNER_RIGHTS_CONFIRMED=true
+AUTHORIZED_PARTNER_MANIFEST_URLS=https://partner.example/catalog.json
+```
+
+كل Manifest يجب أن يحتوي على اسم الشريك و`rightsReference` ونطاق يشمل `SA` أو `GCC` أو `MENA`. الصفوف التي ليست عربية أو مترجمة/مدبلجة عربي تُستبعد تلقائيًا. روابط HTTP مرفوضة افتراضيًا، وأي stream يحتاج Headers خاصة يُستبعد لأن Xtream الحالي يوجّه المشغل مباشرة إلى رابط المصدر.
+
+مثال مختصر:
+
+```json
+{
+  "partner": "Example FAST Distributor",
+  "rightsReference": "agreement-2026-001",
+  "territories": ["MENA"],
+  "expiresAt": "2027-12-31T23:59:59Z",
+  "items": [
+    {
+      "id": "channel-1",
+      "kind": "live",
+      "title": "قناة دراما",
+      "language": "ar",
+      "category": "دراما",
+      "url": "https://cdn.example/channel.m3u8"
+    },
+    {
+      "id": "movie-1",
+      "kind": "movie",
+      "title": "Foreign Film",
+      "language": "en",
+      "subtitleLanguages": ["ar"],
+      "category": "Movies",
+      "url": "https://cdn.example/movie.mp4"
+    }
+  ]
+}
+```
+
 ## التخزين الدائم
 
 محليًا يستخدم `DATA_DIR`.
