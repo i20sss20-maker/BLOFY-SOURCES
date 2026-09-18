@@ -4,6 +4,7 @@ import { envBool, arabicFirstEnabled } from '../src/providers/common.mjs';
 import { providerDefinitions } from '../src/providers/index.mjs';
 import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films.mjs';
 import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
+import { archiveEntertainmentProfile } from '../src/providers/internet-archive.mjs';
 
 function withEnv(values, fn) {
   const before = new Map();
@@ -109,4 +110,41 @@ test('authorized partner manifests require HTTPS unless HTTP is explicitly allow
   };
   assert.equal(normalizeAuthorizedManifest(manifest).length, 0);
   assert.equal(normalizeAuthorizedManifest(manifest, { allowHttp:true }).length, 1);
+});
+
+
+test('Arabic Archive entertainment filter keeps viewer content and assigns clean categories', () => {
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'فيلم عربي كوميدي قديم', subject:['Arabic cinema'] }),
+    { accepted:true, category:'عربي · أفلام عربية مفتوحة', reason:'film' }
+  );
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'مسلسل الحارة الحلقة 12', subject:['television series'] }),
+    { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' }
+  );
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'رحلة في الصحراء', subject:['فيلم وثائقي','television'] }),
+    { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' }
+  );
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'مغامرات صغيرة', subject:['كرتون','أطفال'] }),
+    { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' }
+  );
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'مسرحية ليلة طويلة', subject:['مسرح'] }),
+    { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' }
+  );
+});
+
+test('Arabic Archive entertainment filter rejects lectures, interviews, news and generic uploads', () => {
+  for (const doc of [
+    { title:'محاضرة عن تاريخ السينما', subject:['فيلم'] },
+    { title:'مقابلة مع مخرج فيلم عربي', subject:['cinema'] },
+    { title:'بودكاست أسبوعي عن المسلسلات', subject:['series'] },
+    { title:'نشرة أخبار المساء', subject:['television'] },
+    { title:'تلاوة القرآن الكريم', subject:['Arabic'] },
+    { title:'جولة في السعودية 2026', subject:['Saudi Arabia','Arabic'] }
+  ]) {
+    assert.equal(archiveEntertainmentProfile(doc).accepted, false, doc.title);
+  }
 });
