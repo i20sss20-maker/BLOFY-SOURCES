@@ -100,7 +100,7 @@ function renderDashboardSubscribers(){
 
 function renderStatus(s){
   state=s;$('login').classList.add('hidden');
-  const stats=s.stats||{},arabic=s.arabic||stats.arabic||{},acc=s.accountsSummary||{};
+  const stats=s.stats||{},arabic=s.arabic||stats.arabic||{},acc=s.accountsSummary||{},providers=s.providers||[];
   $('mActive').textContent=fmt(acc.active);
   $('mExpired').textContent=fmt(acc.expired);
   $('mTotal').textContent=fmt(stats.totalItems);
@@ -118,6 +118,9 @@ function renderStatus(s){
   $('aLive').textContent=fmt(arabic.live);$('aMovies').textContent=fmt(arabic.movies);$('aSeries').textContent=fmt(arabic.series);$('aEpisodes').textContent=fmt(arabic.episodes);
   $('syncState').textContent=s.syncing?'المزامنة تعمل الآن…':'المكتبة جاهزة';
   $('lastSync').textContent=stats.lastSyncAt?new Date(stats.lastSyncAt).toLocaleString('ar-SA'):'لم تتم بعد';
+  const enabledProviders=providers.filter(p=>p.enabled),failedProviders=enabledProviders.filter(p=>p.runtime?.lastError);
+  $('sourceHealthSummary').textContent=failedProviders.length?`${failedProviders.length} مصدر يحتاج مراجعة · ${enabledProviders.length-failedProviders.length} سليم`:`كل ${enabledProviders.length} المصادر المفعلة سليمة`;
+  $('sourceHealthDot').className='mini-health '+(failedProviders.length?'warn':'ok');
   $('syncLog').innerHTML=(s.lastSyncLog||[]).slice(-8).map(x=>`<span class="sync-chip ${x.status==='error'?'err':'ok'}">${esc(x.source)} · ${x.status==='ok'?fmt(x.count):esc(x.status)}</span>`).join('');
   $('hostValue').textContent=s.baseUrl||'—';$('adminHostValue').textContent=s.adminBaseUrl||'—';
   renderSources(s.providers||[]);renderSourceFilter(s.providers||[]);renderAccessLinks();
@@ -185,12 +188,25 @@ async function loadArabic(reset=false){
 function filteredSubscribers(){
   const q=$('subscriberSearch').value.trim().toLowerCase();
   const selectFilter=$('subscriberStatus').value||subscriberFilter;
-  return allSubscribers.filter(a=>{
+  const sort=$('subscriberSort')?.value||'attention';
+  const rows=allSubscribers.filter(a=>{
     const matches=!q||`${a.username} ${a.label||''} ${a.note||''}`.toLowerCase().includes(q);
     if(!matches)return false;
     if(!selectFilter)return true;
     return subscriberStatus(a).key===selectFilter;
   });
+  const rank=a=>{const k=subscriberStatus(a).key;return k==='expired'?0:k==='soon'?1:k==='active'?2:3};
+  rows.sort((a,b)=>{
+    if(sort==='expiry'){
+      const ax=a.expiresAt?new Date(a.expiresAt).getTime():Number.MAX_SAFE_INTEGER;
+      const bx=b.expiresAt?new Date(b.expiresAt).getTime():Number.MAX_SAFE_INTEGER;
+      return ax-bx||String(a.label||a.username).localeCompare(String(b.label||b.username),'ar');
+    }
+    if(sort==='newest')return new Date(b.createdAt||0)-new Date(a.createdAt||0);
+    if(sort==='name')return String(a.label||a.username).localeCompare(String(b.label||b.username),'ar');
+    return rank(a)-rank(b)||((a.expiresAt?new Date(a.expiresAt).getTime():Number.MAX_SAFE_INTEGER)-(b.expiresAt?new Date(b.expiresAt).getTime():Number.MAX_SAFE_INTEGER));
+  });
+  return rows;
 }
 
 function openRenew(user){
@@ -230,8 +246,8 @@ function renderSubscribers(){
   $('subscriberCount').textContent=`${fmt(rows.length)} من ${fmt(allSubscribers.length)} مشترك`;
   $('subscriberRows').innerHTML=rows.length?rows.map(a=>{
     const st=subscriberStatus(a),left=daysLeft(a.expiresAt);
-    return `<tr>
-      <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline">${esc(a.username)}</div></td>
+    return `<tr class="subscriber-row status-${st.key}">
+      <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline username-line">${esc(a.username)} <button class="copy-user inline-copy" data-user="${esc(a.username)}">نسخ</button></div></td>
       <td><span class="badge ${st.cls}">${st.label}</span></td>
       <td>${dateText(a.expiresAt)}${left!=null&&!a.expired? `<div class="muted">${fmt(Math.max(0,left))} يوم</div>`:''}</td>
       <td>${fmt(a.maxConnections||1)}</td>
@@ -345,9 +361,11 @@ $('createSubscriberBtn').onclick=createSubscriber;
 
 $('subscriberSearch').addEventListener('input',renderSubscribers);
 $('subscriberStatus').onchange=()=>{subscriberFilter='';document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x.dataset.status===$('subscriberStatus').value));renderSubscribers()};
+$('subscriberSort').onchange=renderSubscribers;
 document.querySelectorAll('.summary-pill').forEach(b=>b.onclick=()=>{subscriberFilter=b.dataset.status;$('subscriberStatus').value=b.dataset.status;document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x===b));renderSubscribers()});
 
 $('subscriberRows').addEventListener('click',e=>{
+  const c=e.target.closest('.copy-user');if(c)return copyText(c.dataset.user,'تم نسخ Username');
   const r=e.target.closest('.renew-user');if(r)return openRenew(r.dataset.user);
   const p=e.target.closest('.password-user');if(p)return openPassword(p.dataset.user);
   const t=e.target.closest('.toggle-user');if(t)return toggleSubscriber(t.dataset.user,t.dataset.enable==='1',t);
@@ -367,6 +385,19 @@ $('passwordResult').addEventListener('click',e=>{
   const user=$('serverUsername').value,password=$('serverPassword').value,host=String(state?.baseUrl||'').replace(/\/+$/,'');
   copyText(`Host: ${host}\nUsername: ${user}\nPassword: ${password}`,'تم نسخ بيانات الدخول');
 });
+
+$('exportSubscribersBtn').onclick=()=>{
+  if(!allSubscribers.length)return toast('لا يوجد مشتركون للتصدير','error');
+  const rows=[['username','label','status','expires_at','max_connections','note']];
+  for(const a of allSubscribers){
+    const st=subscriberStatus(a);
+    rows.push([a.username,a.label||'',st.key,a.expiresAt||'',a.maxConnections||1,a.note||'']);
+  }
+  const csv='\uFEFF'+rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download=`blofy-subscribers-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  toast('تم تصدير المشتركين','success');
+};
 
 $('createdSubscriber').addEventListener('click',e=>{
   if(e.target.id!=='copyCreatedSubscriber'||!lastCreated)return;
