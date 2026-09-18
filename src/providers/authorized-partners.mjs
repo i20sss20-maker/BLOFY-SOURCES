@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { fetchJson, fetchText, envBool, envInt } from './common.mjs';
+import { syncAuthorizedXtreamFeed } from './authorized-xtream.mjs';
 
 const ARABIC_CODES = new Set(['ar','ara','arabic','arb','arz','apc','ary','aeb','acm','acq']);
 const SAUDI_TERRITORIES = new Set(['sa','ksa','saudi arabia','saudi','gcc','mena','global','world','worldwide']);
@@ -279,13 +280,29 @@ export async function syncAuthorizedPartnerManifests() {
 
     const feeds = Array.isArray(manifest.feeds) ? manifest.feeds : [];
     for (const feed of feeds) {
-      if (String(feed?.type || '').toLowerCase() !== 'm3u') continue;
-      const feedUrl = safeHttpUrl(feed.url, { allowHttp });
-      if (!feedUrl) throw new Error('partner_m3u_url_invalid');
-      const m3u = await fetchText(feedUrl, 30000);
-      const feedRows = normalizeAuthorizedM3u(m3u, manifest, feed, { allowHttp, maxItems });
-      for (const item of feedRows) byId.set(`${item.rights.partner}\0${item.sourceItemId}`, item);
       if (byId.size >= maxItems) break;
+      const type = String(feed?.type || '').toLowerCase();
+
+      if (type === 'm3u') {
+        const feedUrl = safeHttpUrl(feed.url, { allowHttp });
+        if (!feedUrl) throw new Error('partner_m3u_url_invalid');
+        const m3u = await fetchText(feedUrl, 30000);
+        const feedRows = normalizeAuthorizedM3u(m3u, manifest, feed, { allowHttp, maxItems: maxItems - byId.size });
+        for (const item of feedRows) byId.set(`${item.rights.partner}\0${item.sourceItemId}`, item);
+        continue;
+      }
+
+      if (type === 'xtream') {
+        const rights = manifestRightsContext(manifest, { allowHttp });
+        const profile = feedArabicProfile(feed);
+        const feedRows = await syncAuthorizedXtreamFeed(feed, {
+          rights,
+          profile,
+          allowHttp,
+          maxItems: maxItems - byId.size
+        });
+        for (const item of feedRows) byId.set(`${item.rights.partner}\0${item.sourceItemId}`, item);
+      }
     }
   }
 
