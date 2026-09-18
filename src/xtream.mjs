@@ -4,6 +4,23 @@ import { xtreamBaseUrl, json, text } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilter } from './xtream-format.mjs';
 
+async function mergedRequestUrl(req,url){
+  if(req.method!=='POST')return url;
+  const type=String(req.headers['content-type']||'').toLowerCase();
+  if(!type.includes('application/x-www-form-urlencoded')&&!type.includes('application/json'))return url;
+  let body='',size=0;
+  for await(const chunk of req){size+=chunk.length;if(size>32_000)throw new Error('xtream_request_too_large');body+=chunk.toString('utf8')}
+  if(!body)return url;
+  const merged=new URL(url);
+  if(type.includes('application/json')){
+    const parsed=JSON.parse(body);
+    for(const [key,value] of Object.entries(parsed||{}))if(value!=null&&!merged.searchParams.has(key))merged.searchParams.set(key,String(value));
+  }else{
+    const params=new URLSearchParams(body);
+    for(const [key,value] of params)if(!merged.searchParams.has(key))merged.searchParams.set(key,value);
+  }
+  return merged;
+}
 async function auth(url){
   const username=url.searchParams.get('username')||'',password=url.searchParams.get('password')||'';
   return authenticateXtream(username,password);
@@ -11,6 +28,7 @@ async function auth(url){
 function allCategory(id){const x=String(id||'').trim();return !x||x==='0'||x==='all'||x==='*'}
 
 export async function servePlayerApi(req,res,url){
+  url=await mergedRequestUrl(req,url);
   const a=await auth(url);
   if(!a)return json(res,200,{user_info:{auth:0,status:'Disabled'},server_info:serverInfo(req)});
   const action=url.searchParams.get('action')||'';
