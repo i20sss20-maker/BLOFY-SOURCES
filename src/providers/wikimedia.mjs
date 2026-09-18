@@ -7,6 +7,19 @@ function wikimediaLicense(meta = {}) {
   return { name, url, allowed: allowedOpenLicense(name, url) };
 }
 
+
+async function mapLimit(values, limit, fn) {
+  const out = new Array(values.length);
+  const queue = values.map((value, index) => ({ value, index }));
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const job = queue.shift();
+      out[job.index] = await fn(job.value, job.index);
+    }
+  }));
+  return out;
+}
+
 async function searchVideos(query, limit, { arabic = false, category = 'Wikimedia Commons' } = {}) {
   const batch = 50;
   let offset = 0;
@@ -43,9 +56,40 @@ async function searchVideos(query, limit, { arabic = false, category = 'Wikimedi
   return items;
 }
 
+
+function generalPrefixes() {
+  return [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'];
+}
+function arabicPrefixes() {
+  return ['ا','ب','ت','ج','ح','د','ر','س','ع','ف','ك','ل','م','ن','و','ي'];
+}
+async function prefixVideoSets(limit, concurrency) {
+  return mapLimit(generalPrefixes(), concurrency, async prefix => {
+    try {
+      return await searchVideos(`filetype:video prefix:File:${prefix}`, limit, { category: 'Wikimedia Commons · Open Video' });
+    } catch (error) {
+      console.warn(`Wikimedia prefix shard skipped ${prefix}: ${String(error?.message || error)}`);
+      return [];
+    }
+  });
+}
+async function arabicPrefixVideoSets(limit, concurrency) {
+  return mapLimit(arabicPrefixes(), concurrency, async prefix => {
+    try {
+      return await searchVideos(`filetype:video prefix:File:${prefix}`, limit, { arabic: true, category: 'ويكيميديا · أسماء عربية' });
+    } catch (error) {
+      console.warn(`Wikimedia Arabic prefix shard skipped ${prefix}: ${String(error?.message || error)}`);
+      return [];
+    }
+  });
+}
+
 export async function syncWikimediaCommons() {
   const limit = envInt('WIKIMEDIA_LIMIT', 8000, 100, 15000);
   const arabicLimit = envInt('WIKIMEDIA_ARABIC_LIMIT', 3000, 100, 5000);
+  const shardLimit = envInt('WIKIMEDIA_SHARD_LIMIT', 1000, 100, 2500);
+  const arabicShardLimit = envInt('WIKIMEDIA_ARABIC_SHARD_LIMIT', 250, 25, 1000);
+  const shardConcurrency = envInt('WIKIMEDIA_SHARD_CONCURRENCY', 4, 1, 6);
   const byId = new Map();
 
   const arabicQueries = [
@@ -59,7 +103,7 @@ export async function syncWikimediaCommons() {
     { query: 'filetype:video incategory:"Wikitongues videos in Arabic"', category: 'Wikitongues · عربي' },
     { query: 'filetype:video incategory:"CDC videos in Arabic"', category: 'CDC · عربي' }
   ];
-  const [arabicSets, general] = await Promise.all([
+  const [arabicSets, general, prefixSets, arabicPrefixSets] = await Promise.all([
     Promise.all(arabicQueries.map(async entry => {
       try {
         return await searchVideos(entry.query, arabicLimit, { arabic: true, category: entry.category });
@@ -68,9 +112,13 @@ export async function syncWikimediaCommons() {
         return [];
       }
     })),
-    searchVideos('filetype:video', limit)
+    searchVideos('filetype:video', limit),
+    prefixVideoSets(shardLimit, shardConcurrency),
+    arabicPrefixVideoSets(arabicShardLimit, Math.min(3, shardConcurrency))
   ]);
   for (const rows of arabicSets) for (const item of rows) byId.set(item.sourceItemId, item);
+  for (const rows of arabicPrefixSets) for (const item of rows) byId.set(item.sourceItemId, item);
+  for (const rows of prefixSets) for (const item of rows) if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
   for (const item of general) if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
 
   return [...byId.values()].sort((a,b) => Number(b.language === 'ar') - Number(a.language === 'ar') || a.title.localeCompare(b.title, 'ar'));
