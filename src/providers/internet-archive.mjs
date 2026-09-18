@@ -36,9 +36,14 @@ function openCollectionQueries() {
 
 function arabicExpansionQueries() {
   return [
-    `mediatype:movies AND (title:فيلم OR title:وثائقي OR title:مسلسل OR title:برنامج OR title:الحلقة OR title:موسم) AND ${OPEN_LICENSE_QUERY}`,
-    `mediatype:movies AND (subject:Arabic OR subject:"Arabic language" OR subject:"Arab world") AND ${OPEN_LICENSE_QUERY}`,
-    `mediatype:movies AND collection:opensource_movies AND (language:Arabic OR language:ara OR language:ar OR title:فيلم OR title:وثائقي OR title:مسلسل) AND ${OPEN_LICENSE_QUERY}`
+    `mediatype:movies AND (title:فيلم OR title:وثائقي OR title:مسلسل OR title:برنامج OR title:الحلقة OR title:موسم OR title:مسرحية OR title:محاضرة OR title:مقابلة) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (subject:Arabic OR subject:"Arabic language" OR subject:"Arab world" OR subject:"Middle East") AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND collection:opensource_movies AND (language:Arabic OR language:ara OR language:ar OR title:فيلم OR title:وثائقي OR title:مسلسل OR title:برنامج) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (title:السعودية OR title:مصر OR title:فلسطين OR title:سوريا OR title:العراق OR title:لبنان OR title:اليمن OR title:الأردن) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (title:المغرب OR title:الجزائر OR title:تونس OR title:ليبيا OR title:السودان OR title:موريتانيا) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (title:الإمارات OR title:قطر OR title:الكويت OR title:البحرين OR title:عمان) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (subject:"Saudi Arabia" OR subject:Egypt OR subject:Palestine OR subject:Syria OR subject:Iraq OR subject:Lebanon OR subject:Yemen OR subject:Jordan) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (subject:Morocco OR subject:Algeria OR subject:Tunisia OR subject:Libya OR subject:Sudan OR subject:Qatar OR subject:Kuwait OR subject:"United Arab Emirates") AND ${OPEN_LICENSE_QUERY}`
   ];
 }
 
