@@ -109,21 +109,38 @@ jobs:
           BASE='${{ steps.deploy.outputs.base }}'
           FQDN='${{ steps.deploy.outputs.fqdn }}'
 
-          for attempt in $(seq 1 48); do
+          for attempt in $(seq 1 96); do
             code="$(curl -sS --max-time 12 -o /tmp/health.json -w '%{http_code}' "$BASE/health" || true)"
             if [ "$code" = 200 ]; then
               standalone="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.standalone===true))")"
               smoke="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.ok))")"
               stage="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.stage||''))")"
-              echo "Attempt $attempt: standalone=$standalone smoke=$smoke stage=$stage"
-              if [ "$standalone" = true ] && [ "$smoke" = true ]; then break; fi
+              syncing="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.syncing===true))")"
+              echo "Attempt $attempt: standalone=$standalone smoke=$smoke stage=$stage syncing=$syncing"
+              if [ "$standalone" = true ] && [ "$smoke" = true ] && [ "$syncing" = false ]; then break; fi
             fi
-            [ "$attempt" = 48 ] && { cat /tmp/health.json 2>/dev/null || true; exit 1; }
+            [ "$attempt" = 96 ] && { cat /tmp/health.json 2>/dev/null || true; exit 1; }
             sleep 5
           done
 
           cat /tmp/health.json
           grep -Fq '"mode":"azure-blob"' /tmp/health.json
+
+          node <<'NODE'
+          const fs=require('fs');
+          const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
+          const stats=h.xtream?.stats||{};
+          const sources=Array.isArray(stats.sources)?stats.sources:[];
+          const nasa=sources.find(x=>x.id==='nasa');
+          const open=sources.find(x=>x.id==='open-arabic-films');
+          const total=Number(stats.totalItems||0);
+          const arabic=Number(stats.arabic?.total||0);
+          if(h.xtream?.syncing===true) throw new Error('catalog_sync_still_running');
+          if(!nasa || nasa.enabled!==false || Number(nasa.count||0)!==0) throw new Error('nasa_not_purged');
+          if(!open || open.enabled!==true || Number(open.count||0)<1) throw new Error('open_arabic_films_missing');
+          if(total>0 && arabic/total<0.95) throw new Error(`arabic_ratio_too_low_${arabic}_of_${total}`);
+          console.log(`Arabic-first verified: ${arabic}/${total}; openFilms=${open.count}; NASA=0`);
+          NODE
 
           curl -fsS --max-time 15 "$BASE/admin" >/tmp/admin.html
           grep -Fq 'لوحة الإدارة' /tmp/admin.html
