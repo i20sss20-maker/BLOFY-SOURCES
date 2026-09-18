@@ -6,6 +6,7 @@ import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films
 import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
 import { archiveEntertainmentProfile } from '../src/providers/internet-archive.mjs';
 import { peertubeEntertainmentProfile } from '../src/providers/peertube.mjs';
+import { wikimediaEntertainmentProfile } from '../src/providers/wikimedia.mjs';
 
 function withEnv(values, fn) {
   const before = new Map();
@@ -183,5 +184,36 @@ test('PeerTube Arabic entertainment filter rejects education, news, tech and act
     { name:'محتوى عربي عام', category:{label:'People'} }
   ]) {
     assert.equal(peertubeEntertainmentProfile(video).accepted, false, video.name);
+  }
+});
+
+
+test('Wikimedia Arabic entertainment filter keeps films, documentaries, theatre and animation', () => {
+  assert.deepEqual(
+    wikimediaEntertainmentProfile({ title:'فيلم مصري قديم', description:'نسخة سينمائية', category:'أفلام عربية' }),
+    { accepted:true, category:'عربي · أفلام عربية مفتوحة', reason:'film' }
+  );
+  assert.deepEqual(
+    wikimediaEntertainmentProfile({ title:'رحلة عبر الصحراء', description:'فيلم وثائقي عربي', category:'وثائقيات عربية' }),
+    { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' }
+  );
+  assert.deepEqual(
+    wikimediaEntertainmentProfile({ title:'مسرحية عربية', description:'عرض مسرحي كامل', category:'مسرحيات عربية' }),
+    { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' }
+  );
+  assert.deepEqual(
+    wikimediaEntertainmentProfile({ title:'كرتون للأطفال', description:'رسوم متحركة', category:'أطفال' }),
+    { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' }
+  );
+});
+
+test('Wikimedia Arabic entertainment filter rejects news, interviews, lectures and generic clips', () => {
+  for (const item of [
+    { title:'نشرة أخبار المساء', description:'', category:'ويكيميديا عربي' },
+    { title:'مقابلة مع مخرج فيلم', description:'cinema', category:'ويكيميديا عربي' },
+    { title:'محاضرة عن الدراما', description:'', category:'ويكيميديا عربي' },
+    { title:'لقطة عربية عامة', description:'', category:'ويكيميديا عربي' }
+  ]) {
+    assert.equal(wikimediaEntertainmentProfile(item).accepted, false, item.title);
   }
 });
