@@ -23,6 +23,9 @@ concurrency:
 
 env:
   AZURE_RG: ${{ vars.BLOFY_AZURE_RG || 'rg-blofy-player' }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '9853cf04-5035-4d82-a47f-461db09fdd9c' }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || 'ec5ef9bb-cb2b-425f-af4a-9baf41b7fc23' }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || '37cef360-5cea-44b8-8a64-5a8094c9a587' }}
   CONTAINER_APP: blofy-gateway
 
 jobs:
@@ -40,9 +43,9 @@ jobs:
       - name: Azure login with OIDC
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolve existing BLOFY Azure resources
         id: azure
@@ -151,8 +154,10 @@ jobs:
           done
           cat /tmp/health.json
           grep -Fq '"mode":"azure-blob"' /tmp/health.json
+          curl -fsS --max-time 15 "$BASE/admin" >/tmp/admin.html
+          grep -Fq 'لوحة الإدارة' /tmp/admin.html
           curl -fsS --max-time 15 "$BASE/xtream" >/tmp/xtream.html
-          grep -Fq 'BLOFY XTREAM' /tmp/xtream.html
+          grep -Fq 'لوحة الإدارة' /tmp/xtream.html
           curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/player-probe.json
           grep -Fq '"auth":0' /tmp/player-probe.json
           check_existing_route() {
@@ -162,7 +167,8 @@ jobs:
             [ -n "$code" ] && [ "$code" -ge 200 ] && [ "$code" -lt 500 ]
           }
           check_existing_route /portal
-          check_existing_route /admin
+          check_existing_route /activation-admin
           check_existing_route /downloads
-          echo "Xtream admin: $BASE/xtream"
+          echo "Admin:        $BASE/admin"
+          echo "Xtream alias: $BASE/xtream"
           echo "Xtream host:  $BASE"
