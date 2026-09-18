@@ -18,7 +18,6 @@ function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function isArabicItem(item){return String(item?.language||'').toLowerCase()==='ar'||String(item?.category||'').startsWith('عربي ·')||item?.rights?.arabic===true||/[\u0600-\u06ff]/.test(String(item?.title||''))}
 function catalogCounts(rows){const out={total:0,live:0,movies:0,episodes:0};for(const item of rows){out.total++;if(item.kind==='live')out.live++;else if(item.kind==='series_episode')out.episodes++;else out.movies++}return out}
 function accountSummary(accounts){const now=Date.now();return{total:accounts.length,active:accounts.filter(x=>x.enabled&&!x.expired).length,expired:accounts.filter(x=>x.expired).length,disabled:accounts.filter(x=>!x.enabled).length,expiringSoon:accounts.filter(x=>x.enabled&&!x.expired&&x.expiresAt&&(new Date(x.expiresAt).getTime()-now)<=7*86400000).length}}
-function normalizeLegacyAdminAccount(row={}){
 export async function serveAdminAsset(res,pathname){
   const file=pathname==='/admin'?'/admin.html':pathname;if(!['/admin.html','/admin.css','/admin.js'].includes(file))return false;
   const body=await readFile(path.join(ROOT,'public',file.slice(1)),'utf8');
