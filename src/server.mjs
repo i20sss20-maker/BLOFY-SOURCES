@@ -9,7 +9,7 @@ import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
 import { runXtreamSelfTest,xtreamSmokeState } from './xtream-auth.mjs';
-import { activeConnectionCount,connectionStats } from './connections.mjs';
+import { connectionStats } from './connections.mjs';
 
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
 const PROCESS_STARTED_AT=new Date().toISOString();
