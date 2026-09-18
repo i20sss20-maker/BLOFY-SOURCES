@@ -1,5 +1,5 @@
 import { parseEpisodeTitle, normalizeArray, stripHtml } from '../catalog.mjs';
-import { fetchJson, envInt, arrayFirst, cleanLicenseUrl, allowedOpenLicense, categoryFromMeta } from './common.mjs';
+import { fetchJson, envInt, envBool, arrayFirst, cleanLicenseUrl, allowedOpenLicense, categoryFromMeta } from './common.mjs';
 
 const OPEN_LICENSE_QUERY = '(licenseurl:http*by* OR licenseurl:http*zero* OR licenseurl:http*publicdomain*)';
 const ARCHIVE_FIELDS = ['identifier','title','description','creator','subject','collection','licenseurl','language','date','downloads'];
@@ -187,16 +187,17 @@ export async function syncInternetArchive() {
   const shardConcurrency = envInt('IA_SHARD_CONCURRENCY', 2, 1, 3);
   const arabicExtraLimit = envInt('IA_ARABIC_EXTRA_LIMIT', 15000, 500, 25000);
   const collectionLimit = envInt('IA_OPEN_COLLECTION_LIMIT', 25000, 1000, 40000);
+  const arabicFirst = envBool('ARABIC_FIRST', true);
   const byId = new Map();
 
   const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs, shardSets, arabicExtraSets, collectionSets] = await Promise.all([
-    archiveDocs(genericQuery(), generalLimit),
+    arabicFirst ? [] : archiveDocs(genericQuery(), generalLimit),
     archiveDocs(arabicQuery(), arabicLimit),
-    archiveDocs(FEDFLIX_QUERY, fedflixLimit),
-    archiveDocs(PRELINGER_QUERY, prelingerLimit),
-    mapLimit(openShardQueries(), shardConcurrency, query => archiveDocs(query, shardLimit)),
+    arabicFirst ? [] : archiveDocs(FEDFLIX_QUERY, fedflixLimit),
+    arabicFirst ? [] : archiveDocs(PRELINGER_QUERY, prelingerLimit),
+    arabicFirst ? [] : mapLimit(openShardQueries(), shardConcurrency, query => archiveDocs(query, shardLimit)),
     mapLimit(arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit)),
-    mapLimit(openCollectionQueries(), 2, query => archiveDocs(query, collectionLimit))
+    arabicFirst ? [] : mapLimit(openCollectionQueries(), 2, query => archiveDocs(query, collectionLimit))
   ]);
 
   for (const doc of generalDocs) {
@@ -227,6 +228,7 @@ export async function syncInternetArchive() {
 
   for (const docs of arabicExtraSets) {
     for (const doc of docs) {
+      if (arabicFirst && !isArabicDoc(doc)) continue;
       const item = toCatalogItem(doc, { forceArabic: isArabicDoc(doc) || /[\u0600-\u06ff]/.test(String(doc.title || '')) });
       if (item) byId.set(item.sourceItemId, item);
     }
@@ -239,7 +241,9 @@ export async function syncInternetArchive() {
     }
   }
 
-  const seriesDocs = await mapLimit(seriesQueries(), 3, query => archiveDocs(query, seriesLimit));
+  const allSeriesQueries = seriesQueries();
+  const selectedSeriesQueries = arabicFirst ? [allSeriesQueries.at(-1)] : allSeriesQueries;
+  const seriesDocs = await mapLimit(selectedSeriesQueries, 3, query => archiveDocs(query, seriesLimit));
   for (const docs of seriesDocs) {
     for (const doc of docs) {
       const item = toCatalogItem(doc);
