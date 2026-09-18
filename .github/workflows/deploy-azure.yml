@@ -178,6 +178,8 @@ jobs:
           grep -Fq '"mode":"azure-blob"' /tmp/health.json
           curl -fsS --max-time 15 "$BASE/xtream" >/tmp/xtream.html
           grep -Fq 'لوحة الإدارة' /tmp/xtream.html
+          curl -fsS --max-time 15 "$BASE/sources-admin" >/tmp/sources-admin.html
+          grep -Fq 'لوحة الإدارة' /tmp/sources-admin.html
           curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/player-probe.json
           grep -Fq '"auth":0' /tmp/player-probe.json
           check_existing_route() {
