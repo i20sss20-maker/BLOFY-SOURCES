@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { envBool, arabicFirstEnabled } from '../src/providers/common.mjs';
 import { providerDefinitions } from '../src/providers/index.mjs';
+import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films.mjs';
 
 function withEnv(values, fn) {
   const before = new Map();
@@ -41,4 +42,22 @@ test('curated Arabic-localized open films provider is enabled by default', () =>
   assert.ok(provider);
   withEnv({ ENABLE_OPEN_ARABIC_FILMS: null }, () => assert.equal(provider.enabled(), true));
   withEnv({ ENABLE_OPEN_ARABIC_FILMS: 'false' }, () => assert.equal(provider.enabled(), false));
+});
+
+
+test('Arabic TimedText names resolve only to supported video files and Arabic language codes', () => {
+  assert.deepEqual(
+    mediaFileFromArabicTimedText('TimedText:Elephants Dream.ogv.ar.srt'),
+    { file:'Elephants Dream.ogv', languageCode:'ar' }
+  );
+  assert.deepEqual(
+    mediaFileFromArabicTimedText('TimedText:Cosmos_Laundromat.webm.apc.srt'),
+    { file:'Cosmos_Laundromat.webm', languageCode:'apc' }
+  );
+  assert.deepEqual(
+    mediaFileFromArabicTimedText('TimedText:Movie.mp4.arz.srt'),
+    { file:'Movie.mp4', languageCode:'arz' }
+  );
+  assert.equal(mediaFileFromArabicTimedText('TimedText:Movie.webm.en.srt'), null);
+  assert.equal(mediaFileFromArabicTimedText('TimedText:Poster.jpg.ar.srt'), null);
 });
