@@ -151,3 +151,39 @@ export async function runXtreamSelfTest(publicBaseUrl){
   }
   return smokeState;
 }
+
+
+function legacyAdminHeaders(){
+  return{'content-type':'application/json','authorization':`Bearer ${SESSION_SECRET}`,'user-agent':'BLOFY-Sources-Legacy-Admin/1.0'};
+}
+async function legacyAdminRequest(path,{method='GET',body=null}={}){
+  if(!ACTIVATION_URL)throw new Error('activation_url_missing');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+  try{
+    const response=await fetch(new URL(path,ACTIVATION_URL+'/'),{
+      method,signal:controller.signal,headers:legacyAdminHeaders(),body:body==null?undefined:JSON.stringify(body)
+    });
+    const text=await response.text();
+    let data={};try{data=text?JSON.parse(text):{}}catch{}
+    if(!response.ok)throw new Error(String(data?.error||`legacy_admin_http_${response.status}`));
+    return data;
+  }finally{clearTimeout(timer)}
+}
+export async function listLegacyGatewayAccounts(){
+  const data=await legacyAdminRequest('/api/v1/admin/xtream-gateway');
+  return{serverUrl:data?.serverUrl||'',items:Array.isArray(data?.items)?data.items:[]};
+}
+export async function createLegacyGatewayAccount({label='',durationDays=365,maxConnections=1}={}){
+  const days=Math.max(0,Math.min(3650,Number(durationDays)||0));
+  const expiresAt=days?new Date(Date.now()+days*86400000).toISOString():null;
+  return legacyAdminRequest('/api/v1/admin/xtream-gateway/accounts',{method:'POST',body:{label,maxConnections,expiresAt}});
+}
+export async function resetLegacyGatewayPassword(id){
+  return legacyAdminRequest(`/api/v1/admin/xtream-gateway/accounts/${encodeURIComponent(String(id))}/reset`,{method:'POST',body:{}});
+}
+export async function patchLegacyGatewayAccount(id,patch={}){
+  return legacyAdminRequest(`/api/v1/admin/xtream-gateway/accounts/${encodeURIComponent(String(id))}`,{method:'PATCH',body:patch});
+}
+export async function deleteLegacyGatewayAccount(id){
+  return legacyAdminRequest(`/api/v1/admin/xtream-gateway/accounts/${encodeURIComponent(String(id))}`,{method:'DELETE'});
+}
