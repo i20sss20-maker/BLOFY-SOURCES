@@ -5,6 +5,7 @@ import { providerDefinitions } from '../src/providers/index.mjs';
 import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films.mjs';
 import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
 import { archiveEntertainmentProfile } from '../src/providers/internet-archive.mjs';
+import { peertubeEntertainmentProfile } from '../src/providers/peertube.mjs';
 
 function withEnv(values, fn) {
   const before = new Map();
@@ -150,5 +151,37 @@ test('Arabic Archive entertainment filter rejects lectures, interviews, news and
     { title:'جولة في السعودية 2026', subject:['Saudi Arabia','Arabic'] }
   ]) {
     assert.equal(archiveEntertainmentProfile(doc).accepted, false, doc.title);
+  }
+});
+
+
+test('PeerTube Arabic entertainment filter keeps films, drama, documentaries and kids', () => {
+  assert.deepEqual(
+    peertubeEntertainmentProfile({ name:'فيلم عربي قصير', category:{label:'Films'} }),
+    { accepted:true, category:'عربي · أفلام وترفيه مفتوح', reason:'film' }
+  );
+  assert.deepEqual(
+    peertubeEntertainmentProfile({ name:'الحلقة 3 من مسلسل المدينة', category:{label:'Entertainment'} }),
+    { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' }
+  );
+  assert.deepEqual(
+    peertubeEntertainmentProfile({ name:'رحلة الصحراء', category:{label:'Documentary'} }),
+    { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' }
+  );
+  assert.deepEqual(
+    peertubeEntertainmentProfile({ name:'حكايات للأطفال', category:{label:'Kids'} }),
+    { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' }
+  );
+});
+
+test('PeerTube Arabic entertainment filter rejects education, news, tech and activism', () => {
+  for (const video of [
+    { name:'محاضرة عن السينما', category:{label:'Education'} },
+    { name:'شرح برمجة تطبيق', category:{label:'Science & Technology'} },
+    { name:'نشرة أخبار اليوم', category:{label:'News & Politics'} },
+    { name:'بودكاست عن المسلسلات', category:{label:'Entertainment'} },
+    { name:'محتوى عربي عام', category:{label:'People'} }
+  ]) {
+    assert.equal(peertubeEntertainmentProfile(video).accepted, false, video.name);
   }
 });

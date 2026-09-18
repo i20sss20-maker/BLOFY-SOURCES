@@ -2,6 +2,36 @@ import { stripHtml } from '../catalog.mjs';
 import { fetchJson, envInt, envBool } from './common.mjs';
 
 const PEERTUBE_ALLOWED_LICENSE_IDS = new Set([1, 2, 7, 8]);
+
+
+const PEERTUBE_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|برمجة|سياسة|سياسي|نشاط|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|science|technology|activism|how to|quran|recitation)/i;
+const PEERTUBE_SERIES = /(?:مسلسل|مسلسلات|حلقة|حلقات|موسم|دراما|series|serial|episode|season|drama|tv show)/i;
+const PEERTUBE_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
+const PEERTUBE_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime|kids)/i;
+const PEERTUBE_THEATRE = /(?:مسرحية|مسرحيات|مسرح|theatre|theater|stage play)/i;
+const PEERTUBE_FILM = /(?:فيلم|أفلام|افلام|سينما|كوميديا|كوميدي|أكشن|اكشن|رعب|رومانسي|ترفيه|movie|movies|film|films|cinema|comedy|action|horror|romance|entertainment)/i;
+
+function peertubeMetaText(video) {
+  return [
+    String(video?.name || ''),
+    String(video?.description || ''),
+    String(video?.category?.label || ''),
+    String(video?.channel?.displayName || ''),
+    String(video?.channel?.name || '')
+  ].join(' ');
+}
+
+export function peertubeEntertainmentProfile(video) {
+  const text = peertubeMetaText(video);
+  if (!text.trim()) return { accepted:false, category:'', reason:'missing-metadata' };
+  if (PEERTUBE_NON_ENTERTAINMENT.test(text)) return { accepted:false, category:'', reason:'non-entertainment' };
+  if (PEERTUBE_ANIMATION.test(text)) return { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' };
+  if (PEERTUBE_DOCUMENTARY.test(text)) return { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' };
+  if (PEERTUBE_THEATRE.test(text)) return { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' };
+  if (PEERTUBE_SERIES.test(text)) return { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' };
+  if (PEERTUBE_FILM.test(text)) return { accepted:true, category:'عربي · أفلام وترفيه مفتوح', reason:'film' };
+  return { accepted:false, category:'', reason:'not-entertainment' };
+}
 const DEFAULT_SEEDS = [
   'https://framatube.org',
   'https://video.tedomum.net',
@@ -41,7 +71,7 @@ function isArabicVideo(video, forced = false) {
   if (/^ar(?:[-_]|$)/.test(lang) || lang === 'ara' || lang === 'arabic') return true;
   return /[\u0600-\u06ff]/.test(`${video.name || ''} ${video.description || ''}`);
 }
-function mapVideo(video, seed, { forceArabic = false } = {}) {
+function mapVideo(video, seed, { forceArabic = false, categoryOverride = '' } = {}) {
   const licenseId = Number(video.licence?.id ?? video.licence);
   if (!PEERTUBE_ALLOWED_LICENSE_IDS.has(licenseId) || video.nsfw === true) return null;
   const uuid = String(video.uuid || '').trim(); if (!uuid) return null;
@@ -51,16 +81,17 @@ function mapVideo(video, seed, { forceArabic = false } = {}) {
   const licenceLabel = video.licence?.label || video.licence?.name || ({1:'CC BY',2:'CC BY-SA',7:'Public Domain',8:'No known copyright restrictions'}[licenseId] || 'Open licence');
   const arabic = isArabicVideo(video, forceArabic);
   const rawCategory = String(video.category?.label || (video.isLive ? 'PeerTube Live' : 'PeerTube'));
-  return {sourceItemId:uuid,kind:video.isLive?'live':'movie',title:String(video.name||uuid),description:stripHtml(video.description||''),icon:video.thumbnailPath?`${origin}${video.thumbnailPath}`:'',category:arabic?`عربي · ${rawCategory}`:rawCategory,language:arabic?'ar':String(video.language?.id||video.language||''),licenseName:String(licenceLabel),licenseUrl:'',attribution:channel?`${channel} · PeerTube`:'PeerTube',publishedAt:video.publishedAt||video.createdAt||'',stream:{resolver:'peertube',origin,uuid},rights:{mode:'license-filtered',redistributable:true,commercialCompatible:![4,5,6].includes(licenseId),arabic}};
+  const category = categoryOverride || (arabic?`عربي · ${rawCategory}`:rawCategory);
+  return {sourceItemId:uuid,kind:video.isLive?'live':'movie',title:String(video.name||uuid),description:stripHtml(video.description||''),icon:video.thumbnailPath?`${origin}${video.thumbnailPath}`:'',category,language:arabic?'ar':String(video.language?.id||video.language||''),licenseName:String(licenceLabel),licenseUrl:'',attribution:channel?`${channel} · PeerTube`:'PeerTube',publishedAt:video.publishedAt||video.createdAt||'',stream:{resolver:'peertube',origin,uuid},rights:{mode:'license-filtered',redistributable:true,commercialCompatible:![4,5,6].includes(licenseId),arabic}};
 }
-async function collectSeed(seed, limit, { arabicOnly = false } = {}) {
+async function collectSeed(seed, limit, { arabicOnly = false, entertainmentOnly = false } = {}) {
   const out=[];let start=0;
   while(out.length<limit&&start<Math.max(limit*4,300)){
     const count=Math.min(100,Math.max(1,limit-out.length));
     const params=new URLSearchParams({count:String(count),start:String(start),sort:'-views'});if(arabicOnly)params.set('languageOneOf','ar');
     let data;try{data=await fetchJson(`${seed}/api/v1/videos?${params}`,16000)}catch(error){console.warn(`PeerTube seed skipped ${seed}: ${String(error?.message||error)}`);break}
     const rows=data?.data||[];if(!rows.length)break;
-    for(const video of rows){const item=mapVideo(video,seed,{forceArabic:arabicOnly});if(item)out.push(item);if(out.length>=limit)break}
+    for(const video of rows){const profile=entertainmentOnly?peertubeEntertainmentProfile(video):null;if(entertainmentOnly&&!profile.accepted)continue;const item=mapVideo(video,seed,{forceArabic:arabicOnly,categoryOverride:profile?.category||''});if(item)out.push(item);if(out.length>=limit)break}
     start+=rows.length;if(rows.length<count)break;
   }
   return out;
@@ -72,9 +103,9 @@ async function mapLimit(values,limit,fn){
 }
 export async function syncPeerTube() {
   const totalLimit=envInt('PEERTUBE_LIMIT',60000,100,80000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',20000,50,30000),seeds=peertubeSeeds(),byId=new Map();
-  const arabicFirst=envBool('ARABIC_FIRST',true);
+  const arabicFirst=envBool('ARABIC_FIRST',true),entertainmentOnly=arabicFirst&&envBool('ARABIC_FIRST_ENTERTAINMENT_ONLY',true);
   const seedConcurrency=envInt('PEERTUBE_SEED_CONCURRENCY',4,1,8),arabicPerSeed=Math.max(50,Math.ceil(arabicLimit/Math.max(1,seeds.length)));
-  const arabicSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,arabicPerSeed,{arabicOnly:true}));
+  const arabicSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,arabicPerSeed,{arabicOnly:true,entertainmentOnly}));
   for(const rows of arabicSets)for(const item of rows)byId.set(item.sourceItemId,item);
   if(!arabicFirst){
     const perSeed=Math.max(100,Math.ceil(totalLimit/Math.max(1,seeds.length)));
