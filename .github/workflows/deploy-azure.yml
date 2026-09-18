@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: blofy-sources-azure-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   AZURE_RG: ${{ vars.BLOFY_AZURE_RG || 'rg-blofy-player' }}
@@ -86,7 +86,18 @@ jobs:
           set -euo pipefail
           KV='${{ steps.azure.outputs.kv }}'
           ID='${{ steps.azure.outputs.identity_id }}'
-          az containerapp secret set -g "$AZURE_RG" -n "$CONTAINER_APP" --secrets \
+
+          retry_az() {
+            local attempt
+            for attempt in $(seq 1 24); do
+              if "$@"; then return 0; fi
+              echo "Azure operation busy/failed (attempt $attempt/24); retrying in 10s..." >&2
+              sleep 10
+            done
+            return 1
+          }
+
+          retry_az az containerapp secret set -g "$AZURE_RG" -n "$CONTAINER_APP" --secrets \
             "xtream-admin=keyvaultref:https://${KV}.vault.azure.net/secrets/release-admin-password,identityref:${ID}" \
             "xtream-session=keyvaultref:https://${KV}.vault.azure.net/secrets/blofy-admin-token,identityref:${ID}" \
             --only-show-errors >/dev/null
@@ -96,7 +107,18 @@ jobs:
         run: |
           set -euo pipefail
           BASE='https://${{ steps.azure.outputs.fqdn }}'
-          az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP" \
+
+          retry_az() {
+            local attempt
+            for attempt in $(seq 1 24); do
+              if "$@"; then return 0; fi
+              echo "Azure operation busy/failed (attempt $attempt/24); retrying in 10s..." >&2
+              sleep 10
+            done
+            return 1
+          }
+
+          retry_az az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP" \
             --image "$IMAGE" \
             --min-replicas 1 \
             --max-replicas 1 \
@@ -135,10 +157,10 @@ jobs:
               ENABLE_IPTV_ORG=false \
             --only-show-errors >/dev/null
 
-          az containerapp ingress update -g "$AZURE_RG" -n "$CONTAINER_APP" \
+          retry_az az containerapp ingress update -g "$AZURE_RG" -n "$CONTAINER_APP" \
             --type external --target-port 8080 --transport auto --allow-insecure false \
             --only-show-errors >/dev/null
-          az containerapp ingress traffic set -g "$AZURE_RG" -n "$CONTAINER_APP" \
+          retry_az az containerapp ingress traffic set -g "$AZURE_RG" -n "$CONTAINER_APP" \
             --revision-weight latest=100 --only-show-errors >/dev/null
 
       - name: Verify existing site and new Xtream routes
