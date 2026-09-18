@@ -21,7 +21,8 @@ export class CatalogStore {
   markSourceError(sourceId,error){this.sources[sourceId]={...(this.sources[sourceId]||{}),id:sourceId,lastError:String(error?.message||error||'unknown_error').slice(0,500),failedAt:new Date().toISOString()}}
   finishSync(){this.lastSyncAt=new Date().toISOString()}
   get(id){return this.items.get(Number(id))||null}
-  listKind(kind){return[...this.items.values()].filter(item=>item.kind===kind)}
+  *iterKind(kind){for(const item of this.items.values())if(item.kind===kind)yield item}
+  listKind(kind){return[...this.iterKind(kind)]}
   categoryRecords(kind){const names=new Set();if(kind==='series'){for(const group of this.seriesGroups())names.add(group.category||'Series')}else{for(const item of this.listKind(kind))names.add(item.category||'Other')}return[...names].sort((a,b)=>a.localeCompare(b)).map(name=>({id:stableNumericId(`category:${kind}`,name),name}))}
   categoryId(kind,name){return stableNumericId(`category:${kind}`,name||'Other')}
   seriesGroups(){const groups=new Map();for(const item of this.listKind('series_episode')){const title=item.seriesTitle||item.title,key=`${item.source}\0${title.toLowerCase()}`;let group=groups.get(key);if(!group){group={id:stableNumericId('series',key),key,title,source:item.source,icon:item.icon,description:item.description,category:item.category||'Series',licenseName:item.licenseName,licenseUrl:item.licenseUrl,attribution:item.attribution,episodes:[]};groups.set(key,group)}group.episodes.push(item);if(!group.icon&&item.icon)group.icon=item.icon;if(!group.description&&item.description)group.description=item.description}for(const group of groups.values())group.episodes.sort((a,b)=>(a.season-b.season)||(a.episode-b.episode)||a.title.localeCompare(b.title));return[...groups.values()].sort((a,b)=>a.title.localeCompare(b.title))}
