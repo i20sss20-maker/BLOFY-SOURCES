@@ -78,6 +78,7 @@ export function normalizeAuthorizedManifest(manifest, { allowHttp = false, now =
 
     const streamUrl = safeHttpUrl(raw.stream?.url || raw.url, { allowHttp });
     if (!streamUrl) continue;
+    if (raw.stream?.headers && typeof raw.stream.headers === 'object' && Object.keys(raw.stream.headers).length) continue;
 
     const subtitles = normalizeSubtitles(raw.subtitles, allowHttp);
     const arabicAudio = hasArabic(raw.audioLanguages || raw.audio_languages);
@@ -114,8 +115,7 @@ export function normalizeAuthorizedManifest(manifest, { allowHttp = false, now =
       stream: {
         resolver: 'direct',
         url: streamUrl,
-        extension: String(raw.stream?.extension || raw.extension || '').trim().slice(0, 16),
-        headers: raw.stream?.headers && typeof raw.stream.headers === 'object' ? raw.stream.headers : undefined
+        extension: String(raw.stream?.extension || raw.extension || '').trim().slice(0, 16)
       },
       rights: {
         mode: 'authorized-partner-manifest',
