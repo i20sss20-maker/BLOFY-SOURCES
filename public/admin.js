@@ -218,19 +218,19 @@ function openRenew(user){
 
 function closeRenew(){$('renewModal').hidden=true;renewUser=''}
 function openPassword(user){
-  const a=allSubscribers.find(x=>x.username===user);passwordUser=a?.id||'';
+  const a=allSubscribers.find(x=>x.username===user);passwordUser=a?.username||user;
   $('passwordTitle').textContent=`كلمة سر جديدة ${a?.label||user}`;
-  $('passwordSubtitle').textContent=`Username: ${user} · سيتم توليد كلمة سر قوية جديدة من نظام الحسابات المتوافق مع المشغلات.`;
-  $('newSubscriberPassword').value='';$('newSubscriberPassword').disabled=true;
+  $('passwordSubtitle').textContent=`Username: ${user} · اترك الحقل فارغًا لتوليد كلمة سر قوية جديدة من نفس مشروع Xtream.`;
+  $('newSubscriberPassword').value='';$('newSubscriberPassword').disabled=false;
   $('passwordResult').hidden=true;
   $('passwordModal').hidden=false;
 }
-function closePassword(){$('passwordModal').hidden=true;passwordUser='';$('newSubscriberPassword').value='';$('newSubscriberPassword').disabled=false;$('passwordResult').hidden=true}
+function closePassword(){$('passwordModal').hidden=true;passwordUser='';$('newSubscriberPassword').value='';$('passwordResult').hidden=true}
 async function savePassword(){
   if(!passwordUser)return;
   try{
     $('saveSubscriberPassword').disabled=true;
-    const j=await api('compat-accounts/reset',{method:'POST',body:JSON.stringify({id:passwordUser})});
+    const account=allSubscribers.find(x=>x.id===passwordUser||x.username===passwordUser);const j=await api('accounts/password',{method:'POST',body:JSON.stringify({username:account?.username||passwordUser,password:$('newSubscriberPassword').value})});
     const tested=await api('account/test',{method:'POST',body:JSON.stringify({username:j.username,password:j.password})});
     if(!tested.auth)throw new Error('account_validation_failed');
     $('passwordResult').hidden=false;
@@ -265,7 +265,7 @@ function renderSubscribers(){
 
 async function loadSubscribers(){
   try{
-    const j=await api('compat-accounts');allSubscribers=j.accounts||[];const s=j.summary||{};
+    const j=await api('accounts');allSubscribers=j.accounts||[];const s=j.summary||{};
     $('sTotal').textContent=fmt(s.total);$('sActive').textContent=fmt(s.active);$('sExpired').textContent=fmt(s.expired);$('sSoon').textContent=fmt(s.expiringSoon);$('sDisabled').textContent=fmt(s.disabled);
     renderSubscribers();
   }catch(e){toast(e.message,'error')}
@@ -278,7 +278,7 @@ async function createSubscriber(){
   };
   try{
     $('createSubscriberBtn').disabled=true;
-    const j=await api('compat-accounts',{method:'POST',body:JSON.stringify(body)});
+    const j=await api('accounts',{method:'POST',body:JSON.stringify(body)});
     const tested=await api('account/test',{method:'POST',body:JSON.stringify({username:j.username,password:j.password})});
     if(!tested.auth)throw new Error('account_validation_failed');
     lastCreated=j;
@@ -298,20 +298,20 @@ async function createSubscriber(){
 async function renewSubscriber(user,days){
   try{
     const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');
-    await api('compat-accounts/renew',{method:'POST',body:JSON.stringify({id:account.id,days})});
+    await api('accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});
     closeRenew();toast(`تم تجديد ${user} لمدة ${days===365?'سنة':days===730?'سنتين':days+' يوم'}`,'success');
     await Promise.all([loadSubscribers(),refresh()]);
   }catch(e){toast(e.message,'error')}
 }
 
 async function toggleSubscriber(user,enabled,button){
-  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api('compat-accounts/toggle',{method:'POST',body:JSON.stringify({id:account.id,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api('accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
 async function deleteSubscriber(user,button){
   if(!confirm(`حذف المشترك ${user} نهائيًا؟`))return;
-  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api(`compat-accounts?id=${encodeURIComponent(account.id)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api(`accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
