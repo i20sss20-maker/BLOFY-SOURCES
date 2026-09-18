@@ -1,8 +1,8 @@
 import { catalog } from './context.mjs';
 import { authenticateXtream } from './xtream-auth.mjs';
-import { xtreamBaseUrl, json, text } from './http.mjs';
+import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
 import { resolveStream } from './providers.mjs';
-import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilter } from './xtream-format.mjs';
+import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilterIter } from './xtream-format.mjs';
 
 async function mergedRequestUrl(req,url){
   if(req.method!=='POST')return url;
@@ -36,13 +36,13 @@ export async function servePlayerApi(req,res,url){
   if(action==='get_live_categories')return json(res,200,categories('live'));
   if(action==='get_vod_categories')return json(res,200,categories('movie'));
   if(action==='get_series_categories')return json(res,200,categories('series'));
-  if(action==='get_live_streams')return json(res,200,categoryFilter(url,'live',catalog.listKind('live')).map(liveObject));
-  if(action==='get_vod_streams')return json(res,200,categoryFilter(url,'movie',catalog.listKind('movie')).map(movieObject));
+  if(action==='get_live_streams')return jsonArray(res,200,categoryFilterIter(url,'live',catalog.iterKind('live')),liveObject);
+  if(action==='get_vod_streams')return jsonArray(res,200,categoryFilterIter(url,'movie',catalog.iterKind('movie')),movieObject);
   if(action==='get_series'){
     let groups=catalog.seriesGroups();
     const id=url.searchParams.get('category_id');
     if(!allCategory(id))groups=groups.filter(x=>String(catalog.categoryId('series',x.category))===String(id));
-    return json(res,200,groups.map(seriesObject));
+    return jsonArray(res,200,groups,seriesObject);
   }
   if(action==='get_vod_info'){
     const x=catalog.get(url.searchParams.get('vod_id'));
@@ -86,9 +86,9 @@ function m3uLine(req,a,x,output='ts'){
 export async function serveM3u(req,res,url){
   const a=await auth(url);
   if(!a)return text(res,401,'#EXTM3U\n# Authentication failed\n','audio/x-mpegurl; charset=utf-8');
-  const output=String(url.searchParams.get('output')||'ts').toLowerCase()==='m3u8'?'m3u8':'ts',lines=['#EXTM3U'];
-  for(const k of ['live','movie','series_episode'])for(const x of catalog.listKind(k))lines.push(m3uLine(req,a,x,output));
-  return text(res,200,`${lines.join('\n')}\n`,'audio/x-mpegurl; charset=utf-8',{'content-disposition':'inline; filename="blofy.m3u"'});
+  const output=String(url.searchParams.get('output')||'ts').toLowerCase()==='m3u8'?'m3u8':'ts';
+  async function* chunks(){yield '#EXTM3U\n';for(const x of catalog.items.values())if(x.kind==='live'||x.kind==='movie'||x.kind==='series_episode')yield `${m3uLine(req,a,x,output)}\n`}
+  return textStream(res,200,chunks(),'audio/x-mpegurl; charset=utf-8',{'content-disposition':'inline; filename="blofy.m3u"'});
 }
 export async function serveXmltv(req,res,url){
   const a=await auth(url);
