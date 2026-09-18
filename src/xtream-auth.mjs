@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { getAccount, verifyAccount } from './context.mjs';
+import { catalog, getAccount, verifyAccount } from './context.mjs';
 import { SESSION_SECRET } from './config.mjs';
 
 const ACTIVATION_URL = String(process.env.ACTIVATION_URL || '').trim().replace(/\/+$/, '');
@@ -140,6 +140,13 @@ export async function runXtreamSelfTest(publicBaseUrl){
     if(!r.ok)throw new Error(`m3u_http_${r.status}`);
     const m3u=await r.text();
     if(!m3u.startsWith('#EXTM3U'))throw new Error('m3u_invalid');
+
+    smokeState.stage='playback-route';
+    const directLive=catalog.listKind('live').find(item=>item?.stream?.resolver==='direct')||catalog.listKind('live')[0];
+    if(directLive){
+      r=await fetch(`${base}/live/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${directLive.id}.ts`,{method:'HEAD',redirect:'manual',headers:{'user-agent':'BLOFY-Xtream-SelfTest/1.0'}});
+      if(![200,206,301,302,303,307,308].includes(r.status))throw new Error(`playback_route_http_${r.status}`);
+    }
 
     smokeState={...smokeState,running:false,ok:true,elapsedMs:Date.now()-started,stage:'complete',error:null};
   }catch(error){
