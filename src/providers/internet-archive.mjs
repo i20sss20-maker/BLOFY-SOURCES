@@ -6,6 +6,46 @@ const ARCHIVE_FIELDS = ['identifier','title','description','creator','subject','
 const FEDFLIX_QUERY = 'mediatype:movies AND collection:FedFlix';
 const PRELINGER_QUERY = `mediatype:movies AND collection:prelinger AND ${OPEN_LICENSE_QUERY}`;
 
+
+const ENTERTAINMENT_NEGATIVE = /(?:محاضر(?:ة|ات)|خطبة|خطب|درس|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|ورشة|ورش|كورس|كورسات|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|newscast|press conference|quran|recitation)/i;
+const ENTERTAINMENT_SERIES = /(?:مسلسل|مسلسلات|الحلقة|حلقة|حلقات|الموسم|موسم|دراما|series|serial|episode|season|tv show|television series)/i;
+const ENTERTAINMENT_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
+const ENTERTAINMENT_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime)/i;
+const ENTERTAINMENT_THEATRE = /(?:مسرحية|مسرحيات|المسرح|مسرح|theatre|theater|stage play)/i;
+const ENTERTAINMENT_FILM = /(?:فيلم|أفلام|افلام|سينما|كوميديا|كوميدي|أكشن|اكشن|رعب|مغامرات|رومانسي|movie|movies|film|films|cinema|comedy|action|horror|romance|short film|feature film)/i;
+
+function archiveMetaText(doc) {
+  return [
+    String(doc?.title || ''),
+    ...normalizeArray(doc?.subject),
+    ...normalizeArray(doc?.collection)
+  ].join(' ');
+}
+
+export function archiveEntertainmentProfile(doc) {
+  const text = archiveMetaText(doc);
+  if (!text.trim()) return { accepted:false, category:'', reason:'missing-metadata' };
+  if (ENTERTAINMENT_NEGATIVE.test(text)) return { accepted:false, category:'', reason:'non-entertainment' };
+
+  const classification = classifyArchiveItem(doc);
+  if (classification.kind === 'series_episode' || ENTERTAINMENT_SERIES.test(text)) {
+    return { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' };
+  }
+  if (ENTERTAINMENT_ANIMATION.test(text)) {
+    return { accepted:true, category:'عربي · أطفال وأنيميشن مفتوح', reason:'animation' };
+  }
+  if (ENTERTAINMENT_DOCUMENTARY.test(text)) {
+    return { accepted:true, category:'عربي · وثائقيات عربية مفتوحة', reason:'documentary' };
+  }
+  if (ENTERTAINMENT_THEATRE.test(text)) {
+    return { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' };
+  }
+  if (ENTERTAINMENT_FILM.test(text)) {
+    return { accepted:true, category:'عربي · أفلام عربية مفتوحة', reason:'film' };
+  }
+  return { accepted:false, category:'', reason:'not-entertainment' };
+}
+
 function openShardQueries() {
   const currentYear = new Date().getUTCFullYear();
   const ranges = [
@@ -31,6 +71,15 @@ function openCollectionQueries() {
     `mediatype:movies AND collection:opensource_movies AND ${OPEN_LICENSE_QUERY}`,
     `mediatype:movies AND collection:community_video AND ${OPEN_LICENSE_QUERY}`,
     `mediatype:movies AND collection:vlogs AND ${OPEN_LICENSE_QUERY}`
+  ];
+}
+
+function arabicEntertainmentQueries() {
+  return [
+    `mediatype:movies AND (language:Arabic OR language:ara OR language:ar) AND (title:فيلم OR title:أفلام OR title:مسلسل OR title:الحلقة OR title:حلقة OR title:موسم OR title:مسرحية OR title:وثائقي OR title:كرتون OR title:دراما OR title:كوميديا OR title:أكشن) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (language:Arabic OR language:ara OR language:ar) AND (subject:film OR subject:movie OR subject:cinema OR subject:documentary OR subject:drama OR subject:comedy OR subject:animation OR subject:cartoon OR subject:television OR subject:series OR subject:episode) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND collection:opensource_movies AND (language:Arabic OR language:ara OR language:ar) AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND (title:فيلم OR title:مسلسل OR title:مسرحية OR title:وثائقي OR title:كرتون) AND (subject:Arabic OR subject:"Arabic language" OR subject:"Arab world") AND ${OPEN_LICENSE_QUERY}`
   ];
 }
 
@@ -154,14 +203,14 @@ async function archiveDocs(query, limit) {
   return docs.slice(0, total);
 }
 
-function toCatalogItem(doc, { forceArabic = false, trustedFedFlix = false } = {}) {
+function toCatalogItem(doc, { forceArabic = false, trustedFedFlix = false, categoryOverride = '' } = {}) {
   const licenseUrl = cleanLicenseUrl(doc.licenseurl);
   if (!trustedFedFlix && !allowedOpenLicense('', licenseUrl)) return null;
   const classification = classifyArchiveItem(doc);
   const creator = normalizeArray(doc.creator).join(', ');
   const language = forceArabic || isArabicDoc(doc) ? 'ar' : docLanguage(doc);
   const rawCategory = trustedFedFlix ? 'FedFlix · US Government' : categoryFromMeta(doc.subject, doc.collection, classification.kind === 'series_episode' ? 'Series' : 'Public Domain & CC');
-  const category = language === 'ar' ? `عربي · ${rawCategory}` : rawCategory;
+  const category = categoryOverride || (language === 'ar' ? `عربي · ${rawCategory}` : rawCategory);
   return {
     sourceItemId: String(doc.identifier), ...classification, title: String(doc.title || doc.identifier),
     description: stripHtml(arrayFirst(doc.description) || ''), icon: `https://archive.org/services/img/${encodeURIComponent(doc.identifier)}`,
@@ -188,6 +237,7 @@ export async function syncInternetArchive() {
   const arabicExtraLimit = envInt('IA_ARABIC_EXTRA_LIMIT', 15000, 500, 25000);
   const collectionLimit = envInt('IA_OPEN_COLLECTION_LIMIT', 25000, 1000, 40000);
   const arabicFirst = envBool('ARABIC_FIRST', true);
+  const entertainmentOnly = arabicFirst && envBool('ARABIC_FIRST_ENTERTAINMENT_ONLY', true);
   const byId = new Map();
 
   const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs, shardSets, arabicExtraSets, collectionSets] = await Promise.all([
@@ -196,7 +246,7 @@ export async function syncInternetArchive() {
     arabicFirst ? [] : archiveDocs(FEDFLIX_QUERY, fedflixLimit),
     arabicFirst ? [] : archiveDocs(PRELINGER_QUERY, prelingerLimit),
     arabicFirst ? [] : mapLimit(openShardQueries(), shardConcurrency, query => archiveDocs(query, shardLimit)),
-    mapLimit(arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit)),
+    mapLimit(entertainmentOnly ? arabicEntertainmentQueries() : arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit)),
     arabicFirst ? [] : mapLimit(openCollectionQueries(), 2, query => archiveDocs(query, collectionLimit))
   ]);
 
@@ -205,7 +255,9 @@ export async function syncInternetArchive() {
     if (item) byId.set(item.sourceItemId, item);
   }
   for (const doc of arabicDocs) {
-    const item = toCatalogItem(doc, { forceArabic: true });
+    const profile = entertainmentOnly ? archiveEntertainmentProfile(doc) : null;
+    if (entertainmentOnly && !profile.accepted) continue;
+    const item = toCatalogItem(doc, { forceArabic: true, categoryOverride: profile?.category || '' });
     if (item) byId.set(item.sourceItemId, item);
   }
   for (const doc of fedflixDocs) {
@@ -229,7 +281,12 @@ export async function syncInternetArchive() {
   for (const docs of arabicExtraSets) {
     for (const doc of docs) {
       if (arabicFirst && !isArabicDoc(doc)) continue;
-      const item = toCatalogItem(doc, { forceArabic: isArabicDoc(doc) || /[\u0600-\u06ff]/.test(String(doc.title || '')) });
+      const profile = entertainmentOnly ? archiveEntertainmentProfile(doc) : null;
+      if (entertainmentOnly && !profile.accepted) continue;
+      const item = toCatalogItem(doc, {
+        forceArabic: isArabicDoc(doc) || /[\u0600-\u06ff]/.test(String(doc.title || '')),
+        categoryOverride: profile?.category || ''
+      });
       if (item) byId.set(item.sourceItemId, item);
     }
   }
@@ -246,7 +303,9 @@ export async function syncInternetArchive() {
   const seriesDocs = await mapLimit(selectedSeriesQueries, 3, query => archiveDocs(query, seriesLimit));
   for (const docs of seriesDocs) {
     for (const doc of docs) {
-      const item = toCatalogItem(doc);
+      const profile = entertainmentOnly ? archiveEntertainmentProfile(doc) : null;
+      if (entertainmentOnly && !profile.accepted) continue;
+      const item = toCatalogItem(doc, { categoryOverride: profile?.category || '' });
       if (!item || item.kind !== 'series_episode') continue;
       byId.set(item.sourceItemId, item);
     }
