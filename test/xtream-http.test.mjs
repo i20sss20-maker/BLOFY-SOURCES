@@ -20,12 +20,11 @@ function sampleCatalog(){
   ]};
 }
 
-test('Xtream HTTP surface works end-to-end like a player',async()=>{
+test('Xtream HTTP surface and unified admin work end-to-end like a player',async()=>{
   const dataDir=mkdtempSync(path.join(os.tmpdir(),'blofy-http-'));mkdirSync(dataDir,{recursive:true});
   const port=await freePort(),base=`http://127.0.0.1:${port}`;
   writeFileSync(path.join(dataDir,'catalog.json'),JSON.stringify(sampleCatalog()));
   const child=spawn(process.execPath,['src/server.mjs'],{cwd:repoRoot,env:{...process.env,PORT:String(port),DATA_DIR:dataDir,PUBLIC_BASE_URL:base,XTREAM_PUBLIC_BASE_URL:base,ADMIN_PASSWORD:'AdminPass-123',SESSION_SECRET:'c'.repeat(64),XTREAM_USERNAME:'testuser',XTREAM_PASSWORD:'TestPass-123',SYNC_ON_START:'false',ACTIVATION_URL:'http://127.0.0.1:9',RELEASE_URL:'http://127.0.0.1:9'},stdio:['ignore','pipe','pipe']});
-  let logs='';child.stdout.on('data',x=>logs+=x);child.stderr.on('data',x=>logs+=x);
   try{
     const health=await waitHealth(base,child);assert.equal(health.ok,true);assert.equal(health.xtream.stats.totalItems,3);assert.equal(health.storage.mode,'filesystem');
     const authUrl=`${base}/player_api.php?username=testuser&password=TestPass-123`;
@@ -35,9 +34,10 @@ test('Xtream HTTP surface works end-to-end like a player',async()=>{
     r=await fetch(`${authUrl}&action=get_vod_streams&category_id=all`);j=await r.json();assert.equal(j.length,1);assert.equal(j[0].stream_id,102);
     r=await fetch(`${authUrl}&action=get_series`);j=await r.json();assert.equal(j.length,1);const seriesId=j[0].series_id;
     r=await fetch(`${authUrl}&action=get_series_info&series_id=${seriesId}`);j=await r.json();assert.equal(j.seasons.length,1);assert.equal(j.episodes['1'][0].id,'103');
-    r=await fetch(`${base}/get.php?username=testuser&password=TestPass-123&type=m3u_plus&output=ts`);assert.equal(r.status,200);const m3u=await r.text();assert.match(m3u,/^#EXTM3U/);assert.match(m3u,new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}/live/testuser/TestPass-123/101\\.ts`));assert.match(m3u,/\/movie\/testuser\/TestPass-123\/102\.mp4/);assert.match(m3u,/\/series\/testuser\/TestPass-123\/103\.mp4/);
+    r=await fetch(`${base}/get.php?username=testuser&password=TestPass-123&type=m3u_plus&output=ts`);assert.equal(r.status,200);const m3u=await r.text();assert.match(m3u,/^#EXTM3U/);assert.match(m3u,/\/live\/testuser\/TestPass-123\/101\.ts/);assert.match(m3u,/\/movie\/testuser\/TestPass-123\/102\.mp4/);assert.match(m3u,/\/series\/testuser\/TestPass-123\/103\.mp4/);
     r=await fetch(`${base}/live/testuser/TestPass-123/101.ts`,{redirect:'manual'});assert.equal(r.status,302);assert.equal(r.headers.get('location'),'https://example.com/live.m3u8');
-    r=await fetch(`${base}/xtream`);assert.equal(r.status,200);const html=await r.text();assert.match(html,/BLOFY XTREAM/);assert.match(html,/\/xtream-assets\/admin\.js/);
-    r=await fetch(`${base}/xtream-assets/admin.js`);const js=await r.text();assert.match(js,/\/xtream-api\/accounts/);assert.doesNotMatch(js,/\/api\/admin\/accounts/);
+    r=await fetch(`${base}/admin`);assert.equal(r.status,200);const html=await r.text();assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);
+    r=await fetch(`${base}/admin-assets/admin.js`);const js=await r.text();assert.match(js,/\/admin-api\//);
+    r=await fetch(`${base}/admin-api/status`);assert.equal(r.status,401);
   } finally {child.kill('SIGTERM');await new Promise(resolve=>{if(child.exitCode!=null)return resolve();child.once('exit',resolve);setTimeout(resolve,1500)});rmSync(dataDir,{recursive:true,force:true})}
 },15000);
