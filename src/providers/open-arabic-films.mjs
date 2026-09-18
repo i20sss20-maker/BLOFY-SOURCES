@@ -1,5 +1,6 @@
 import { stripHtml } from '../catalog.mjs';
 import { fetchJson, envInt, allowedOpenLicense } from './common.mjs';
+import { wikimediaEntertainmentProfile } from './wikimedia.mjs';
 
 const CURATED = [
   {
@@ -48,6 +49,40 @@ const CURATED = [
 
 const ARABIC_TIMEDTEXT_CODES = new Set(['ar','arb','arz','apc','ary','aeb','acm','acq']);
 
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function commonsJson(url, timeoutMs = 30000) {
+  let lastError;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await fetchJson(url, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 5) break;
+      await sleep(Math.min(12000, 1200 * attempt * attempt));
+    }
+  }
+  throw lastError;
+}
+
+const LOCALIZED_CATEGORY_BY_REASON = {
+  film:'أجنبي مترجم · أفلام مفتوحة',
+  series:'أجنبي مترجم · مسلسلات مفتوحة',
+  documentary:'أجنبي مترجم · وثائقيات مفتوحة',
+  theatre:'أجنبي مترجم · مسرح مفتوح',
+  animation:'أجنبي مترجم · أطفال وأنيميشن مفتوح'
+};
+
+export function localizedOpenEntertainmentProfile({ title = '', description = '' } = {}) {
+  const profile = wikimediaEntertainmentProfile({ title, description, category:'محتوى مترجم' });
+  if (!profile.accepted) return { accepted:false, category:'', reason:profile.reason };
+  const category = LOCALIZED_CATEGORY_BY_REASON[profile.reason] || '';
+  return category
+    ? { accepted:true, category, reason:profile.reason }
+    : { accepted:false, category:'', reason:'unsupported-entertainment-type' };
+}
+
 function mediaKey(value = '') {
   return String(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 }
@@ -77,7 +112,7 @@ async function discoverArabicTimedTexts() {
       origin:'*'
     });
     if (apcontinue) params.set('apcontinue', apcontinue);
-    const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, 25000);
+    const data = await commonsJson(`https://commons.wikimedia.org/w/api.php?${params}`, 30000);
     const rows = data?.query?.allpages || [];
     if (!rows.length) break;
     scanned += rows.length;
@@ -114,7 +149,7 @@ async function commonsFiles(entries) {
       iiextmetadatafilter:'LicenseShortName|LicenseUrl|Artist|Credit|ImageDescription|DateTimeOriginal',
       origin:'*'
     });
-    const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, 30000);
+    const data = await commonsJson(`https://commons.wikimedia.org/w/api.php?${params}`, 35000);
     for (const page of data?.query?.pages || []) {
       if (!page || page.missing === true) continue;
       const file = String(page.title || '').replace(/^File:/i, '');
@@ -146,6 +181,8 @@ async function discoverOpenArabicSubtitleFilms() {
     const artist = stripHtml(info.extmetadata?.Artist?.value || info.extmetadata?.Credit?.value || 'Wikimedia Commons');
     const description = stripHtml(info.extmetadata?.ImageDescription?.value || '');
     const title = entry.file.replace(/\.(?:webm|ogv|ogg|mp4)$/i, '').replace(/[_]+/g, ' ').trim();
+    const entertainment = localizedOpenEntertainmentProfile({ title, description });
+    if (!entertainment.accepted) continue;
     const subtitleUrl = `https://commons.wikimedia.org/w/index.php?title=${encodeURIComponent(entry.timedTextTitle)}&action=raw`;
 
     out.push({
@@ -154,7 +191,7 @@ async function discoverOpenArabicSubtitleFilms() {
       title,
       description,
       icon:info.thumburl || '',
-      category:'أجنبي مترجم · Wikimedia',
+      category:entertainment.category,
       language:'ar',
       licenseName:license.name,
       licenseUrl:license.url,
@@ -178,7 +215,7 @@ async function discoverOpenArabicSubtitleFilms() {
 
 async function commonsPage(title, extra = {}) {
   const params = new URLSearchParams({ action:'query', format:'json', formatversion:'2', titles:title, origin:'*', ...extra });
-  const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, 25000);
+  const data = await commonsJson(`https://commons.wikimedia.org/w/api.php?${params}`, 30000);
   return data?.query?.pages?.[0] || null;
 }
 
@@ -252,12 +289,10 @@ export async function syncOpenArabicFilms() {
   }));
 
   const byId = new Map(rows.filter(Boolean).map(item => [item.sourceItemId, item]));
-  try {
-    for (const item of await discoverOpenArabicSubtitleFilms()) {
-      if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
-    }
-  } catch (error) {
-    console.warn(`Arabic TimedText discovery skipped: ${String(error?.message || error)}`);
+  const discovered = await discoverOpenArabicSubtitleFilms();
+  if (!discovered.length) throw new Error('arabic_timedtext_discovery_empty');
+  for (const item of discovered) {
+    if (!byId.has(item.sourceItemId)) byId.set(item.sourceItemId, item);
   }
   return [...byId.values()];
 }

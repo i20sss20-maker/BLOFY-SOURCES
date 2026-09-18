@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { envBool, arabicFirstEnabled } from '../src/providers/common.mjs';
 import { providerDefinitions } from '../src/providers/index.mjs';
-import { mediaFileFromArabicTimedText } from '../src/providers/open-arabic-films.mjs';
+import { mediaFileFromArabicTimedText, localizedOpenEntertainmentProfile } from '../src/providers/open-arabic-films.mjs';
 import { normalizeAuthorizedManifest } from '../src/providers/authorized-partners.mjs';
 import { archiveEntertainmentProfile } from '../src/providers/internet-archive.mjs';
 import { peertubeEntertainmentProfile } from '../src/providers/peertube.mjs';
@@ -215,5 +215,32 @@ test('Wikimedia Arabic entertainment filter rejects news, interviews, lectures a
     { title:'لقطة عربية عامة', description:'', category:'ويكيميديا عربي' }
   ]) {
     assert.equal(wikimediaEntertainmentProfile(item).accepted, false, item.title);
+  }
+});
+
+
+test('Arabic-subtitled open-video discovery keeps entertainment and assigns foreign-localized categories', () => {
+  assert.deepEqual(
+    localizedOpenEntertainmentProfile({ title:'Open Short Movie', description:'An animated science fiction short film.' }),
+    { accepted:true, category:'أجنبي مترجم · أطفال وأنيميشن مفتوح', reason:'animation' }
+  );
+  assert.deepEqual(
+    localizedOpenEntertainmentProfile({ title:'Desert Journey', description:'A documentary film about desert wildlife.' }),
+    { accepted:true, category:'أجنبي مترجم · وثائقيات مفتوحة', reason:'documentary' }
+  );
+  assert.deepEqual(
+    localizedOpenEntertainmentProfile({ title:'Feature Story', description:'Independent feature film and cinema release.' }),
+    { accepted:true, category:'أجنبي مترجم · أفلام مفتوحة', reason:'film' }
+  );
+});
+
+test('Arabic-subtitled open-video discovery rejects translated talks, news and generic clips', () => {
+  for (const item of [
+    { title:'Technology Lecture', description:'A lecture about software.' },
+    { title:'Director Interview', description:'Interview about a movie.' },
+    { title:'Daily News', description:'News bulletin.' },
+    { title:'Open Video 2026', description:'Community video.' }
+  ]) {
+    assert.equal(localizedOpenEntertainmentProfile(item).accepted, false, item.title);
   }
 });

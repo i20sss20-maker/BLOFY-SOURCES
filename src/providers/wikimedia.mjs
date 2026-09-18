@@ -1,7 +1,7 @@
 import { stripHtml } from '../catalog.mjs';
 import { fetchJson, envInt, envBool, allowedOpenLicense } from './common.mjs';
 
-const WIKIMEDIA_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|سياسة|سياسي|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|science|technology|activism|quran|recitation|press conference)/i;
+const WIKIMEDIA_NON_ENTERTAINMENT = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|تعليم|تعليمي|تقنية|تكنولوجيا|سياسة|سياسي|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|news|politics|education|educational|technology|activism|quran|recitation|press conference)/i;
 const WIKIMEDIA_SERIES = /(?:مسلسل|مسلسلات|حلقة|حلقات|موسم|دراما|series|serial|episode|season|drama|tv show)/i;
 const WIKIMEDIA_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
 const WIKIMEDIA_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime|kids)/i;
