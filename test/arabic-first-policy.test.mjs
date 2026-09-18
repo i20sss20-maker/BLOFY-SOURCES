@@ -134,6 +134,10 @@ test('Arabic Archive entertainment filter keeps viewer content and assigns clean
     archiveEntertainmentProfile({ title:'مسرحية ليلة طويلة', subject:['مسرح'] }),
     { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' }
   );
+  assert.deepEqual(
+    archiveEntertainmentProfile({ title:'مسرحية مدرسة المشاغبين', subject:['مسرحيات عربية'] }),
+    { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' }
+  );
 });
 
 test('Arabic Archive entertainment filter rejects lectures, interviews, news and generic uploads', () => {
