@@ -27,6 +27,7 @@ test('unified gateway restores activation admin and keeps Xtream admin separate'
     r=await fetch(`${base}/downloads/client.apk`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/downloads/client.apk');
     r=await fetch(`${base}/releases-admin/builds`);j=await r.json();assert.equal(j.service,'releases');assert.equal(j.path,'/admin/builds');
     r=await fetch(`${base}/player_api.php?username=testuser&password=TestPass-123`);j=await r.json();assert.equal(j.user_info.auth,1);assert.notEqual(j.service,'activation');
-    r=await fetch(`${base}/xtream`);assert.equal(r.status,200);const html=await r.text();assert.match(html,/BLOFY/);assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);
+    r=await fetch(`${base}/xtream`);assert.equal(r.status,200);let html=await r.text();assert.match(html,/BLOFY/);assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);
+    r=await fetch(`${base}/sources-admin`);assert.equal(r.status,200);html=await r.text();assert.match(html,/لوحة الإدارة/);assert.match(html,/إدارة المشتركين/);
   } finally {child.kill('SIGTERM');await Promise.all([close(activation),close(releases)]);rmSync(dataDir,{recursive:true,force:true})}
 },15000);
