@@ -2,16 +2,17 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS,SYNC_ON_START,ROOT } from './config.mjs';
+import { PORT,ADMIN_PASSWORD,SYNC_INTERVAL_MS,SYNC_ON_START,ROOT,PUBLIC_BASE_URL,XTREAM_PUBLIC_BASE_URL } from './config.mjs';
 import { catalog,listAccounts } from './context.mjs';
 import { baseUrl,json,text } from './http.mjs';
 import { storageStatus } from './storage.mjs';
 import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
-import { legacyXtreamHealth } from './xtream-auth.mjs';
+import { legacyXtreamHealth, runXtreamSelfTest, xtreamSmokeState } from './xtream-auth.mjs';
 
 const ACTIVATION_URL=String(process.env.ACTIVATION_URL||'http://blofy-activation').replace(/\/+$/,'');
+const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
 const RELEASE_URL=String(process.env.RELEASE_URL||'http://blofy-releases').replace(/\/+$/,'');
 const RELEASE_PATH=/^(?:\/release\.json|\/download(?:\/|$)|\/downloads(?:\/|$)|\/releases(?:\/|$))/;
 const HOP_BY_HOP=new Set(['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade']);
@@ -69,7 +70,7 @@ const server=http.createServer(async(req,res)=>{try{
   if((req.method==='GET'||req.method==='HEAD')&&pathname==='/health'){
     const legacy=await legacyXtreamHealth();
     const localAccounts=accountHealth();
-    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:{...localAccounts,legacyActive:legacy.accounts,totalRecognized:localAccounts.active+legacy.accounts},legacyAuth:legacy,...syncState()}};
+    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:{...localAccounts,legacyActive:legacy.accounts,totalRecognized:localAccounts.active+legacy.accounts},legacyAuth:legacy,smoke:xtreamSmokeState(),...syncState()}};
     if(req.method==='HEAD'){res.writeHead(200,{'cache-control':'no-store',...securityHeaders()});return res.end()}
     return json(res,200,body,securityHeaders());
   }
@@ -93,3 +94,14 @@ server.on('clientError',(error,socket)=>{console.warn('gateway client error:',er
 server.listen(PORT,'0.0.0.0',()=>{console.log(`BLOFY unified gateway + admin + Xtream listening on :${PORT}`);console.log(`activation upstream: ${ACTIVATION_URL}`);console.log(`releases upstream: ${RELEASE_URL}`);console.log(`storage mode: ${storageStatus().mode}`);if(!ADMIN_PASSWORD)console.warn('ADMIN_PASSWORD is empty; admin login disabled.')});
 setTimeout(()=>{if(SYNC_ON_START){console.log(`startup catalog sync scheduled; restored=${catalog.items.size} lastSync=${catalog.lastSyncAt||'never'}`);syncAll().then(result=>logSync('startup',result)).catch(e=>console.error('startup sync failed:',e))}else if(!catalog.lastSyncAt){syncAll().then(result=>logSync('initial',result)).catch(e=>console.error('initial sync failed:',e))}else console.log(`catalog restored without startup sync: ${JSON.stringify(catalog.stats())}`)},1500).unref();
 setInterval(()=>syncAll().then(result=>logSync('scheduled',result)).catch(e=>console.error('scheduled sync failed:',e)),SYNC_INTERVAL_MS).unref();
+
+
+setTimeout(()=>{
+  if(!SELF_TEST_BASE)return;
+  runXtreamSelfTest(SELF_TEST_BASE).then(result=>console.log('xtream self-test:',JSON.stringify(result))).catch(error=>console.error('xtream self-test failed:',String(error?.message||error)));
+},7000).unref();
+
+setInterval(()=>{
+  if(!SELF_TEST_BASE)return;
+  runXtreamSelfTest(SELF_TEST_BASE).catch(error=>console.error('scheduled xtream self-test failed:',String(error?.message||error)));
+},30*60_000).unref();
