@@ -84,6 +84,7 @@ test('licensed Xtream playback is proxied and upstream credentials never reach t
   writeFileSync(path.join(dataDir,'catalog.json'),JSON.stringify(catalog(upstreamPort)));
 
   const seen=[];
+  let releaseHeld=null;
   const upstream=http.createServer((req,res)=>{
     seen.push({url:req.url,range:req.headers.range,userAgent:req.headers['user-agent']});
     if(req.url!=='/movie/licensed-user/LicensedPass-456/501.mp4'){
@@ -104,6 +105,16 @@ test('licensed Xtream playback is proxied and upstream credentials never reach t
         'accept-ranges':'bytes'
       });
       return res.end(part);
+    }
+    if(req.headers.range==='bytes=4-'){
+      res.writeHead(206,{
+        'content-type':'video/mp4',
+        'content-range':'bytes 4-7/8',
+        'accept-ranges':'bytes'
+      });
+      res.write('E');
+      releaseHeld=()=>res.end('FGH');
+      return;
     }
     res.writeHead(200,{'content-type':'video/mp4','content-length':String(full.length),'accept-ranges':'bytes'});
     res.end(full);
@@ -166,7 +177,37 @@ test('licensed Xtream playback is proxied and upstream credentials never reach t
     assert.equal(seen[0].url,'/movie/licensed-user/LicensedPass-456/501.mp4');
     assert.equal(seen[0].range,'bytes=0-3');
     assert.match(String(seen[0].userAgent||''),/BLOFY-Xtream-Gateway/);
+
+    const held=await fetch(`${gatewayBase}/movie/testuser/TestPass-123/901.mp4`,{
+      headers:{range:'bytes=4-'},
+      redirect:'manual'
+    });
+    assert.equal(held.status,206);
+
+    let info=await (await fetch(`${gatewayBase}/player_api.php?username=testuser&password=TestPass-123`)).json();
+    assert.equal(info.user_info.active_cons,'1');
+    assert.equal(info.user_info.max_connections,'1');
+
+    const denied=await fetch(`${gatewayBase}/movie/testuser/TestPass-123/901.mp4`,{redirect:'manual'});
+    assert.equal(denied.status,429);
+    assert.equal(denied.headers.get('x-blofy-active-connections'),'1');
+    assert.equal(denied.headers.get('x-blofy-max-connections'),'1');
+    assert.equal(seen.filter(x=>x.range==='bytes=4-').length,1);
+
+    releaseHeld();
+    assert.equal(await held.text(),'EFGH');
+
+    for(let i=0;i<30;i++){
+      info=await (await fetch(`${gatewayBase}/player_api.php?username=testuser&password=TestPass-123`)).json();
+      if(info.user_info.active_cons==='0')break;
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
+    assert.equal(info.user_info.active_cons,'0');
+
+    const finalHealth=await (await fetch(`${gatewayBase}/health`)).json();
+    assert.equal(finalHealth.xtream.accounts.activeConnections,0);
   } finally {
+    if(releaseHeld)try{releaseHeld()}catch{}
     child.kill('SIGTERM');
     await new Promise(resolve=>{
       if(child.exitCode!=null)return resolve();
