@@ -13,7 +13,6 @@ import { legacyXtreamHealth, runXtreamSelfTest, xtreamSmokeState } from './xtrea
 
 const ACTIVATION_URL=String(process.env.ACTIVATION_URL||'http://blofy-activation').replace(/\/+$/,'');
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
-const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
 const RELEASE_URL=String(process.env.RELEASE_URL||'http://blofy-releases').replace(/\/+$/,'');
 const RELEASE_PATH=/^(?:\/release\.json|\/download(?:\/|$)|\/downloads(?:\/|$)|\/releases(?:\/|$))/;
 const HOP_BY_HOP=new Set(['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade']);
