@@ -130,7 +130,36 @@ AUTHORIZED_PARTNER_MANIFEST_URLS=https://partner.example/catalog.json
 }
 ```
 
-الـM3U لا يعمل وحده: يجب أن يكون داخل Manifest يحمل مرجع الحقوق والنطاق. كما تُرفض قوائم `#EXTVLCOPT` / `#KODIPROP` التي تحتاج Headers خاصة، لأن رابط التشغيل الحالي يُعاد مباشرة للمشغل.
+الـM3U لا يعمل وحده: يجب أن يكون داخل Manifest يحمل مرجع الحقوق والنطاق. كما تُرفض قوائم `#EXTVLCOPT` / `#KODIPROP` التي تحتاج Headers خاصة.
+
+يمكن أيضًا ربط **Xtream Upstream مرخّص** داخل نفس Manifest بدون وضع Username/Password في GitHub أو في `catalog.json`:
+
+```json
+{
+  "partner": "Example Licensed Distributor",
+  "rightsReference": "agreement-2026-010",
+  "territories": ["SA", "GCC"],
+  "expiresAt": "2027-12-31T23:59:59Z",
+  "feeds": [
+    {
+      "type": "xtream",
+      "secretRef": "DEMO",
+      "language": "ar",
+      "include": ["live", "vod", "series"]
+    }
+  ]
+}
+```
+
+ويتم وضع بيانات المصدر في بيئة التشغيل فقط:
+
+```text
+BLOFY_PARTNER_XTREAM_DEMO_URL=https://licensed-provider.example
+BLOFY_PARTNER_XTREAM_DEMO_USERNAME=...
+BLOFY_PARTNER_XTREAM_DEMO_PASSWORD=...
+```
+
+أثناء المزامنة تُستخدم البيانات لجلب الفئات والقنوات والأفلام والمسلسلات، لكن الكتالوج يحفظ فقط `secretRef` ومعرّف العنصر عند المزود. وأثناء التشغيل يمر البث المرخّص عبر **BLOFY proxy** مع دعم `Range` و`HEAD`، لذلك لا يصل Username/Password الخاص بالمزود إلى تطبيق العميل أو `Location` header. البث المباشر المرخّص يستخدم TS عبر الـproxy حتى لا نحتاج إلى كشف أو إعادة كتابة روابط HLS الداخلية.
 
 مثال مختصر:
 
