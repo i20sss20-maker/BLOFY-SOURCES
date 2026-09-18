@@ -85,7 +85,8 @@ export async function legacyXtreamHealth(){
 }
 
 
-let smokeState={enabled:String(process.env.ENABLE_XTREAM_SELF_TEST||'false').toLowerCase()==='true',running:false,ok:null,lastRunAt:null,elapsedMs:null,stage:'idle',error:null};
+const SMOKE_DEFAULT=process.env.NODE_ENV==='production'?'true':'false';
+let smokeState={enabled:String(process.env.ENABLE_XTREAM_SELF_TEST||SMOKE_DEFAULT).toLowerCase()==='true',running:false,ok:null,lastRunAt:null,elapsedMs:null,stage:'idle',error:null};
 
 function smokeHeaders(){return{'content-type':'application/json','authorization':`Bearer ${SESSION_SECRET}`,'user-agent':'BLOFY-Xtream-SelfTest/1.0'}}
 
