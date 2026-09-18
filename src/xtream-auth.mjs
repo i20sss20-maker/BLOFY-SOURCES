@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { getAccount, verifyAccount } from './context.mjs';
+import { SESSION_SECRET } from './config.mjs';
 
 const ACTIVATION_URL = String(process.env.ACTIVATION_URL || '').trim().replace(/\/+$/, '');
 const CACHE_TTL_MS = Math.max(5_000, Number(process.env.LEGACY_XTREAM_AUTH_CACHE_MS || 120_000));
@@ -81,4 +82,71 @@ export async function legacyXtreamHealth(){
   }catch(error){
     return{ok:false,configured:true,accounts:0,error:error?.name==='AbortError'?'timeout':String(error?.message||error).slice(0,160)};
   }finally{clearTimeout(timer)}
+}
+
+
+let smokeState={enabled:String(process.env.ENABLE_XTREAM_SELF_TEST||'false').toLowerCase()==='true',running:false,ok:null,lastRunAt:null,elapsedMs:null,stage:'idle',error:null};
+
+function smokeHeaders(){return{'content-type':'application/json','authorization':`Bearer ${SESSION_SECRET}`,'user-agent':'BLOFY-Xtream-SelfTest/1.0'}}
+
+export function xtreamSmokeState(){return{...smokeState}}
+
+export async function runXtreamSelfTest(publicBaseUrl){
+  if(!smokeState.enabled)return smokeState;
+  if(smokeState.running)return smokeState;
+  const started=Date.now();smokeState={...smokeState,running:true,ok:null,lastRunAt:new Date().toISOString(),elapsedMs:null,stage:'create-account',error:null};
+  let accountId='';
+  try{
+    if(!ACTIVATION_URL)throw new Error('activation_url_missing');
+    const createResponse=await fetch(new URL('/api/v1/admin/xtream-gateway/accounts',ACTIVATION_URL+'/'),{
+      method:'POST',
+      headers:smokeHeaders(),
+      body:JSON.stringify({label:'BLOFY automated compatibility probe',maxConnections:1,expiresAt:new Date(Date.now()+20*60_000).toISOString()})
+    });
+    if(!createResponse.ok)throw new Error(`create_account_http_${createResponse.status}`);
+    const created=await createResponse.json();
+    accountId=String(created?.item?.id||'');
+    const username=String(created?.credentials?.username||''),password=String(created?.credentials?.password||'');
+    if(!accountId||!username||!password)throw new Error('create_account_incomplete');
+
+    const base=String(publicBaseUrl||'').replace(/\/+$/,'');
+    smokeState.stage='player-api';
+    let r=await fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,{headers:{'user-agent':'BLOFY-Xtream-SelfTest/1.0','accept':'application/json'}});
+    if(!r.ok)throw new Error(`player_api_http_${r.status}`);
+    let j=await r.json();
+    if(!(j?.user_info?.auth===1||j?.user_info?.auth===true||String(j?.user_info?.auth)==='1'))throw new Error('player_api_auth_failed');
+
+    smokeState.stage='live-categories';
+    r=await fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`,{headers:{'accept':'application/json'}});
+    if(!r.ok)throw new Error(`live_categories_http_${r.status}`);
+    j=await r.json();
+    if(!Array.isArray(j))throw new Error('live_categories_invalid');
+
+    smokeState.stage='vod-categories';
+    r=await fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_vod_categories`,{headers:{'accept':'application/json'}});
+    if(!r.ok)throw new Error(`vod_categories_http_${r.status}`);
+    j=await r.json();
+    if(!Array.isArray(j))throw new Error('vod_categories_invalid');
+
+    smokeState.stage='series-categories';
+    r=await fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_series_categories`,{headers:{'accept':'application/json'}});
+    if(!r.ok)throw new Error(`series_categories_http_${r.status}`);
+    j=await r.json();
+    if(!Array.isArray(j))throw new Error('series_categories_invalid');
+
+    smokeState.stage='m3u';
+    r=await fetch(`${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,{headers:{'accept':'audio/x-mpegurl,*/*'}});
+    if(!r.ok)throw new Error(`m3u_http_${r.status}`);
+    const m3u=await r.text();
+    if(!m3u.startsWith('#EXTM3U'))throw new Error('m3u_invalid');
+
+    smokeState={...smokeState,running:false,ok:true,elapsedMs:Date.now()-started,stage:'complete',error:null};
+  }catch(error){
+    smokeState={...smokeState,running:false,ok:false,elapsedMs:Date.now()-started,stage:smokeState.stage,error:String(error?.message||error).slice(0,180)};
+  }finally{
+    if(accountId){
+      try{await fetch(new URL(`/api/v1/admin/xtream-gateway/accounts/${encodeURIComponent(accountId)}`,ACTIVATION_URL+'/'),{method:'DELETE',headers:{'authorization':`Bearer ${SESSION_SECRET}`,'user-agent':'BLOFY-Xtream-SelfTest/1.0'}})}catch{}
+    }
+  }
+  return smokeState;
 }
