@@ -9,7 +9,7 @@ import { storageStatus } from './storage.mjs';
 import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
-import { legacyXtreamHealth, runXtreamSelfTest, xtreamSmokeState } from './xtream-auth.mjs';
+import { runXtreamSelfTest, xtreamSmokeState } from './xtream-auth.mjs';
 
 const ACTIVATION_URL=String(process.env.ACTIVATION_URL||'http://blofy-activation').replace(/\/+$/,'');
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
@@ -68,9 +68,8 @@ function proxy(req,res){
 const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url||'/',baseUrl(req)),pathname=cleanPath(url.pathname);
   if((req.method==='GET'||req.method==='HEAD')&&pathname==='/health'){
-    const legacy=await legacyXtreamHealth();
     const localAccounts=accountHealth();
-    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:{...localAccounts,legacyActive:legacy.accounts,totalRecognized:localAccounts.active+legacy.accounts},legacyAuth:legacy,smoke:xtreamSmokeState(),...syncState()}};
+    const body={ok:true,service:'blofy-gateway',storage:storageStatus(),xtream:{ok:true,stats:catalog.stats(),accounts:localAccounts,smoke:xtreamSmokeState(),...syncState()}};
     if(req.method==='HEAD'){res.writeHead(200,{'cache-control':'no-store',...securityHeaders()});return res.end()}
     return json(res,200,body,securityHeaders());
   }
