@@ -1,11 +1,23 @@
 import { gzipSync } from 'node:zlib';
 import { PORT, PUBLIC_BASE_URL, XTREAM_PUBLIC_BASE_URL } from './config.mjs';
-export function baseUrl(req) {
-  if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
-  const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
-  return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
+
+function forwardedProto(req){
+  const raw=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim().toLowerCase();
+  if(raw==='http'||raw==='https')return raw;
+  return req.socket?.encrypted?'https':'http';
 }
-export function xtreamBaseUrl(req) { return XTREAM_PUBLIC_BASE_URL || PUBLIC_BASE_URL || baseUrl(req); }
+function requestBaseUrl(req){
+  const host=String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim();
+  return host?`${forwardedProto(req)}://${host}`:'';
+}
+export function baseUrl(req) {
+  return PUBLIC_BASE_URL || requestBaseUrl(req) || `http://localhost:${PORT}`;
+}
+export function xtreamBaseUrl(req) {
+  // Prefer the real request scheme/host so old players using HTTP receive HTTP links,
+  // while HTTPS players keep HTTPS links. Explicit XTREAM_PUBLIC_BASE_URL is fallback only.
+  return requestBaseUrl(req) || XTREAM_PUBLIC_BASE_URL || PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+}
 function sendBody(res,status,body,contentType,extra={}){
   const raw=Buffer.isBuffer(body)?body:Buffer.from(String(body));
   const accepts=String(res.req?.headers?.['accept-encoding']||'').toLowerCase();
