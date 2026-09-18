@@ -1,4 +1,5 @@
 import { catalog } from './context.mjs';
+import { activeConnectionCount } from './connections.mjs';
 import { xtreamBaseUrl } from './http.mjs';
 
 export function serverInfo(req){
@@ -31,7 +32,7 @@ export function userInfo(auth){
     status:'Active',
     exp_date:exp,
     is_trial:String(legacy.is_trial??'0'),
-    active_cons:String(legacy.active_cons??'0'),
+    active_cons:String(activeConnectionCount(auth?.username)||Number(legacy.active_cons)||0),
     created_at:created,
     max_connections:max,
     allowed_output_formats:allowed
