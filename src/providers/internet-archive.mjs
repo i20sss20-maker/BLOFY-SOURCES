@@ -10,13 +10,28 @@ function openShardQueries() {
   const currentYear = new Date().getUTCFullYear();
   const ranges = [
     ['2000-01-01','2009-12-31'],
-    ['2010-01-01','2014-12-31'],
-    ['2015-01-01','2019-12-31'],
-    ['2020-01-01','2022-12-31'],
-    ['2023-01-01','2024-12-31'],
-    ['2025-01-01',`${currentYear}-12-31`]
+    ['2010-01-01','2012-12-31'],
+    ['2013-01-01','2015-12-31'],
+    ['2016-01-01','2018-12-31'],
+    ['2019-01-01','2020-12-31'],
+    ['2021-01-01','2021-12-31'],
+    ['2022-01-01','2022-12-31'],
+    ['2023-01-01','2023-12-31'],
+    ['2024-01-01','2024-12-31'],
+    ['2025-01-01','2025-12-31'],
+    ['2026-01-01',`${currentYear}-12-31`]
   ];
-  return ranges.map(([from,to]) => `mediatype:movies AND addeddate:[${from} TO ${to}] AND ${OPEN_LICENSE_QUERY}`);
+  return ranges
+    .filter(([from]) => Number(from.slice(0,4)) <= currentYear)
+    .map(([from,to]) => `mediatype:movies AND addeddate:[${from} TO ${to}] AND ${OPEN_LICENSE_QUERY}`);
+}
+
+function openCollectionQueries() {
+  return [
+    `mediatype:movies AND collection:opensource_movies AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND collection:community_video AND ${OPEN_LICENSE_QUERY}`,
+    `mediatype:movies AND collection:vlogs AND ${OPEN_LICENSE_QUERY}`
+  ];
 }
 
 function arabicExpansionQueries() {
@@ -165,16 +180,18 @@ export async function syncInternetArchive() {
   const prelingerLimit = envInt('IA_PRELINGER_LIMIT', 5000, 100, 10000);
   const shardLimit = envInt('IA_SHARD_LIMIT', 18000, 1000, 30000);
   const shardConcurrency = envInt('IA_SHARD_CONCURRENCY', 2, 1, 3);
-  const arabicExtraLimit = envInt('IA_ARABIC_EXTRA_LIMIT', 10000, 500, 20000);
+  const arabicExtraLimit = envInt('IA_ARABIC_EXTRA_LIMIT', 15000, 500, 25000);
+  const collectionLimit = envInt('IA_OPEN_COLLECTION_LIMIT', 25000, 1000, 40000);
   const byId = new Map();
 
-  const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs, shardSets, arabicExtraSets] = await Promise.all([
+  const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs, shardSets, arabicExtraSets, collectionSets] = await Promise.all([
     archiveDocs(genericQuery(), generalLimit),
     archiveDocs(arabicQuery(), arabicLimit),
     archiveDocs(FEDFLIX_QUERY, fedflixLimit),
     archiveDocs(PRELINGER_QUERY, prelingerLimit),
     mapLimit(openShardQueries(), shardConcurrency, query => archiveDocs(query, shardLimit)),
-    mapLimit(arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit))
+    mapLimit(arabicExpansionQueries(), 2, query => archiveDocs(query, arabicExtraLimit)),
+    mapLimit(openCollectionQueries(), 2, query => archiveDocs(query, collectionLimit))
   ]);
 
   for (const doc of generalDocs) {
@@ -206,6 +223,13 @@ export async function syncInternetArchive() {
   for (const docs of arabicExtraSets) {
     for (const doc of docs) {
       const item = toCatalogItem(doc, { forceArabic: isArabicDoc(doc) || /[\u0600-\u06ff]/.test(String(doc.title || '')) });
+      if (item) byId.set(item.sourceItemId, item);
+    }
+  }
+
+  for (const docs of collectionSets) {
+    for (const doc of docs) {
+      const item = toCatalogItem(doc);
       if (item) byId.set(item.sourceItemId, item);
     }
   }
