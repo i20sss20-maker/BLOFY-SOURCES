@@ -297,7 +297,6 @@ async function createSubscriber(){
 
 async function renewSubscriber(user,days){
   try{
-    const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');
     await api('accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});
     closeRenew();toast(`تم تجديد ${user} لمدة ${days===365?'سنة':days===730?'سنتين':days+' يوم'}`,'success');
     await Promise.all([loadSubscribers(),refresh()]);
@@ -305,13 +304,13 @@ async function renewSubscriber(user,days){
 }
 
 async function toggleSubscriber(user,enabled,button){
-  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api('accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;await api('accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
 async function deleteSubscriber(user,button){
   if(!confirm(`حذف المشترك ${user} نهائيًا؟`))return;
-  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api(`accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;await api(`accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
