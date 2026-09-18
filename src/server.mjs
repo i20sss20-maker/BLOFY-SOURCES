@@ -22,7 +22,7 @@ function cleanPath(pathname){if(pathname==='/'||!pathname)return '/';return path
 
 async function serveAdminUi(res,pathname){
   let file='';
-  if(pathname==='/xtream')file='admin.html';
+  if(pathname==='/xtream'||pathname==='/sources-admin')file='admin.html';
   else if(pathname==='/admin-assets/admin.css'||pathname==='/xtream-assets/admin.css')file='admin.css';
   else if(pathname==='/admin-assets/admin.js'||pathname==='/xtream-assets/admin.js')file='admin.js';
   else return false;
