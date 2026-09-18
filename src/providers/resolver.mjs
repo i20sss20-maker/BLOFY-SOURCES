@@ -1,9 +1,11 @@
 import { fetchJson } from './common.mjs';
+import { resolveAuthorizedXtreamTarget } from './authorized-xtream.mjs';
 
 export async function resolveStream(item) {
   if (!item?.stream) throw new Error('stream_missing');
   const resolver = item.stream.resolver;
   if (resolver === 'direct') return { url: String(item.stream.url), extension: item.stream.extension || extensionFromUrl(item.stream.url) };
+  if (resolver === 'authorized-xtream') return resolveAuthorizedXtreamTarget(item.stream);
   if (resolver === 'internet-archive') {
     const id = encodeURIComponent(item.stream.identifier);
     const data = await fetchJson(`https://archive.org/metadata/${id}`, 25000);

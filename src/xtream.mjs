@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { catalog } from './context.mjs';
 import { authenticateXtream } from './xtream-auth.mjs';
 import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
@@ -97,6 +99,71 @@ export async function serveXmltv(req,res,url){
   return text(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="BLOFY SOURCES">${channels}</tv>\n`,'application/xml; charset=utf-8');
 }
 
+function proxyRequestHeaders(req){
+  const headers={
+    'user-agent':'BLOFY-Xtream-Gateway/2.0',
+    'accept':'*/*',
+    'accept-encoding':'identity'
+  };
+  for(const name of ['range','if-range','if-none-match','if-modified-since']){
+    const value=req.headers[name];
+    if(value)headers[name]=String(value);
+  }
+  return headers;
+}
+
+function proxyResponseHeaders(upstream){
+  const headers={
+    'cache-control':'no-store',
+    'x-content-type-options':'nosniff',
+    'referrer-policy':'no-referrer'
+  };
+  for(const name of ['content-type','content-length','content-range','accept-ranges','etag','last-modified','content-disposition']){
+    const value=upstream.headers.get(name);
+    if(value)headers[name]=value;
+  }
+  return headers;
+}
+
+async function proxyPlayback(req,res,target,item){
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  req.once('aborted',abort);
+  res.once('close',abort);
+  try{
+    const upstream=await fetch(target.url,{
+      method:req.method==='HEAD'?'HEAD':'GET',
+      redirect:'follow',
+      headers:proxyRequestHeaders(req),
+      signal:controller.signal
+    });
+    const ok=upstream.ok||upstream.status===206||upstream.status===304;
+    if(!ok){
+      const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
+      if(!res.headersSent)json(res,status,{ok:false,error:`upstream_http_${upstream.status}`,source:item.source,itemId:item.id});
+      else if(!res.writableEnded)res.end();
+      return;
+    }
+    res.writeHead(upstream.status,proxyResponseHeaders(upstream));
+    if(req.method==='HEAD'||!upstream.body){
+      res.end();
+      return;
+    }
+    await pipeline(Readable.fromWeb(upstream.body),res);
+  }catch(error){
+    if(controller.signal.aborted){
+      if(!res.writableEnded)res.end();
+      return;
+    }
+    console.warn(`xtream playback proxy failed source=${item.source} item=${item.id}: ${String(error?.message||error)}`);
+    if(!res.headersSent)json(res,502,{ok:false,error:'upstream_proxy_failed',source:item.source,itemId:item.id});
+    else if(!res.writableEnded)res.end();
+  }finally{
+    req.off('aborted',abort);
+    res.off('close',abort);
+  }
+}
+
 export async function servePlayback(req,res,pathname){
   const m=pathname.match(/^\/(live|movie|series)\/([^/]+)\/([^/]+)\/(\d+)(?:\.([A-Za-z0-9]+))?\/?$/);
   if(!m)return false;
@@ -106,8 +173,13 @@ export async function servePlayback(req,res,pathname){
   const x=catalog.get(id),valid=x&&((type==='live'&&x.kind==='live')||(type==='movie'&&x.kind==='movie')||(type==='series'&&x.kind==='series_episode'));
   if(!valid){text(res,404,'Not found');return true}
   try{
-    const target=new URL((await resolveStream(x)).url);
+    const resolved=await resolveStream(x);
+    const target=new URL(resolved.url);
     if(!['http:','https:'].includes(target.protocol))throw new Error('unsupported_target_protocol');
+    if(resolved.proxy===true){
+      await proxyPlayback(req,res,{...resolved,url:target.toString()},x);
+      return true;
+    }
     res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
     res.end();
   }catch(e){
