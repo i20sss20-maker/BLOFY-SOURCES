@@ -35,6 +35,16 @@ export function envInt(name, fallback, min = 1, max = 100000) {
   return Number.isFinite(value) ? Math.min(max, Math.max(min, Math.floor(value))) : fallback;
 }
 
+export function envBool(name, fallback = false) {
+  const raw = process.env[name];
+  if (raw == null || String(raw).trim() === '') return Boolean(fallback);
+  return ['1','true','yes','on'].includes(String(raw).trim().toLowerCase());
+}
+
+export function arabicFirstEnabled() {
+  return envBool('ARABIC_FIRST', true);
+}
+
 export function arrayFirst(value) {
   return Array.isArray(value) ? value[0] : value;
 }
