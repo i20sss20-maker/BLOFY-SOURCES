@@ -3,7 +3,7 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
 import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
-import { authenticateXtream } from './xtream-auth.mjs';
+import { authenticateXtream,listLegacyGatewayAccounts,createLegacyGatewayAccount,resetLegacyGatewayPassword,patchLegacyGatewayAccount,deleteLegacyGatewayAccount } from './xtream-auth.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
@@ -18,6 +18,10 @@ function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function isArabicItem(item){return String(item?.language||'').toLowerCase()==='ar'||String(item?.category||'').startsWith('عربي ·')||item?.rights?.arabic===true||/[\u0600-\u06ff]/.test(String(item?.title||''))}
 function catalogCounts(rows){const out={total:0,live:0,movies:0,episodes:0};for(const item of rows){out.total++;if(item.kind==='live')out.live++;else if(item.kind==='series_episode')out.episodes++;else out.movies++}return out}
 function accountSummary(accounts){const now=Date.now();return{total:accounts.length,active:accounts.filter(x=>x.enabled&&!x.expired).length,expired:accounts.filter(x=>x.expired).length,disabled:accounts.filter(x=>!x.enabled).length,expiringSoon:accounts.filter(x=>x.enabled&&!x.expired&&x.expiresAt&&(new Date(x.expiresAt).getTime()-now)<=7*86400000).length}}
+function normalizeLegacyAdminAccount(row={}){
+  const expiresMs=Number(row.expiresAt||0),createdMs=Number(row.createdAt||0),enabled=row.enabled!==false,expired=Boolean(expiresMs&&expiresMs<=Date.now());
+  return{id:String(row.id||''),username:String(row.username||''),label:String(row.label||''),enabled,expired,expiresAt:expiresMs?new Date(expiresMs).toISOString():null,createdAt:createdMs?new Date(createdMs).toISOString():null,maxConnections:Math.max(1,Number(row.maxConnections)||1),legacy:true};
+}
 
 export async function serveAdminAsset(res,pathname){
   const file=pathname==='/admin'?'/admin.html':pathname;if(!['/admin.html','/admin.css','/admin.js'].includes(file))return false;
@@ -38,6 +42,43 @@ export async function adminApi(req,res,url){
     arabic.series=catalog.seriesGroups().filter(group=>String(group.category||'').startsWith('عربي ·')||/[\u0600-\u06ff]/.test(String(group.title||''))).length;
     for(const item of all){const bucket=perSource[item.source]||(perSource[item.source]={live:0,movies:0,episodes:0,total:0});bucket.total++;if(item.kind==='live')bucket.live++;else if(item.kind==='series_episode')bucket.episodes++;else bucket.movies++}
     return json(res,200,{ok:true,adminBaseUrl:baseUrl(req),baseUrl:xtreamBaseUrl(req),stats:catalog.stats(),arabic,accountsSummary:accountSummary(accounts),providers:providerDefinitions.map(p=>({id:p.id,name:p.name,kind:p.kind,enabled:p.enabled(),rights:p.rights,runtime:catalog.sources[p.id]||null,counts:perSource[p.id]||{live:0,movies:0,episodes:0,total:0}})),account:accounts[0]||null,...sync});
+  }
+  if(url.pathname==='/api/admin/compat-accounts'&&req.method==='GET'){
+    try{
+      const data=await listLegacyGatewayAccounts(),accounts=(data.items||[]).map(normalizeLegacyAdminAccount);
+      return json(res,200,{ok:true,summary:accountSummary(accounts),accounts});
+    }catch(e){return json(res,502,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/compat-accounts'&&req.method==='POST'){
+    const body=await readJsonBody(req).catch(()=>({}));
+    try{
+      const result=await createLegacyGatewayAccount({label:body.label,durationDays:body.durationDays,maxConnections:body.maxConnections});
+      const account=normalizeLegacyAdminAccount(result.item||{}),host=xtreamBaseUrl(req),credentials=result.credentials||{};
+      return json(res,201,{ok:true,host,...account,password:String(credentials.password||''),m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}`});
+    }catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/compat-accounts/reset'&&req.method==='POST'){
+    const body=await readJsonBody(req).catch(()=>({}));
+    try{
+      const result=await resetLegacyGatewayPassword(body.id),account=normalizeLegacyAdminAccount(result.item||{}),host=xtreamBaseUrl(req),credentials=result.credentials||{};
+      return json(res,200,{ok:true,host,...account,password:String(credentials.password||''),m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}`});
+    }catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/compat-accounts/renew'&&req.method==='POST'){
+    const body=await readJsonBody(req).catch(()=>({}));
+    try{
+      const data=await listLegacyGatewayAccounts(),current=(data.items||[]).find(x=>String(x.id)===String(body.id));if(!current)throw new Error('account_not_found');
+      const add=Math.max(1,Math.min(3650,Number(body.days)||30))*86400000,base=Number(current.expiresAt||0)>Date.now()?Number(current.expiresAt):Date.now();
+      const item=await patchLegacyGatewayAccount(body.id,{enabled:true,expiresAt:new Date(base+add).toISOString()});
+      return json(res,200,{ok:true,account:normalizeLegacyAdminAccount(item)});
+    }catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/compat-accounts/toggle'&&req.method==='POST'){
+    const body=await readJsonBody(req).catch(()=>({}));
+    try{return json(res,200,{ok:true,account:normalizeLegacyAdminAccount(await patchLegacyGatewayAccount(body.id,{enabled:Boolean(body.enabled)}))})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/compat-accounts'&&req.method==='DELETE'){
+    const id=String(url.searchParams.get('id')||'');try{await deleteLegacyGatewayAccount(id);return json(res,200,{ok:true})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='GET'){
     const accounts=listAccounts();return json(res,200,{ok:true,summary:accountSummary(accounts),accounts});
