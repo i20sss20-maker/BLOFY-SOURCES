@@ -6,8 +6,10 @@ import { syncNasa } from './nasa.mjs';
 import { syncIptvOrg } from './iptv-org.mjs';
 import { syncFreeTv } from './free-tv.mjs';
 import { syncOpenArabicFilms } from './open-arabic-films.mjs';
+import { syncAuthorizedPartnerManifests } from './authorized-partners.mjs';
 
 export const providerDefinitions = [
+  { id:'authorized-partners', name:'Authorized partner manifests', kind:'Live + VOD + series', sync:syncAuthorizedPartnerManifests, enabled:()=>envBool('ENABLE_AUTHORIZED_PARTNERS', false), rights:'Disabled by default. Requires explicit rights confirmation plus a manifest carrying partner, Saudi/MENA territory and rights reference.' },
   { id:'internet-archive', name:'Internet Archive · Open licences', kind:'VOD + series detection', sync:syncInternetArchive, enabled:()=>true, rights:'Only CC0 / CC BY / CC BY-SA / public-domain-style licence URLs are accepted.' },
   { id:'wikimedia', name:'Wikimedia Commons · Video', kind:'VOD', sync:syncWikimediaCommons, enabled:()=>true, rights:'Machine-readable licence metadata is checked; NC/ND are excluded.' },
   { id:'peertube', name:'PeerTube · Open licences', kind:'VOD + live', sync:syncPeerTube, enabled:()=>true, rights:'Only licence IDs CC BY, CC BY-SA, Public Domain, and no-known-restrictions are accepted.' },
