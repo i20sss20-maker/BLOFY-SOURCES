@@ -11,6 +11,8 @@ import { syncAll,syncState } from './sync.mjs';
 import { runXtreamSelfTest,xtreamSmokeState } from './xtream-auth.mjs';
 
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
+const PROCESS_STARTED_AT=new Date().toISOString();
+const BUILD_SHA=String(process.env.BLOFY_BUILD_SHA||'').trim();
 
 function securityHeaders(){
   return{
@@ -62,6 +64,7 @@ const server=http.createServer(async(req,res)=>{
         ok:true,
         service:'blofy-xtream',
         standalone:true,
+        build:{sha:BUILD_SHA,startedAt:PROCESS_STARTED_AT},
         storage:storageStatus(),
         xtream:{
           ok:true,
