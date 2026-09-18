@@ -1,42 +1,355 @@
 const $=id=>document.getElementById(id);
-let state=null,catalogOffset=0,arabicOffset=0,arabicKind='',allSubscribers=[],lastCreated=null;
+const API='/admin-api/';
 const PAGE_SIZE=60;
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const titles={overview:'لوحة التحكم',subscribers:'المشتركون',arabic:'المحتوى العربي',catalog:'المكتبة الكاملة',access:'اختبار السيرفر'};
-function toast(msg,type=''){const b=$('statusbar');b.textContent=msg;b.className='statusbar show '+type;clearTimeout(window.__toast);window.__toast=setTimeout(()=>b.className='statusbar',4200)}
-async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{'content-type':'application/json',...(opts.headers||{})}});const j=await r.json().catch(()=>({}));if(r.status===401){$('login').classList.remove('hidden');throw new Error(j.error||'auth_required')}if(!r.ok)throw new Error(j.error||`request_${r.status}`);return j}
-function fmt(n){return new Intl.NumberFormat('ar-SA').format(Number(n||0))}
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function dateText(v){if(!v)return 'بدون انتهاء';const d=new Date(v);if(Number.isNaN(d.getTime()))return '—';return d.toLocaleDateString('ar-SA',{year:'numeric',month:'short',day:'numeric'})}
-function currentCredentials(){return{host:String(state?.baseUrl||'').replace(/\/+$/,''),username:$('serverUsername')?.value.trim()||'',password:$('serverPassword')?.value||''}}
-function credentialUrl(path,extra=''){const c=currentCredentials();if(!c.host||!c.username||!c.password)return 'يظهر بعد إدخال كلمة السر';const q=`username=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}${extra}`;return `${c.host}${path}?${q}`}
-function renderAccessLinks(){if(!$('playerApiValue'))return;$('playerApiValue').textContent=credentialUrl('/player_api.php');$('m3uValue').textContent=credentialUrl('/get.php','&type=m3u_plus&output=ts');$('xmltvValue').textContent=credentialUrl('/xmltv.php')}
-function renderSourceFilter(providers){const select=$('sourceFilter');if(!select)return;const current=select.value;select.innerHTML='<option value="">كل المصادر</option>'+providers.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');if([...select.options].some(x=>x.value===current))select.value=current}
-function renderSources(providers){const box=$('sourceList');if(!box)return;box.innerHTML=providers.map(p=>{const rt=p.runtime||{},c=p.counts||{},cls=rt.lastError?'err':p.enabled?'ok':'off',label=rt.lastError?'خطأ':p.enabled?'مفعل':'معطل';return `<div class="source-row"><div class="source-main"><strong>${esc(p.name)}</strong><span>${fmt(c.total??rt.count??0)} عنصر · مباشر ${fmt(c.live)} · فيديو ${fmt(c.movies)} · حلقات ${fmt(c.episodes)}</span></div><span class="badge ${cls}">${label}</span>${p.enabled?`<button class="btn source-sync" data-source="${esc(p.id)}">مزامنة</button>`:''}</div>`}).join('')}
-function render(s){state=s;$('login').classList.add('hidden');$('mLive').textContent=fmt(s.stats.live);$('mMovies').textContent=fmt(s.stats.movies);$('mSeries').textContent=fmt(s.stats.series);$('mArabic').textContent=fmt(s.arabic?.total||s.stats?.arabic?.total||0);$('subtitle').textContent=`${fmt(s.stats.totalItems)} عنصر · ${fmt(s.arabic?.total||s.stats?.arabic?.total||0)} عربي`;$('arabicSummary').textContent=`${fmt(s.arabic?.live||0)} قناة · ${fmt(s.arabic?.movies||0)} فيديو · ${fmt(s.arabic?.series||0)} مسلسل`;
-  const a=s.accountsSummary||{};$('subscriberSummary').textContent=`${fmt(a.active||0)} نشط · ${fmt(a.expired||0)} منتهي`;$('lastSync').textContent=s.stats.lastSyncAt?new Date(s.stats.lastSyncAt).toLocaleString('ar-SA'):'لم تتم بعد';$('syncState').textContent=s.syncing?'المزامنة تعمل الآن…':'المكتبة جاهزة';$('hostValue').textContent=s.baseUrl||'—';$('adminHostValue').textContent=s.adminBaseUrl||'—';$('syncLog').innerHTML=(s.lastSyncLog||[]).slice(-6).map(x=>`<span class="sync-chip ${x.status==='error'?'err':'ok'}">${esc(x.source)} · ${x.status==='ok'?fmt(x.count):esc(x.status)}</span>`).join('');renderSources(s.providers||[]);renderSourceFilter(s.providers||[]);renderAccessLinks()}
-async function refresh(){const s=await api('/api/admin/status');render(s);return s}
-async function waitForSync(timeoutMs=20*60_000){const start=Date.now();while(Date.now()-start<timeoutMs){const s=await refresh();if(!s.syncing)return s;await sleep(2200)}throw new Error('المزامنة أخذت وقتًا أطول من المتوقع')}
-async function syncAll(){try{$('syncBtn').disabled=true;if($('syncBtn2'))$('syncBtn2').disabled=true;toast('بدأت المزامنة…');await api('/api/admin/sync',{method:'POST',body:'{}'});const done=await waitForSync();const failed=(done.lastSyncLog||[]).filter(x=>x.status==='error');toast(failed.length?'اكتملت المزامنة وبعض المصادر تحتاج مراجعة':'اكتملت المزامنة','success');if(document.querySelector('.nav button.active')?.dataset.view==='arabic')loadArabic(true)}catch(e){toast(e.message,'error')}finally{$('syncBtn').disabled=false;if($('syncBtn2'))$('syncBtn2').disabled=false}}
-async function syncOne(source,button){try{button.disabled=true;toast(`مزامنة ${source}…`);await api('/api/admin/sync',{method:'POST',body:JSON.stringify({source})});await waitForSync();toast('اكتملت مزامنة المصدر','success')}catch(e){toast(e.message,'error')}finally{button.disabled=false}}
-function rowHtml(x){return `<tr><td>${x.icon?`<img class="thumb" src="${esc(x.icon)}" loading="lazy" onerror="this.style.display='none'">`:'<span class="thumb-empty">•</span>'}</td><td><strong>${esc(x.title)}</strong>${x.language==='ar'?'<small class="arabic-tag">عربي</small>':''}</td><td>${esc(x.category||'—')}</td><td>${esc(x.source)}</td><td>${x.kind==='live'?'مباشر':x.kind==='series_episode'?'حلقة':'فيديو'}</td></tr>`}
-async function loadCatalog(reset=false){try{if(reset)catalogOffset=0;const p=new URLSearchParams({kind:$('kindFilter').value,source:$('sourceFilter').value,q:$('searchInput').value,limit:String(PAGE_SIZE),offset:String(catalogOffset)});const j=await api('/api/admin/catalog?'+p);$('catalogRows').innerHTML=j.items.length?j.items.map(rowHtml).join(''):'<tr><td colspan="5">لا توجد نتائج</td></tr>';$('catalogCount').textContent=j.total?`${fmt(j.offset+1)}–${fmt(j.offset+j.items.length)} من ${fmt(j.total)}`:'0 نتيجة';$('catalogPrev').disabled=j.offset<=0;$('catalogNext').disabled=!j.hasMore}catch(e){toast(e.message,'error')}}
-async function loadArabic(reset=false){try{if(reset)arabicOffset=0;const p=new URLSearchParams({arabic:'1',kind:arabicKind,q:$('arabicSearch').value,limit:String(PAGE_SIZE),offset:String(arabicOffset)});const j=await api('/api/admin/catalog?'+p);$('arabicRows').innerHTML=j.items.length?j.items.map(rowHtml).join(''):'<tr><td colspan="5">لا توجد نتائج عربية بهذا الفلتر</td></tr>';$('arabicCount').textContent=j.total?`${fmt(j.offset+1)}–${fmt(j.offset+j.items.length)} من ${fmt(j.total)}`:'0 نتيجة';$('arabicPrev').disabled=j.offset<=0;$('arabicNext').disabled=!j.hasMore}catch(e){toast(e.message,'error')}}
-function subscriberStatus(a){if(!a.enabled)return{key:'disabled',label:'معطل',cls:'off'};if(a.expired)return{key:'expired',label:'منتهي',cls:'err'};if(a.expiresAt&&new Date(a.expiresAt).getTime()-Date.now()<=7*86400000)return{key:'active',label:'قريب الانتهاء',cls:'warn'};return{key:'active',label:'نشط',cls:'ok'}}
-function renderSubscribers(){const q=$('subscriberSearch').value.trim().toLowerCase(),filter=$('subscriberStatus').value;let rows=allSubscribers.filter(a=>!q||`${a.username} ${a.label||''} ${a.note||''}`.toLowerCase().includes(q));if(filter)rows=rows.filter(a=>subscriberStatus(a).key===filter);$('subscriberCount').textContent=`${fmt(rows.length)} من ${fmt(allSubscribers.length)} مشترك`;$('subscriberRows').innerHTML=rows.length?rows.map(a=>{const st=subscriberStatus(a);return `<tr><td><strong class="ltr-inline">${esc(a.username)}</strong><div class="muted small">${esc(a.label||'بدون اسم')}</div></td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${dateText(a.expiresAt)}${a.lastRenewedAt?`<div class="muted small">آخر تجديد ${dateText(a.lastRenewedAt)}</div>`:''}</td><td>${fmt(a.maxConnections||1)}</td><td><div class="subscriber-actions"><button class="btn tiny renew" data-user="${esc(a.username)}" data-days="30">+30</button><button class="btn tiny renew" data-user="${esc(a.username)}" data-days="90">+90</button><button class="btn tiny renew" data-user="${esc(a.username)}" data-days="365">+سنة</button><button class="btn tiny toggle-user" data-user="${esc(a.username)}" data-enable="${a.enabled?'0':'1'}">${a.enabled?'تعطيل':'تفعيل'}</button>${a.bootstrap?'':`<button class="btn tiny danger delete-user" data-user="${esc(a.username)}">حذف</button>`}</div></td></tr>`}).join(''):'<tr><td colspan="5">لا توجد نتائج</td></tr>'}
-async function loadSubscribers(){try{const j=await api('/api/admin/accounts');allSubscribers=j.accounts||[];const s=j.summary||{};$('sActive').textContent=fmt(s.active);$('sExpired').textContent=fmt(s.expired);$('sSoon').textContent=fmt(s.expiringSoon);$('sDisabled').textContent=fmt(s.disabled);renderSubscribers()}catch(e){toast(e.message,'error')}}
-async function createSubscriber(){const body={label:$('newLabel').value.trim(),username:$('newUsername').value.trim(),durationDays:Number($('newDuration').value),maxConnections:Number($('newConnections').value)};try{$('createSubscriberBtn').disabled=true;const j=await api('/api/admin/accounts',{method:'POST',body:JSON.stringify(body)});lastCreated=j;$('createdSubscriber').hidden=false;$('createdSubscriber').innerHTML=`<strong>تم إنشاء المشترك ✓</strong><div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code><span>الانتهاء</span><code>${esc(dateText(j.expiresAt))}</code></div><button id="copyCreatedSubscriber" class="btn primary">نسخ البيانات كلها</button>`;$('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();toast('تم إنشاء المشترك','success');await loadSubscribers();await refresh()}catch(e){const m=e.message==='username_exists'?'اسم المستخدم موجود مسبقًا':e.message==='invalid_username'?'اسم المستخدم غير صالح':e.message;toast(m,'error')}finally{$('createSubscriberBtn').disabled=false}}
-async function renewSubscriber(user,days,button){try{button.disabled=true;await api('/api/admin/accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});toast(`تم تجديد ${user} لمدة ${days===365?'سنة':days+' يوم'}`,'success');await loadSubscribers();await refresh()}catch(e){toast(e.message,'error')}finally{button.disabled=false}}
-async function toggleSubscriber(user,enabled,button){try{button.disabled=true;await api('/api/admin/accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await loadSubscribers();await refresh()}catch(e){toast(e.message,'error')}finally{button.disabled=false}}
-async function deleteSubscriber(user,button){if(!confirm(`حذف المشترك ${user} نهائيًا؟`))return;try{button.disabled=true;await api(`/api/admin/accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await loadSubscribers();await refresh()}catch(e){toast(e.message,'error')}finally{button.disabled=false}}
-function setServerBadge(kind,text){const b=$('serverBadge');b.className=`badge ${kind}`;b.textContent=text}
-async function testAccount(){const c=currentCredentials();if(!c.username||!c.password)return toast('أدخل اسم المستخدم وكلمة السر أولًا','error');try{$('testAccountBtn').disabled=true;setServerBadge('neutral','جاري الاختبار…');const j=await api('/api/admin/account/test',{method:'POST',body:JSON.stringify({username:c.username,password:c.password})});const box=$('serverTestResult');box.hidden=false;if(!j.auth){setServerBadge('err','فشل');box.className='test-result err';box.innerHTML='<strong>الحساب غير صالح.</strong><span>قد تكون البيانات خاطئة، أو الاشتراك منتهي، أو الحساب معطل.</span>';return}setServerBadge('ok','يعمل');box.className='test-result ok';box.innerHTML=`<strong>الاتصال ناجح ✓</strong><span>Host: ${esc(j.host)}</span><span>${fmt(j.stats.live)} مباشر · ${fmt(j.stats.movies)} فيديو · ${fmt(j.stats.series)} مسلسل · ${fmt(j.stats.episodes)} حلقة</span>`;renderAccessLinks();toast('بيانات Xtream صحيحة','success')}catch(e){setServerBadge('err','خطأ');toast(e.message,'error')}finally{$('testAccountBtn').disabled=false}}
-function gotoView(name){document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===name));document.querySelectorAll('.section').forEach(x=>x.classList.toggle('active',x.id===`view-${name}`));$('pageTitle').textContent=titles[name]||'لوحة التحكم';if(name==='subscribers')loadSubscribers();if(name==='arabic')loadArabic(true);if(name==='catalog')loadCatalog(true)}
+let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',lastCreated=null;
 
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/admin/login',{method:'POST',body:JSON.stringify({password:$('adminPassword').value})});$('adminPassword').value='';await refresh();toast('تم تسجيل الدخول','success')}catch(e){toast(e.message==='too_many_login_attempts'?'محاولات كثيرة، حاول لاحقًا':'تعذر تسجيل الدخول','error')}});
-$('logoutBtn').onclick=async()=>{try{await api('/api/admin/logout',{method:'POST',body:'{}'})}catch{}location.reload()};$('refreshBtn').onclick=()=>Promise.all([refresh(),loadSubscribers()]).then(()=>toast('تم التحديث','success')).catch(e=>toast(e.message,'error'));$('syncBtn').onclick=syncAll;$('syncBtn2').onclick=syncAll;
-$('openCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true};$('closeCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=true};$('createSubscriberBtn').onclick=createSubscriber;$('subscriberSearch').addEventListener('input',renderSubscribers);$('subscriberStatus').onchange=renderSubscribers;$('subscriberRows').addEventListener('click',e=>{const r=e.target.closest('.renew');if(r)return renewSubscriber(r.dataset.user,Number(r.dataset.days),r);const t=e.target.closest('.toggle-user');if(t)return toggleSubscriber(t.dataset.user,t.dataset.enable==='1',t);const d=e.target.closest('.delete-user');if(d)return deleteSubscriber(d.dataset.user,d)});$('createdSubscriber').addEventListener('click',async e=>{if(e.target.id!=='copyCreatedSubscriber'||!lastCreated)return;const text=`Host: ${lastCreated.host}\nUsername: ${lastCreated.username}\nPassword: ${lastCreated.password}\nM3U: ${lastCreated.m3u}`;try{await navigator.clipboard.writeText(text);toast('تم نسخ بيانات المشترك','success')}catch{toast('تعذر النسخ','error')}});
-$('testAccountBtn').onclick=testAccount;$('togglePassword').onclick=()=>{const i=$('serverPassword');i.type=i.type==='password'?'text':'password';$('togglePassword').textContent=i.type==='password'?'إظهار':'إخفاء'};$('serverUsername').addEventListener('input',renderAccessLinks);$('serverPassword').addEventListener('input',()=>{renderAccessLinks();setServerBadge('neutral','غير مختبر')});
-$('copyAllBtn').onclick=async()=>{const c=currentCredentials();if(!c.username||!c.password)return toast('أدخل كلمة السر أولًا','error');const text=`Host: ${c.host}\nUsername: ${c.username}\nPassword: ${c.password}\nM3U: ${$('m3uValue').textContent}`;try{await navigator.clipboard.writeText(text);toast('تم نسخ بيانات السيرفر','success')}catch{toast('تعذر النسخ','error')}};document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{const t=$(b.dataset.copy).textContent;if(!t||t==='—'||t.includes('يظهر بعد'))return toast('أدخل كلمة السر أولًا','error');try{await navigator.clipboard.writeText(t);toast('تم النسخ','success')}catch{toast('تعذر النسخ','error')}});document.querySelectorAll('.copy-input').forEach(b=>b.onclick=async()=>{const t=$(b.dataset.input).value;try{await navigator.clipboard.writeText(t);toast('تم النسخ','success')}catch{toast('تعذر النسخ','error')}});
-document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>gotoView(b.dataset.view));document.querySelectorAll('.jump').forEach(b=>b.onclick=()=>gotoView(b.dataset.target));$('sourceList').addEventListener('click',e=>{const b=e.target.closest('.source-sync');if(b)syncOne(b.dataset.source,b)});$('searchBtn').onclick=()=>loadCatalog(true);$('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')loadCatalog(true)});$('sourceFilter').onchange=()=>loadCatalog(true);$('kindFilter').onchange=()=>loadCatalog(true);$('catalogPrev').onclick=()=>{catalogOffset=Math.max(0,catalogOffset-PAGE_SIZE);loadCatalog()};$('catalogNext').onclick=()=>{catalogOffset+=PAGE_SIZE;loadCatalog()};$('arabicSearchBtn').onclick=()=>loadArabic(true);$('arabicSearch').addEventListener('keydown',e=>{if(e.key==='Enter')loadArabic(true)});$('arabicPrev').onclick=()=>{arabicOffset=Math.max(0,arabicOffset-PAGE_SIZE);loadArabic()};$('arabicNext').onclick=()=>{arabicOffset+=PAGE_SIZE;loadArabic()};$('arabicFilters').addEventListener('click',e=>{const b=e.target.closest('button[data-kind]');if(!b)return;arabicKind=b.dataset.kind;document.querySelectorAll('#arabicFilters button').forEach(x=>x.classList.toggle('active',x===b));loadArabic(true)});
+const titles={
+  overview:['الرئيسية','BLOFY CONTROL CENTER'],
+  subscribers:['إدارة المشتركين','XTREAM USERS'],
+  arabic:['المحتوى العربي','ARABIC FIRST'],
+  catalog:['المكتبة الكاملة','CATALOG'],
+  access:['اختبار السيرفر','XTREAM TEST']
+};
+
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmt=n=>new Intl.NumberFormat('ar-SA').format(Number(n||0));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dateText=v=>v?new Date(v).toLocaleDateString('ar-SA',{year:'numeric',month:'short',day:'numeric'}):'بدون انتهاء';
+const daysLeft=v=>v?Math.ceil((new Date(v).getTime()-Date.now())/86400000):null;
+
+function toast(message,type=''){
+  const box=$('statusbar');box.textContent=message;box.className='toast show '+type;
+  clearTimeout(window.__toast);window.__toast=setTimeout(()=>box.className='toast',4200);
+}
+
+async function api(path,opts={}){
+  const r=await fetch(API+path,{...opts,headers:{'content-type':'application/json',...(opts.headers||{})}});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401){$('login').classList.remove('hidden');throw new Error(j.error||'admin_auth_required')}
+  if(!r.ok)throw new Error(j.error||`request_${r.status}`);
+  return j;
+}
+
+function subscriberStatus(a){
+  if(!a.enabled)return{key:'disabled',label:'معطل',cls:'off'};
+  if(a.expired)return{key:'expired',label:'منتهي',cls:'err'};
+  const left=daysLeft(a.expiresAt);
+  if(left!=null&&left<=7)return{key:'soon',label:`باقي ${Math.max(0,left)} يوم`,cls:'warn'};
+  return{key:'active',label:'نشط',cls:'ok'};
+}
+
+function currentCredentials(){
+  return{
+    host:String(state?.baseUrl||'').replace(/\/+$/,''),
+    username:$('serverUsername').value.trim(),
+    password:$('serverPassword').value
+  };
+}
+
+function credentialUrl(path,extra=''){
+  const c=currentCredentials();
+  if(!c.host||!c.username||!c.password)return'أدخل كلمة السر';
+  return `${c.host}${path}?username=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}${extra}`;
+}
+
+function renderAccessLinks(){
+  $('playerApiValue').textContent=credentialUrl('/player_api.php');
+  $('m3uValue').textContent=credentialUrl('/get.php','&type=m3u_plus&output=ts');
+  $('xmltvValue').textContent=credentialUrl('/xmltv.php');
+}
+
+function setHealth(ok,syncing=false){
+  const dot=$('sidebarStatusDot'),hero=$('heroHealthDot');
+  dot.className='status-dot '+(syncing?'warn':ok?'ok':'warn');
+  hero.className='health-dot '+(syncing?'warn':ok?'ok':'warn');
+  $('sidebarStatus').textContent=syncing?'مزامنة جارية':ok?'الخدمة تعمل':'تحتاج مراجعة';
+  $('heroHealth').textContent=syncing?'مزامنة':ok?'سليم':'مراجعة';
+}
+
+function renderSourceFilter(providers){
+  const select=$('sourceFilter'),current=select.value;
+  select.innerHTML='<option value="">كل المصادر</option>'+providers.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  if([...select.options].some(o=>o.value===current))select.value=current;
+}
+
+function renderSources(providers){
+  $('sourceList').innerHTML=providers.map(p=>{
+    const rt=p.runtime||{},c=p.counts||{},cls=rt.lastError?'err':p.enabled?'ok':'off';
+    const label=rt.lastError?'خطأ':p.enabled?'مفعل':'معطل';
+    return `<div class="source-row">
+      <div class="source-main"><strong>${esc(p.name)}</strong><span>${fmt(c.total??rt.count??0)} عنصر · مباشر ${fmt(c.live)} · فيديو ${fmt(c.movies)} · حلقات ${fmt(c.episodes)}</span></div>
+      <span class="badge ${cls}">${label}</span>
+      ${p.enabled?`<button class="tiny-btn source-sync" data-source="${esc(p.id)}">مزامنة</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderDashboardSubscribers(){
+  const candidates=allSubscribers
+    .filter(a=>subscriberStatus(a).key==='expired'||subscriberStatus(a).key==='soon')
+    .sort((a,b)=>(a.expired===b.expired?0:a.expired?-1:1)||(new Date(a.expiresAt||0)-new Date(b.expiresAt||0)))
+    .slice(0,6);
+  $('attentionSubscribers').innerHTML=candidates.length?candidates.map(a=>{
+    const st=subscriberStatus(a);
+    return `<div class="attention-item">
+      <div><strong>${esc(a.label||a.username)}</strong><small class="ltr-inline">${esc(a.username)}</small></div>
+      <div class="attention-actions"><span class="badge ${st.cls}">${st.label}</span><button class="tiny-btn primary quick-renew" data-user="${esc(a.username)}">تجديد</button></div>
+    </div>`;
+  }).join(''):'<div class="attention-item"><div><strong>كل شيء مرتب ✓</strong><small>لا توجد اشتراكات منتهية أو قريبة خلال 7 أيام.</small></div></div>';
+}
+
+function renderStatus(s){
+  state=s;$('login').classList.add('hidden');
+  const stats=s.stats||{},arabic=s.arabic||stats.arabic||{},acc=s.accountsSummary||{};
+  $('mActive').textContent=fmt(acc.active);
+  $('mExpired').textContent=fmt(acc.expired);
+  $('mTotal').textContent=fmt(stats.totalItems);
+  $('mArabic').textContent=fmt(arabic.total);
+  $('subtitle').textContent=`${fmt(stats.totalItems)} عنصر · ${fmt(acc.total)} مشترك · ${fmt(arabic.total)} عربي`;
+  $('navExpired').textContent=fmt(acc.expired);$('navExpired').hidden=!acc.expired;
+  $('heroTitle').textContent=acc.expired?`عندك ${fmt(acc.expired)} اشتراك منتهي`:'لوحتك مرتبة وجاهزة';
+  $('heroText').textContent=s.syncing?'المحتوى يتزامن الآن، ويظل السيرفر متاحًا أثناء المزامنة.':`المكتبة فيها ${fmt(stats.totalItems)} عنصر، وآخر مزامنة محفوظة بنجاح.`;
+  setHealth(true,Boolean(s.syncing));
+
+  $('dLive').textContent=fmt(stats.live);$('dMovies').textContent=fmt(stats.movies);$('dSeries').textContent=fmt(stats.series);$('dEpisodes').textContent=fmt(stats.episodes);
+  const values=[Number(stats.live||0),Number(stats.movies||0),Number(stats.series||0),Number(stats.episodes||0)],max=Math.max(...values,1);
+  [['barLive',values[0]],['barMovies',values[1]],['barSeries',values[2]],['barEpisodes',values[3]]].forEach(([id,v])=>$(id).style.width=`${Math.max(4,Math.round(v/max*100))}%`);
+
+  $('aLive').textContent=fmt(arabic.live);$('aMovies').textContent=fmt(arabic.movies);$('aSeries').textContent=fmt(arabic.series);$('aEpisodes').textContent=fmt(arabic.episodes);
+  $('syncState').textContent=s.syncing?'المزامنة تعمل الآن…':'المكتبة جاهزة';
+  $('lastSync').textContent=stats.lastSyncAt?new Date(stats.lastSyncAt).toLocaleString('ar-SA'):'لم تتم بعد';
+  $('syncLog').innerHTML=(s.lastSyncLog||[]).slice(-8).map(x=>`<span class="sync-chip ${x.status==='error'?'err':'ok'}">${esc(x.source)} · ${x.status==='ok'?fmt(x.count):esc(x.status)}</span>`).join('');
+  $('hostValue').textContent=s.baseUrl||'—';$('adminHostValue').textContent=s.adminBaseUrl||'—';
+  renderSources(s.providers||[]);renderSourceFilter(s.providers||[]);renderAccessLinks();
+}
+
+async function refresh(){
+  const s=await api('status');renderStatus(s);return s;
+}
+
+async function waitForSync(timeoutMs=25*60_000){
+  const start=Date.now();
+  while(Date.now()-start<timeoutMs){
+    const s=await refresh();
+    if(!s.syncing)return s;
+    await sleep(2200);
+  }
+  throw new Error('المزامنة أخذت وقتًا أطول من المتوقع');
+}
+
+async function syncAll(){
+  try{
+    $('syncBtn').disabled=true;$('syncBtn2').disabled=true;toast('بدأت مزامنة المكتبة…');
+    await api('sync',{method:'POST',body:'{}'});await waitForSync();
+    toast('اكتملت المزامنة','success');
+    if(document.querySelector('.nav button.active')?.dataset.view==='arabic')loadArabic(true);
+    if(document.querySelector('.nav button.active')?.dataset.view==='catalog')loadCatalog(true);
+  }catch(e){toast(e.message,'error')}finally{$('syncBtn').disabled=false;$('syncBtn2').disabled=false}
+}
+
+async function syncOne(source,button){
+  try{button.disabled=true;toast(`مزامنة ${source}…`);await api('sync',{method:'POST',body:JSON.stringify({source})});await waitForSync();toast('اكتملت مزامنة المصدر','success')}
+  catch(e){toast(e.message,'error')}finally{button.disabled=false}
+}
+
+function rowHtml(x){
+  return `<tr>
+    <td>${x.icon?`<img class="thumb" src="${esc(x.icon)}" loading="lazy" onerror="this.style.display='none'">`:'<span class="thumb-empty">•</span>'}</td>
+    <td><strong>${esc(x.title)}</strong>${x.language==='ar'?'<small class="arabic-tag">عربي</small>':''}</td>
+    <td>${esc(x.category||'—')}</td><td>${esc(x.source)}</td><td>${x.kind==='live'?'مباشر':x.kind==='series_episode'?'حلقة':'فيديو'}</td>
+  </tr>`;
+}
+
+async function loadCatalog(reset=false){
+  try{
+    if(reset)catalogOffset=0;
+    const p=new URLSearchParams({kind:$('kindFilter').value,source:$('sourceFilter').value,q:$('searchInput').value,limit:String(PAGE_SIZE),offset:String(catalogOffset)});
+    const j=await api('catalog?'+p);
+    $('catalogRows').innerHTML=j.items.length?j.items.map(rowHtml).join(''):'<tr><td colspan="5">لا توجد نتائج</td></tr>';
+    $('catalogCount').textContent=j.total?`${fmt(j.offset+1)}–${fmt(j.offset+j.items.length)} من ${fmt(j.total)}`:'0 نتيجة';
+    $('catalogPrev').disabled=j.offset<=0;$('catalogNext').disabled=!j.hasMore;
+  }catch(e){toast(e.message,'error')}
+}
+
+async function loadArabic(reset=false){
+  try{
+    if(reset)arabicOffset=0;
+    const p=new URLSearchParams({arabic:'1',kind:arabicKind,q:$('arabicSearch').value,limit:String(PAGE_SIZE),offset:String(arabicOffset)});
+    const j=await api('catalog?'+p);
+    $('arabicRows').innerHTML=j.items.length?j.items.map(rowHtml).join(''):'<tr><td colspan="5">لا توجد نتائج عربية بهذا الفلتر</td></tr>';
+    $('arabicCount').textContent=j.total?`${fmt(j.offset+1)}–${fmt(j.offset+j.items.length)} من ${fmt(j.total)}`:'0 نتيجة';
+    $('arabicPrev').disabled=j.offset<=0;$('arabicNext').disabled=!j.hasMore;
+  }catch(e){toast(e.message,'error')}
+}
+
+function filteredSubscribers(){
+  const q=$('subscriberSearch').value.trim().toLowerCase();
+  const selectFilter=$('subscriberStatus').value||subscriberFilter;
+  return allSubscribers.filter(a=>{
+    const matches=!q||`${a.username} ${a.label||''} ${a.note||''}`.toLowerCase().includes(q);
+    if(!matches)return false;
+    if(!selectFilter)return true;
+    return subscriberStatus(a).key===selectFilter;
+  });
+}
+
+function openRenew(user){
+  renewUser=user;const a=allSubscribers.find(x=>x.username===user);
+  $('renewTitle').textContent=`تجديد ${a?.label||user}`;
+  $('renewSubtitle').textContent=`Username: ${user} · الانتهاء الحالي: ${dateText(a?.expiresAt)}`;
+  $('renewModal').hidden=false;
+}
+
+function closeRenew(){$('renewModal').hidden=true;renewUser=''}
+
+function renderSubscribers(){
+  const rows=filteredSubscribers();
+  $('subscriberCount').textContent=`${fmt(rows.length)} من ${fmt(allSubscribers.length)} مشترك`;
+  $('subscriberRows').innerHTML=rows.length?rows.map(a=>{
+    const st=subscriberStatus(a),left=daysLeft(a.expiresAt);
+    return `<tr>
+      <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline">${esc(a.username)}</div></td>
+      <td><span class="badge ${st.cls}">${st.label}</span></td>
+      <td>${dateText(a.expiresAt)}${left!=null&&!a.expired? `<div class="muted">${fmt(Math.max(0,left))} يوم</div>`:''}</td>
+      <td>${fmt(a.maxConnections||1)}</td>
+      <td><div class="subscriber-actions">
+        <button class="tiny-btn primary renew-user" data-user="${esc(a.username)}">تجديد</button>
+        <button class="tiny-btn toggle-user" data-user="${esc(a.username)}" data-enable="${a.enabled?'0':'1'}">${a.enabled?'تعطيل':'تفعيل'}</button>
+        ${a.bootstrap?'':`<button class="tiny-btn danger delete-user" data-user="${esc(a.username)}">حذف</button>`}
+      </div></td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="5">لا توجد نتائج</td></tr>';
+  renderDashboardSubscribers();
+}
+
+async function loadSubscribers(){
+  try{
+    const j=await api('accounts');allSubscribers=j.accounts||[];const s=j.summary||{};
+    $('sTotal').textContent=fmt(s.total);$('sActive').textContent=fmt(s.active);$('sExpired').textContent=fmt(s.expired);$('sSoon').textContent=fmt(s.expiringSoon);$('sDisabled').textContent=fmt(s.disabled);
+    renderSubscribers();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function createSubscriber(){
+  const body={
+    label:$('newLabel').value.trim(),username:$('newUsername').value.trim(),password:$('newPassword').value,
+    durationDays:Number($('newDuration').value),maxConnections:Number($('newConnections').value)
+  };
+  try{
+    $('createSubscriberBtn').disabled=true;
+    const j=await api('accounts',{method:'POST',body:JSON.stringify(body)});lastCreated=j;
+    $('createdSubscriber').hidden=false;
+    $('createdSubscriber').innerHTML=`<strong>تم إنشاء الحساب ✓</strong>
+      <div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code><span>الانتهاء</span><code>${esc(dateText(j.expiresAt))}</code></div>
+      <button id="copyCreatedSubscriber" class="btn primary">نسخ البيانات كلها</button>`;
+    $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
+    $('newLabel').value='';$('newUsername').value='';$('newPassword').value='';
+    toast('تم إنشاء المشترك','success');await Promise.all([loadSubscribers(),refresh()]);
+  }catch(e){
+    const map={username_exists:'اسم المستخدم موجود مسبقًا',invalid_username:'اسم المستخدم غير صالح',invalid_password:'كلمة السر يجب أن تكون 8 أحرف أو أكثر'};
+    toast(map[e.message]||e.message,'error');
+  }finally{$('createSubscriberBtn').disabled=false}
+}
+
+async function renewSubscriber(user,days){
+  try{
+    await api('accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});
+    closeRenew();toast(`تم تجديد ${user} لمدة ${days===365?'سنة':days===730?'سنتين':days+' يوم'}`,'success');
+    await Promise.all([loadSubscribers(),refresh()]);
+  }catch(e){toast(e.message,'error')}
+}
+
+async function toggleSubscriber(user,enabled,button){
+  try{button.disabled=true;await api('accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  catch(e){toast(e.message,'error')}finally{button.disabled=false}
+}
+
+async function deleteSubscriber(user,button){
+  if(!confirm(`حذف المشترك ${user} نهائيًا؟`))return;
+  try{button.disabled=true;await api(`accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  catch(e){toast(e.message,'error')}finally{button.disabled=false}
+}
+
+function setServerBadge(kind,text){const b=$('serverBadge');b.className=`status-badge ${kind}`;b.textContent=text}
+
+async function testAccount(){
+  const c=currentCredentials();if(!c.username||!c.password)return toast('أدخل Username وكلمة السر','error');
+  try{
+    $('testAccountBtn').disabled=true;setServerBadge('neutral','جاري الاختبار…');
+    const j=await api('account/test',{method:'POST',body:JSON.stringify({username:c.username,password:c.password})});
+    const box=$('serverTestResult');box.hidden=false;
+    if(!j.auth){setServerBadge('err','فشل');box.className='test-result err';box.innerHTML='<strong>الحساب غير صالح</strong><span>قد يكون منتهيًا أو معطلًا أو البيانات غير صحيحة.</span>';return}
+    setServerBadge('ok','يعمل');box.className='test-result ok';
+    box.innerHTML=`<strong>الاتصال ناجح ✓</strong><span>${fmt(j.stats.live)} مباشر · ${fmt(j.stats.movies)} فيديو · ${fmt(j.stats.series)} مسلسل · ${fmt(j.stats.episodes)} حلقة</span>`;
+    renderAccessLinks();toast('بيانات Xtream صحيحة','success');
+  }catch(e){setServerBadge('err','خطأ');toast(e.message,'error')}finally{$('testAccountBtn').disabled=false}
+}
+
+function gotoView(name){
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===name));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===`view-${name}`));
+  $('pageTitle').textContent=titles[name]?.[0]||'لوحة الإدارة';$('pageKicker').textContent=titles[name]?.[1]||'BLOFY';
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(name==='subscribers')loadSubscribers();
+  if(name==='arabic')loadArabic(true);
+  if(name==='catalog')loadCatalog(true);
+}
+
+async function copyText(text,msg='تم النسخ'){
+  try{await navigator.clipboard.writeText(text);toast(msg,'success')}catch{toast('تعذر النسخ','error')}
+}
+
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{await api('login',{method:'POST',body:JSON.stringify({password:$('adminPassword').value})});$('adminPassword').value='';await Promise.all([refresh(),loadSubscribers()]);toast('تم تسجيل الدخول','success')}
+  catch(e){toast(e.message==='too_many_login_attempts'?'محاولات كثيرة، حاول لاحقًا':'تعذر تسجيل الدخول','error')}
+});
+
+$('logoutBtn').onclick=async()=>{try{await api('logout',{method:'POST',body:'{}'})}catch{}location.reload()};
+$('refreshBtn').onclick=()=>Promise.all([refresh(),loadSubscribers()]).then(()=>toast('تم التحديث','success')).catch(e=>toast(e.message,'error'));
+$('syncBtn').onclick=syncAll;$('syncBtn2').onclick=syncAll;
+
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>gotoView(b.dataset.view));
+document.querySelectorAll('.jump').forEach(b=>b.onclick=()=>{gotoView(b.dataset.target);if(b.dataset.create==='1')setTimeout(()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true},120)});
+
+$('sourceList').addEventListener('click',e=>{const b=e.target.closest('.source-sync');if(b)syncOne(b.dataset.source,b)});
+$('attentionSubscribers').addEventListener('click',e=>{const b=e.target.closest('.quick-renew');if(b)openRenew(b.dataset.user)});
+
+$('openCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true;$('newLabel').focus()};
+$('closeCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=true};
+$('createSubscriberBtn').onclick=createSubscriber;
+
+$('subscriberSearch').addEventListener('input',renderSubscribers);
+$('subscriberStatus').onchange=()=>{subscriberFilter='';document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x.dataset.status===$('subscriberStatus').value));renderSubscribers()};
+document.querySelectorAll('.summary-pill').forEach(b=>b.onclick=()=>{subscriberFilter=b.dataset.status;$('subscriberStatus').value=b.dataset.status;document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x===b));renderSubscribers()});
+
+$('subscriberRows').addEventListener('click',e=>{
+  const r=e.target.closest('.renew-user');if(r)return openRenew(r.dataset.user);
+  const t=e.target.closest('.toggle-user');if(t)return toggleSubscriber(t.dataset.user,t.dataset.enable==='1',t);
+  const d=e.target.closest('.delete-user');if(d)return deleteSubscriber(d.dataset.user,d);
+});
+
+$('renewModal').addEventListener('click',e=>{if(e.target===$('renewModal'))closeRenew()});
+$('closeRenewModal').onclick=closeRenew;
+document.querySelectorAll('.renew-options button').forEach(b=>b.onclick=()=>renewUser&&renewSubscriber(renewUser,Number(b.dataset.days)));
+
+$('createdSubscriber').addEventListener('click',e=>{
+  if(e.target.id!=='copyCreatedSubscriber'||!lastCreated)return;
+  copyText(`Host: ${lastCreated.host}\nUsername: ${lastCreated.username}\nPassword: ${lastCreated.password}\nM3U: ${lastCreated.m3u}`,'تم نسخ بيانات المشترك');
+});
+
+$('testAccountBtn').onclick=testAccount;
+$('togglePassword').onclick=()=>{const i=$('serverPassword');i.type=i.type==='password'?'text':'password';$('togglePassword').textContent=i.type==='password'?'إظهار':'إخفاء'};
+$('serverUsername').addEventListener('input',renderAccessLinks);
+$('serverPassword').addEventListener('input',()=>{renderAccessLinks();setServerBadge('neutral','غير مختبر')});
+$('copyAllBtn').onclick=()=>{const c=currentCredentials();if(!c.username||!c.password)return toast('أدخل كلمة السر أولًا','error');copyText(`Host: ${c.host}\nUsername: ${c.username}\nPassword: ${c.password}\nM3U: ${$('m3uValue').textContent}`,'تم نسخ بيانات السيرفر')};
+document.querySelectorAll('.copy').forEach(b=>b.onclick=()=>{const t=$(b.dataset.copy).textContent;if(!t||t==='—'||t.includes('أدخل'))return toast('أدخل كلمة السر أولًا','error');copyText(t)});
+document.querySelectorAll('.copy-input').forEach(b=>b.onclick=()=>copyText($(b.dataset.input).value));
+
+$('searchBtn').onclick=()=>loadCatalog(true);$('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')loadCatalog(true)});$('sourceFilter').onchange=()=>loadCatalog(true);$('kindFilter').onchange=()=>loadCatalog(true);
+$('catalogPrev').onclick=()=>{catalogOffset=Math.max(0,catalogOffset-PAGE_SIZE);loadCatalog()};$('catalogNext').onclick=()=>{catalogOffset+=PAGE_SIZE;loadCatalog()};
+$('arabicSearchBtn').onclick=()=>loadArabic(true);$('arabicSearch').addEventListener('keydown',e=>{if(e.key==='Enter')loadArabic(true)});
+$('arabicPrev').onclick=()=>{arabicOffset=Math.max(0,arabicOffset-PAGE_SIZE);loadArabic()};$('arabicNext').onclick=()=>{arabicOffset+=PAGE_SIZE;loadArabic()};
+$('arabicFilters').addEventListener('click',e=>{const b=e.target.closest('[data-kind]');if(!b)return;arabicKind=b.dataset.kind;document.querySelectorAll('#arabicFilters [data-kind]').forEach(x=>x.classList.toggle('active',x===b));loadArabic(true)});
+
 Promise.all([refresh(),loadSubscribers()]).then(([s])=>{if(s.syncing)waitForSync().catch(()=>{})}).catch(()=>{});
