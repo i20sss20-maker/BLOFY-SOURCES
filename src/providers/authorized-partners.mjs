@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { fetchJson, envBool, envInt } from './common.mjs';
+import { fetchJson, fetchText, envBool, envInt } from './common.mjs';
 
 const ARABIC_CODES = new Set(['ar','ara','arabic','arb','arz','apc','ary','aeb','acm','acq']);
 const SAUDI_TERRITORIES = new Set(['sa','ksa','saudi arabia','saudi','gcc','mena','global','world','worldwide']);
@@ -34,6 +34,137 @@ function manifestItemId(raw, partner) {
   return crypto.createHash('sha256').update(`${partner}\0${basis}`).digest('hex').slice(0, 24);
 }
 
+function manifestRightsContext(manifest, { allowHttp = false, now = Date.now() } = {}) {
+  if (!manifest || typeof manifest !== 'object') throw new Error('partner_manifest_invalid');
+  const partner = String(manifest.partner || manifest.provider || manifest.name || '').trim();
+  const rightsReference = String(manifest.rightsReference || manifest.rights_reference || '').trim();
+  const territories = normalizeList(manifest.territories || manifest.territory);
+  const rightsUrl = safeHttpUrl(manifest.rightsUrl || manifest.rights_url, { allowHttp });
+
+  if (!partner) throw new Error('partner_manifest_missing_partner');
+  if (!rightsReference) throw new Error('partner_manifest_missing_rights_reference');
+  if (!isSaudiCleared(territories)) throw new Error('partner_manifest_saudi_rights_missing');
+
+  if (manifest.expiresAt || manifest.expires_at) {
+    const expiry = new Date(manifest.expiresAt || manifest.expires_at).getTime();
+    if (!Number.isFinite(expiry)) throw new Error('partner_manifest_invalid_expiry');
+    if (expiry <= now) throw new Error('partner_manifest_rights_expired');
+  }
+
+  return {
+    partner,
+    rightsReference,
+    territories,
+    rightsUrl,
+    expiresAt: manifest.expiresAt || manifest.expires_at || null
+  };
+}
+
+function parseM3uAttributes(line) {
+  const attrs = {};
+  const head = String(line || '').split(',', 1)[0];
+  for (const match of head.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[match[1].toLowerCase()] = match[2];
+  const comma = String(line || '').indexOf(',');
+  attrs.name = comma >= 0 ? String(line).slice(comma + 1).trim() : '';
+  return attrs;
+}
+
+function feedArabicProfile(feed = {}) {
+  const language = String(feed.language || '').trim().toLowerCase();
+  const arabicLanguage = ARABIC_CODES.has(language) || hasArabic(feed.audioLanguages || feed.audio_languages);
+  const arabicSubtitle = hasArabic(feed.subtitleLanguages || feed.subtitle_languages);
+  const localizedArabic = arabicLanguage || arabicSubtitle || feed.arabicLocalized === true || feed.arabic_localized === true;
+  return { arabicLanguage, arabicSubtitle, localizedArabic };
+}
+
+export function normalizeAuthorizedM3u(m3uText, manifest, feed = {}, { allowHttp = false, now = Date.now(), maxItems = 50000 } = {}) {
+  const rights = manifestRightsContext(manifest, { allowHttp, now });
+  const profile = feedArabicProfile(feed);
+  if (!profile.localizedArabic) throw new Error('partner_m3u_arabic_localization_missing');
+
+  const text = String(m3uText || '');
+  if (!text.trim().startsWith('#EXTM3U')) throw new Error('partner_m3u_invalid');
+  if (/^#EXTVLCOPT:|^#KODIPROP:/mi.test(text)) throw new Error('partner_m3u_custom_headers_unsupported');
+
+  const defaultCategory = String(feed.category || feed.defaultCategory || 'قنوات شريك').trim();
+  const categoryPrefix = profile.arabicLanguage ? 'عربي · ' : 'أجنبي مترجم · ';
+  const rows = [];
+  let attrs = null;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith('#EXTINF:')) {
+      attrs = parseM3uAttributes(line);
+      continue;
+    }
+    if (line.startsWith('#')) continue;
+    if (!attrs) continue;
+
+    const streamUrl = safeHttpUrl(line, { allowHttp });
+    if (!streamUrl) {
+      attrs = null;
+      continue;
+    }
+
+    const title = String(attrs['tvg-name'] || attrs.name || '').trim();
+    if (!title) {
+      attrs = null;
+      continue;
+    }
+
+    const rawCategory = String(attrs['group-title'] || defaultCategory).trim() || defaultCategory;
+    const category = rawCategory.startsWith('عربي ·') || rawCategory.startsWith('أجنبي مترجم ·')
+      ? rawCategory
+      : `${categoryPrefix}${rawCategory}`;
+
+    const raw = {
+      id: String(attrs['tvg-id'] || '').trim(),
+      kind: 'live',
+      title,
+      url: streamUrl
+    };
+
+    rows.push({
+      sourceItemId: manifestItemId(raw, rights.partner),
+      kind:'live',
+      title,
+      description: String(feed.description || '').trim(),
+      icon: safeHttpUrl(attrs['tvg-logo'], { allowHttp }),
+      category,
+      language:'ar',
+      country: String(attrs['tvg-country'] || feed.country || '').trim().slice(0,8),
+      epgId: String(attrs['tvg-id'] || '').trim(),
+      licenseName: `Authorized partner · ${rights.partner}`,
+      licenseUrl: rights.rightsUrl,
+      attribution: rights.partner,
+      subtitles: [],
+      stream:{
+        resolver:'direct',
+        url:streamUrl,
+        extension: String(feed.extension || '').trim().slice(0,16)
+      },
+      rights:{
+        mode:'authorized-partner-m3u',
+        redistributable:true,
+        commercialCompatible:true,
+        partner:rights.partner,
+        rightsReference:rights.rightsReference,
+        territories:rights.territories,
+        arabic:true,
+        arabicAudio:profile.arabicLanguage,
+        arabicSubtitle:profile.arabicSubtitle,
+        expiresAt:rights.expiresAt
+      }
+    });
+
+    attrs = null;
+    if (rows.length >= maxItems) break;
+  }
+
+  return rows;
+}
+
 function normalizeSubtitles(raw, allowHttp) {
   const rows = Array.isArray(raw) ? raw : [];
   return rows.map(entry => {
@@ -51,21 +182,8 @@ function normalizeSubtitles(raw, allowHttp) {
 }
 
 export function normalizeAuthorizedManifest(manifest, { allowHttp = false, now = Date.now(), maxItems = 50000 } = {}) {
-  if (!manifest || typeof manifest !== 'object') throw new Error('partner_manifest_invalid');
-  const partner = String(manifest.partner || manifest.provider || manifest.name || '').trim();
-  const rightsReference = String(manifest.rightsReference || manifest.rights_reference || '').trim();
-  const territories = normalizeList(manifest.territories || manifest.territory);
-  const rightsUrl = safeHttpUrl(manifest.rightsUrl || manifest.rights_url, { allowHttp });
-
-  if (!partner) throw new Error('partner_manifest_missing_partner');
-  if (!rightsReference) throw new Error('partner_manifest_missing_rights_reference');
-  if (!isSaudiCleared(territories)) throw new Error('partner_manifest_saudi_rights_missing');
-
-  if (manifest.expiresAt || manifest.expires_at) {
-    const expiry = new Date(manifest.expiresAt || manifest.expires_at).getTime();
-    if (!Number.isFinite(expiry)) throw new Error('partner_manifest_invalid_expiry');
-    if (expiry <= now) throw new Error('partner_manifest_rights_expired');
-  }
+  const context = manifestRightsContext(manifest, { allowHttp, now });
+  const { partner, rightsReference, territories, rightsUrl, expiresAt } = context;
 
   const rows = Array.isArray(manifest.items) ? manifest.items.slice(0, maxItems) : [];
   const out = [];
@@ -127,7 +245,7 @@ export function normalizeAuthorizedManifest(manifest, { allowHttp = false, now =
         arabic: true,
         arabicAudio,
         arabicSubtitle,
-        expiresAt: manifest.expiresAt || manifest.expires_at || null
+        expiresAt
       }
     });
   }
@@ -158,6 +276,17 @@ export async function syncAuthorizedPartnerManifests() {
     const manifest = await fetchJson(url, 30000);
     const rows = normalizeAuthorizedManifest(manifest, { allowHttp, maxItems });
     for (const item of rows) byId.set(`${item.rights.partner}\0${item.sourceItemId}`, item);
+
+    const feeds = Array.isArray(manifest.feeds) ? manifest.feeds : [];
+    for (const feed of feeds) {
+      if (String(feed?.type || '').toLowerCase() !== 'm3u') continue;
+      const feedUrl = safeHttpUrl(feed.url, { allowHttp });
+      if (!feedUrl) throw new Error('partner_m3u_url_invalid');
+      const m3u = await fetchText(feedUrl, 30000);
+      const feedRows = normalizeAuthorizedM3u(m3u, manifest, feed, { allowHttp, maxItems });
+      for (const item of feedRows) byId.set(`${item.rights.partner}\0${item.sourceItemId}`, item);
+      if (byId.size >= maxItems) break;
+    }
   }
 
   return [...byId.values()];
