@@ -1,5 +1,5 @@
 import { stripHtml } from '../catalog.mjs';
-import { fetchJson, envInt, allowedOpenLicense } from './common.mjs';
+import { fetchJson, envInt, envBool, allowedOpenLicense } from './common.mjs';
 
 function wikimediaLicense(meta = {}) {
   const name = stripHtml(meta.LicenseShortName?.value || '');
@@ -104,6 +104,7 @@ export async function syncWikimediaCommons() {
   const shardLimit = envInt('WIKIMEDIA_SHARD_LIMIT', 1000, 100, 2500);
   const arabicShardLimit = envInt('WIKIMEDIA_ARABIC_SHARD_LIMIT', 250, 25, 1000);
   const shardConcurrency = envInt('WIKIMEDIA_SHARD_CONCURRENCY', 4, 1, 6);
+  const arabicFirst = envBool('ARABIC_FIRST', true);
   const byId = new Map();
 
   const arabicQueries = [
@@ -126,8 +127,8 @@ export async function syncWikimediaCommons() {
         return [];
       }
     })),
-    searchVideos('filetype:video', limit),
-    prefixVideoSets(shardLimit, shardConcurrency),
+    arabicFirst ? [] : searchVideos('filetype:video', limit),
+    arabicFirst ? [] : prefixVideoSets(shardLimit, shardConcurrency),
     arabicPrefixVideoSets(arabicShardLimit, Math.min(3, shardConcurrency))
   ]);
   for (const rows of arabicSets) for (const item of rows) byId.set(item.sourceItemId, item);
