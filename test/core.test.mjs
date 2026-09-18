@@ -38,6 +38,25 @@ test('catalog reuses derived indexes until content changes', async () => {
   }
 });
 
+
+test('replacing a disabled source with an empty set purges its cached items', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'blofy-disabled-source-'));
+  try {
+    const store = await new CatalogStore({ dataDir: dir }).init();
+    store.replaceSource('nasa', [
+      { sourceItemId: 'old-1', kind: 'movie', title: 'Old NASA item', category: 'NASA' }
+    ], { enabled: true });
+    assert.equal(store.stats().movies, 1);
+    const accepted = store.replaceSource('nasa', [], { enabled: false });
+    assert.equal(accepted, 0);
+    assert.equal(store.stats().movies, 0);
+    assert.equal(store.sources.nasa.enabled, false);
+    assert.equal(store.sources.nasa.count, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('catalog groups series episodes and persists', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'blofy-catalog-'));
   try {
