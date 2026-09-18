@@ -36,8 +36,8 @@ test('Xtream HTTP surface and unified admin work end-to-end like a player',async
     r=await fetch(`${authUrl}&action=get_series_info&series_id=${seriesId}`);j=await r.json();assert.equal(j.seasons.length,1);assert.equal(j.episodes['1'][0].id,'103');
     r=await fetch(`${base}/get.php?username=testuser&password=TestPass-123&type=m3u_plus&output=ts`);assert.equal(r.status,200);const m3u=await r.text();assert.match(m3u,/^#EXTM3U/);assert.match(m3u,/\/live\/testuser\/TestPass-123\/101\.ts/);assert.match(m3u,/\/movie\/testuser\/TestPass-123\/102\.mp4/);assert.match(m3u,/\/series\/testuser\/TestPass-123\/103\.mp4/);
     r=await fetch(`${base}/live/testuser/TestPass-123/101.ts`,{redirect:'manual'});assert.equal(r.status,302);assert.equal(r.headers.get('location'),'https://example.com/live.m3u8');
-    r=await fetch(`${base}/xtream`);assert.equal(r.status,200);const html=await r.text();assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);
-    r=await fetch(`${base}/admin-assets/admin.js`);const js=await r.text();assert.match(js,/\/admin-api\//);
+    r=await fetch(`${base}/xtream`);assert.equal(r.status,200);const html=await r.text();assert.match(html,/لوحة الإدارة/);assert.match(html,/\/admin-assets\/admin\.js/);assert.match(html,/href="\/admin"/);assert.match(html,/id="subscriberSort"/);assert.match(html,/id="exportSubscribersBtn"/);assert.match(html,/id="passwordModal"/);
+    r=await fetch(`${base}/admin-assets/admin.js`);const js=await r.text();assert.match(js,/\/admin-api\//);assert.match(js,/accounts\/password/);assert.match(js,/exportSubscribersBtn/);
     r=await fetch(`${base}/admin-api/status`);assert.equal(r.status,401);
   } finally {child.kill('SIGTERM');await new Promise(resolve=>{if(child.exitCode!=null)return resolve();child.once('exit',resolve);setTimeout(resolve,1500)});rmSync(dataDir,{recursive:true,force:true})}
 },15000);
