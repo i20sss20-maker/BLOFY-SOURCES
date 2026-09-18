@@ -63,14 +63,17 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = {
             { name: 'SYNC_ON_START', value: 'true' }
             { name: 'SYNC_INTERVAL_MS', value: '21600000' }
             { name: 'SYNC_PROVIDER_CONCURRENCY', value: '3' }
-            { name: 'IA_LIMIT', value: '14000' }
-            { name: 'IA_SERIES_LIMIT', value: '4500' }
-            { name: 'IA_ARABIC_LIMIT', value: '4500' }
+            { name: 'IA_LIMIT', value: '20000' }
+            { name: 'IA_SERIES_LIMIT', value: '8000' }
+            { name: 'IA_ARABIC_LIMIT', value: '10000' }
+            { name: 'IA_ARABIC_EXTRA_LIMIT', value: '10000' }
+            { name: 'IA_SHARD_LIMIT', value: '18000' }
+            { name: 'IA_SHARD_CONCURRENCY', value: '2' }
             { name: 'IA_FEDFLIX_LIMIT', value: '6000' }
             { name: 'IA_PRELINGER_LIMIT', value: '5000' }
-            { name: 'IA_PAGE_CONCURRENCY', value: '3' }
-            { name: 'WIKIMEDIA_LIMIT', value: '2500' }
-            { name: 'WIKIMEDIA_ARABIC_LIMIT', value: '1500' }
+            { name: 'IA_PAGE_CONCURRENCY', value: '5' }
+            { name: 'WIKIMEDIA_LIMIT', value: '8000' }
+            { name: 'WIKIMEDIA_ARABIC_LIMIT', value: '3000' }
             { name: 'PEERTUBE_LIMIT', value: '6000' }
             { name: 'PEERTUBE_ARABIC_LIMIT', value: '1500' }
             { name: 'PEERTUBE_SEED_CONCURRENCY', value: '3' }
@@ -83,8 +86,8 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = {
             { name: 'ENABLE_XTREAM_SELF_TEST', value: 'true' }
           ]
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('1.0')
+            memory: '2Gi'
           }
         }
       ]
