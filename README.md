@@ -104,6 +104,34 @@ AUTHORIZED_PARTNER_MANIFEST_URLS=https://partner.example/catalog.json
 
 كل Manifest يجب أن يحتوي على اسم الشريك و`rightsReference` ونطاق يشمل `SA` أو `GCC` أو `MENA`. الصفوف التي ليست عربية أو مترجمة/مدبلجة عربي تُستبعد تلقائيًا. روابط HTTP مرفوضة افتراضيًا، وأي stream يحتاج Headers خاصة يُستبعد لأن Xtream الحالي يوجّه المشغل مباشرة إلى رابط المصدر.
 
+يمكن للـManifest أيضًا تغليف Feed مرخّص بصيغة M3U بدل إدخال كل قناة يدويًا:
+
+```json
+{
+  "partner": "Example FAST Distributor",
+  "rightsReference": "agreement-2026-009",
+  "territories": ["MENA"],
+  "expiresAt": "2027-12-31T23:59:59Z",
+  "feeds": [
+    {
+      "type": "m3u",
+      "url": "https://partner.example/arabic-fast.m3u8",
+      "language": "ar",
+      "category": "قنوات رقمية"
+    },
+    {
+      "type": "m3u",
+      "url": "https://partner.example/international-arabic-subtitles.m3u8",
+      "language": "en",
+      "subtitleLanguages": ["ar"],
+      "category": "أفلام أجنبية"
+    }
+  ]
+}
+```
+
+الـM3U لا يعمل وحده: يجب أن يكون داخل Manifest يحمل مرجع الحقوق والنطاق. كما تُرفض قوائم `#EXTVLCOPT` / `#KODIPROP` التي تحتاج Headers خاصة، لأن رابط التشغيل الحالي يُعاد مباشرة للمشغل.
+
 مثال مختصر:
 
 ```json
