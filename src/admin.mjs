@@ -52,7 +52,7 @@ export async function adminApi(req,res,url){
   if(url.pathname==='/api/admin/compat-accounts'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));
     try{
-      const result=await createLegacyGatewayAccount({label:body.label,durationDays:body.durationDays,maxConnections:body.maxConnections});
+      const result=await createLegacyGatewayAccount({label:body.label,durationDays:body.durationDays,maxConnections:body.maxConnections,username:body.username,password:body.password});
       const account=normalizeLegacyAdminAccount(result.item||{}),host=xtreamBaseUrl(req),credentials=result.credentials||{};
       return json(res,201,{ok:true,host,...account,password:String(credentials.password||''),m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(credentials.password||'')}`});
     }catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
