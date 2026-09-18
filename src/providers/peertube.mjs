@@ -3,8 +3,18 @@ import { fetchJson, envInt } from './common.mjs';
 
 const PEERTUBE_ALLOWED_LICENSE_IDS = new Set([1, 2, 7, 8]);
 const DEFAULT_SEEDS = [
-  'https://framatube.org','https://video.tedomum.net','https://videos.domainepublic.net',
-  'https://tube-sciences-technologies.apps.education.fr','https://indymotion.fr'
+  'https://framatube.org',
+  'https://video.tedomum.net',
+  'https://videos.domainepublic.net',
+  'https://tube-sciences-technologies.apps.education.fr',
+  'https://indymotion.fr',
+  'https://peertube.wtf',
+  'https://video.4d2.org',
+  'https://peertube.1312.media',
+  'https://fedi.video',
+  'https://tube.p2p.legal',
+  'https://video.lqdn.fr',
+  'https://friprogramvarusyndikatet.tv'
 ];
 
 function peertubeSeeds() {
@@ -48,7 +58,7 @@ async function mapLimit(values,limit,fn){
   return out;
 }
 export async function syncPeerTube() {
-  const totalLimit=envInt('PEERTUBE_LIMIT',3000,50,10000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',800,25,5000),seeds=peertubeSeeds(),byId=new Map();
+  const totalLimit=envInt('PEERTUBE_LIMIT',20000,100,30000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',4000,50,8000),seeds=peertubeSeeds(),byId=new Map();
   const seedConcurrency=envInt('PEERTUBE_SEED_CONCURRENCY',3,1,6),arabicPerSeed=Math.max(25,Math.ceil(arabicLimit/Math.max(1,seeds.length)));
   const arabicSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,arabicPerSeed,{arabicOnly:true}));
   for(const rows of arabicSets)for(const item of rows)byId.set(item.sourceItemId,item);
