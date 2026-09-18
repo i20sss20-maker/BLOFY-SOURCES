@@ -48,6 +48,10 @@ const CURATED = [
 
 const ARABIC_TIMEDTEXT_CODES = new Set(['ar','arb','arz','apc','ary','aeb','acm','acq']);
 
+function mediaKey(value = '') {
+  return String(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 export function mediaFileFromArabicTimedText(title = '') {
   const text = String(title).replace(/^TimedText:/i, '');
   const match = text.match(/^(.*\.(?:webm|ogv|ogg|mp4))\.([a-z0-9-]+)\.srt$/i);
@@ -68,6 +72,7 @@ async function discoverArabicTimedTexts() {
       formatversion:'2',
       list:'allpages',
       apnamespace:'102',
+      apfilterredir:'nonredirects',
       aplimit:String(Math.min(500, scanLimit - scanned)),
       origin:'*'
     });
@@ -96,10 +101,12 @@ async function commonsFiles(entries) {
   const items = [];
   for (let i = 0; i < entries.length; i += 25) {
     const batch = entries.slice(i, i + 25);
+    const entryByKey = new Map(batch.map(x => [mediaKey(x.file), x]));
     const params = new URLSearchParams({
       action:'query',
       format:'json',
       formatversion:'2',
+      redirects:'1',
       titles:batch.map(x => `File:${x.file}`).join('|'),
       prop:'imageinfo',
       iiprop:'url|mime|mediatype|extmetadata',
@@ -111,7 +118,7 @@ async function commonsFiles(entries) {
     for (const page of data?.query?.pages || []) {
       if (!page || page.missing === true) continue;
       const file = String(page.title || '').replace(/^File:/i, '');
-      const entry = batch.find(x => x.file === file);
+      const entry = entryByKey.get(mediaKey(file));
       if (!entry) continue;
       items.push({ entry, page });
     }
