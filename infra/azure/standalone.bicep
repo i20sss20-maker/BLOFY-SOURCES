@@ -70,8 +70,8 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = {
             { name: 'IA_OPEN_COLLECTION_LIMIT', value: '35000' }
             { name: 'IA_SHARD_LIMIT', value: '20000' }
             { name: 'IA_SHARD_CONCURRENCY', value: '2' }
-            { name: 'IA_FEDFLIX_LIMIT', value: '6000' }
-            { name: 'IA_PRELINGER_LIMIT', value: '5000' }
+            { name: 'IA_FEDFLIX_LIMIT', value: '7000' }
+            { name: 'IA_PRELINGER_LIMIT', value: '10000' }
             { name: 'IA_PAGE_CONCURRENCY', value: '6' }
             { name: 'WIKIMEDIA_LIMIT', value: '8000' }
             { name: 'WIKIMEDIA_ARABIC_LIMIT', value: '3000' }
