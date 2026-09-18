@@ -65,6 +65,8 @@
         <p id="subtitle" class="muted">جارٍ تحميل البيانات…</p>
       </div>
       <div class="top-actions">
+        <a class="btn ghost top-link" href="/admin">أجهزة BLOFY</a>
+        <a class="btn ghost top-link" href="/downloads">التنزيلات</a>
         <button id="refreshBtn" class="btn ghost">تحديث</button>
         <button id="syncBtn" class="btn primary">مزامنة المحتوى</button>
       </div>
@@ -119,7 +121,11 @@
 
         <article class="panel wide">
           <div class="panel-head">
-            <div><span class="kicker">المزامنة</span><h3 id="syncState">—</h3><p class="muted">آخر مزامنة: <span id="lastSync">—</span></p></div>
+            <div>
+              <span class="kicker">المزامنة</span><h3 id="syncState">—</h3>
+              <p class="muted">آخر مزامنة: <span id="lastSync">—</span></p>
+              <p class="source-health-line"><span id="sourceHealthDot" class="mini-health"></span><span id="sourceHealthSummary">جارٍ فحص المصادر…</span></p>
+            </div>
             <button id="syncBtn2" class="btn ghost">مزامنة الآن</button>
           </div>
           <div id="syncLog" class="sync-chips"></div>
@@ -169,7 +175,15 @@
         <div class="table-toolbar">
           <div class="search-box"><span>⌕</span><input id="subscriberSearch" class="input" placeholder="ابحث باسم العميل أو Username"></div>
           <select id="subscriberStatus"><option value="">كل الحالات</option><option value="active">نشط</option><option value="expired">منتهي</option><option value="soon">قريب الانتهاء</option><option value="disabled">معطل</option></select>
+          <select id="subscriberSort">
+            <option value="attention">الأهم أولًا</option>
+            <option value="expiry">الأقرب انتهاء</option>
+            <option value="newest">الأحدث إنشاء</option>
+            <option value="name">الاسم</option>
+          </select>
+          <button id="exportSubscribersBtn" class="btn ghost">تصدير CSV</button>
         </div>
+        <p class="security-note">كلمات السر لا تُعرض بعد الإنشاء لأنها محفوظة كـ hash. إذا فقدها العميل استخدم زر <b>كلمة السر</b> لتوليد واحدة جديدة.</p>
         <div class="data-table">
           <table>
             <thead><tr><th>المشترك</th><th>الحالة</th><th>الانتهاء</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead>
