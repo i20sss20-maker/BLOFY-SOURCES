@@ -7,7 +7,7 @@ const FEDFLIX_QUERY = 'mediatype:movies AND collection:FedFlix';
 const PRELINGER_QUERY = `mediatype:movies AND collection:prelinger AND ${OPEN_LICENSE_QUERY}`;
 
 
-const ENTERTAINMENT_NEGATIVE = /(?:محاضر(?:ة|ات)|خطبة|خطب|درس|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|ورشة|ورش|كورس|كورسات|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|newscast|press conference|quran|recitation)/i;
+const ENTERTAINMENT_NEGATIVE = /(?:محاضر(?:ة|ات)|خطبة|خطب|دروس|دورة|دورات|شرح|شروحات|مؤتمر|مؤتمرات|مقابلة|مقابلات|بودكاست|ندوة|ندوات|تلاوة|تلاوات|ال?قرآن|أخبار|اخبار|نشرة|نشرات|ورشة|ورش|كورس|كورسات|lecture|sermon|conference|interview|podcast|webinar|tutorial|course|lesson|workshop|speech|newscast|press conference|quran|recitation)/i;
 const ENTERTAINMENT_SERIES = /(?:مسلسل|مسلسلات|الحلقة|حلقة|حلقات|الموسم|موسم|دراما|series|serial|episode|season|tv show|television series)/i;
 const ENTERTAINMENT_DOCUMENTARY = /(?:وثائقي|وثائقية|وثائقيات|documentary|documentaries)/i;
 const ENTERTAINMENT_ANIMATION = /(?:كرتون|رسوم متحركة|أنيميشن|انيميشن|أنمي|انمي|أطفال|اطفال|animation|animated|cartoon|anime)/i;
