@@ -9,6 +9,7 @@ import { adminApi } from './admin.mjs';
 import { servePlayerApi,serveM3u,serveXmltv,servePlayback } from './xtream.mjs';
 import { syncAll,syncState } from './sync.mjs';
 import { runXtreamSelfTest,xtreamSmokeState } from './xtream-auth.mjs';
+import { connectionStats } from './connections.mjs';
 
 const SELF_TEST_BASE=XTREAM_PUBLIC_BASE_URL||PUBLIC_BASE_URL||'';
 const PROCESS_STARTED_AT=new Date().toISOString();
@@ -27,11 +28,14 @@ function securityHeaders(){
 function logSync(label,result){console.log(`${label} sync complete: ${JSON.stringify({stats:result.stats,log:result.log})}`)}
 function accountHealth(){
   const rows=listAccounts();
+  const connections=connectionStats();
   return{
     total:rows.length,
     active:rows.filter(x=>x.enabled&&!x.expired).length,
     expired:rows.filter(x=>x.expired).length,
-    disabled:rows.filter(x=>!x.enabled).length
+    disabled:rows.filter(x=>!x.enabled).length,
+    activeConnections:connections.total,
+    streamingAccounts:connections.users.length
   };
 }
 function cleanPath(pathname){

@@ -7,6 +7,7 @@ import { authenticateXtream } from './xtream-auth.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
+import { activeConnectionCount } from './connections.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const LOGIN_WINDOW_MS=10*60_000,LOGIN_MAX_ATTEMPTS=8,loginAttempts=new Map();
@@ -17,7 +18,8 @@ function pruneLoginAttempts(now=Date.now()){if(loginAttempts.size<1000)return;fo
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function isArabicItem(item){return String(item?.language||'').toLowerCase()==='ar'||String(item?.category||'').startsWith('عربي ·')||item?.rights?.arabic===true||/[\u0600-\u06ff]/.test(String(item?.title||''))}
 function catalogCounts(rows){const out={total:0,live:0,movies:0,episodes:0};for(const item of rows){out.total++;if(item.kind==='live')out.live++;else if(item.kind==='series_episode')out.episodes++;else out.movies++}return out}
-function accountSummary(accounts){const now=Date.now();return{total:accounts.length,active:accounts.filter(x=>x.enabled&&!x.expired).length,expired:accounts.filter(x=>x.expired).length,disabled:accounts.filter(x=>!x.enabled).length,expiringSoon:accounts.filter(x=>x.enabled&&!x.expired&&x.expiresAt&&(new Date(x.expiresAt).getTime()-now)<=7*86400000).length}}
+function withConnectionState(accounts){return accounts.map(account=>({...account,activeConnections:activeConnectionCount(account.username)}))}
+function accountSummary(accounts){const now=Date.now();return{total:accounts.length,active:accounts.filter(x=>x.enabled&&!x.expired).length,expired:accounts.filter(x=>x.expired).length,disabled:accounts.filter(x=>!x.enabled).length,expiringSoon:accounts.filter(x=>x.enabled&&!x.expired&&x.expiresAt&&(new Date(x.expiresAt).getTime()-now)<=7*86400000).length,activeConnections:accounts.reduce((sum,x)=>sum+Number(x.activeConnections||0),0)}}
 export async function serveAdminAsset(res,pathname){
   const file=pathname==='/admin'?'/admin.html':pathname;if(!['/admin.html','/admin.css','/admin.js'].includes(file))return false;
   const body=await readFile(path.join(ROOT,'public',file.slice(1)),'utf8');
@@ -33,13 +35,13 @@ export async function adminApi(req,res,url){
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
   if(url.pathname==='/api/admin/logout'&&req.method==='POST'){clearAdminSession(res);return json(res,200,{ok:true})}
   if(url.pathname==='/api/admin/status'&&req.method==='GET'){
-    const sync=syncState(),accounts=listAccounts(),perSource={};const all=[...catalog.items.values()],arabicRows=all.filter(isArabicItem),arabic=catalogCounts(arabicRows);
+    const sync=syncState(),accounts=withConnectionState(listAccounts()),perSource={};const all=[...catalog.items.values()],arabicRows=all.filter(isArabicItem),arabic=catalogCounts(arabicRows);
     arabic.series=catalog.seriesGroups().filter(group=>String(group.category||'').startsWith('عربي ·')||/[\u0600-\u06ff]/.test(String(group.title||''))).length;
     for(const item of all){const bucket=perSource[item.source]||(perSource[item.source]={live:0,movies:0,episodes:0,total:0});bucket.total++;if(item.kind==='live')bucket.live++;else if(item.kind==='series_episode')bucket.episodes++;else bucket.movies++}
     return json(res,200,{ok:true,adminBaseUrl:baseUrl(req),baseUrl:xtreamBaseUrl(req),stats:catalog.stats(),arabic,accountsSummary:accountSummary(accounts),providers:providerDefinitions.map(p=>({id:p.id,name:p.name,kind:p.kind,enabled:p.enabled(),rights:p.rights,runtime:catalog.sources[p.id]||null,counts:perSource[p.id]||{live:0,movies:0,episodes:0,total:0}})),account:accounts[0]||null,...sync});
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='GET'){
-    const accounts=listAccounts();return json(res,200,{ok:true,summary:accountSummary(accounts),accounts});
+    const accounts=withConnectionState(listAccounts());return json(res,200,{ok:true,summary:accountSummary(accounts),accounts});
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));

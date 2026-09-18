@@ -251,7 +251,7 @@ function renderSubscribers(){
       <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline username-line">${esc(a.username)} <button class="copy-user inline-copy" data-user="${esc(a.username)}">نسخ</button></div></td>
       <td><span class="badge ${st.cls}">${st.label}</span></td>
       <td>${dateText(a.expiresAt)}${left!=null&&!a.expired? `<div class="muted">${fmt(Math.max(0,left))} يوم</div>`:''}</td>
-      <td>${fmt(a.maxConnections||1)}</td>
+      <td><strong>${fmt(a.activeConnections||0)}</strong> / ${fmt(a.maxConnections||1)}<div class="muted">نشط / الحد</div></td>
       <td><div class="subscriber-actions">
         <button class="tiny-btn primary renew-user" data-user="${esc(a.username)}">تجديد</button>
         ${a.bootstrap?'':`<button class="tiny-btn password-user" data-user="${esc(a.username)}">كلمة السر</button>`}
@@ -392,10 +392,10 @@ $('passwordResult').addEventListener('click',e=>{
 
 $('exportSubscribersBtn').onclick=()=>{
   if(!allSubscribers.length)return toast('لا يوجد مشتركون للتصدير','error');
-  const rows=[['username','label','status','expires_at','max_connections','note']];
+  const rows=[['username','label','status','expires_at','active_connections','max_connections','note']];
   for(const a of allSubscribers){
     const st=subscriberStatus(a);
-    rows.push([a.username,a.label||'',st.key,a.expiresAt||'',a.maxConnections||1,a.note||'']);
+    rows.push([a.username,a.label||'',st.key,a.expiresAt||'',a.activeConnections||0,a.maxConnections||1,a.note||'']);
   }
   const csv='\uFEFF'+rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
