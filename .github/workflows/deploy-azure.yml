@@ -1,6 +1,16 @@
 name: Deploy BLOFY Sources to Azure Gateway
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'test/**'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-azure.yml'
   workflow_dispatch:
 
 permissions:
