@@ -38,10 +38,11 @@ export async function adminApi(req,res,url){
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
   if(url.pathname==='/api/admin/logout'&&req.method==='POST'){clearAdminSession(res);return json(res,200,{ok:true})}
   if(url.pathname==='/api/admin/status'&&req.method==='GET'){
-    const sync=syncState(),accounts=listAccounts(),perSource={};const all=[...catalog.items.values()],arabicRows=all.filter(isArabicItem),arabic=catalogCounts(arabicRows);
+    const sync=syncState(),perSource={};const all=[...catalog.items.values()],arabicRows=all.filter(isArabicItem),arabic=catalogCounts(arabicRows);
     arabic.series=catalog.seriesGroups().filter(group=>String(group.category||'').startsWith('عربي ·')||/[\u0600-\u06ff]/.test(String(group.title||''))).length;
     for(const item of all){const bucket=perSource[item.source]||(perSource[item.source]={live:0,movies:0,episodes:0,total:0});bucket.total++;if(item.kind==='live')bucket.live++;else if(item.kind==='series_episode')bucket.episodes++;else bucket.movies++}
-    return json(res,200,{ok:true,adminBaseUrl:baseUrl(req),baseUrl:xtreamBaseUrl(req),stats:catalog.stats(),arabic,accountsSummary:accountSummary(accounts),providers:providerDefinitions.map(p=>({id:p.id,name:p.name,kind:p.kind,enabled:p.enabled(),rights:p.rights,runtime:catalog.sources[p.id]||null,counts:perSource[p.id]||{live:0,movies:0,episodes:0,total:0}})),account:accounts[0]||null,...sync});
+    let compatAccounts=[];try{const data=await listLegacyGatewayAccounts();compatAccounts=(data.items||[]).map(normalizeLegacyAdminAccount)}catch{}
+    return json(res,200,{ok:true,adminBaseUrl:baseUrl(req),baseUrl:xtreamBaseUrl(req),stats:catalog.stats(),arabic,accountsSummary:accountSummary(compatAccounts),providers:providerDefinitions.map(p=>({id:p.id,name:p.name,kind:p.kind,enabled:p.enabled(),rights:p.rights,runtime:catalog.sources[p.id]||null,counts:perSource[p.id]||{live:0,movies:0,episodes:0,total:0}})),account:compatAccounts[0]||null,...sync});
   }
   if(url.pathname==='/api/admin/compat-accounts'&&req.method==='GET'){
     try{
