@@ -50,7 +50,8 @@ export async function syncWikimediaCommons() {
 
   const arabicQueries = [
     { query: 'filetype:video incategory:"Videos in Arabic"', category: 'ويكيميديا عربي' },
-    { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · Creative Commons' }
+    { query: 'filetype:video incategory:"Al Jazeera videos"', category: 'الجزيرة · Creative Commons' },
+    { query: 'filetype:video incategory:"Videos by Al Jazeera of the 2008-2009 Gaza War"', category: 'الجزيرة · غزة · Creative Commons' }
   ];
   for (const entry of arabicQueries) {
     try {
