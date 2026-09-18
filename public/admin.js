@@ -231,8 +231,10 @@ async function savePassword(){
   try{
     $('saveSubscriberPassword').disabled=true;
     const j=await api('compat-accounts/reset',{method:'POST',body:JSON.stringify({id:passwordUser})});
+    const tested=await api('account/test',{method:'POST',body:JSON.stringify({username:j.username,password:j.password})});
+    if(!tested.auth)throw new Error('account_validation_failed');
     $('passwordResult').hidden=false;
-    $('passwordResult').innerHTML=`<strong>تم تغيير كلمة السر ✓</strong><div class="created-grid"><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code></div><button id="copyPasswordResult" class="btn primary">نسخ بيانات الدخول</button>`;
+    $('passwordResult').innerHTML=`<strong>تم تغيير كلمة السر واختبارها على Xtream ✓</strong><div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code></div><button id="copyPasswordResult" class="btn primary">نسخ Host + Username + Password</button>`;
     $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
     toast('تم تغيير كلمة السر','success');
   }catch(e){
@@ -276,11 +278,14 @@ async function createSubscriber(){
   };
   try{
     $('createSubscriberBtn').disabled=true;
-    const j=await api('compat-accounts',{method:'POST',body:JSON.stringify(body)});lastCreated=j;
+    const j=await api('compat-accounts',{method:'POST',body:JSON.stringify(body)});
+    const tested=await api('account/test',{method:'POST',body:JSON.stringify({username:j.username,password:j.password})});
+    if(!tested.auth)throw new Error('account_validation_failed');
+    lastCreated=j;
     $('createdSubscriber').hidden=false;
-    $('createdSubscriber').innerHTML=`<strong>تم إنشاء الحساب ✓</strong>
+    $('createdSubscriber').innerHTML=`<strong>تم إنشاء الحساب واختباره على Xtream ✓</strong>
       <div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code><span>الانتهاء</span><code>${esc(dateText(j.expiresAt))}</code></div>
-      <button id="copyCreatedSubscriber" class="btn primary">نسخ البيانات كلها</button>`;
+      <button id="copyCreatedSubscriber" class="btn primary">نسخ Host + Username + Password + M3U</button>`;
     $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
     $('newLabel').value='';$('newUsername').value='';$('newPassword').value='';
     toast('تم إنشاء المشترك','success');await Promise.all([loadSubscribers(),refresh()]);
