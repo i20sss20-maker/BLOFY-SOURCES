@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
-import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,deleteAccount,verifyAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
+import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,verifyAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
@@ -53,6 +53,9 @@ export async function adminApi(req,res,url){
   }
   if(url.pathname==='/api/admin/accounts/update'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));try{return json(res,200,{ok:true,account:await updateAccount(body.username,{maxConnections:body.maxConnections,label:body.label,note:body.note})})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/accounts/password'&&req.method==='POST'){
+    const body=await readJsonBody(req).catch(()=>({}));try{const account=await resetAccountPassword(body.username,body.password);const host=xtreamBaseUrl(req);return json(res,200,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='DELETE'){
     const username=String(url.searchParams.get('username')||'');try{await deleteAccount(username);return json(res,200,{ok:true})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
