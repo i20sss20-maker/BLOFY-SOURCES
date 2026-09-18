@@ -79,15 +79,6 @@ export async function serveXmltv(req,res,url){
   return text(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="BLOFY SOURCES">${channels}</tv>\n`,'application/xml; charset=utf-8');
 }
 
-function copyUpstreamHeaders(response){
-  const out={};
-  for(const name of ['content-type','content-length','content-range','accept-ranges','cache-control','last-modified','etag']){
-    const value=response.headers.get(name);if(value)out[name]=value;
-  }
-  out['x-content-type-options']='nosniff';
-  return out;
-}
-
 export async function servePlayback(req,res,pathname){
   const m=pathname.match(/^\/(live|movie|series)\/([^/]+)\/([^/]+)\/(\d+)(?:\.([A-Za-z0-9]+))?\/?$/);
   if(!m)return false;
@@ -97,34 +88,12 @@ export async function servePlayback(req,res,pathname){
   const x=catalog.get(id),valid=x&&((type==='live'&&x.kind==='live')||(type==='movie'&&x.kind==='movie')||(type==='series'&&x.kind==='series_episode'));
   if(!valid){text(res,404,'Not found');return true}
   try{
-    const resolved=await resolveStream(x),target=new URL(resolved.url);
+    const target=new URL((await resolveStream(x)).url);
     if(!['http:','https:'].includes(target.protocol))throw new Error('unsupported_target_protocol');
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
-    const abort=()=>{if(!controller.signal.aborted)controller.abort()};
-    res.on('close',()=>{if(!res.writableEnded)abort()});
-    const headers={'user-agent':String(req.headers['user-agent']||'BLOFY-Xtream-Gateway/2.0')};
-    if(req.headers.range)headers.range=String(req.headers.range);
-    let response;
-    try{
-      response=await fetch(target,{method:req.method==='HEAD'?'HEAD':'GET',redirect:'follow',signal:controller.signal,headers});
-    }finally{clearTimeout(timer)}
-    if(!(response.ok||response.status===206)){text(res,502,'Upstream unavailable');return true}
-    res.writeHead(response.status,copyUpstreamHeaders(response));
-    if(req.method==='HEAD'||!response.body){res.end();return true}
-    const reader=response.body.getReader();
-    try{
-      while(true){
-        const {done,value}=await reader.read();
-        if(done)break;
-        if(!res.write(Buffer.from(value)))await new Promise(resolve=>res.once('drain',resolve));
-      }
-      res.end();
-    }catch(error){
-      abort();if(!res.destroyed)res.destroy(error);
-    }
+    res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
+    res.end();
   }catch(e){
     if(!res.headersSent)json(res,502,{ok:false,error:String(e?.message||e),source:x.source,itemId:x.id});
-    else if(!res.destroyed)res.destroy();
   }
   return true;
 }
