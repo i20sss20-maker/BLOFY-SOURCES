@@ -4,6 +4,7 @@ import { fetchJson, envInt, arrayFirst, cleanLicenseUrl, allowedOpenLicense, cat
 const OPEN_LICENSE_QUERY = '(licenseurl:http*by* OR licenseurl:http*zero* OR licenseurl:http*publicdomain*)';
 const ARCHIVE_FIELDS = ['identifier','title','description','creator','subject','collection','licenseurl','language','date','downloads'];
 const FEDFLIX_QUERY = 'mediatype:movies AND collection:FedFlix';
+const PRELINGER_QUERY = `mediatype:movies AND collection:prelinger AND ${OPEN_LICENSE_QUERY}`;
 
 function looseEpisodeTitle(title) {
   const text = String(title || '').trim();
@@ -140,12 +141,14 @@ export async function syncInternetArchive() {
   const seriesLimit = envInt('IA_SERIES_LIMIT', 4500, 100, 12000);
   const arabicLimit = envInt('IA_ARABIC_LIMIT', 4500, 100, 12000);
   const fedflixLimit = envInt('IA_FEDFLIX_LIMIT', 6000, 100, 7000);
+  const prelingerLimit = envInt('IA_PRELINGER_LIMIT', 5000, 100, 10000);
   const byId = new Map();
 
-  const [generalDocs, arabicDocs, fedflixDocs] = await Promise.all([
+  const [generalDocs, arabicDocs, fedflixDocs, prelingerDocs] = await Promise.all([
     archiveDocs(genericQuery(), generalLimit),
     archiveDocs(arabicQuery(), arabicLimit),
-    archiveDocs(FEDFLIX_QUERY, fedflixLimit)
+    archiveDocs(FEDFLIX_QUERY, fedflixLimit),
+    archiveDocs(PRELINGER_QUERY, prelingerLimit)
   ]);
 
   for (const doc of generalDocs) {
@@ -159,6 +162,12 @@ export async function syncInternetArchive() {
   for (const doc of fedflixDocs) {
     const item = toCatalogItem(doc, { trustedFedFlix: true });
     if (item) byId.set(item.sourceItemId, item);
+  }
+  for (const doc of prelingerDocs) {
+    const item = toCatalogItem(doc);
+    if (!item) continue;
+    if (!String(item.category || '').startsWith('عربي ·')) item.category = `Prelinger · ${item.category}`;
+    byId.set(item.sourceItemId, item);
   }
 
   const seriesDocs = await mapLimit(seriesQueries(), 3, query => archiveDocs(query, seriesLimit));
