@@ -218,20 +218,19 @@ function openRenew(user){
 
 function closeRenew(){$('renewModal').hidden=true;renewUser=''}
 function openPassword(user){
-  passwordUser=user;
-  const a=allSubscribers.find(x=>x.username===user);
-  $('passwordTitle').textContent=`تغيير كلمة سر ${a?.label||user}`;
-  $('passwordSubtitle').textContent=`Username: ${user} · اترك الحقل فارغًا لتوليد كلمة سر تلقائيًا.`;
-  $('newSubscriberPassword').value='';
+  const a=allSubscribers.find(x=>x.username===user);passwordUser=a?.id||'';
+  $('passwordTitle').textContent=`كلمة سر جديدة ${a?.label||user}`;
+  $('passwordSubtitle').textContent=`Username: ${user} · سيتم توليد كلمة سر قوية جديدة من نظام الحسابات المتوافق مع المشغلات.`;
+  $('newSubscriberPassword').value='';$('newSubscriberPassword').disabled=true;
   $('passwordResult').hidden=true;
   $('passwordModal').hidden=false;
 }
-function closePassword(){$('passwordModal').hidden=true;passwordUser='';$('newSubscriberPassword').value='';$('passwordResult').hidden=true}
+function closePassword(){$('passwordModal').hidden=true;passwordUser='';$('newSubscriberPassword').value='';$('newSubscriberPassword').disabled=false;$('passwordResult').hidden=true}
 async function savePassword(){
   if(!passwordUser)return;
   try{
     $('saveSubscriberPassword').disabled=true;
-    const j=await api('accounts/password',{method:'POST',body:JSON.stringify({username:passwordUser,password:$('newSubscriberPassword').value})});
+    const j=await api('compat-accounts/reset',{method:'POST',body:JSON.stringify({id:passwordUser})});
     $('passwordResult').hidden=false;
     $('passwordResult').innerHTML=`<strong>تم تغيير كلمة السر ✓</strong><div class="created-grid"><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code></div><button id="copyPasswordResult" class="btn primary">نسخ بيانات الدخول</button>`;
     $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
@@ -264,7 +263,7 @@ function renderSubscribers(){
 
 async function loadSubscribers(){
   try{
-    const j=await api('accounts');allSubscribers=j.accounts||[];const s=j.summary||{};
+    const j=await api('compat-accounts');allSubscribers=j.accounts||[];const s=j.summary||{};
     $('sTotal').textContent=fmt(s.total);$('sActive').textContent=fmt(s.active);$('sExpired').textContent=fmt(s.expired);$('sSoon').textContent=fmt(s.expiringSoon);$('sDisabled').textContent=fmt(s.disabled);
     renderSubscribers();
   }catch(e){toast(e.message,'error')}
@@ -277,7 +276,7 @@ async function createSubscriber(){
   };
   try{
     $('createSubscriberBtn').disabled=true;
-    const j=await api('accounts',{method:'POST',body:JSON.stringify(body)});lastCreated=j;
+    const j=await api('compat-accounts',{method:'POST',body:JSON.stringify(body)});lastCreated=j;
     $('createdSubscriber').hidden=false;
     $('createdSubscriber').innerHTML=`<strong>تم إنشاء الحساب ✓</strong>
       <div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code><span>الانتهاء</span><code>${esc(dateText(j.expiresAt))}</code></div>
@@ -286,27 +285,28 @@ async function createSubscriber(){
     $('newLabel').value='';$('newUsername').value='';$('newPassword').value='';
     toast('تم إنشاء المشترك','success');await Promise.all([loadSubscribers(),refresh()]);
   }catch(e){
-    const map={username_exists:'اسم المستخدم موجود مسبقًا',invalid_username:'اسم المستخدم غير صالح',invalid_password:'كلمة السر يجب أن تكون 8 أحرف أو أكثر'};
+    const map={username_exists:'اسم المستخدم موجود مسبقًا',invalid_username:'اسم المستخدم غير صالح',invalid_password:'كلمة السر يجب أن تكون 8 أحرف أو أكثر',xtream_gateway_username_exists:'اسم المستخدم موجود مسبقًا',xtream_gateway_username_invalid:'اسم المستخدم غير صالح',xtream_gateway_password_invalid:'كلمة السر يجب أن تكون 8 أحرف أو أكثر'};
     toast(map[e.message]||e.message,'error');
   }finally{$('createSubscriberBtn').disabled=false}
 }
 
 async function renewSubscriber(user,days){
   try{
-    await api('accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});
+    const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');
+    await api('compat-accounts/renew',{method:'POST',body:JSON.stringify({id:account.id,days})});
     closeRenew();toast(`تم تجديد ${user} لمدة ${days===365?'سنة':days===730?'سنتين':days+' يوم'}`,'success');
     await Promise.all([loadSubscribers(),refresh()]);
   }catch(e){toast(e.message,'error')}
 }
 
 async function toggleSubscriber(user,enabled,button){
-  try{button.disabled=true;await api('accounts/toggle',{method:'POST',body:JSON.stringify({username:user,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api('compat-accounts/toggle',{method:'POST',body:JSON.stringify({id:account.id,enabled})});toast(enabled?'تم تفعيل المشترك':'تم تعطيل المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
 async function deleteSubscriber(user,button){
   if(!confirm(`حذف المشترك ${user} نهائيًا؟`))return;
-  try{button.disabled=true;await api(`accounts?username=${encodeURIComponent(user)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
+  try{button.disabled=true;const account=allSubscribers.find(x=>x.username===user);if(!account?.id)throw new Error('account_not_found');await api(`compat-accounts?id=${encodeURIComponent(account.id)}`,{method:'DELETE'});toast('تم حذف المشترك','success');await Promise.all([loadSubscribers(),refresh()])}
   catch(e){toast(e.message,'error')}finally{button.disabled=false}
 }
 
