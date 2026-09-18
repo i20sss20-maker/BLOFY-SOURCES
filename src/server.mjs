@@ -130,6 +130,15 @@ setInterval(()=>{
 
 async function startupSmoke(){
   if(!SELF_TEST_BASE)return;
+  for(let waitAttempt=1;waitAttempt<=120;waitAttempt++){
+    if(!syncState().syncing)break;
+    if(waitAttempt===1||waitAttempt%12===0)console.log(`xtream self-test waiting for catalog sync: attempt ${waitAttempt}`);
+    await new Promise(resolve=>setTimeout(resolve,5_000));
+  }
+  if(syncState().syncing){
+    console.error('xtream self-test skipped: catalog sync did not finish before timeout');
+    return;
+  }
   for(let attempt=1;attempt<=8;attempt++){
     const result=await runXtreamSelfTest(SELF_TEST_BASE);
     console.log(`xtream self-test attempt ${attempt}:`,JSON.stringify(result));
