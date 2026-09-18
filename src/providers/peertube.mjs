@@ -14,7 +14,20 @@ const DEFAULT_SEEDS = [
   'https://fedi.video',
   'https://tube.p2p.legal',
   'https://video.lqdn.fr',
-  'https://friprogramvarusyndikatet.tv'
+  'https://friprogramvarusyndikatet.tv',
+  'https://meyon.com.ye',
+  'https://makertube.net',
+  'https://tube-arts-lettres-sciences-humaines.apps.education.fr',
+  'https://tube-numerique-educatif.apps.education.fr',
+  'https://tube-action-educative.apps.education.fr',
+  'https://video.antopie.org',
+  'https://peertube.iriseden.eu',
+  'https://peertube.ch',
+  'https://peertube.stream',
+  'https://peertube.tv',
+  'https://peertube.lyceeconnecte.fr',
+  'https://play.cotv.org.br',
+  'https://video.hardlimit.com'
 ];
 
 function peertubeSeeds() {
@@ -58,8 +71,8 @@ async function mapLimit(values,limit,fn){
   return out;
 }
 export async function syncPeerTube() {
-  const totalLimit=envInt('PEERTUBE_LIMIT',20000,100,30000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',4000,50,8000),seeds=peertubeSeeds(),byId=new Map();
-  const seedConcurrency=envInt('PEERTUBE_SEED_CONCURRENCY',3,1,6),arabicPerSeed=Math.max(25,Math.ceil(arabicLimit/Math.max(1,seeds.length)));
+  const totalLimit=envInt('PEERTUBE_LIMIT',60000,100,80000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',20000,50,30000),seeds=peertubeSeeds(),byId=new Map();
+  const seedConcurrency=envInt('PEERTUBE_SEED_CONCURRENCY',4,1,8),arabicPerSeed=Math.max(50,Math.ceil(arabicLimit/Math.max(1,seeds.length)));
   const arabicSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,arabicPerSeed,{arabicOnly:true}));
   for(const rows of arabicSets)for(const item of rows)byId.set(item.sourceItemId,item);
   const perSeed=Math.max(100,Math.ceil(totalLimit/Math.max(1,seeds.length)));
