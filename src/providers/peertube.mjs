@@ -1,5 +1,5 @@
 import { stripHtml } from '../catalog.mjs';
-import { fetchJson, envInt } from './common.mjs';
+import { fetchJson, envInt, envBool } from './common.mjs';
 
 const PEERTUBE_ALLOWED_LICENSE_IDS = new Set([1, 2, 7, 8]);
 const DEFAULT_SEEDS = [
@@ -72,11 +72,15 @@ async function mapLimit(values,limit,fn){
 }
 export async function syncPeerTube() {
   const totalLimit=envInt('PEERTUBE_LIMIT',60000,100,80000),arabicLimit=envInt('PEERTUBE_ARABIC_LIMIT',20000,50,30000),seeds=peertubeSeeds(),byId=new Map();
+  const arabicFirst=envBool('ARABIC_FIRST',true);
   const seedConcurrency=envInt('PEERTUBE_SEED_CONCURRENCY',4,1,8),arabicPerSeed=Math.max(50,Math.ceil(arabicLimit/Math.max(1,seeds.length)));
   const arabicSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,arabicPerSeed,{arabicOnly:true}));
   for(const rows of arabicSets)for(const item of rows)byId.set(item.sourceItemId,item);
-  const perSeed=Math.max(100,Math.ceil(totalLimit/Math.max(1,seeds.length)));
-  const generalSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,perSeed));
-  for(const rows of generalSets)for(const item of rows)if(!byId.has(item.sourceItemId))byId.set(item.sourceItemId,item);
-  return [...byId.values()].slice(0,totalLimit+arabicLimit).sort((a,b)=>Number(b.language==='ar')-Number(a.language==='ar')||a.title.localeCompare(b.title,'ar'));
+  if(!arabicFirst){
+    const perSeed=Math.max(100,Math.ceil(totalLimit/Math.max(1,seeds.length)));
+    const generalSets=await mapLimit(seeds,seedConcurrency,seed=>collectSeed(seed,perSeed));
+    for(const rows of generalSets)for(const item of rows)if(!byId.has(item.sourceItemId))byId.set(item.sourceItemId,item);
+  }
+  const cap=arabicFirst?arabicLimit:totalLimit+arabicLimit;
+  return [...byId.values()].slice(0,cap).sort((a,b)=>Number(b.language==='ar')-Number(a.language==='ar')||a.title.localeCompare(b.title,'ar'));
 }
