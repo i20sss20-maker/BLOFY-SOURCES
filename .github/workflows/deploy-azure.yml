@@ -1,4 +1,4 @@
-name: Deploy BLOFY Sources to Azure Gateway
+name: Deploy Standalone BLOFY Xtream to Azure
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'public/**'
       - 'test/**'
+      - 'infra/azure/standalone.bicep'
       - 'Dockerfile'
       - 'package.json'
       - 'package-lock.json'
@@ -18,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: blofy-sources-azure-production
+  group: blofy-xtream-azure-production
   cancel-in-progress: false
 
 env:
@@ -26,19 +27,22 @@ env:
   AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '9853cf04-5035-4d82-a47f-461db09fdd9c' }}
   AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || 'ec5ef9bb-cb2b-425f-af4a-9baf41b7fc23' }}
   AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || '37cef360-5cea-44b8-8a64-5a8094c9a587' }}
-  CONTAINER_APP: blofy-gateway
+  CONTAINER_APP: blofy-xtream
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - run: npm ci --ignore-scripts
       - run: npm run check && npm test
+      - run: az bicep build --file infra/azure/standalone.bicep --stdout >/dev/null
 
       - name: Azure login with OIDC
         uses: azure/login@v2
@@ -47,7 +51,7 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Resolve existing BLOFY Azure resources
+      - name: Resolve shared Azure infrastructure
         id: azure
         shell: bash
         run: |
@@ -57,152 +61,80 @@ jobs:
           REG="$(az acr show -n "$ACR" --query loginServer -o tsv)"
           STORAGE="$(az storage account list -g "$AZURE_RG" --query '[0].name' -o tsv)"
           KV="$(az keyvault list -g "$AZURE_RG" --query '[0].name' -o tsv)"
-          IDENTITY_ID="$(az containerapp show -g "$AZURE_RG" -n "$CONTAINER_APP" --query 'keys(identity.userAssignedIdentities)[0]' -o tsv)"
+          ENV_ID="$(az containerapp env list -g "$AZURE_RG" --query '[0].id' -o tsv)"
+          IDENTITY_ID="$(az identity list -g "$AZURE_RG" --query '[0].id' -o tsv)"
           CLIENT_ID="$(az identity show --ids "$IDENTITY_ID" --query clientId -o tsv)"
-          FQDN="$(az containerapp show -g "$AZURE_RG" -n "$CONTAINER_APP" --query properties.configuration.ingress.fqdn -o tsv)"
-          test -n "$ACR" && test -n "$REG" && test -n "$STORAGE" && test -n "$KV" && test -n "$IDENTITY_ID" && test -n "$CLIENT_ID" && test -n "$FQDN"
+          test -n "$ACR" && test -n "$REG" && test -n "$STORAGE" && test -n "$KV" && test -n "$ENV_ID" && test -n "$IDENTITY_ID" && test -n "$CLIENT_ID"
           echo "acr=$ACR" >> "$GITHUB_OUTPUT"
           echo "reg=$REG" >> "$GITHUB_OUTPUT"
           echo "storage=$STORAGE" >> "$GITHUB_OUTPUT"
           echo "kv=$KV" >> "$GITHUB_OUTPUT"
+          echo "env_id=$ENV_ID" >> "$GITHUB_OUTPUT"
           echo "identity_id=$IDENTITY_ID" >> "$GITHUB_OUTPUT"
           echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
-          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
           echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push unified gateway image
+      - name: Build and push Xtream image
         shell: bash
         run: |
           set -euo pipefail
           az acr login --name '${{ steps.azure.outputs.acr }}'
-          IMAGE='${{ steps.azure.outputs.reg }}/blofy/sources:${{ steps.azure.outputs.tag }}'
+          IMAGE='${{ steps.azure.outputs.reg }}/blofy/xtream:${{ steps.azure.outputs.tag }}'
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
-      - name: Reuse existing Key Vault secrets for Xtream admin
+      - name: Deploy standalone Xtream Container App
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          KV='${{ steps.azure.outputs.kv }}'
-          ID='${{ steps.azure.outputs.identity_id }}'
+          FQDN="$(az deployment group create             -g "$AZURE_RG"             --template-file infra/azure/standalone.bicep             --parameters               managedEnvironmentId='${{ steps.azure.outputs.env_id }}'               identityResourceId='${{ steps.azure.outputs.identity_id }}'               identityClientId='${{ steps.azure.outputs.client_id }}'               acrLoginServer='${{ steps.azure.outputs.reg }}'               storageAccountName='${{ steps.azure.outputs.storage }}'               keyVaultName='${{ steps.azure.outputs.kv }}'               image="$IMAGE"             --query 'properties.outputs.fqdn.value' -o tsv)"
+          test -n "$FQDN"
+          BASE="https://$FQDN"
+          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
-          retry_az() {
-            local attempt
-            for attempt in $(seq 1 24); do
-              if "$@"; then return 0; fi
-              echo "Azure operation busy/failed (attempt $attempt/24); retrying in 10s..." >&2
-              sleep 10
-            done
-            return 1
-          }
-
-          retry_az az containerapp secret set -g "$AZURE_RG" -n "$CONTAINER_APP" --secrets \
-            "xtream-admin=keyvaultref:https://${KV}.vault.azure.net/secrets/release-admin-password,identityref:${ID}" \
-            "xtream-session=keyvaultref:https://${KV}.vault.azure.net/secrets/blofy-admin-token,identityref:${ID}" \
-            --only-show-errors >/dev/null
-
-      - name: Update existing gateway only
+      - name: Set standalone public URL
         shell: bash
         run: |
           set -euo pipefail
-          BASE='https://${{ steps.azure.outputs.fqdn }}'
+          BASE='${{ steps.deploy.outputs.base }}'
+          az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP"             --set-env-vars               PUBLIC_BASE_URL="$BASE"               XTREAM_PUBLIC_BASE_URL="$BASE"             --only-show-errors >/dev/null
+          az containerapp ingress traffic set -g "$AZURE_RG" -n "$CONTAINER_APP"             --revision-weight latest=100 --only-show-errors >/dev/null
 
-          retry_az() {
-            local attempt
-            for attempt in $(seq 1 24); do
-              if "$@"; then return 0; fi
-              echo "Azure operation busy/failed (attempt $attempt/24); retrying in 10s..." >&2
-              sleep 10
-            done
-            return 1
-          }
-
-          retry_az az containerapp update -g "$AZURE_RG" -n "$CONTAINER_APP" \
-            --image "$IMAGE" \
-            --min-replicas 1 \
-            --max-replicas 1 \
-            --set-env-vars \
-              PORT=8080 \
-              NODE_ENV=production \
-              ACTIVATION_URL=http://blofy-activation \
-              RELEASE_URL=http://blofy-releases \
-              PUBLIC_BASE_URL="$BASE" \
-              XTREAM_PUBLIC_BASE_URL="$BASE" \
-              ADMIN_PASSWORD=secretref:xtream-admin \
-              SESSION_SECRET=secretref:xtream-session \
-              AZURE_STORAGE_ACCOUNT='${{ steps.azure.outputs.storage }}' \
-              AZURE_CLIENT_ID='${{ steps.azure.outputs.client_id }}' \
-              BLOFY_BLOB_CONTAINER=blofy-xtream \
-              DATA_DIR=/tmp/blofy-data \
-              SYNC_ON_START=true \
-              SYNC_INTERVAL_MS=21600000 \
-              SYNC_PROVIDER_CONCURRENCY=3 \
-              IA_LIMIT=14000 \
-              IA_SERIES_LIMIT=4500 \
-              IA_ARABIC_LIMIT=4500 \
-              IA_FEDFLIX_LIMIT=6000 \
-              IA_PRELINGER_LIMIT=5000 \
-              IA_PAGE_CONCURRENCY=3 \
-              WIKIMEDIA_LIMIT=2500 \
-              WIKIMEDIA_ARABIC_LIMIT=1500 \
-              PEERTUBE_LIMIT=6000 \
-              PEERTUBE_ARABIC_LIMIT=1500 \
-              PEERTUBE_SEED_CONCURRENCY=3 \
-              NASA_LIMIT=700 \
-              FREE_TV_LIMIT=4000 \
-              ENABLE_FREE_TV=true \
-              FREE_TV_VALIDATE_ARABIC=true \
-              FREE_TV_VALIDATE_CONCURRENCY=12 \
-              ENABLE_IPTV_ORG=false \
-              ENABLE_XTREAM_SELF_TEST=true \
-            --only-show-errors >/dev/null
-
-          retry_az az containerapp ingress update -g "$AZURE_RG" -n "$CONTAINER_APP" \
-            --type external --target-port 8080 --transport auto --allow-insecure false \
-            --only-show-errors >/dev/null
-          retry_az az containerapp ingress traffic set -g "$AZURE_RG" -n "$CONTAINER_APP" \
-            --revision-weight latest=100 --only-show-errors >/dev/null
-
-      - name: Verify existing site and new Xtream routes
+      - name: Verify standalone Xtream end to end
         shell: bash
         run: |
           set -euo pipefail
-          BASE='https://${{ steps.azure.outputs.fqdn }}'
-          for attempt in $(seq 1 36); do
+          BASE='${{ steps.deploy.outputs.base }}'
+          FQDN='${{ steps.deploy.outputs.fqdn }}'
+
+          for attempt in $(seq 1 48); do
             code="$(curl -sS --max-time 12 -o /tmp/health.json -w '%{http_code}' "$BASE/health" || true)"
-            [ "$code" = 200 ] && break
-            [ "$attempt" = 36 ] && { cat /tmp/health.json 2>/dev/null || true; exit 1; }
+            if [ "$code" = 200 ]; then
+              standalone="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.standalone===true))")"
+              smoke="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.ok))")"
+              stage="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.stage||''))")"
+              echo "Attempt $attempt: standalone=$standalone smoke=$smoke stage=$stage"
+              if [ "$standalone" = true ] && [ "$smoke" = true ]; then break; fi
+            fi
+            [ "$attempt" = 48 ] && { cat /tmp/health.json 2>/dev/null || true; exit 1; }
             sleep 5
           done
+
           cat /tmp/health.json
           grep -Fq '"mode":"azure-blob"' /tmp/health.json
-          for attempt in $(seq 1 24); do
-            curl -fsS --max-time 12 "$BASE/health" >/tmp/health.json
-            smoke="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.ok))")"
-            stage="$(node -e "const h=JSON.parse(require('fs').readFileSync('/tmp/health.json','utf8')); process.stdout.write(String(h.xtream?.smoke?.stage||''))")"
-            echo "Standalone Xtream self-test attempt $attempt: ok=$smoke stage=$stage"
-            if [ "$smoke" = "true" ]; then break; fi
-            if [ "$smoke" = "false" ]; then cat /tmp/health.json; exit 4; fi
-            [ "$attempt" = 24 ] && { cat /tmp/health.json; exit 5; }
-            sleep 5
-          done
-          curl -fsS --max-time 15 "$BASE/xtream" >/tmp/xtream.html
-          grep -Fq 'لوحة الإدارة' /tmp/xtream.html
-          curl -fsS --max-time 15 "$BASE/sources-admin" >/tmp/sources-admin.html
-          grep -Fq 'لوحة الإدارة' /tmp/sources-admin.html
-          curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/player-probe.json
-          grep -Fq '"auth":0' /tmp/player-probe.json
-          check_existing_route() {
-            local route="$1" code
-            code="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$BASE$route" || true)"
-            echo "$route=$code"
-            [ -n "$code" ] && [ "$code" -ge 200 ] && [ "$code" -lt 500 ]
-          }
-          check_existing_route /portal
-          check_existing_route /admin
-          check_existing_route /activation-admin
-          check_existing_route /downloads
-          echo "Activation admin: $BASE/admin"
-          echo "Xtream admin:     $BASE/xtream"
-          echo "Xtream host:  $BASE"
+
+          curl -fsS --max-time 15 "$BASE/admin" >/tmp/admin.html
+          grep -Fq 'لوحة الإدارة' /tmp/admin.html
+
+          curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/probe.json
+          grep -Fq '"auth":0' /tmp/probe.json
+
+          http_code="$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' "http://$FQDN/health" || true)"
+          echo "HTTP compatibility status: $http_code"
+
+          echo "Standalone Xtream admin: $BASE/admin"
+          echo "Standalone Xtream host:  $BASE"
+          echo "Legacy HTTP host:         http://$FQDN"
