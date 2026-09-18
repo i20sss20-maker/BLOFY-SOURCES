@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const API='/admin-api/';
 const PAGE_SIZE=60;
-let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',lastCreated=null;
+let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',passwordUser='',lastCreated=null;
 
 const titles={
   overview:['الرئيسية','BLOFY CONTROL CENTER'],
@@ -201,6 +201,29 @@ function openRenew(user){
 }
 
 function closeRenew(){$('renewModal').hidden=true;renewUser=''}
+function openPassword(user){
+  passwordUser=user;
+  const a=allSubscribers.find(x=>x.username===user);
+  $('passwordTitle').textContent=`تغيير كلمة سر ${a?.label||user}`;
+  $('passwordSubtitle').textContent=`Username: ${user} · اترك الحقل فارغًا لتوليد كلمة سر تلقائيًا.`;
+  $('newSubscriberPassword').value='';
+  $('passwordResult').hidden=true;
+  $('passwordModal').hidden=false;
+}
+function closePassword(){$('passwordModal').hidden=true;passwordUser='';$('newSubscriberPassword').value='';$('passwordResult').hidden=true}
+async function savePassword(){
+  if(!passwordUser)return;
+  try{
+    $('saveSubscriberPassword').disabled=true;
+    const j=await api('accounts/password',{method:'POST',body:JSON.stringify({username:passwordUser,password:$('newSubscriberPassword').value})});
+    $('passwordResult').hidden=false;
+    $('passwordResult').innerHTML=`<strong>تم تغيير كلمة السر ✓</strong><div class="created-grid"><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code></div><button id="copyPasswordResult" class="btn primary">نسخ بيانات الدخول</button>`;
+    $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
+    toast('تم تغيير كلمة السر','success');
+  }catch(e){
+    toast(e.message==='invalid_password'?'كلمة السر يجب أن تكون 8 أحرف أو أكثر':e.message,'error');
+  }finally{$('saveSubscriberPassword').disabled=false}
+}
 
 function renderSubscribers(){
   const rows=filteredSubscribers();
@@ -214,6 +237,7 @@ function renderSubscribers(){
       <td>${fmt(a.maxConnections||1)}</td>
       <td><div class="subscriber-actions">
         <button class="tiny-btn primary renew-user" data-user="${esc(a.username)}">تجديد</button>
+        ${a.bootstrap?'':`<button class="tiny-btn password-user" data-user="${esc(a.username)}">كلمة السر</button>`}
         <button class="tiny-btn toggle-user" data-user="${esc(a.username)}" data-enable="${a.enabled?'0':'1'}">${a.enabled?'تعطيل':'تفعيل'}</button>
         ${a.bootstrap?'':`<button class="tiny-btn danger delete-user" data-user="${esc(a.username)}">حذف</button>`}
       </div></td>
@@ -325,6 +349,7 @@ document.querySelectorAll('.summary-pill').forEach(b=>b.onclick=()=>{subscriberF
 
 $('subscriberRows').addEventListener('click',e=>{
   const r=e.target.closest('.renew-user');if(r)return openRenew(r.dataset.user);
+  const p=e.target.closest('.password-user');if(p)return openPassword(p.dataset.user);
   const t=e.target.closest('.toggle-user');if(t)return toggleSubscriber(t.dataset.user,t.dataset.enable==='1',t);
   const d=e.target.closest('.delete-user');if(d)return deleteSubscriber(d.dataset.user,d);
 });
@@ -332,6 +357,16 @@ $('subscriberRows').addEventListener('click',e=>{
 $('renewModal').addEventListener('click',e=>{if(e.target===$('renewModal'))closeRenew()});
 $('closeRenewModal').onclick=closeRenew;
 document.querySelectorAll('.renew-options button').forEach(b=>b.onclick=()=>renewUser&&renewSubscriber(renewUser,Number(b.dataset.days)));
+
+$('passwordModal').addEventListener('click',e=>{if(e.target===$('passwordModal'))closePassword()});
+$('closePasswordModal').onclick=closePassword;
+$('saveSubscriberPassword').onclick=savePassword;
+$('newSubscriberPassword').addEventListener('keydown',e=>{if(e.key==='Enter')savePassword()});
+$('passwordResult').addEventListener('click',e=>{
+  if(e.target.id!=='copyPasswordResult')return;
+  const user=$('serverUsername').value,password=$('serverPassword').value,host=String(state?.baseUrl||'').replace(/\/+$/,'');
+  copyText(`Host: ${host}\nUsername: ${user}\nPassword: ${password}`,'تم نسخ بيانات الدخول');
+});
 
 $('createdSubscriber').addEventListener('click',e=>{
   if(e.target.id!=='copyCreatedSubscriber'||!lastCreated)return;
