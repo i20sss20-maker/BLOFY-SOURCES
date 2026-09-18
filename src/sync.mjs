@@ -43,8 +43,11 @@ export async function syncAll(){
   current=(async()=>{
     const started=Date.now();
     const concurrency=Math.max(1,Math.min(6,Number(process.env.SYNC_PROVIDER_CONCURRENCY)||3));
-    const fetched=await fetchWithConcurrency(providerDefinitions,concurrency);
-    const log=fetched.map(applyResult);
+    const primary=providerDefinitions.filter(provider=>provider.deferred!==true);
+    const deferred=providerDefinitions.filter(provider=>provider.deferred===true);
+    const fetchedPrimary=await fetchWithConcurrency(primary,concurrency);
+    const fetchedDeferred=deferred.length?await fetchWithConcurrency(deferred,1):[];
+    const log=[...fetchedPrimary,...fetchedDeferred].map(applyResult);
     catalog.finishSync();
     await catalog.persist({remote:true});
     last=log;
