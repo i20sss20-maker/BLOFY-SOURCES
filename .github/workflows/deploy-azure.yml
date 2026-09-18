@@ -154,8 +154,6 @@ jobs:
           done
           cat /tmp/health.json
           grep -Fq '"mode":"azure-blob"' /tmp/health.json
-          curl -fsS --max-time 15 "$BASE/admin" >/tmp/admin.html
-          grep -Fq 'لوحة الإدارة' /tmp/admin.html
           curl -fsS --max-time 15 "$BASE/xtream" >/tmp/xtream.html
           grep -Fq 'لوحة الإدارة' /tmp/xtream.html
           curl -fsS --max-time 15 "$BASE/player_api.php?username=__probe__&password=__probe__" >/tmp/player-probe.json
@@ -167,8 +165,9 @@ jobs:
             [ -n "$code" ] && [ "$code" -ge 200 ] && [ "$code" -lt 500 ]
           }
           check_existing_route /portal
+          check_existing_route /admin
           check_existing_route /activation-admin
           check_existing_route /downloads
-          echo "Admin:        $BASE/admin"
-          echo "Xtream alias: $BASE/xtream"
+          echo "Activation admin: $BASE/admin"
+          echo "Xtream admin:     $BASE/xtream"
           echo "Xtream host:  $BASE"
