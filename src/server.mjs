@@ -40,6 +40,10 @@ function proxyTarget(requestUrl){
     const suffix=pathname.slice('/activation-admin'.length);
     pathname=`/admin${suffix}`;
     base=ACTIVATION_URL;
+  }else if(pathname==='/legacy-sources-admin'||pathname.startsWith('/legacy-sources-admin/')){
+    const suffix=pathname.slice('/legacy-sources-admin'.length);
+    pathname=`/sources-admin${suffix}`;
+    base=ACTIVATION_URL;
   }else if(pathname==='/releases-admin'||pathname.startsWith('/releases-admin/')){
     const suffix=pathname.slice('/releases-admin'.length);
     pathname=`/admin${suffix}`;
