@@ -83,7 +83,7 @@ const server=http.createServer(async(req,res)=>{try{
   if((req.method==='GET'||req.method==='POST')&&(pathname==='/player_api.php'||pathname==='/panel_api.php'))return await servePlayerApi(req,res,url);
   if(req.method==='GET'&&pathname==='/get.php')return await serveM3u(req,res,url);
   if(req.method==='GET'&&pathname==='/xmltv.php')return await serveXmltv(req,res,url);
-  if(req.method==='GET'&&await servePlayback(req,res,pathname))return;
+  if((req.method==='GET'||req.method==='HEAD')&&await servePlayback(req,res,pathname))return;
   return proxy(req,res);
 }catch(e){
   console.error('gateway request error:',e?.message||String(e));
