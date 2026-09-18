@@ -107,6 +107,7 @@ jobs:
               IA_SERIES_LIMIT=4500 \
               IA_ARABIC_LIMIT=4500 \
               IA_FEDFLIX_LIMIT=6000 \
+              IA_PRELINGER_LIMIT=5000 \
               IA_PAGE_CONCURRENCY=3 \
               WIKIMEDIA_LIMIT=2500 \
               WIKIMEDIA_ARABIC_LIMIT=1500 \
