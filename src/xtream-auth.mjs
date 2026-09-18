@@ -173,10 +173,13 @@ export async function listLegacyGatewayAccounts(){
   const data=await legacyAdminRequest('/api/v1/admin/xtream-gateway');
   return{serverUrl:data?.serverUrl||'',items:Array.isArray(data?.items)?data.items:[]};
 }
-export async function createLegacyGatewayAccount({label='',durationDays=365,maxConnections=1}={}){
+export async function createLegacyGatewayAccount({label='',durationDays=365,maxConnections=1,username='',password=''}={}){
   const days=Math.max(0,Math.min(3650,Number(durationDays)||0));
   const expiresAt=days?new Date(Date.now()+days*86400000).toISOString():null;
-  return legacyAdminRequest('/api/v1/admin/xtream-gateway/accounts',{method:'POST',body:{label,maxConnections,expiresAt}});
+  const body={label,maxConnections,expiresAt};
+  if(String(username||'').trim())body.username=String(username).trim();
+  if(String(password||'').trim())body.password=String(password).trim();
+  return legacyAdminRequest('/api/v1/admin/xtream-gateway/accounts',{method:'POST',body});
 }
 export async function resetLegacyGatewayPassword(id){
   return legacyAdminRequest(`/api/v1/admin/xtream-gateway/accounts/${encodeURIComponent(String(id))}/reset`,{method:'POST',body:{}});
