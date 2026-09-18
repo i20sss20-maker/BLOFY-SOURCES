@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { catalog } from './context.mjs';
 import { authenticateXtream } from './xtream-auth.mjs';
+import { acquirePlaybackConnection } from './connections.mjs';
 import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilterIter } from './xtream-format.mjs';
@@ -125,7 +126,7 @@ function proxyResponseHeaders(upstream){
   return headers;
 }
 
-async function proxyPlayback(req,res,target,item){
+async function proxyPlayback(req,res,target,item,lease=null){
   const controller=new AbortController();
   const abort=()=>controller.abort();
   req.once('aborted',abort);
@@ -161,6 +162,7 @@ async function proxyPlayback(req,res,target,item){
   }finally{
     req.off('aborted',abort);
     res.off('close',abort);
+    lease?.release?.();
   }
 }
 
@@ -177,7 +179,24 @@ export async function servePlayback(req,res,pathname){
     const target=new URL(resolved.url);
     if(!['http:','https:'].includes(target.protocol))throw new Error('unsupported_target_protocol');
     if(resolved.proxy===true){
-      await proxyPlayback(req,res,{...resolved,url:target.toString()},x);
+      let lease=null;
+      if(req.method!=='HEAD'){
+        lease=acquirePlaybackConnection(credentials,x);
+        if(!lease.ok){
+          return text(
+            res,
+            429,
+            'Connection limit reached',
+            'text/plain; charset=utf-8',
+            {
+              'retry-after':'2',
+              'x-blofy-active-connections':String(lease.current),
+              'x-blofy-max-connections':String(lease.max)
+            }
+          ),true;
+        }
+      }
+      await proxyPlayback(req,res,{...resolved,url:target.toString()},x,lease);
       return true;
     }
     res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
