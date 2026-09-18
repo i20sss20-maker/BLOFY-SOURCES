@@ -28,7 +28,7 @@ export function archiveEntertainmentProfile(doc) {
   if (ENTERTAINMENT_NEGATIVE.test(text)) return { accepted:false, category:'', reason:'non-entertainment' };
 
   const classification = classifyArchiveItem(doc);
-  if (classification.kind === 'series_episode' || ENTERTAINMENT_SERIES.test(text)) {
+  if (classification.kind === 'series_episode') {
     return { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' };
   }
   if (ENTERTAINMENT_ANIMATION.test(text)) {
@@ -39,6 +39,9 @@ export function archiveEntertainmentProfile(doc) {
   }
   if (ENTERTAINMENT_THEATRE.test(text)) {
     return { accepted:true, category:'عربي · مسرحيات عربية مفتوحة', reason:'theatre' };
+  }
+  if (ENTERTAINMENT_SERIES.test(text)) {
+    return { accepted:true, category:'عربي · مسلسلات عربية مفتوحة', reason:'series' };
   }
   if (ENTERTAINMENT_FILM.test(text)) {
     return { accepted:true, category:'عربي · أفلام عربية مفتوحة', reason:'film' };
