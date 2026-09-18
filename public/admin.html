@@ -43,6 +43,13 @@
       <button data-view="access"><span class="nav-icon">◈</span><span>اختبار السيرفر</span></button>
     </nav>
 
+    <div class="sidebar-links">
+      <span>روابط BLOFY</span>
+      <a href="/admin"><b>◉</b><div><strong>أجهزة BLOFY PLAYER</strong><small>التفعيل والأجهزة القديمة</small></div></a>
+      <a href="/portal"><b>↗</b><div><strong>بوابة العميل</strong><small>الدخول والتجديد</small></div></a>
+      <a href="/downloads"><b>↓</b><div><strong>التنزيلات</strong><small>الإصدارات والتحميل</small></div></a>
+    </div>
+
     <div class="sidebar-status">
       <div class="status-dot" id="sidebarStatusDot"></div>
       <div><small>حالة الخدمة</small><strong id="sidebarStatus">جاري الفحص…</strong></div>
@@ -229,6 +236,20 @@
       </div>
     </section>
   </main>
+</div>
+
+<div id="passwordModal" class="modal" hidden>
+  <div class="modal-card">
+    <button id="closePasswordModal" class="icon-btn modal-close">×</button>
+    <span class="kicker">كلمة سر المشترك</span>
+    <h3 id="passwordTitle">تغيير كلمة السر</h3>
+    <p id="passwordSubtitle" class="muted">اترك الحقل فارغًا لتوليد كلمة سر قوية تلقائيًا.</p>
+    <label class="modal-field">كلمة السر الجديدة
+      <input id="newSubscriberPassword" class="input ltr" type="text" placeholder="تلقائي إذا تركته فارغًا">
+    </label>
+    <button id="saveSubscriberPassword" class="btn primary full">حفظ كلمة السر</button>
+    <div id="passwordResult" class="created-box" hidden></div>
+  </div>
 </div>
 
 <div id="renewModal" class="modal" hidden>
