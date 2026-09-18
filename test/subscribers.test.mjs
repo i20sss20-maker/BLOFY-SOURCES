@@ -29,8 +29,14 @@ test('multiple subscribers can expire, renew, disable and authenticate independe
       if(mod.verifyAccount('seconduser','SecondPass-123'))process.exit(15);
       await mod.setAccountEnabled('seconduser',true);
       if(!mod.verifyAccount('seconduser','SecondPass-123'))process.exit(16);
+      const changed=await mod.resetAccountPassword('seconduser','NewSecondPass-456');
+      if(changed.password!=='NewSecondPass-456')process.exit(17);
+      if(mod.verifyAccount('seconduser','SecondPass-123'))process.exit(18);
+      if(!mod.verifyAccount('seconduser','NewSecondPass-456'))process.exit(19);
+      const generated=await mod.resetAccountPassword('seconduser','');
+      if(!generated.password||generated.password.length<8||!mod.verifyAccount('seconduser',generated.password))process.exit(20);
       await mod.deleteAccount('seconduser');
-      if(mod.listAccounts().length!==1)process.exit(17);
+      if(mod.listAccounts().length!==1)process.exit(21);
     `;
     const result=spawnSync(process.execPath,['--input-type=module','-e',script],{cwd:repoRoot,env:{...process.env,DATA_DIR:dataDir,SESSION_SECRET:'b'.repeat(64),XTREAM_USERNAME:'',XTREAM_PASSWORD:''},encoding:'utf8'});
     assert.equal(result.status,0,result.stderr||result.stdout||`child exited ${result.status}`);
