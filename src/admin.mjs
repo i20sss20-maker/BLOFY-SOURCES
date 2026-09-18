@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
-import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,verifyAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
+import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
+import { authenticateXtream } from './xtream-auth.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
@@ -68,9 +69,9 @@ export async function adminApi(req,res,url){
     try{const account=await resetAccount(),host=xtreamBaseUrl(req);return json(res,200,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`,xmltv:`${host}/xmltv.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/account/test'&&req.method==='POST'){
-    const body=await readJsonBody(req).catch(()=>({})),username=String(body.username||'').trim(),password=String(body.password||''),auth=verifyAccount(username,password),host=xtreamBaseUrl(req),stats=catalog.stats();
+    const body=await readJsonBody(req).catch(()=>({})),username=String(body.username||'').trim(),password=String(body.password||''),auth=await authenticateXtream(username,password),host=xtreamBaseUrl(req),stats=catalog.stats();
     if(!auth)return json(res,200,{ok:true,auth:false,host,error:'invalid_or_expired_xtream_credentials'});
-    return json(res,200,{ok:true,auth:true,host,username,stats:{live:stats.live,movies:stats.movies,series:stats.series,episodes:stats.episodes,totalItems:stats.totalItems},playerApi:`${host}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,m3u:`${host}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,xmltv:`${host}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`});
+    return json(res,200,{ok:true,auth:true,authSource:auth.source,host,username,stats:{live:stats.live,movies:stats.movies,series:stats.series,episodes:stats.episodes,totalItems:stats.totalItems},playerApi:`${host}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,m3u:`${host}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,xmltv:`${host}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`});
   }
   if(url.pathname==='/api/admin/catalog'&&req.method==='GET'){
     const kind=url.searchParams.get('kind')||'',source=url.searchParams.get('source')||'',arabic=['1','true','yes'].includes(String(url.searchParams.get('arabic')||'').toLowerCase()),q=String(url.searchParams.get('q')||'').trim().toLowerCase(),limit=Math.min(200,Math.max(1,Number(url.searchParams.get('limit')||60))),offset=Math.max(0,Number(url.searchParams.get('offset')||0));
