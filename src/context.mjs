@@ -55,6 +55,40 @@ export async function createAccount({username='',password='',durationDays=30,max
   const account=normalizeAccount({username:finalUsername,salt,hash:hash(finalPassword,salt),createdAt:new Date(now).toISOString(),expiresAt:days?new Date(now+days*86400000).toISOString():null,enabled:true,maxConnections,label,note});
   state.accounts.push(account);await saveState();return{...publicAccount(account),password:finalPassword};
 }
+export async function createAccountsBulk({count=20,durationDays=30,maxConnections=1,labelPrefix='BLOFYSAT'}={}){
+  const size=Number(count),days=Number(durationDays),connections=Number(maxConnections);
+  const prefix=String(labelPrefix??'BLOFYSAT').trim();
+  if(!Number.isInteger(size)||size<1||size>100)throw new Error('invalid_bulk_count');
+  if(!Number.isInteger(days)||days<0||days>3650)throw new Error('invalid_bulk_duration');
+  if(!Number.isInteger(connections)||connections<1||connections>20)throw new Error('invalid_bulk_connections');
+  if(!prefix||prefix.length>80||/[\r\n\t]/.test(prefix)||/^[=+@-]/.test(prefix))throw new Error('invalid_bulk_label');
+  const existing=new Set(state.accounts.map(a=>a.username));
+  const now=Date.now(),batch=[],result=[];
+  for(let i=0;i<size;i++){
+    let username='';
+    for(let attempt=0;attempt<10;attempt++){
+      const candidate=random('blofy',7).toLowerCase();
+      if(!existing.has(candidate)&&candidate!==BOOTSTRAP_USERNAME){username=candidate;break}
+    }
+    if(!username)throw new Error('bulk_username_generation_failed');
+    existing.add(username);
+    const password=random('',18),salt=crypto.randomBytes(16).toString('hex');
+    const row=normalizeAccount({
+      username,salt,hash:hash(password,salt),
+      createdAt:new Date(now).toISOString(),
+      expiresAt:days?new Date(now+days*86400000).toISOString():null,
+      enabled:true,maxConnections:connections,
+      label:prefix+' '+String(i+1).padStart(3,'0')
+    });
+    batch.push(row);
+    result.push({...publicAccount(row),password});
+  }
+  // Persist once for the whole batch. The stored accounts contain password hashes only.
+  state.accounts.push(...batch);
+  await saveState();
+  return result;
+}
+
 export async function resetAccount(){return createAccount({durationDays:365,label:'Generated account'})}
 export async function renewAccount(username,days=30){const a=state.accounts.find(x=>x.username===String(username));if(!a)throw new Error('account_not_found');const add=Math.max(1,Math.min(3650,Number(days)||30))*86400000,base=a.expiresAt&&new Date(a.expiresAt).getTime()>Date.now()?new Date(a.expiresAt).getTime():Date.now();a.expiresAt=new Date(base+add).toISOString();a.enabled=true;a.lastRenewedAt=new Date().toISOString();await saveState();return publicAccount(a)}
 export async function setAccountEnabled(username,enabled){const a=state.accounts.find(x=>x.username===String(username));if(!a)throw new Error('account_not_found');a.enabled=Boolean(enabled);await saveState();return publicAccount(a)}
