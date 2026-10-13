@@ -127,18 +127,38 @@ function proxyResponseHeaders(upstream){
   return headers;
 }
 
+async function fetchOpenLicensedMedia(url,options,item){
+  let current=url;
+  for(let hop=0;hop<5;hop++){
+    const response=await fetch(current,{...options,redirect:'manual'});
+    if(![301,302,303,307,308].includes(response.status))return response;
+    const location=response.headers.get('location');
+    if(!location)throw new Error('open_media_redirect_missing');
+    const next=new URL(location,current);
+    const allowedHost=item.source==='wikimedia'
+      ? next.hostname==='upload.wikimedia.org'
+      : item.source==='internet-archive'&&(next.hostname==='archive.org'||next.hostname.endsWith('.archive.org'));
+    if(next.protocol!=='https:'||!allowedHost||next.username||next.password)throw new Error('open_media_redirect_blocked');
+    await response.body?.cancel();
+    current=next.toString();
+  }
+  throw new Error('open_media_redirect_limit');
+}
+
 async function proxyPlayback(req,res,target,item,lease=null){
   const controller=new AbortController();
   const abort=()=>controller.abort();
   req.once('aborted',abort);
   res.once('close',abort);
   try{
-    const upstream=await fetch(target.url,{
+    const options={
       method:req.method==='HEAD'?'HEAD':'GET',
-      redirect:'follow',
       headers:proxyRequestHeaders(req),
       signal:controller.signal
-    });
+    };
+    const upstream=target.openLicensed
+      ? await fetchOpenLicensedMedia(target.url,options,item)
+      : await fetch(target.url,{...options,redirect:'follow'});
     const ok=upstream.ok||upstream.status===206||upstream.status===304;
     if(!ok){
       const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
@@ -201,7 +221,7 @@ export async function servePlayback(req,res,pathname){
           ),true;
         }
       }
-      await proxyPlayback(req,res,{...resolved,url:target.toString()},x,lease);
+      await proxyPlayback(req,res,{...resolved,url:target.toString(),openLicensed:openLicensedProxy},x,lease);
       return true;
     }
     res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
