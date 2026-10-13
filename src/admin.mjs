@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
-import { blofysatSelection, catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
+import { blofysatSelection, catalog,listAccounts,createAccount,createAccountsBulk,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
 import { authenticateXtream } from './xtream-auth.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
@@ -59,6 +59,20 @@ export async function adminApi(req,res,url){
   if(url.pathname==='/api/admin/accounts'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));
     try{const account=await createAccount({username:body.username,password:body.password,durationDays:body.durationDays,maxConnections:body.maxConnections,label:body.label,note:body.note});const host=xtreamBaseUrl(req);return json(res,201,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+  }
+  if(url.pathname==='/api/admin/accounts/bulk'&&req.method==='POST'){
+    try{
+      const body=await readJsonBody(req);
+      const accounts=await createAccountsBulk({
+        count:body.count,durationDays:body.durationDays,
+        maxConnections:body.maxConnections,labelPrefix:body.labelPrefix
+      });
+      const host=xtreamBaseUrl(req);
+      return json(res,201,{ok:true,host,count:accounts.length,accounts:accounts.map(a=>({
+        ...a,
+        m3u:host+'/get.php?username='+encodeURIComponent(a.username)+'&password='+encodeURIComponent(a.password)+'&type=m3u_plus&output=ts'
+      }))});
+    }catch(error){return json(res,400,{ok:false,error:String(error?.message||error)})}
   }
   if(url.pathname==='/api/admin/accounts/renew'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));try{return json(res,200,{ok:true,account:await renewAccount(body.username,body.days)})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}

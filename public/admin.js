@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id);
 const API='/admin-api/';
 const PAGE_SIZE=60;
 let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',passwordUser='',lastCreated=null;
+let bulkDownloadUrl=null;
 
 const titles={
   overview:['الرئيسية','BLOFY CONTROL CENTER'],
@@ -318,6 +319,52 @@ async function createSubscriber(){
   }finally{$('createSubscriberBtn').disabled=false}
 }
 
+function escapeBulkCsvCell(value){
+  const s=String(value??'');
+  return '"'+s.replace(/"/g,'""')+'"';
+}
+
+async function createBulkSubscribers(){
+  const button=$('bulkCreateBtn'),notice=$('bulkCreatedNotice');
+  const count=Number($('bulkCount').value);
+  if(!confirm('إنشاء '+count+' حساب Xtream مستقل؟ سيتم حفظ جميع الحسابات على السيرفر.'))return;
+  try{
+    button.disabled=true;
+    button.textContent='جارٍ إنشاء الحسابات…';
+    const j=await api('accounts/bulk',{
+      method:'POST',
+      body:JSON.stringify({
+        count,
+        durationDays:Number($('bulkDuration').value),
+        maxConnections:Number($('bulkConnections').value),
+        labelPrefix:$('bulkLabelPrefix').value.trim()
+      })
+    });
+    const rows=[['host','username','password','expires_at','max_connections','label','m3u']];
+    for(const account of j.accounts||[]){
+      rows.push([j.host,account.username,account.password,account.expiresAt||'',account.maxConnections,account.label,account.m3u]);
+    }
+    const csv='\uFEFF'+rows.map(row=>row.map(escapeBulkCsvCell).join(',')).join('\r\n');
+    if(bulkDownloadUrl)URL.revokeObjectURL(bulkDownloadUrl);
+    bulkDownloadUrl=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    const filename='blofysat-users-'+new Date().toISOString().slice(0,10)+'.csv';
+    notice.hidden=false;
+    notice.innerHTML='<strong>تم إنشاء '+fmt(j.count)+' حسابًا بنجاح ✓</strong><p>حمّل ملف الدخول الآن. يحتوي على Host وUsername وPassword ورابط M3U لكل حساب. لا ترسله بشكل علني.</p>';
+    const link=document.createElement('a');
+    link.className='btn primary';link.textContent='تنزيل ملف حسابات Xtream (CSV)';
+    link.href=bulkDownloadUrl;link.download=filename;
+    notice.appendChild(link);
+    link.click();
+    toast('تم إنشاء '+fmt(j.count)+' حسابًا. احتفظ بالملف في مكان آمن.','success');
+    await Promise.all([loadSubscribers(),refresh()]);
+  }catch(e){
+    toast(e.message==='invalid_bulk_count'?'العدد المسموح من 1 إلى 100':e.message,'error');
+  }finally{
+    button.disabled=false;
+    button.textContent='إنشاء اليوزرات وتنزيل ملفها';
+  }
+}
+
 async function renewSubscriber(user,days){
   try{
     await api('accounts/renew',{method:'POST',body:JSON.stringify({username:user,days})});
@@ -385,6 +432,7 @@ $('attentionSubscribers').addEventListener('click',e=>{const b=e.target.closest(
 $('openCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true;$('newLabel').focus()};
 $('closeCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=true};
 $('createSubscriberBtn').onclick=createSubscriber;
+$('bulkCreateBtn').onclick=createBulkSubscribers;
 
 $('subscriberSearch').addEventListener('input',renderSubscribers);
 $('subscriberStatus').onchange=()=>{subscriberFilter='';document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x.dataset.status===$('subscriberStatus').value));renderSubscribers()};
