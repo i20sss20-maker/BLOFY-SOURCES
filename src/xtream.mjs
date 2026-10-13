@@ -6,6 +6,7 @@ import { acquirePlaybackConnection } from './connections.mjs';
 import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilterIter } from './xtream-format.mjs';
+import { openLicensedMediaProxyAllowed } from './open-licensed-playback.mjs';
 
 async function mergedRequestUrl(req,url){
   if(req.method!=='POST')return url;
@@ -126,18 +127,38 @@ function proxyResponseHeaders(upstream){
   return headers;
 }
 
+async function fetchOpenLicensedMedia(url,options,item){
+  let current=url;
+  for(let hop=0;hop<5;hop++){
+    const response=await fetch(current,{...options,redirect:'manual'});
+    if(![301,302,303,307,308].includes(response.status))return response;
+    const location=response.headers.get('location');
+    if(!location)throw new Error('open_media_redirect_missing');
+    const next=new URL(location,current);
+    const allowedHost=item.source==='wikimedia'
+      ? next.hostname==='upload.wikimedia.org'
+      : item.source==='internet-archive'&&(next.hostname==='archive.org'||next.hostname.endsWith('.archive.org'));
+    if(next.protocol!=='https:'||!allowedHost||next.username||next.password)throw new Error('open_media_redirect_blocked');
+    await response.body?.cancel();
+    current=next.toString();
+  }
+  throw new Error('open_media_redirect_limit');
+}
+
 async function proxyPlayback(req,res,target,item,lease=null){
   const controller=new AbortController();
   const abort=()=>controller.abort();
   req.once('aborted',abort);
   res.once('close',abort);
   try{
-    const upstream=await fetch(target.url,{
+    const options={
       method:req.method==='HEAD'?'HEAD':'GET',
-      redirect:'follow',
       headers:proxyRequestHeaders(req),
       signal:controller.signal
-    });
+    };
+    const upstream=target.openLicensed
+      ? await fetchOpenLicensedMedia(target.url,options,item)
+      : await fetch(target.url,{...options,redirect:'follow'});
     const ok=upstream.ok||upstream.status===206||upstream.status===304;
     if(!ok){
       const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
@@ -178,7 +199,11 @@ export async function servePlayback(req,res,pathname){
     const resolved=await resolveStream(x);
     const target=new URL(resolved.url);
     if(!['http:','https:'].includes(target.protocol))throw new Error('unsupported_target_protocol');
-    if(resolved.proxy===true){
+    const openLicensedProxy=openLicensedMediaProxyAllowed(
+      x,target.toString(),
+      String(process.env.XTREAM_PROXY_OPEN_LICENSED||'').trim().toLowerCase()==='true'
+    );
+    if(resolved.proxy===true||openLicensedProxy){
       let lease=null;
       if(req.method!=='HEAD'){
         lease=acquirePlaybackConnection(credentials,x);
@@ -196,7 +221,7 @@ export async function servePlayback(req,res,pathname){
           ),true;
         }
       }
-      await proxyPlayback(req,res,{...resolved,url:target.toString()},x,lease);
+      await proxyPlayback(req,res,{...resolved,url:target.toString(),openLicensed:openLicensedProxy},x,lease);
       return true;
     }
     res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
