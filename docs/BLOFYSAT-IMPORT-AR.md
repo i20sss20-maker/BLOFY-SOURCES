@@ -28,3 +28,39 @@ copy passwords to source control or to the CSV.
 ## Local tests
 
 `node --test test/blofysat-selection.test.mjs`
+
+## Licensed Xtream selection for BLOFYSAT
+
+For an **already authorized** Xtream partner only, the authorized partner manifest
+supports `selectedCatalog: "BLOFYSAT"`. This opt-in limits media from that
+feed by the exact upstream `stream_id` (live/movies) or `series_id` (series)
+saved in the private CSV. Missing IDs are silently excluded from output.
+
+Example feed inside a rights-checked authorized partner manifest:
+
+```json
+{
+  "type": "xtream",
+  "secretRef": "LICENSED_PARTNER",
+  "language": "ar",
+  "selectedCatalog": "BLOFYSAT",
+  "include": ["live", "vod", "series"],
+  "maxSeries": 100
+}
+```
+
+This does **not** obtain or grant content rights. The existing
+`ENABLE_AUTHORIZED_PARTNERS=true`,
+`AUTHORIZED_PARTNER_RIGHTS_CONFIRMED=true` and partner manifest rights
+checks are required, and the upstream access credentials belong in sealed
+runtime environment variables only. Never store passwords in GitHub,
+metadata CSV, or the manifest.
+
+**Scalability note:** The selected series list filters *before* the series
+information lookup limit. `maxSeries` defaults to the configured series
+limit and is capped at 20,000 when selection is enabled. Importing 15,815
+series requires potentially many upstream metadata requests and many more
+episodes than series IDs; it must be tested and staged in manageable batches.
+A successfully imported 54,665-row CSV is metadata, not 54,665 verified
+playable items. The public Xtream catalog will only include the actual
+licensed rows that were successfully synced.

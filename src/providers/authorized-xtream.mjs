@@ -1,4 +1,5 @@
 import { fetchJson, envBool, envInt } from './common.mjs';
+import { blofysatSelection } from '../context.mjs';
 
 const SECRET_REF_RE=/^[A-Z0-9][A-Z0-9_]{1,63}$/;
 
@@ -192,7 +193,8 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   allowHttp=false,
   maxItems=50000,
   seriesLimit=envInt('AUTHORIZED_XTREAM_SERIES_LIMIT',500,1,5000),
-  seriesConcurrency=envInt('AUTHORIZED_XTREAM_SERIES_CONCURRENCY',4,1,8)
+  seriesConcurrency=envInt('AUTHORIZED_XTREAM_SERIES_CONCURRENCY',4,1,8),
+  selection=blofysatSelection
 }={}){
   requireRightsContext(rights,profile);
   const itemLimit=Math.max(0,Math.min(100000,Number(maxItems)||0));
@@ -203,6 +205,11 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   const root=await xtreamJson(credentials);
   if(!isAuthenticated(root))throw new Error('partner_xtream_auth_failed');
 
+  const selectedCatalog=String(feed.selectedCatalog||feed.selection||'').trim().toUpperCase();
+  if(selectedCatalog&&selectedCatalog!=='BLOFYSAT')throw new Error('partner_xtream_selection_unknown');
+  const selectedOnly=selectedCatalog==='BLOFYSAT';
+  if(selectedOnly&&!selection?.summary()?.imported)throw new Error('blofysat_selection_not_imported');
+  const includeSelected=(type,id)=>!selectedOnly||selection.contains(type,id);
   const kinds=allowedKinds(feed);
   const rows=[];
 
@@ -221,7 +228,7 @@ export async function syncAuthorizedXtreamFeed(feed={},{
     for(const raw of Array.isArray(list)?list:[]){
       if(rows.length>=itemLimit)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
-      if(!id||!title)continue;
+      if(!id||!title||!includeSelected('Live',id))continue;
       const category=localizedCategory(liveCategories.get(String(raw?.category_id??''))||feed.liveCategory,'قنوات شريك',profile);
       rows.push(commonItem({
         kind:'live',title,description:raw?.description||'',icon:raw?.stream_icon||raw?.icon||'',category,feed,rights,profile,allowHttp,
@@ -236,7 +243,7 @@ export async function syncAuthorizedXtreamFeed(feed={},{
     for(const raw of Array.isArray(list)?list:[]){
       if(rows.length>=itemLimit)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
-      if(!id||!title)continue;
+      if(!id||!title||!includeSelected('Movies',id))continue;
       const category=localizedCategory(vodCategories.get(String(raw?.category_id??''))||feed.vodCategory,'أفلام شريك',profile);
       const extension=sanitizeExtension(raw?.container_extension||feed.vodExtension||feed.vod_extension||'mp4','mp4');
       rows.push(commonItem({
@@ -249,8 +256,11 @@ export async function syncAuthorizedXtreamFeed(feed={},{
 
   if(kinds.has('series')&&rows.length<itemLimit){
     const list=await xtreamJson(credentials,'get_series');
-    const maxSeries=Math.max(1,Math.min(5000,Number(feed.maxSeries||feed.max_series)||seriesLimit));
-    const selected=(Array.isArray(list)?list:[]).slice(0,maxSeries);
+    const maxSeries=Math.max(1,Math.min(selectedOnly?20000:5000,Number(feed.maxSeries||feed.max_series)||seriesLimit));
+    const available=Array.isArray(list)?list:[];
+    // Filter by the original provider's series IDs BEFORE taking the hydration limit.
+    const eligible=selectedOnly?available.filter(row=>includeSelected('Series',row?.series_id??row?.id)):available;
+    const selected=eligible.slice(0,maxSeries);
     const episodeGroups=await mapLimit(selected,seriesConcurrency,async raw=>{
       const seriesId=String(raw?.series_id??raw?.id??'').trim(),seriesTitle=String(raw?.name||raw?.title||'').trim();
       if(!seriesId||!seriesTitle)return[];
