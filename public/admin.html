@@ -170,6 +170,27 @@
         <div id="createdSubscriber" class="created-box" hidden></div>
       </article>
 
+      <article class="panel create-panel" id="bulkSubscriberCard">
+        <div class="panel-head">
+          <div><span class="kicker">BULK XTREAM USERS</span><h3>إنشاء يوزرات بالجملة</h3><p class="muted">أنشئ حتى 100 حساب مستقل بضغطة واحدة. لكل مستخدم كلمة مرور قوية مختلفة.</p></div>
+        </div>
+        <div class="form-grid">
+          <label>عدد اليوزرات
+            <select id="bulkCount"><option value="10">10 حسابات</option><option value="20" selected>20 حسابًا</option><option value="50">50 حسابًا</option><option value="100">100 حساب</option></select>
+          </label>
+          <label>اسم الدفعة<input id="bulkLabelPrefix" class="input" maxlength="80" value="BLOFYSAT" placeholder="BLOFYSAT"></label>
+          <label>مدة الاشتراك
+            <select id="bulkDuration"><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option><option value="90">90 يومًا</option><option value="180">6 أشهر</option><option value="365">سنة</option></select>
+          </label>
+          <label>حد الاتصالات لكل حساب
+            <select id="bulkConnections"><option value="1" selected>اتصال واحد</option><option value="2">اتصالان</option><option value="3">3 اتصالات</option><option value="5">5 اتصالات</option></select>
+          </label>
+        </div>
+        <p class="security-note">حمّل ملف CSV بعد الإنشاء واحفظه في مكان آمن. كلمات المرور لا يمكن عرضها لاحقًا؛ عند فقدانها يمكنك إعادة تعيينها. هذه الحسابات تستخدم مكتبة التشغيل المتاحة حاليًا، وليست ضمانًا لتشغيل فهرس 54,665 عنوانًا.</p>
+        <div class="create-actions"><button id="bulkCreateBtn" class="btn primary">إنشاء اليوزرات وتنزيل ملفها</button></div>
+        <div id="bulkCreatedNotice" class="created-box" hidden></div>
+      </article>
+
       <article class="panel table-panel">
         <div class="table-toolbar">
           <div class="search-box"><span>⌕</span><input id="subscriberSearch" class="input" placeholder="ابحث باسم العميل أو Username"></div>
