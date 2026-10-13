@@ -163,6 +163,29 @@ function rowHtml(x){
   </tr>`;
 }
 
+async function loadBlofysatSelection(){
+  try{
+    const j=await api('blofysat'),s=j.selection;
+    $('blofysatImportStatus').textContent=s.imported
+      ? 'تم الحفظ: '+fmt(s.total)+' عنوانًا (قنوات '+fmt(s.counts.live)+'، أفلام '+fmt(s.counts.vod)+'، مسلسلات '+fmt(s.counts.series)+'). فهرس فقط، وليس مصدر تشغيل.'
+      : 'لم يتم تحميل قائمة BLOFYSAT بعد.';
+  }catch(e){$('blofysatImportStatus').textContent='تعذر قراءة الفهرس: '+e.message}
+}
+$('blofysatUpload').addEventListener('click',async()=>{
+  const file=$('blofysatCsvInput').files?.[0],button=$('blofysatUpload');
+  if(!file){toast('اختر ملف CSV بالمعرفات أولًا','error');return}
+  if(file.size>16*1024*1024){toast('ملف CSV أكبر من الحد المسموح','error');return}
+  if(!window.confirm('سيتم استبدال فهرس BLOFYSAT المحفوظ دون إضافة بث للمشغلات. هل تكمل؟'))return;
+  button.disabled=true;
+  $('blofysatImportStatus').textContent='جاري حفظ فهرس الباقة الخاص…';
+  try{
+    const j=await api('blofysat/import',{method:'POST',headers:{'content-type':'text/csv; charset=utf-8'},body:await file.text()});
+    toast('تم حفظ '+fmt(j.selection.total)+' عنوانًا في فهرس BLOFYSAT','success');
+    await loadBlofysatSelection();
+  }catch(e){toast(e.message,'error');$('blofysatImportStatus').textContent='فشل الاستيراد: '+e.message}
+  finally{button.disabled=false}
+});
+
 async function loadCatalog(reset=false){
   try{
     if(reset)catalogOffset=0;
@@ -422,4 +445,5 @@ $('arabicSearchBtn').onclick=()=>loadArabic(true);$('arabicSearch').addEventList
 $('arabicPrev').onclick=()=>{arabicOffset=Math.max(0,arabicOffset-PAGE_SIZE);loadArabic()};$('arabicNext').onclick=()=>{arabicOffset+=PAGE_SIZE;loadArabic()};
 $('arabicFilters').addEventListener('click',e=>{const b=e.target.closest('[data-kind]');if(!b)return;arabicKind=b.dataset.kind;document.querySelectorAll('#arabicFilters [data-kind]').forEach(x=>x.classList.toggle('active',x===b));loadArabic(true)});
 
+loadBlofysatSelection();
 Promise.all([refresh(),loadSubscribers()]).then(([s])=>{if(s.syncing)waitForSync().catch(()=>{})}).catch(()=>{});
