@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { CatalogStore } from './catalog.mjs';
+import { BlofysatSelection } from './blofysat-selection.mjs';
 import { DATA_DIR, SESSION_SECRET } from './config.mjs';
 import { baseUrl } from './http.mjs';
 import { loadRemoteJson, saveRemoteJson } from './storage.mjs';
@@ -12,6 +13,7 @@ const BOOTSTRAP_PASSWORD = String(process.env.XTREAM_PASSWORD || '').trim();
 const BOOTSTRAP_CREATED_AT = new Date().toISOString();
 
 export const catalog = await new CatalogStore({ dataDir: DATA_DIR }).init();
+export const blofysatSelection = await new BlofysatSelection({ dataDir: DATA_DIR }).init();
 let state = migrateState(await loadState());
 
 async function loadState(){

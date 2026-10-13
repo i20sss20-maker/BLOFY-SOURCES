@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { ROOT, ADMIN_PASSWORD } from './config.mjs';
-import { catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
+import { blofysatSelection, catalog,listAccounts,createAccount,resetAccount,renewAccount,setAccountEnabled,updateAccount,resetAccountPassword,deleteAccount,createAdminSession,isAdmin,clearAdminSession } from './context.mjs';
 import { authenticateXtream } from './xtream-auth.mjs';
 import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
@@ -25,6 +25,14 @@ export async function serveAdminAsset(res,pathname){
   const body=await readFile(path.join(ROOT,'public',file.slice(1)),'utf8');
   text(res,200,body,contentTypes[path.extname(file)]||'text/plain; charset=utf-8',file.endsWith('.html')?{'content-security-policy':"default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",'x-frame-options':'DENY','referrer-policy':'no-referrer'}:{});return true;
 }
+async function readSelectionCsv(req) {
+  const mime=String(req.headers['content-type']||'').toLowerCase().split(';')[0].trim();
+  if(!['text/csv','application/octet-stream','application/vnd.ms-excel'].includes(mime))throw new Error('requires_csv');
+  const chunks=[];let size=0;
+  for await(const chunk of req){size+=chunk.length;if(size>16*1024*1024)throw new Error('csv_too_large');chunks.push(chunk)}
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 export async function adminApi(req,res,url){
   if(url.pathname==='/api/admin/login'&&req.method==='POST'){
     pruneLoginAttempts();const key=loginKey(req),attempt=loginState(key);
@@ -33,6 +41,11 @@ export async function adminApi(req,res,url){
     loginAttempts.delete(key);createAdminSession(res,req);return json(res,200,{ok:true});
   }
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
+  if(url.pathname==='/api/admin/blofysat'&&req.method==='GET')return json(res,200,{ok:true,selection:blofysatSelection.summary()});
+  if(url.pathname==='/api/admin/blofysat/import'&&req.method==='POST'){
+    try{return json(res,200,{ok:true,selection:await blofysatSelection.importCsv(await readSelectionCsv(req))})}
+    catch(error){return json(res,400,{ok:false,error:String(error?.message||error)})}
+  }
   if(url.pathname==='/api/admin/logout'&&req.method==='POST'){clearAdminSession(res);return json(res,200,{ok:true})}
   if(url.pathname==='/api/admin/status'&&req.method==='GET'){
     const sync=syncState(),accounts=withConnectionState(listAccounts()),perSource={};const all=[...catalog.items.values()],arabicRows=all.filter(isArabicItem),arabic=catalogCounts(arabicRows);

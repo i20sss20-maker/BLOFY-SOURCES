@@ -212,6 +212,16 @@
     </section>
 
     <section id="view-catalog" class="view">
+      <article class="panel" id="blofysatSelectionPanel">
+        <div class="panel-head"><div><span class="kicker">BLOFYSAT · PRIVATE CATALOG</span><h3>استيراد قائمة BLOFYSAT</h3></div></div>
+        <p>ارفع ملف ARABIC-AND-SUBTITLED-WITH-IDS.csv. يستورد الموقع أسماء المحتوى ومعرّفاته في فهرس خاص للإدارة فقط، دون نشرها للمشغلات أو ربط بث غير مرخص.</p>
+        <div class="table-toolbar">
+          <input id="blofysatCsvInput" class="input" type="file" accept=".csv,text/csv" aria-label="ملف BLOFYSAT CSV">
+          <button id="blofysatUpload" class="btn primary" type="button">حفظ فهرس BLOFYSAT</button>
+        </div>
+        <p id="blofysatImportStatus" role="status">جارٍ فحص حالة الفهرس…</p>
+        <small>وجود عنوان في الفهرس لا يثبت توفر تشغيله أو الترخيص. لا ترفع ملف كلمات المرور.</small>
+      </article>
       <div class="section-title"><div><span class="kicker">CATALOG</span><h2>المكتبة الكاملة</h2><p>ابحث وفلتر بين عشرات الآلاف من العناصر بدون تحميلها كلها.</p></div></div>
       <article class="panel table-panel">
         <div class="table-toolbar catalog-toolbar">
