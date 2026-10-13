@@ -6,6 +6,7 @@ import { acquirePlaybackConnection } from './connections.mjs';
 import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilterIter } from './xtream-format.mjs';
+import { openLicensedMediaProxyAllowed } from './open-licensed-playback.mjs';
 
 async function mergedRequestUrl(req,url){
   if(req.method!=='POST')return url;
@@ -178,7 +179,11 @@ export async function servePlayback(req,res,pathname){
     const resolved=await resolveStream(x);
     const target=new URL(resolved.url);
     if(!['http:','https:'].includes(target.protocol))throw new Error('unsupported_target_protocol');
-    if(resolved.proxy===true){
+    const openLicensedProxy=openLicensedMediaProxyAllowed(
+      x,target.toString(),
+      String(process.env.XTREAM_PROXY_OPEN_LICENSED||'').trim().toLowerCase()==='true'
+    );
+    if(resolved.proxy===true||openLicensedProxy){
       let lease=null;
       if(req.method!=='HEAD'){
         lease=acquirePlaybackConnection(credentials,x);
