@@ -8,6 +8,7 @@ import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
 import { activeConnectionCount } from './connections.mjs';
+import { restreamOverview } from './restream-dashboard.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const LOGIN_WINDOW_MS=10*60_000,LOGIN_MAX_ATTEMPTS=8,loginAttempts=new Map();
