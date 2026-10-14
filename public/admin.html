@@ -40,6 +40,7 @@
       <button data-view="subscribers"><span class="nav-icon">◎</span><span>المشتركون</span><b id="navExpired" class="nav-badge" hidden>0</b></button>
       <button data-view="arabic"><span class="nav-icon">ع</span><span>المحتوى العربي</span></button>
       <button data-view="catalog"><span class="nav-icon">▦</span><span>المكتبة</span></button>
+      <button data-view="restream"><span class="nav-icon">↗</span><span>مركز إعادة البث</span></button>
       <button data-view="access"><span class="nav-icon">◈</span><span>اختبار السيرفر</span></button>
     </nav>
 
@@ -132,6 +133,60 @@
             <summary>تفاصيل المصادر</summary>
             <div id="sourceList" class="source-list"></div>
           </details>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-restream" class="view">
+      <div class="section-title">
+        <div><span class="kicker">BLOFYSAT · RESTREAM CONTROL</span><h2>مركز إدارة إعادة البث</h2><p>حالة المصادر المفتوحة، قابلية إعادة التوزيع، الجلسات النشطة والمزامنة من مكان واحد.</p></div>
+        <button id="restreamRefreshBtn" class="btn primary">تحديث حالة البث</button>
+      </div>
+      <article class="panel restream-notice">
+        <div class="panel-head">
+          <div><span class="kicker">RELAY MODE</span><h3>تمرير الفيديو المرخّص عبر BLOFYSAT</h3></div>
+          <span id="restreamRelayBadge" class="status-badge neutral">جارٍ الفحص…</span>
+        </div>
+        <p id="restreamRelayText" class="muted">نقرأ سياسة إعادة البث والإعداد الحالي…</p>
+        <p class="security-note">المصدر المجاني للمشاهدة لا يعني السماح بإعادة توزيعه. نعرض فقط الفيديوهات ذات ترخيص مناسب وفق البيانات المتاحة. فحص الأهلية لا يثبت أن كل فيديو يعمل، أو أن الترخيص مؤكد بصورة قانونية.</p>
+      </article>
+      <div class="metric-grid restream-metrics">
+        <article class="metric-card purple-card"><span>مرشح لإعادة البث</span><strong id="rCandidates">0</strong><small>فيديوهات ذات ترخيص مناسب مبدئيًا</small></article>
+        <article class="metric-card"><span>محتوى المكتبة</span><strong id="rCatalogTotal">0</strong><small>المتوفر داخل Xtream</small></article>
+        <article class="metric-card"><span>البث النشط</span><strong id="rActiveStreams">0</strong><small>اتصالات فعلية لحظية</small></article>
+        <article class="metric-card danger-card"><span>الفهرس الخاص</span><strong id="rPrivateTitles">0</strong><small>عناوين تحتاج مصدر فيديو مصرحًا</small></article>
+      </div>
+      <div class="dashboard-grid">
+        <article class="panel wide">
+          <div class="panel-head">
+            <div><span class="kicker">MEDIA SOURCES</span><h3>المصادر وحالة الحقوق</h3><p class="muted">العدّادات تقديرية من فهرس المصدر وليست عددًا مؤكدًا من الملفات التي اجتازت فحص التشغيل.</p></div>
+            <button id="restreamSyncBtn" class="btn ghost">مزامنة المصادر</button>
+          </div>
+          <div class="data-table">
+            <table>
+              <thead><tr><th>المصدر</th><th>في المكتبة</th><th>مرشح لإعادة البث</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+              <tbody id="restreamSourceRows"><tr><td colspan="5">جارٍ تحميل المصادر…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><span class="kicker">LICENSED SAMPLES</span><h3>نماذج للمحتوى المفتوح</h3></div></div>
+          <p class="muted">تراخيص معلنة في البيانات الوصفية؛ لا تعني اختبار تشغيل كامل.</p>
+          <div id="restreamSampleRows" class="restream-samples">جارٍ التحميل…</div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><span class="kicker">ACTIVE STREAMS</span><h3>مراقبة المشاهدين</h3></div></div>
+          <p id="restreamConnectionsSummary" class="muted">نقرأ الاتصالات النشطة…</p>
+          <div id="restreamConnectionRows" class="attention-list"></div>
+          <button id="restreamAccountsBtn" class="btn ghost full">إدارة حسابات Xtream</button>
+        </article>
+        <article class="panel wide">
+          <div class="panel-head"><div><span class="kicker">OPERATING GUIDE</span><h3>كيف يتم تشغيل إعادة البث؟</h3></div></div>
+          <div class="restream-steps">
+            <div><strong>1 · مصدر مسموح</strong><p>Wikimedia أو Internet Archive بترخيص إعادة استخدام تجاري صالح. يتم استبعاد قوائم IPTV المجانية غير المصرح بإعادة بثها.</p></div>
+            <div><strong>2 · المزامنة والترخيص</strong><p>نزامن المحتوى ونفلتر الملفات المرشحة. الموافقة النهائية وذكر المصدر والمؤلف وشروط الترخيص تبقى مطلوبة.</p></div>
+            <div><strong>3 · Xtream والتشغيل</strong><p>كل مستخدم يدخل بحسابه الخاص، والبث المؤهل يمر عبر نطاق BLOFYSAT وفق الإعداد الحالي وحدود الاتصالات.</p></div>
+          </div>
         </article>
       </div>
     </section>

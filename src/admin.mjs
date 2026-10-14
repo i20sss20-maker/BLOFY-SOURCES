@@ -8,6 +8,7 @@ import { providerDefinitions } from './providers.mjs';
 import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
 import { activeConnectionCount } from './connections.mjs';
+import { restreamOverview } from './restream-dashboard.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const LOGIN_WINDOW_MS=10*60_000,LOGIN_MAX_ATTEMPTS=8,loginAttempts=new Map();
@@ -41,6 +42,7 @@ export async function adminApi(req,res,url){
     loginAttempts.delete(key);createAdminSession(res,req);return json(res,200,{ok:true});
   }
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
+  if(url.pathname==='/api/admin/restream'&&req.method==='GET')return json(res,200,{ok:true,restream:restreamOverview()});
   if(url.pathname==='/api/admin/blofysat'&&req.method==='GET')return json(res,200,{ok:true,selection:blofysatSelection.summary()});
   if(url.pathname==='/api/admin/blofysat/import'&&req.method==='POST'){
     try{return json(res,200,{ok:true,selection:await blofysatSelection.importCsv(await readSelectionCsv(req))})}

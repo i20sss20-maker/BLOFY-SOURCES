@@ -7,6 +7,7 @@ let bulkDownloadUrl=null;
 const titles={
   overview:['الرئيسية','BLOFY CONTROL CENTER'],
   subscribers:['إدارة المشتركين','XTREAM USERS'],
+  restream:['مركز إعادة البث','RESTREAM CONTROL'],
   arabic:['المحتوى العربي','ARABIC FIRST'],
   catalog:['المكتبة الكاملة','CATALOG'],
   access:['اختبار السيرفر','XTREAM TEST']
@@ -83,6 +84,57 @@ function renderSources(providers){
       ${p.enabled?`<button class="tiny-btn source-sync" data-source="${esc(p.id)}">مزامنة</button>`:''}
     </div>`;
   }).join('');
+}
+
+let restreamData=null;
+function sourceRestreamStatus(row){
+  if(row.candidates>0)return{cls:'ok',label:'محتوى بترخيص مفتوح'};
+  if(row.available>0)return{cls:'warn',label:'مشاهدة / حقوق غير مثبتة'};
+  if(row.enabled)return{cls:'off',label:'بانتظار المزامنة'};
+  return{cls:'off',label:'معطل'};
+}
+function renderRestreamDashboard(data){
+  restreamData=data;
+  $('rCandidates').textContent=fmt(data.catalog?.candidates);
+  $('rCatalogTotal').textContent=fmt(data.catalog?.total);
+  $('rActiveStreams').textContent=fmt(data.connections?.total);
+  $('rPrivateTitles').textContent=fmt(data.privateSelection?.total);
+  $('restreamRelayBadge').textContent=data.enabled?'مفعّل للمحتوى المرخّص':'وضع التحويل';
+  $('restreamRelayBadge').className='status-badge '+(data.enabled?'ok':'neutral');
+  $('restreamRelayText').textContent=data.enabled
+    ? 'تمرير الفيديو مفعّل فقط للفيديوهات المطابقة لشروط المصدر والترخيص؛ قنوات المشاهدة العامة والباقات الخاصة غير مدعومة لإعادة البث تلقائيًا.'
+    : 'إعادة البث عبر السيرفر غير مفعّلة للمصادر المفتوحة؛ روابط التشغيل قد تحوّل المشغّل مباشرة إلى المصدر.';
+  $('restreamSourceRows').innerHTML=(data.sources||[]).map(row=>{
+    const st=sourceRestreamStatus(row);
+    return '<tr><td><strong>'+esc(row.name)+'</strong><small class="muted">'+esc(row.id)+'</small></td>'+
+      '<td>'+fmt(row.available)+'</td><td>'+fmt(row.candidates)+'</td>'+
+      '<td><span class="badge '+st.cls+'">'+st.label+'</span></td>'+
+      '<td>'+(row.enabled?'<button class="tiny-btn restream-source-sync" data-source="'+esc(row.id)+'">مزامنة</button>':'—')+'</td></tr>';
+  }).join('')||'<tr><td colspan="5">لا توجد مصادر</td></tr>';
+  $('restreamSampleRows').innerHTML=(data.samples||[]).map(x=>
+    '<div class="restream-sample"><strong>'+esc(x.title)+'</strong>'+
+    '<small>'+esc(x.source)+' · '+esc(x.kind==='movie'?'فيديو':'حلقة')+'</small>'+
+    '<small>'+esc(x.licenseName||'ترخيص مفتوح')+'</small>'+
+    (String(x.licenseUrl||'').startsWith('https://creativecommons.org/')
+      ? '<a href="'+esc(x.licenseUrl)+'" target="_blank" rel="noopener noreferrer">قراءة الترخيص ↗</a>':'')+
+    '</div>'
+  ).join('')||'<p class="muted">لم تُكتشف ملفات تطابق شروط إعادة البث بعد. جرّب المزامنة.</p>';
+  const connections=data.connections||{};
+  $('restreamConnectionsSummary').textContent=fmt(connections.total)+' اتصال تمرير فيديو نشط حاليًا. التحويلات المباشرة إلى مصادر خارجية لا تظهر هنا.';
+  $('restreamConnectionRows').innerHTML=(connections.users||[]).slice(0,15).map(x=>
+    '<div class="attention-item"><div><strong>'+esc(x.username)+'</strong></div><span class="badge ok">'+fmt(x.activeConnections)+' اتصال</span></div>'
+  ).join('')||'<div class="attention-item"><div><strong>لا توجد اتصالات نشطة</strong><small>عند بدء تمرير الفيديو من السيرفر ستظهر الاتصالات هنا.</small></div></div>';
+}
+async function loadRestreamDashboard(){
+  try{
+    const j=await api('restream');
+    renderRestreamDashboard(j.restream||{});
+    return j.restream;
+  }catch(error){
+    $('restreamSourceRows').innerHTML='<tr><td colspan="5">'+esc('تعذر جلب البيانات: '+error.message)+'</td></tr>';
+    toast(error.message,'error');
+    return null;
+  }
 }
 
 function renderDashboardSubscribers(){
@@ -404,6 +456,7 @@ function gotoView(name){
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===`view-${name}`));
   $('pageTitle').textContent=titles[name]?.[0]||'لوحة الإدارة';$('pageKicker').textContent=titles[name]?.[1]||'BLOFY';
   window.scrollTo({top:0,behavior:'smooth'});
+  if(name==='restream')loadRestreamDashboard();
   if(name==='subscribers')loadSubscribers();
   if(name==='arabic')loadArabic(true);
   if(name==='catalog')loadCatalog(true);
@@ -427,6 +480,20 @@ document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>gotoView(b.dat
 document.querySelectorAll('.jump').forEach(b=>b.onclick=()=>{gotoView(b.dataset.target);if(b.dataset.create==='1')setTimeout(()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true},120)});
 
 $('sourceList').addEventListener('click',e=>{const b=e.target.closest('.source-sync');if(b)syncOne(b.dataset.source,b)});
+$('restreamRefreshBtn').onclick=loadRestreamDashboard;
+$('restreamAccountsBtn').onclick=()=>gotoView('subscribers');
+$('restreamSyncBtn').onclick=async()=>{
+  const b=$('restreamSyncBtn');
+  b.disabled=true;
+  try{await syncAll();await loadRestreamDashboard()}finally{b.disabled=false}
+};
+$('restreamSourceRows').addEventListener('click',async event=>{
+  const b=event.target.closest('.restream-source-sync');
+  if(!b)return;
+  await syncOne(b.dataset.source,b);
+  await loadRestreamDashboard();
+});
+
 $('attentionSubscribers').addEventListener('click',e=>{const b=e.target.closest('.quick-renew');if(b)openRenew(b.dataset.user)});
 
 $('openCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=false;$('createdSubscriber').hidden=true;$('newLabel').focus()};
