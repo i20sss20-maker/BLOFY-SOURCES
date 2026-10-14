@@ -1,11 +1,9 @@
 import { catalog, blofysatSelection } from './context.mjs';
 import { providerDefinitions } from './providers.mjs';
-import { resolveStream } from './providers.mjs';
 import { connectionStats } from './connections.mjs';
 import { syncState } from './sync.mjs';
 import { openLicensedMediaProxyAllowed } from './open-licensed-playback.mjs';
 
-const recentChecks=[];
 const OPEN_SOURCES=new Set(['wikimedia','internet-archive']);
 const RESTREAM_LIMIT=10;
 
@@ -57,67 +55,8 @@ export function restreamOverview({items=catalog.items.values(),providers=provide
       metadataOnly:true,playbackConnected:false
     },
     syncing:Boolean(syncing),sources:[...counters.values()],
-    samples,recentChecks:[...recentChecks],
+    samples,recentChecks:[],
     connections:{total:sessions.total,users:sessions.users}
   };
 }
 
-function allowedCheckHost(url,item){
-  try{
-    const u=new URL(url);
-    if(u.protocol!=='https:'||u.username||u.password||u.port&&u.port!=='443')return false;
-    if(item.source==='wikimedia')return u.hostname==='upload.wikimedia.org';
-    return item.source==='internet-archive'
-      && (u.hostname==='archive.org'||u.hostname.endsWith('.archive.org'));
-  }catch{return false}
-}
-
-async function verifyHttpHead(url,item,{request=fetch,signal}={}){
-  let current=url;
-  for(let i=0;i<5;i++){
-    if(!allowedCheckHost(current,item))throw new Error('source_domain_not_allowed');
-    const response=await request(current,{method:'HEAD',redirect:'manual',signal,headers:{'user-agent':'BLOFY-Restream-Check/1.0','accept':'*/*'}});
-    if([301,302,303,307,308].includes(response.status)){
-      const loc=response.headers.get('location');
-      await response.body?.cancel();
-      if(!loc)throw new Error('redirect_missing_location');
-      current=new URL(loc,current).toString();
-      continue;
-    }
-    if(response.status===405){
-      await response.body?.cancel();
-      const fallback=await request(current,{method:'GET',redirect:'manual',signal,headers:{range:'bytes=0-0','user-agent':'BLOFY-Restream-Check/1.0'}});
-      const result={status:fallback.status,domain:new URL(current).hostname,contentType:fallback.headers.get('content-type')||''};
-      await fallback.body?.cancel();
-      return result;
-    }
-    const result={status:response.status,domain:new URL(current).hostname,contentType:response.headers.get('content-type')||''};
-    await response.body?.cancel();
-    return result;
-  }
-  throw new Error('redirect_limit_exceeded');
-}
-
-export async function checkOpenRestreamItem(id,{getItem=value=>catalog.get(value),resolver=resolveStream,request=fetch,timeoutMs=15000}={}){
-  if(!/^\d{1,15}$/.test(String(id)))throw new Error('invalid_item_id');
-  const item=getItem(id);
-  if(!item)throw new Error('item_not_found');
-  if(!isOpenRestreamCandidate(item))throw new Error('item_not_licensed_for_restream');
-  const resolved=await resolver(item);
-  if(!openLicensedMediaProxyAllowed(item,resolved.url,true))throw new Error('resolved_source_not_licensed_for_restream');
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
-  let check;
-  try{
-    check=await verifyHttpHead(resolved.url,item,{request,signal:controller.signal});
-  }catch(e){
-    if(controller.signal.aborted)throw new Error('upstream_timeout');
-    throw e;
-  }finally{clearTimeout(timer)}
-  const result={itemId:item.id,title:item.title,source:item.source,
-    checkedAt:new Date().toISOString(),reachable:[200,206].includes(check.status),
-    status:check.status,domain:check.domain,contentType:check.contentType,
-    note:'Connectivity check only, not full playback validation or a grant of rights.'};
-  recentChecks.unshift(result);
-  if(recentChecks.length>15)recentChecks.length=15;
-  return result;
-}
