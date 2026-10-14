@@ -42,6 +42,7 @@ export async function adminApi(req,res,url){
     loginAttempts.delete(key);createAdminSession(res,req);return json(res,200,{ok:true});
   }
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
+  if(url.pathname==='/api/admin/restream'&&req.method==='GET')return json(res,200,{ok:true,restream:restreamOverview()});
   if(url.pathname==='/api/admin/blofysat'&&req.method==='GET')return json(res,200,{ok:true,selection:blofysatSelection.summary()});
   if(url.pathname==='/api/admin/blofysat/import'&&req.method==='POST'){
     try{return json(res,200,{ok:true,selection:await blofysatSelection.importCsv(await readSelectionCsv(req))})}
