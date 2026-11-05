@@ -82,10 +82,33 @@
   <div class="row pager"><button id="catalogPrev" type="button" class="secondary" disabled>السابق</button><span id="catalogPage"></span><button id="catalogNext" type="button" class="secondary" disabled>التالي</button></div>
 </section>
 <section id="appcodesPanel" class="panel stream-tab" hidden>
-  <span class="eyebrow">BLOFY PLAYER ACTIVATION</span><h1>أكواد تطبيق BLOFY</h1>
-  <p>أكواد تفعيل تطبيق BLOFY مرتبطة بنظام التطبيق الحالي، وهي مختلفة عن حسابات Xtream الخاصة بالمشاهدة.</p>
-  <a class="button-link" href="/admin#codes">فتح إدارة أكواد BLOFY PLAYER ←</a>
-  <p class="mini-note">إصدار أكواد التطبيق وربط الأجهزة يتم من لوحة BLOFY الرئيسية على نفس الدومين. الربط التلقائي بين النظامين لم يُفعّل بعد.</p>
+  <div class="row"><div><span class="eyebrow">BLOFY PLAYER CODES</span><h1>أكواد تطبيق BLOFY</h1></div><button id="refreshAppCodes" type="button" class="secondary">تحديث</button></div>
+  <p>إصدار أكواد التطبيق وإدارتها عبر نظام BLOFY PLAYER على نفس الدومين. كل كود يرتبط بحساب Xtream معتمد، ولا يرفع حدود الاتصالات لدى المصدر.</p>
+  <div id="appCodeLoginNotice" class="info" hidden>يلزم تسجيل الدخول إلى لوحة إدارة BLOFY PLAYER أيضًا لإصدار أكواد التطبيق. <a class="button-link" href="/admin#codes">دخول لوحة BLOFY PLAYER ←</a></div>
+  <div id="appCodesArea" hidden>
+    <div class="stats-grid three" id="appCodeStats">
+      <div class="stat-card"><small>إجمالي أكواد التطبيق</small><strong id="appStatTotal">—</strong></div>
+      <div class="stat-card"><small>أكواد نشطة</small><strong id="appStatActive">—</strong></div>
+      <div class="stat-card"><small>أكواد مرتبطة بأجهزة</small><strong id="appStatBound">—</strong></div>
+    </div>
+    <h2>إصدار كود تطبيق جديد</h2>
+    <form id="appCodeForm">
+      <div class="form-grid">
+        <label>Xtream Host<input id="appCodeHost" type="url" placeholder="https://server.example" required></label>
+        <label>Username<input id="appCodeUsername" required></label>
+        <label>Password<input id="appCodePassword" type="password" autocomplete="new-password" required></label>
+      </div>
+      <button id="issueAppCode" type="submit">إنشاء كود تطبيق BLOFY</button>
+    </form>
+    <div class="created" id="issuedAppCodePanel" hidden>
+      <h2>الكود الجديد</h2><p class="one-time-code" id="issuedAppCode" dir="ltr"></p>
+      <p class="mini-note">انسخ الكود الآن؛ الكود لا يمكن استرجاعه لاحقًا.</p>
+    </div>
+    <h2>الأكواد الصادرة</h2>
+    <div id="appCodesList" class="customer-list"></div>
+  </div>
+  <p id="appCodesStatus" class="mini-note">جاري التحقق من جلسة إدارة التطبيق…</p>
+  <a class="button-link" href="/admin#codes">مركز أكواد BLOFY الكامل ←</a>
 </section>
 <section class="panel stream-tab" id="sourcePanel" hidden>
     <div class="row"><h1>ربط Xtream</h1><span class="badge" id="stateBadge">جاري الفحص</span></div>
