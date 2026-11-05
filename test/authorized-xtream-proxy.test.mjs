@@ -204,6 +204,34 @@ test('licensed Xtream playback is proxied and upstream credentials never reach t
     }
     assert.equal(info.user_info.active_cons,'0');
 
+    // Playback dashboard is private: probes never return upstream URLs or credentials.
+    const anonymous=await fetch(gatewayBase+'/admin-api/restream');
+    assert.equal(anonymous.status,401);
+    const login=await fetch(gatewayBase+'/admin-api/login',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({password:'AdminPass-123'})
+    });
+    assert.equal(login.status,200);
+    const cookie=String(login.headers.get('set-cookie')||'').split(';')[0];
+    assert.ok(cookie.startsWith('blofy_admin='));
+    const statsResponse=await fetch(gatewayBase+'/admin-api/restream',{headers:{cookie}});
+    assert.equal(statsResponse.status,200);
+    const stats=(await statsResponse.json()).restream.playback;
+    assert.ok(stats.starts>=2);
+    assert.ok(stats.limits>=1);
+    assert.equal(JSON.stringify(stats).includes('LicensedPass-456'),false);
+    assert.equal(JSON.stringify(stats).includes('TestPass-123'),false);
+
+    const probe=await fetch(gatewayBase+'/admin-api/playback/probe',{
+      method:'POST',headers:{cookie,'content-type':'application/json'},
+      body:JSON.stringify({ids:[901]})
+    });
+    assert.equal(probe.status,200);
+    const probeData=await probe.json();
+    assert.equal(probeData.results.length,1);
+    assert.equal(probeData.results[0].state,'ok');
+    assert.equal(JSON.stringify(probeData).includes('LicensedPass-456'),false);
+
     const finalHealth=await (await fetch(`${gatewayBase}/health`)).json();
     assert.equal(finalHealth.xtream.accounts.activeConnections,0);
   } finally {
