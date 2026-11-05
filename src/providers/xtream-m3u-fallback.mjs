@@ -37,6 +37,14 @@ export function parseXtreamM3u(text,{baseUrl,username,password,maxItems=50000}={
     const file=/^([a-z0-9_-]+)\.([a-z0-9]{2,8})$/i.exec(leaf);
     if(!file)continue;
     const id=file[1],extension=file[2].toLowerCase();
+    // Generic /user/pass/id.ext playlists often omit the media type.
+    // Use conservative format/group hints for those entries only.
+    if(parts.length===3){
+      const group=String(current.attrs['group-title']||'').toLowerCase();
+      const seriesGroup=/(^|[ -])(series|episodes|seasons|مسلسلات|مسلسل)([ -]|$)/i.test(group);
+      if(seriesGroup)kind='series';
+      else if(['mp4','mkv','avi','mov','webm'].includes(extension))kind='movie';
+    }
     const kindLabel=kind==='live'?'live':kind==='movie'?'movie':'series_episode';
     if(!current.name)continue;
     rows.push({
