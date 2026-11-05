@@ -9,6 +9,7 @@ import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
 import { activeConnectionCount } from './connections.mjs';
 import { restreamOverview } from './restream-dashboard.mjs';
+import { runPlaybackProbe } from './playback-health.mjs';
 import { managedXtreamStatus,saveManagedXtream,disableManagedXtream } from './managed-xtream.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
@@ -44,6 +45,12 @@ export async function adminApi(req,res,url){
   }
   if(!isAdmin(req))return json(res,401,{ok:false,error:'admin_auth_required'});
   if(url.pathname==='/api/admin/restream'&&req.method==='GET')return json(res,200,{ok:true,restream:restreamOverview()});
+  if(url.pathname==='/api/admin/playback/probe'&&req.method==='POST'){
+    let body;
+    try{body=await readJsonBody(req,3000)}catch{return json(res,400,{ok:false,error:'invalid_probe_request'})}
+    const result=await runPlaybackProbe(body?.ids||[]);
+    return json(res,result.ok?200:(result.status||400),result);
+  }
   if(url.pathname==='/api/admin/xtream-source'&&req.method==='GET')return json(res,200,{ok:true,source:managedXtreamStatus(),runtime:catalog.sources['managed-xtream']||null,syncing:syncState().syncing});
   if(url.pathname==='/api/admin/xtream-source'&&req.method==='POST'){
     try{
