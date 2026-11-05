@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#131023">
+<title>BLOFY STREAM | ربط Xtream</title>
+<link rel="stylesheet" href="/admin-assets/stream-quick.css">
+<script src="/admin-assets/stream-quick.js" defer></script>
+</head>
+<body>
+<main class="shell">
+  <header class="brand"><span class="logo">B</span><div><b>BLOFY STREAM</b><small>إدارة المصدر</small></div></header>
+  <section class="panel" id="loginPanel" hidden>
+    <h1>دخول الإدارة</h1>
+    <p>ادخل رمز لوحة BLOFY STREAM للمتابعة.</p>
+    <form id="loginForm">
+      <label>رمز الإدارة<input id="adminPassword" type="password" autocomplete="current-password" required></label>
+      <button id="loginButton" type="submit">دخول</button>
+    </form>
+  </section>
+  <section class="panel" id="sourcePanel" hidden>
+    <div class="row"><h1>ربط Xtream</h1><span class="badge" id="stateBadge">جاري الفحص</span></div>
+    <p>أدخل رابط السيرفر وبيانات الحساب، ثم اضغط حفظ وتفعيل.</p>
+    <form id="sourceForm">
+      <label>Host<input id="sourceHost" type="url" placeholder="https://example.com:8080" autocomplete="url" required></label>
+      <label>Username<input id="sourceUser" autocomplete="off" required></label>
+      <label>Password<input id="sourcePass" type="password" autocomplete="new-password" required></label>
+      <label class="consent"><input id="rightsConfirmed" type="checkbox" required><span>أؤكد أن لدي صلاحية إعادة توزيع هذا المحتوى.</span></label>
+      <button id="saveButton" type="submit">حفظ وتفعيل</button>
+    </form>
+    <div class="details">
+      <div>المحتوى المستورد <strong id="sourceCount">0</strong></div>
+      <span id="sourceDetails">جاهز للربط</span>
+    </div>
+    <div class="row actions">
+      <button id="refreshButton" class="secondary" type="button">تحديث الحالة</button>
+      <button id="disableButton" class="danger" type="button" hidden>إيقاف المصدر</button>
+    </div>
+  </section>
+  <div id="message" class="message" role="status">جاري فحص الخدمة…</div>
+  <p class="foot">تفعيل Xtream لا يتجاوز حدود الاتصالات لدى المصدر. إدارة المشتركين منفصلة عن إعداد المصدر.</p>
+</main>
+</body>
+</html>
