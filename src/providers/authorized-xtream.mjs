@@ -226,6 +226,11 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   const includeSelected=(type,id)=>!selectedOnly||selection.contains(type,id);
   const kinds=allowedKinds(feed);
   const rows=[];
+  // Import each kind rather than consuming the entire catalogue limit on Live.
+  // A provider with >50,000 live rows must still leave room for VOD and series.
+  const liveQuota=Math.min(itemLimit,envInt('BLOFY_XTREAM_LIVE_ITEMS_LIMIT',12000,1,50000));
+  const vodQuota=Math.min(itemLimit,envInt('BLOFY_XTREAM_VOD_ITEMS_LIMIT',28000,1,50000));
+  const episodeQuota=Math.min(itemLimit,envInt('BLOFY_XTREAM_EPISODE_ITEMS_LIMIT',10000,1,50000));
 
   let liveCategories=new Map(),vodCategories=new Map(),seriesCategories=new Map();
   let availableSections=0;
@@ -241,8 +246,9 @@ export async function syncAuthorizedXtreamFeed(feed={},{
     // Keep licensed upstream Live opaque behind BLOFY. TS can be streamed through the gateway
     // without exposing partner credentials; HLS playlist rewriting is intentionally not used here.
     const liveExt='ts';
+    const liveStart=rows.length;
     for(const raw of Array.isArray(list)?list:[]){
-      if(rows.length>=itemLimit)break;
+      if(rows.length>=itemLimit||rows.length-liveStart>=liveQuota)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
       if(!id||!title||!includeSelected('Live',id))continue;
       const category=localizedCategory(liveCategories.get(String(raw?.category_id??''))||feed.liveCategory,'قنوات شريك',profile);
@@ -257,8 +263,9 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   if(kinds.has('vod')&&rows.length<itemLimit){
     const list=await optionalXtreamAction(credentials,'get_vod_streams');
     if(Array.isArray(list))availableSections++;
+    const vodStart=rows.length;
     for(const raw of Array.isArray(list)?list:[]){
-      if(rows.length>=itemLimit)break;
+      if(rows.length>=itemLimit||rows.length-vodStart>=vodQuota)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
       if(!id||!title||!includeSelected('Movies',id))continue;
       const category=localizedCategory(vodCategories.get(String(raw?.category_id??''))||feed.vodCategory,'أفلام شريك',profile);
@@ -307,12 +314,13 @@ export async function syncAuthorizedXtreamFeed(feed={},{
       }
       return out;
     });
+    const episodeStart=rows.length;
     for(const group of episodeGroups){
       for(const item of group||[]){
-        if(rows.length>=itemLimit)break;
+        if(rows.length>=itemLimit||rows.length-episodeStart>=episodeQuota)break;
         rows.push(item);
       }
-      if(rows.length>=itemLimit)break;
+      if(rows.length>=itemLimit||rows.length-episodeStart>=episodeQuota)break;
     }
   }
 
