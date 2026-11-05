@@ -1,5 +1,6 @@
 import { fetchJson, envBool, envInt } from './common.mjs';
 import { blofysatSelection } from '../context.mjs';
+import { managedXtreamCredentials } from '../managed-xtream.mjs';
 
 const SECRET_REF_RE=/^[A-Z0-9][A-Z0-9_]{1,63}$/;
 
@@ -45,6 +46,7 @@ export function normalizeAuthorizedXtreamSecretRef(value){
 
 export function authorizedXtreamCredentials(secretRef,{allowHttp=false}={}){
   const ref=normalizeAuthorizedXtreamSecretRef(secretRef);
+  if(ref==='MANAGED')return managedXtreamCredentials();
   const baseUrl=normalizeBaseUrl(process.env[secretEnv(ref,'URL')],{allowHttp});
   const username=String(process.env[secretEnv(ref,'USERNAME')]||'').trim();
   const password=String(process.env[secretEnv(ref,'PASSWORD')]||'');
