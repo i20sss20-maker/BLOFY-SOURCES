@@ -47,7 +47,9 @@
       const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:()=>loadCatalog(true),appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
-    if(history.replaceState)history.replaceState(null,'',location.pathname+'#'+name);
+    const routeNames={overview:'',source:'source',codes:'codes',subscribers:'users',catalog:'content',appcodes:'appcodes'};
+    const newPath=prefix ? prefix+(routeNames[name]?'/'+routeNames[name]:'') : location.pathname;
+    if(history.replaceState)history.replaceState(null,'',newPath+'#'+name);
   }
   async function api(route,{method='GET',body,timeout=15000}={}) {
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
@@ -403,6 +405,9 @@
   });
 
   const fromHash=location.hash.slice(1);
+  const fromPath=location.pathname.replace(/^\/stream\/?/,'').replace(/\/+$/,'');
+  const routeTabs={source:'source',codes:'codes',users:'subscribers',content:'catalog',appcodes:'appcodes'};
+  if(routeTabs[fromPath])activeTab=routeTabs[fromPath];
   if(panels.includes(fromHash))activeTab=fromHash;
   const bootstrapTimer=setTimeout(()=>setMessage('الاستجابة متأخرة، جرّب تحديث الصفحة.','error'),16000);
   api('xtream-source',{timeout:12000}).then(()=>{
