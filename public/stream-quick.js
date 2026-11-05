@@ -44,7 +44,7 @@
       button.setAttribute('aria-current',selected?'page':'false');
     });
     if(load) {
-      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
+      const tasks={overview:loadOverview,source:async()=>{await Promise.all([loadSource(),loadPlaybackHealth()]);},codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
     const routeNames={overview:'',source:'source',codes:'codes',subscribers:'users',catalog:'content',appcodes:'appcodes'};
@@ -537,6 +537,8 @@
     try{await api('xtream-source/disable',{method:'POST',body:{}});await loadSource()}catch(e){setMessage(e.message,'error')}
   });
   $('refreshButton').addEventListener('click',()=>loadSource().catch(e=>setMessage(e.message,'error')));
+  $('quickHealthRefresh').addEventListener('click',()=>loadPlaybackHealth().catch(e=>$('quickHealthNote').textContent=e.message));
+  $('quickProbeBtn').addEventListener('click',runQuickProbe);
   $('refreshOverview').addEventListener('click',()=>loadOverview().catch(e=>setMessage(e.message,'error')));
   $('refreshAppCodes').addEventListener('click',()=>loadAppCodes().catch(e=>setMessage(e.message,'error')));
   $('appCodeForm').addEventListener('submit',issueAppCode);
