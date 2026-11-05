@@ -43,14 +43,14 @@ export async function servePlayerApi(req,res,url){
   if(action==='get_live_streams')return jsonArray(res,200,categoryFilterIter(url,'live',catalog.iterKind('live')),liveObject);
   if(action==='get_vod_streams')return jsonArray(res,200,categoryFilterIter(url,'movie',catalog.iterKind('movie')),movieObject);
   if(action==='get_series'){
-    let groups=catalog.seriesGroups();
+    let groups=catalog.seriesGroups().filter(g=>catalog.isCategoryVisible('series',g.category));
     const id=url.searchParams.get('category_id');
     if(!allCategory(id))groups=groups.filter(x=>String(catalog.categoryId('series',x.category))===String(id));
     return jsonArray(res,200,groups,seriesObject);
   }
   if(action==='get_vod_info'){
     const x=catalog.get(url.searchParams.get('vod_id'));
-    if(!x||x.kind!=='movie')return json(res,200,[]);
+    if(!x||x.kind!=='movie'||!catalog.isCategoryVisible('movie',x.category))return json(res,200,[]);
     return json(res,200,{
       info:{movie_image:x.icon||'',name:x.title,plot:x.description||'',genre:x.category||'',releasedate:x.publishedAt||'',rating:'',duration:'',director:'',cast:'',backdrop_path:[],youtube_trailer:'',license:x.licenseName||'',license_url:x.licenseUrl||'',attribution:x.attribution||'',source:x.source,subtitles:Array.isArray(x.subtitles)?x.subtitles:[]},
       movie_data:movieObject(x)
@@ -58,7 +58,7 @@ export async function servePlayerApi(req,res,url){
   }
   if(action==='get_series_info'){
     const g=catalog.seriesById(url.searchParams.get('series_id'));
-    if(!g)return json(res,200,[]);
+    if(!g||!catalog.isCategoryVisible('series',g.category))return json(res,200,[]);
     const seasons=new Map(),episodes={};
     for(const x of g.episodes){
       if(!seasons.has(x.season))seasons.set(x.season,{air_date:'',episode_count:0,id:x.season,name:`Season ${x.season}`,overview:'',season_number:x.season,cover:g.icon||'',cover_big:g.icon||''});
@@ -91,13 +91,13 @@ export async function serveM3u(req,res,url){
   const a=await auth(url);
   if(!a)return text(res,401,'#EXTM3U\n# Authentication failed\n','audio/x-mpegurl; charset=utf-8');
   const output=String(url.searchParams.get('output')||'ts').toLowerCase()==='m3u8'?'m3u8':'ts';
-  async function* chunks(){yield '#EXTM3U\n';for(const x of catalog.items.values())if(x.kind==='live'||x.kind==='movie'||x.kind==='series_episode')yield `${m3uLine(req,a,x,output)}\n`}
+  async function* chunks(){yield '#EXTM3U\n';for(const x of catalog.items.values())if((x.kind==='live'||x.kind==='movie'||x.kind==='series_episode')&&catalog.isCategoryVisible(x.kind==='series_episode'?'series':x.kind,x.category))yield `${m3uLine(req,a,x,output)}\n`}
   return textStream(res,200,chunks(),'audio/x-mpegurl; charset=utf-8',{'content-disposition':'inline; filename="blofy.m3u"'});
 }
 export async function serveXmltv(req,res,url){
   const a=await auth(url);
   if(!a)return text(res,401,'<?xml version="1.0" encoding="UTF-8"?><tv></tv>','application/xml; charset=utf-8');
-  const channels=catalog.listKind('live').map(x=>{const icon=x.icon?`<icon src="${xmlEsc(x.icon)}"/>`:'';const id=x.epgId||x.id;return `<channel id="${xmlEsc(id)}"><display-name>${xmlEsc(x.title)}</display-name>${icon}</channel>`}).join('');
+  const channels=catalog.listKind('live').filter(x=>catalog.isCategoryVisible('live',x.category)).map(x=>{const icon=x.icon?`<icon src="${xmlEsc(x.icon)}"/>`:'';const id=x.epgId||x.id;return `<channel id="${xmlEsc(id)}"><display-name>${xmlEsc(x.title)}</display-name>${icon}</channel>`}).join('');
   return text(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="BLOFY SOURCES">${channels}</tv>\n`,'application/xml; charset=utf-8');
 }
 
@@ -194,7 +194,7 @@ export async function servePlayback(req,res,pathname){
   const credentials=await authenticateXtream(decodeURIComponent(u),decodeURIComponent(p));
   if(!credentials){text(res,401,'Unauthorized');return true}
   const x=catalog.get(id),valid=x&&((type==='live'&&x.kind==='live')||(type==='movie'&&x.kind==='movie')||(type==='series'&&x.kind==='series_episode'));
-  if(!valid){text(res,404,'Not found');return true}
+  if(!valid||!catalog.isCategoryVisible(type,x.category)){text(res,404,'Not found');return true}
   try{
     const resolved=await resolveStream(x);
     const target=new URL(resolved.url);
