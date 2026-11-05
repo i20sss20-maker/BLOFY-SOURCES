@@ -151,6 +151,26 @@
       <button id="refreshButton" class="secondary" type="button">تحديث الحالة</button>
       <button id="disableButton" class="danger" type="button" hidden>إيقاف المصدر</button>
     </div>
+    <details class="category-editor" id="quickHealthEditor" open>
+      <summary>مراقبة جودة التشغيل <span class="mini-note">تشخيص القنوات والأفلام</span></summary>
+      <div class="category-edit-body">
+        <p class="mini-note">إحصاءات من محاولات التشغيل على سيرفر BLOFY التجريبي خلال الساعة الماضية. هذه النتائج لا تعني فحص جميع القنوات.</p>
+        <div id="quickHealthStats" class="quick-health-grid" aria-live="polite"></div>
+        <div class="row actions">
+          <button id="quickHealthRefresh" class="secondary" type="button">تحديث المراقبة</button>
+        </div>
+        <h3>فحص عينة من المصدر</h3>
+        <p class="mini-note">فحص محدود لبداية البث فقط. أدخل حتى 4 معرّفات رقمية، أو اترك الحقل فارغًا لاختيار عينة تلقائية.</p>
+        <label>معرّفات المحتوى (اختياري)
+          <input id="quickProbeIds" type="text" autocomplete="off" maxlength="90" placeholder="مثال: 1001,1002">
+        </label>
+        <button id="quickProbeBtn" type="button">فحص عينة</button>
+        <p id="quickHealthNote" class="mini-note" role="status"></p>
+        <div id="quickHealthResults" class="quick-health-list"></div>
+        <h3>آخر أخطاء التشغيل</h3>
+        <div id="quickHealthEvents" class="quick-health-list"></div>
+      </div>
+    </details>
   </section>
   <div id="message" class="message" role="status">جاري فحص الخدمة…</div>
   <p class="foot">BLOFY STREAM · تخضع أعداد المشاهدين المتزامنين لسعة المصدر وحقوق توزيعه.</p>
