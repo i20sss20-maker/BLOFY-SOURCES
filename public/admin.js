@@ -125,10 +125,62 @@ function renderRestreamDashboard(data){
     '<div class="attention-item"><div><strong>'+esc(x.username)+'</strong></div><span class="badge ok">'+fmt(x.activeConnections)+' اتصال</span></div>'
   ).join('')||'<div class="attention-item"><div><strong>لا توجد اتصالات نشطة</strong><small>عند بدء تمرير الفيديو من السيرفر ستظهر الاتصالات هنا.</small></div></div>';
 }
+function renderPlaybackHealth(data={}){
+  const p=data.playback||{};
+  const metrics=[
+    ['بدأ التشغيل',p.starts],['فشل الاتصال',p.failures],['انقطع أثناء البث',p.interruptions],
+    ['رفض حد الاتصالات',p.limits],['بدايات بطيئة',p.slowStarts],
+    ['الوقت الوسيط للبدء',p.medianStartMs==null?'—':p.medianStartMs+' ms'],
+    ['P95',p.p95StartMs==null?'—':p.p95StartMs+' ms']
+  ];
+  $('playbackHealthSummary').innerHTML=metrics.map(([label,value])=>
+    '<div class="playback-health-stat"><span>'+esc(label)+'</span><strong>'+
+    (typeof value==='number'?fmt(value):esc(value??'—'))+'</strong></div>'
+  ).join('');
+  const labels={started:'بدأ',finished:'اكتمل',failed:'فشل',interrupted:'انقطع',limited:'حد الاتصالات',redirected:'تحويل مباشر',client_closed:'أغلقه المشغّل'};
+  $('playbackHealthEvents').innerHTML=(p.latest||[]).slice(0,16).map(row=>{
+    const label=labels[row.outcome]||row.outcome;
+    const level=row.outcome==='failed'||row.outcome==='interrupted'||row.outcome==='limited'?'err':
+      row.outcome==='started'&&row.startupMs>6000?'warn':'ok';
+    return '<div class="playback-health-row"><span class="badge '+level+'">'+esc(label)+'</span>'+
+      '<strong>'+esc(row.title||row.id)+'</strong><small>'+esc(row.kind)+' · #'+esc(row.id)+'</small>'+
+      '<small>'+esc(row.reason||'')+(row.startupMs!=null?' · '+fmt(row.startupMs)+' ms':'')+'</small></div>';
+  }).join('')||'<p class="muted">لا توجد محاولات تشغيل على هذا السيرفر خلال آخر ساعة.</p>';
+  const probe=data.recentChecks||{};
+  const checked=Array.isArray(probe.results)?probe.results:[];
+  $('playbackProbeResults').innerHTML=checked.map(x=>{
+    const label=x.state==='ok'?'تعمل':x.state==='slow'?'بطيئة':x.state==='failed'?'فشلت':'غير مدعوم';
+    const level=x.state==='ok'?'ok':x.state==='slow'?'warn':'err';
+    return '<div class="playback-health-row"><span class="badge '+level+'">'+esc(label)+'</span>'+
+      '<strong>'+esc(x.title||x.id)+'</strong><small>#'+esc(x.id)+' · '+esc(x.kind)+'</small>'+
+      '<small>'+esc(x.reason||'')+(x.httpStatus?' · HTTP '+fmt(x.httpStatus):'')+
+      (x.startupMs!=null?' · '+fmt(x.startupMs)+' ms':'')+'</small></div>';
+  }).join('')||'<p class="muted">اضغط «فحص المصدر» لإجراء فحص محدود من دون تحميل البث بالكامل.</p>';
+  if(probe.at)$('playbackProbeNote').textContent='آخر فحص: '+new Date(probe.at).toLocaleString('ar-SA')+' — تحقق من النتائج قبل اتخاذ قرار بشأن المصدر.';
+}
+async function startPlaybackProbe(){
+  const button=$('playbackProbeBtn');
+  const ids=$('playbackProbeIds').value.trim().split(/[\s,;،]+/).filter(Boolean);
+  if(ids.length>4||ids.some(id=>!/^\d{1,15}$/.test(id)))return toast('أدخل حتى 4 معرّفات رقمية، أو اترك الحقل فارغًا','error');
+  button.disabled=true;
+  $('playbackProbeNote').textContent='جارٍ فحص بداية البث؛ قد يستغرق الرد عدة ثوانٍ...';
+  try{
+    const j=await api('playback/probe',{method:'POST',body:JSON.stringify({ids})});
+    $('playbackProbeNote').textContent='انتهى الفحص. النتائج تعكس حالة المصدر وقت الاختبار فقط.';
+    await loadRestreamDashboard();
+    const failed=(j.results||[]).filter(x=>x.state==='failed').length;
+    toast(failed?'وجد الفحص '+failed+' محتوى لا يعمل':'انتهى فحص العينة','success');
+  }catch(e){
+    $('playbackProbeNote').textContent='تعذر إكمال الفحص: '+e.message;
+    toast(e.message,'error');
+  }finally{button.disabled=false}
+}
+
 async function loadRestreamDashboard(){
   try{
     const j=await api('restream');
     renderRestreamDashboard(j.restream||{});
+    renderPlaybackHealth(j.restream||{});
     return j.restream;
   }catch(error){
     $('restreamSourceRows').innerHTML='<tr><td colspan="5">'+esc('تعذر جلب البيانات: '+error.message)+'</td></tr>';
@@ -481,6 +533,8 @@ document.querySelectorAll('.jump').forEach(b=>b.onclick=()=>{gotoView(b.dataset.
 
 $('sourceList').addEventListener('click',e=>{const b=e.target.closest('.source-sync');if(b)syncOne(b.dataset.source,b)});
 $('restreamRefreshBtn').onclick=loadRestreamDashboard;
+$('playbackHealthRefresh').onclick=loadRestreamDashboard;
+$('playbackProbeBtn').onclick=startPlaybackProbe;
 $('restreamAccountsBtn').onclick=()=>gotoView('subscribers');
 $('restreamSyncBtn').onclick=async()=>{
   const b=$('restreamSyncBtn');

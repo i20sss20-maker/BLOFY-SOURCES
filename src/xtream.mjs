@@ -7,6 +7,7 @@ import { xtreamBaseUrl, json, jsonArray, text, textStream } from './http.mjs';
 import { resolveStream } from './providers.mjs';
 import { serverInfo,userInfo,categories,liveObject,movieObject,seriesObject,categoryFilterIter } from './xtream-format.mjs';
 import { openLicensedMediaProxyAllowed } from './open-licensed-playback.mjs';
+import { recordPlaybackEvent, unexpectedMediaResponse } from './playback-health.mjs';
 
 async function mergedRequestUrl(req,url){
   if(req.method!=='POST')return url;
@@ -170,6 +171,8 @@ function briefProxyError(error,controller){
     :error?.code||error?.name||'upstream_error';
 }
 async function proxyPlayback(req,res,target,item,lease=null){
+  const startedAt=Date.now();
+  const observe=(outcome,details={})=>{if(req.method!=='HEAD')recordPlaybackEvent(item,outcome,{durationMs:Date.now()-startedAt,...details})};
   const clientAbort=new AbortController();
   const abort=()=>clientAbort.abort();
   req.once('aborted',abort);
@@ -208,6 +211,7 @@ async function proxyPlayback(req,res,target,item,lease=null){
             continue;
           }
           const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
+          observe('failed',{status,reason:'upstream_http_'+upstream.status,attempts:attempt});
           if(!res.headersSent)json(res,status,{ok:false,error:`upstream_http_${upstream.status}`,source:item.source,itemId:item.id});
           else if(!res.writableEnded)res.destroy();
           return;
@@ -222,6 +226,9 @@ async function proxyPlayback(req,res,target,item,lease=null){
         // Don't send a misleading 200 before the source supplies the first byte.
         const first=await readWithDeadline(reader,controller,firstByteTimeout);
         if(first.done)throw new Error('upstream_empty_stream');
+        const invalidMedia=unexpectedMediaResponse(upstream.headers.get('content-type'),first.value,item.kind);
+        if(invalidMedia)throw new Error(invalidMedia);
+        observe('started',{status:upstream.status,startupMs:Date.now()-startedAt,attempts:attempt});
 
         res.writeHead(upstream.status,proxyResponseHeaders(upstream));
         const body=Readable.from((async function*(){
@@ -233,9 +240,11 @@ async function proxyPlayback(req,res,target,item,lease=null){
           }
         })());
         await pipeline(body,res);
+        observe('finished',{status:upstream.status,attempts:attempt});
         return;
       }catch(error){
         if(clientAbort.signal.aborted){
+          observe('client_closed',{reason:'player_disconnected',attempts:attempt});
           if(!res.writableEnded)res.destroy();
           return;
         }
@@ -247,6 +256,7 @@ async function proxyPlayback(req,res,target,item,lease=null){
           continue;
         }
         console.warn(`xtream playback failed source=${item.source} item=${item.id} reason=${reason} attempt=${attempt}`);
+        observe(res.headersSent?'interrupted':'failed',{reason,status:res.headersSent?200:502,attempts:attempt});
         if(!res.headersSent)json(res,502,{ok:false,error:'upstream_proxy_failed',source:item.source,itemId:item.id});
         else if(!res.writableEnded)res.destroy();
         return;
@@ -284,6 +294,7 @@ export async function servePlayback(req,res,pathname){
       if(req.method!=='HEAD'){
         lease=acquirePlaybackConnection(credentials,x);
         if(!lease.ok){
+          recordPlaybackEvent(x,'limited',{status:429,reason:'connection_limit'});
           return text(
             res,
             429,
@@ -300,9 +311,11 @@ export async function servePlayback(req,res,pathname){
       await proxyPlayback(req,res,{...resolved,url:target.toString(),openLicensed:openLicensedProxy},x,lease);
       return true;
     }
+    if(req.method!=='HEAD')recordPlaybackEvent(x,'redirected',{status:302});
     res.writeHead(302,{location:target.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});
     res.end();
   }catch(e){
+    recordPlaybackEvent(x,'failed',{status:502,reason:'resolver_failed'});
     if(!res.headersSent)json(res,502,{ok:false,error:String(e?.message||e),source:x.source,itemId:x.id});
   }
   return true;
