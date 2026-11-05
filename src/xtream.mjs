@@ -145,41 +145,117 @@ async function fetchOpenLicensedMedia(url,options,item){
   throw new Error('open_media_redirect_limit');
 }
 
+// A retry is only safe *before* any media bytes have been sent to the player.
+// Never stack concurrent upstream attempts: one subscriber lease covers the entire request.
+function restreamTimeout(name,fallback,min,max){
+  const raw=Number(process.env[name]);
+  return Number.isFinite(raw)&&raw>0?Math.min(max,Math.max(min,Math.floor(raw))):fallback;
+}
+function retryableUpstreamStatus(code){
+  return [408,500,502,503,504,524].includes(code);
+}
+async function readWithDeadline(reader,controller,timeoutMs){
+  const timer=setTimeout(()=>controller.abort(new Error('upstream_read_timeout')),timeoutMs);
+  try{
+    for(;;){
+      const result=await reader.read();
+      if(result.done||result.value?.byteLength)return result;
+    }
+  }finally{clearTimeout(timer)}
+}
+function briefProxyError(error,controller){
+  return controller.signal.reason?.message==='upstream_headers_timeout'?'header_timeout'
+    :controller.signal.reason?.message==='upstream_read_timeout'?'read_timeout'
+    :error?.name==='AbortError'?'aborted'
+    :error?.code||error?.name||'upstream_error';
+}
 async function proxyPlayback(req,res,target,item,lease=null){
-  const controller=new AbortController();
-  const abort=()=>controller.abort();
+  const clientAbort=new AbortController();
+  const abort=()=>clientAbort.abort();
   req.once('aborted',abort);
   res.once('close',abort);
+  const maxAttempts=req.method==='HEAD'?1:2;
+  const headerTimeout=restreamTimeout('BLOFY_RESTREAM_CONNECT_TIMEOUT_MS',12000,2000,30000);
+  const firstByteTimeout=restreamTimeout('BLOFY_RESTREAM_FIRST_BYTE_TIMEOUT_MS',20000,3000,60000);
+  const idleTimeout=restreamTimeout('BLOFY_RESTREAM_IDLE_TIMEOUT_MS',45000,10000,120000);
   try{
-    const options={
-      method:req.method==='HEAD'?'HEAD':'GET',
-      headers:proxyRequestHeaders(req),
-      signal:controller.signal
-    };
-    const upstream=target.openLicensed
-      ? await fetchOpenLicensedMedia(target.url,options,item)
-      : await fetch(target.url,{...options,redirect:'follow'});
-    const ok=upstream.ok||upstream.status===206||upstream.status===304;
-    if(!ok){
-      const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
-      if(!res.headersSent)json(res,status,{ok:false,error:`upstream_http_${upstream.status}`,source:item.source,itemId:item.id});
-      else if(!res.writableEnded)res.end();
-      return;
+    for(let attempt=1;attempt<=maxAttempts;attempt++){
+      if(clientAbort.signal.aborted)return;
+      const controller=new AbortController();
+      const cancel=()=>controller.abort();
+      clientAbort.signal.addEventListener('abort',cancel,{once:true});
+      let reader=null;
+      try{
+        const options={
+          method:req.method==='HEAD'?'HEAD':'GET',
+          headers:proxyRequestHeaders(req),
+          signal:controller.signal
+        };
+        let upstream;
+        const headerTimer=setTimeout(()=>controller.abort(new Error('upstream_headers_timeout')),headerTimeout);
+        try{
+          upstream=target.openLicensed
+            ? await fetchOpenLicensedMedia(target.url,options,item)
+            : await fetch(target.url,{...options,redirect:'follow'});
+        }finally{clearTimeout(headerTimer)}
+
+        const ok=upstream.ok||upstream.status===206||upstream.status===304;
+        if(!ok){
+          if(retryableUpstreamStatus(upstream.status)&&attempt<maxAttempts){
+            console.warn(`xtream upstream retry source=${item.source} item=${item.id} status=${upstream.status} attempt=${attempt}`);
+            await upstream.body?.cancel().catch(()=>{});
+            await new Promise(resolve=>setTimeout(resolve,180*attempt));
+            continue;
+          }
+          const status=upstream.status>=400&&upstream.status<600?upstream.status:502;
+          if(!res.headersSent)json(res,status,{ok:false,error:`upstream_http_${upstream.status}`,source:item.source,itemId:item.id});
+          else if(!res.writableEnded)res.destroy();
+          return;
+        }
+        if(req.method==='HEAD'||upstream.status===204||upstream.status===304){
+          res.writeHead(upstream.status,proxyResponseHeaders(upstream));
+          res.end();
+          return;
+        }
+        if(!upstream.body)throw new Error('upstream_empty_body');
+        reader=upstream.body.getReader();
+        // Don't send a misleading 200 before the source supplies the first byte.
+        const first=await readWithDeadline(reader,controller,firstByteTimeout);
+        if(first.done)throw new Error('upstream_empty_stream');
+
+        res.writeHead(upstream.status,proxyResponseHeaders(upstream));
+        const body=Readable.from((async function*(){
+          yield first.value;
+          for(;;){
+            const next=await readWithDeadline(reader,controller,idleTimeout);
+            if(next.done)return;
+            yield next.value;
+          }
+        })());
+        await pipeline(body,res);
+        return;
+      }catch(error){
+        if(clientAbort.signal.aborted){
+          if(!res.writableEnded)res.destroy();
+          return;
+        }
+        const reason=briefProxyError(error,controller);
+        // Only retry before sending headers/bytes, never after a partial stream.
+        if(!res.headersSent&&attempt<maxAttempts){
+          console.warn(`xtream upstream retry source=${item.source} item=${item.id} reason=${reason} attempt=${attempt}`);
+          await new Promise(resolve=>setTimeout(resolve,180*attempt));
+          continue;
+        }
+        console.warn(`xtream playback failed source=${item.source} item=${item.id} reason=${reason} attempt=${attempt}`);
+        if(!res.headersSent)json(res,502,{ok:false,error:'upstream_proxy_failed',source:item.source,itemId:item.id});
+        else if(!res.writableEnded)res.destroy();
+        return;
+      }finally{
+        controller.abort();
+        clientAbort.signal.removeEventListener('abort',cancel);
+        if(reader)try{reader.releaseLock()}catch{}
+      }
     }
-    res.writeHead(upstream.status,proxyResponseHeaders(upstream));
-    if(req.method==='HEAD'||!upstream.body){
-      res.end();
-      return;
-    }
-    await pipeline(Readable.fromWeb(upstream.body),res);
-  }catch(error){
-    if(controller.signal.aborted){
-      if(!res.writableEnded)res.end();
-      return;
-    }
-    console.warn(`xtream playback proxy failed source=${item.source} item=${item.id}: ${String(error?.message||error)}`);
-    if(!res.headersSent)json(res,502,{ok:false,error:'upstream_proxy_failed',source:item.source,itemId:item.id});
-    else if(!res.writableEnded)res.end();
   }finally{
     req.off('aborted',abort);
     res.off('close',abort);
