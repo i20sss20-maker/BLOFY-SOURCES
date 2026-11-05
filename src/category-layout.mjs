@@ -24,6 +24,7 @@ export class CategoryLayout {
     }catch(error){if(error?.code!=='ENOENT')console.warn('category layout restored to defaults:',String(error.message||error))}
     return this;
   }
+  count(kind){this._kind(kind);return this.current[kind].order.length}
   _kind(kind){if(!KINDS.has(kind))throw new Error('invalid_category_kind');return kind}
   _updateHidden(){for(const kind of KINDS)this.hiddenSets[kind]=new Set(this.current[kind].hidden)}
   isVisible(kind,name){this._kind(kind);return !this.hiddenSets[kind].has(clean(name))}
