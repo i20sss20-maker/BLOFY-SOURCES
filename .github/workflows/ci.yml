@@ -3,7 +3,7 @@ name: BLOFY SOURCES CI
 on:
   pull_request:
   push:
-    branches: [main, xtream-open-catalog-v1]
+    branches: [main, xtream-open-catalog-v1, pilot/blofy-restream-v1-20261105]
 
 permissions:
   contents: read
