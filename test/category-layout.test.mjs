@@ -18,12 +18,13 @@ test('category layout moves, hides, persists and restores categories',async()=>{
     assert.ok(moved.indexOf('رياضة')<moved.indexOf('أفلام') || moved.indexOf('رياضة')<moved.indexOf('الأخبار'));
     await layout.change('live','رياضة',{direction:'top'},names);
     assert.equal(layout.ordered('live',rows,{includeHidden:true})[0].name,'رياضة');
+    const topped=layout.ordered('live',rows,{includeHidden:true}).map(x=>x.name);
     await layout.change('live','رياضة',{hidden:true},names);
     assert.equal(layout.isVisible('live','رياضة'),false);
     assert.equal(layout.isVisible('movie','رياضة'),true);
     const restored=await new CategoryLayout(dir).init();
     assert.equal(restored.isVisible('live','رياضة'),false);
-    assert.deepEqual(restored.ordered('live',rows,{includeHidden:true}).map(x=>x.name),moved);
+    assert.deepEqual(restored.ordered('live',rows,{includeHidden:true}).map(x=>x.name),topped);
     await restored.change('live','رياضة',{hidden:false},names);
     assert.equal(restored.isVisible('live','رياضة'),true);
     await assert.rejects(()=>restored.change('live','غير موجود',{hidden:true},names),/category_not_found/);
