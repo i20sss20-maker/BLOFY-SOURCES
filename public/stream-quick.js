@@ -68,6 +68,13 @@
       throw error;
     } finally {clearTimeout(timer);}
   }
+  function explainSourceError(raw){
+    const error=String(raw||'');
+    if(error.includes('http_403_'))return 'المصدر رفض وصول سيرفر BLOFY برمز 403. قائمة المحتوى القديمة محفوظة، لكن التحديث والتشغيل قد لا يعملان حتى يسمح المصدر بالاتصال.';
+    if(error.includes('http_404_'))return 'المصدر لا يدعم أحد مسارات قائمة Xtream (404). تحقّق من رابط Host ودعم API/M3U.';
+    if(error.includes('xtream_invalid_credentials'))return 'اسم مستخدم المصدر أو كلمة المرور غير صحيحة.';
+    return 'تعذر تحديث المصدر: '+error.slice(0,220);
+  }
   async function loadSource() {
     const data=await api('xtream-source'),source=data.source||{},runtime=data.runtime||{};
     if(document.activeElement!==$('sourceHost'))$('sourceHost').value=source.host||'';
@@ -89,7 +96,7 @@
     if(activeTab==='source'){
       const info=!source.configured?'أدخل بيانات Host وUsername وPassword ثم احفظ.':
         !source.enabled?'المصدر موقوف. أعد تفعيله إذا رغبت.':
-        runtime.lastError?'تعذر آخر استيراد: '+String(runtime.lastError):
+        runtime.lastError?explainSourceError(runtime.lastError):
         data.syncing?'جارٍ مزامنة المحتوى…':'المصدر مرتبط. العناصر المستوردة: '+format(runtime.count);
       setMessage(info,runtime.lastError?'error':source.enabled?'ok':'');
     }
@@ -104,7 +111,10 @@
     const values={statTotal:stats.totalItems,statLive:stats.live,statMovies:stats.movies,statEpisodes:stats.episodes,
       statUsers:accounts.total,statActiveUsers:accounts.active};
     Object.entries(values).forEach(([key,val])=>$(key).textContent=format(val||0));
-    setMessage('مركز BLOFY جاهز. يمكنك إدارة المصدر والحسابات والمكتبة من الأقسام أعلاه.','ok');
+    const provider=(s.providers||[]).find(x=>x.id==='managed-xtream');
+    const problem=provider?.runtime?.lastError;
+    if(problem)setMessage('مركز BLOFY يعمل، لكن مصدر Xtream يحتاج معالجة: '+explainSourceError(problem),'error');
+    else setMessage('مركز BLOFY جاهز. يمكنك إدارة المصدر والحسابات والمكتبة من الأقسام أعلاه.','ok');
   }
   async function loadSubscribers() {
     const data=await api('accounts',{timeout:18000});
@@ -212,6 +222,17 @@
     const count=Number($('codesCount').value),durationDays=Number($('codesDays').value),
       maxConnections=Number($('codesConnections').value),labelPrefix=$('codesLabel').value.trim();
     if(!Number.isInteger(count)||count<1||count>100){setMessage('اختر عدد حسابات من 1 إلى 100','error');return;}
+    try{
+      const source=await api('xtream-source',{timeout:12000});
+      if(!source.source?.enabled)throw new Error('مصدر Xtream غير مفعّل. اربطه أولاً قبل إنشاء حسابات العملاء.');
+      if(source.runtime?.lastError){
+        const warning=explainSourceError(source.runtime.lastError);
+        if(!confirm(warning+'\\n\\nهل تريد إنشاء الحسابات رغم مشكلة المصدر؟'))return;
+      }
+    }catch(error){
+      setMessage('لا يمكن التحقق من جاهزية المصدر: '+error.message,'error');
+      return;
+    }
     if(!confirm('إنشاء '+count+' حساب Xtream لمدة '+durationDays+' يوم؟'))return;
     const button=$('generateCodes');button.disabled=true;
     try {
