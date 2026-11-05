@@ -45,10 +45,13 @@ function cleanPath(pathname){
 
 async function serveAdminUi(res,pathname){
   let file='';
-  if(pathname==='/'||pathname==='/admin'||pathname==='/xtream'||pathname==='/sources-admin')file='admin.html';
+  if(pathname==='/' && String(process.env.BLOFY_STREAM_SIMPLE_UI||'').toLowerCase()==='true')file='stream-quick.html';
+  else if(pathname==='/'||pathname==='/admin'||pathname==='/xtream'||pathname==='/sources-admin')file='admin.html';
   else if(pathname==='/admin-assets/admin.css'||pathname==='/xtream-assets/admin.css')file='admin.css';
   else if(pathname==='/admin-assets/admin.js'||pathname==='/xtream-assets/admin.js')file='admin.js';
   else if(pathname==='/admin-assets/xtream-simple.js')file='xtream-simple.js';
+  else if(pathname==='/admin-assets/stream-quick.js')file='stream-quick.js';
+  else if(pathname==='/admin-assets/stream-quick.css')file='stream-quick.css';
   else return false;
   const body=await readFile(path.join(ROOT,'public',file),'utf8');
   const type=file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8';
