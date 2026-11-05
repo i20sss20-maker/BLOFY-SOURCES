@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { loadRemoteJson, saveRemoteJson } from './storage.mjs';
+import { CategoryLayout } from './category-layout.mjs';
 
 export function stableNumericId(namespace, rawValue) {
   const digest = crypto.createHash('sha256').update(`${namespace}\0${rawValue}`).digest();
@@ -14,9 +15,9 @@ export function parseEpisodeTitle(title='') { const text=String(title).trim(),pa
 function sanitizeItem(raw){const source=String(raw.source||'').trim(),sourceItemId=String(raw.sourceItemId||'').trim();if(!source||!sourceItemId)throw new Error('catalog_item_missing_identity');const kind=['live','movie','series_episode'].includes(raw.kind)?raw.kind:'movie';return{...raw,id:Number(raw.id)||stableNumericId(source,sourceItemId),source,sourceItemId,kind,title:String(raw.title||sourceItemId).trim().slice(0,500),description:stripHtml(raw.description||'').slice(0,6000),icon:String(raw.icon||'').trim().slice(0,2000),category:String(raw.category||'Other').trim().slice(0,160),language:String(raw.language||'').trim().slice(0,64),country:String(raw.country||'').trim().slice(0,8),licenseName:String(raw.licenseName||'').trim().slice(0,160),licenseUrl:String(raw.licenseUrl||'').trim().slice(0,2000),attribution:stripHtml(raw.attribution||'').slice(0,2000),publishedAt:raw.publishedAt?String(raw.publishedAt).slice(0,64):'',seriesTitle:raw.seriesTitle?String(raw.seriesTitle).trim().slice(0,500):'',season:Number(raw.season)>0?Number(raw.season):1,episode:Number(raw.episode)>0?Number(raw.episode):1,stream:raw.stream&&typeof raw.stream==='object'?raw.stream:null,rights:raw.rights&&typeof raw.rights==='object'?raw.rights:{}}}
 function isArabicItem(item){return String(item?.language||'').toLowerCase()==='ar'||String(item?.category||'').startsWith('عربي ·')||item?.rights?.arabic===true||/[\u0600-\u06ff]/.test(String(item?.title||''))}
 export class CatalogStore {
-  constructor({dataDir='./data'}={}){this.dataDir=path.resolve(dataDir);this.catalogPath=path.join(this.dataDir,'catalog.json');this.items=new Map();this.sources={};this.lastSyncAt=null;this._cache={seriesGroups:null,categories:new Map(),stats:null}}
+  constructor({dataDir='./data'}={}){this.dataDir=path.resolve(dataDir);this.catalogPath=path.join(this.dataDir,'catalog.json');this.items=new Map();this.sources={};this.lastSyncAt=null;this._cache={seriesGroups:null,categories:new Map(),stats:null};this.categoryLayout=new CategoryLayout(this.dataDir)}
   _invalidateCaches(){this._cache.seriesGroups=null;this._cache.categories.clear();this._cache.stats=null}
-  async init(){await mkdir(this.dataDir,{recursive:true});let saved=null;try{saved=await loadRemoteJson('catalog.json')}catch(error){console.warn('remote catalog load skipped:',error.message)}if(!saved){try{saved=JSON.parse(await readFile(this.catalogPath,'utf8'))}catch(error){if(error?.code!=='ENOENT')console.warn('catalog load skipped:',error.message)}}if(saved){this.lastSyncAt=saved.lastSyncAt||null;this.sources=saved.sources||{};for(const item of saved.items||[]){try{const normalized=sanitizeItem(item);this.items.set(normalized.id,normalized)}catch{}}}return this}
+  async init(){await mkdir(this.dataDir,{recursive:true});await this.categoryLayout.init();let saved=null;try{saved=await loadRemoteJson('catalog.json')}catch(error){console.warn('remote catalog load skipped:',error.message)}if(!saved){try{saved=JSON.parse(await readFile(this.catalogPath,'utf8'))}catch(error){if(error?.code!=='ENOENT')console.warn('catalog load skipped:',error.message)}}if(saved){this.lastSyncAt=saved.lastSyncAt||null;this.sources=saved.sources||{};for(const item of saved.items||[]){try{const normalized=sanitizeItem(item);this.items.set(normalized.id,normalized)}catch{}}}return this}
   async persist({remote=true}={}){const payload={schemaVersion:2,lastSyncAt:this.lastSyncAt,sources:this.sources,items:[...this.items.values()]},tmp=`${this.catalogPath}.tmp`;await writeFile(tmp,JSON.stringify(payload),'utf8');await rename(tmp,this.catalogPath);if(remote)await saveRemoteJson('catalog.json',payload);return true}
   replaceSource(sourceId,items,meta={}){for(const[id,item]of this.items)if(item.source===sourceId)this.items.delete(id);let accepted=0;for(const raw of items||[]){try{const item=sanitizeItem({...raw,source:sourceId});this.items.set(item.id,item);accepted++}catch{}}this.sources[sourceId]={...(this.sources[sourceId]||{}),...meta,id:sourceId,count:accepted,syncedAt:new Date().toISOString()};this._invalidateCaches();return accepted}
   markSourceError(sourceId,error){this.sources[sourceId]={...(this.sources[sourceId]||{}),id:sourceId,lastError:String(error?.message||error||'unknown_error').slice(0,500),failedAt:new Date().toISOString()};this._invalidateCaches()}
@@ -24,7 +25,24 @@ export class CatalogStore {
   get(id){return this.items.get(Number(id))||null}
   *iterKind(kind){for(const item of this.items.values())if(item.kind===kind)yield item}
   listKind(kind){return[...this.iterKind(kind)]}
-  categoryRecords(kind){if(this._cache.categories.has(kind))return this._cache.categories.get(kind);const names=new Set();if(kind==='series'){for(const group of this.seriesGroups())names.add(group.category||'Series')}else{for(const item of this.iterKind(kind))names.add(item.category||'Other')}const records=[...names].sort((a,b)=>a.localeCompare(b)).map(name=>({id:stableNumericId(`category:${kind}`,name),name}));this._cache.categories.set(kind,records);return records}
+  categoryRecords(kind,{includeHidden=false}={}){
+    const key=kind+(includeHidden?':all':':visible');
+    if(this._cache.categories.has(key))return this._cache.categories.get(key);
+    const names=new Set();
+    if(kind==='series'){for(const group of this.seriesGroups())names.add(group.category||'Series')}
+    else{for(const item of this.iterKind(kind))names.add(item.category||'Other')}
+    const records=[...names].map(name=>({id:stableNumericId(`category:${kind}`,name),name}));
+    const sorted=this.categoryLayout.ordered(kind,records,{includeHidden});
+    this._cache.categories.set(key,sorted);
+    return sorted;
+  }
+  isCategoryVisible(kind,name){return this.categoryLayout.isVisible(kind,name)}
+  async changeCategory(kind,name,options){
+    const names=this.categoryRecords(kind,{includeHidden:true}).map(x=>x.name);
+    await this.categoryLayout.change(kind,name,options,names);
+    this._cache.categories.clear();
+    return this.categoryRecords(kind,{includeHidden:true});
+  }
   categoryId(kind,name){return stableNumericId(`category:${kind}`,name||'Other')}
   seriesGroups(){if(this._cache.seriesGroups)return this._cache.seriesGroups;const groups=new Map();for(const item of this.iterKind('series_episode')){const title=item.seriesTitle||item.title,key=`${item.source}\0${title.toLowerCase()}`;let group=groups.get(key);if(!group){group={id:stableNumericId('series',key),key,title,source:item.source,icon:item.icon,description:item.description,category:item.category||'Series',licenseName:item.licenseName,licenseUrl:item.licenseUrl,attribution:item.attribution,episodes:[]};groups.set(key,group)}group.episodes.push(item);if(!group.icon&&item.icon)group.icon=item.icon;if(!group.description&&item.description)group.description=item.description}for(const group of groups.values())group.episodes.sort((a,b)=>(a.season-b.season)||(a.episode-b.episode)||a.title.localeCompare(b.title));this._cache.seriesGroups=[...groups.values()].sort((a,b)=>a.title.localeCompare(b.title));return this._cache.seriesGroups}
   seriesById(id){return this.seriesGroups().find(group=>group.id===Number(id))||null}
