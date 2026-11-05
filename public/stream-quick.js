@@ -104,8 +104,8 @@
     if(!bad.length)events.append(node('p','لا توجد أخطاء تشغيل مسجلة خلال آخر ساعة على هذا السيرفر.','mini-note'));
   }
   async function runQuickProbe(){
-    const ids=$('quickProbeIds').value.trim().split(/[\\s,;،]+/).filter(Boolean);
-    if(ids.length>4||ids.some(x=>!/^\\d{1,15}$/.test(x))){
+    const ids=$('quickProbeIds').value.trim().split(/[\s,;،]+/).filter(Boolean);
+    if(ids.length>4||ids.some(x=>!/^\d{1,15}$/.test(x))){
       $('quickHealthNote').textContent='أدخل حتى 4 معرّفات رقمية فقط.';return;
     }
     const button=$('quickProbeBtn');button.disabled=true;
