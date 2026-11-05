@@ -50,5 +50,7 @@
     try{await request('xtream-source/disable',{method:'POST',body:'{}'});await refresh()}catch(e){$('xtreamSourceMessage').textContent=e.message;}
   });
   document.querySelector('button[data-view="restream"]')?.addEventListener('click',refresh);
+  document.getElementById('loginForm')?.addEventListener('submit',()=>setTimeout(refresh,1200));
+  if(typeof gotoView==='function')gotoView('restream');
   refresh();
 })();
