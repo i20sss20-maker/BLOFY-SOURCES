@@ -1,4 +1,5 @@
 import { envBool } from './common.mjs';
+import { syncManagedXtream, managedXtreamIsEnabled } from '../managed-xtream.mjs';
 import { syncInternetArchive } from './internet-archive.mjs';
 import { syncWikimediaCommons } from './wikimedia.mjs';
 import { syncPeerTube } from './peertube.mjs';
@@ -9,6 +10,7 @@ import { syncOpenArabicFilms } from './open-arabic-films.mjs';
 import { syncAuthorizedPartnerManifests } from './authorized-partners.mjs';
 
 export const providerDefinitions = [
+  {id:'managed-xtream',name:'BLOFY Xtream',kind:'Live + VOD + series',sync:syncManagedXtream,enabled:managedXtreamIsEnabled,rights:'Requires confirmed redistribution rights and an operator-provided reference.'},
   { id:'authorized-partners', name:'Authorized partner manifests', kind:'Live + VOD + series', sync:syncAuthorizedPartnerManifests, enabled:()=>envBool('ENABLE_AUTHORIZED_PARTNERS', false), rights:'Disabled by default. Requires explicit rights confirmation plus a manifest carrying partner, Saudi/MENA territory and rights reference.' },
   { id:'internet-archive', name:'Internet Archive · Open licences', kind:'VOD + series detection', sync:syncInternetArchive, enabled:()=>true, rights:'Only CC0 / CC BY / CC BY-SA / public-domain-style licence URLs are accepted.' },
   { id:'wikimedia', name:'Wikimedia Commons · Video', kind:'VOD', sync:syncWikimediaCommons, enabled:()=>true, rights:'Machine-readable licence metadata is checked; NC/ND are excluded.' },
