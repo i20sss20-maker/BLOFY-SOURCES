@@ -44,7 +44,7 @@
       button.setAttribute('aria-current',selected?'page':'false');
     });
     if(load) {
-      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:()=>loadCatalog(true),appcodes:loadAppCodes};
+      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
     const routeNames={overview:'',source:'source',codes:'codes',subscribers:'users',catalog:'content',appcodes:'appcodes'};
@@ -179,7 +179,13 @@
     freshCodes.forEach((x,index)=>{
       const tr=node('tr');
       tr.append(node('td',x.username,'code-cell'),node('td',x.password,'code-cell'),node('td',readableDate(x.expiresAt)),node('td',x.maxConnections||1));
-      const cell=node('td'),button=node('button','إصدار كود BLOFY','secondary');button.type='button';button.dataset.chooseCode=String(index);cell.append(button);tr.append(cell);
+      const cell=node('td');
+      if(x.appCode)cell.append(node('strong',x.appCode,'code-cell'));
+      else{
+        const button=node('button','إصدار كود BLOFY','secondary');
+        button.type='button';button.dataset.chooseCode=String(index);cell.append(button);
+      }
+      tr.append(cell);
       tbody.append(tr);
     });
     table.append(tbody);target.append(table);
@@ -191,9 +197,9 @@
       if(/^[\s]*[=+\-@]/.test(text))text="'"+text;
       return '"'+text.replaceAll('"','""')+'"';
     };
-    const header=['username','password','host','expires_at','max_connections'];
+    const header=['username','password','host','expires_at','max_connections','blofy_app_code'];
     const rows=[header.join(',')].concat(freshCodes.map(x=>header.map(k=>safe({
-      username:x.username,password:x.password,host:x.host,expires_at:x.expiresAt,max_connections:x.maxConnections
+      username:x.username,password:x.password,host:x.host,expires_at:x.expiresAt,max_connections:x.maxConnections,blofy_app_code:x.appCode||''
     }[k])).join(',')));
     const blob=new Blob(['\ufeff'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -216,6 +222,41 @@
     }catch(e){setMessage('فشل إصدار الحسابات: '+e.message,'error')}
     finally{button.disabled=false;}
   }
+  async function issueBulkAppCodes(){
+    const eligible=freshCodes.filter(row=>row.password&&!row.appCode).slice(0,10);
+    if(!eligible.length){setMessage('لا توجد حسابات جديدة تحتاج إصدار كود تطبيق.','ok');return;}
+    if(!confirm('إصدار أكواد تطبيق BLOFY لعدد '+eligible.length+' من الحسابات الجديدة؟'))return;
+    const button=$('issueBulkAppCodes');button.disabled=true;
+    let issued=0,failed='';
+    try{
+      // Verify the primary application's independent admin session before creating anything.
+      await appApi('code-ops/summary');
+      for(const row of eligible){
+        try{
+          const result=await appApi('blofy-codes',{method:'POST',timeout:25000,body:{
+            source:'custom',host:row.host,username:row.username,password:row.password
+          }});
+          if(!result.code)throw Error('code_not_returned');
+          row.appCode=String(result.code);
+          issued++;
+          renderCreated();
+        }catch(error){
+          // Stop rather than retry automatically: an uncertain request may have
+          // succeeded, and retrying it could issue a duplicate paid code.
+          failed=error.message;
+          break;
+        }
+      }
+      setMessage(issued?'تم إصدار '+issued+' كود تطبيق BLOFY. احفظ ملف CSV الآن.':'لم يصدر أي كود'+(failed?': '+failed:''),
+        issued?'ok':'error');
+      if(failed&&issued)setMessage('صدر '+issued+' كود. توقّف الإصدار عند الخطأ: '+failed+'؛ احفظ الأكواد التي صدرت الآن.','error');
+    }catch(e){
+      setMessage(e.appAuth?
+        'سجّل الدخول أولًا إلى blofyplayer.com/admin ثم ارجع لإصدار أكواد التطبيق.':
+        'تعذر إصدار أكواد التطبيق: '+e.message,'error');
+    }finally{button.disabled=false;}
+  }
+
   async function loadCatalog(reset=false) {
     if(reset)catalogOffset=0;
     const query=$('searchCatalog').value.trim(),kind=$('catalogKind').value;
@@ -238,6 +279,51 @@
     });
     if(!(data.items||[]).length)target.append(node('p','لا يوجد محتوى مطابق.','mini-note'));
   }
+  let editableCategories=[],categoryMutating=false;
+  async function loadCategories(){
+    const kind=$('categoryKind').value;
+    $('categoryEditorStatus').textContent='جاري تحميل التصنيفات…';
+    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
+    editableCategories=data.categories||[];
+    const target=$('categoryEditorRows');clear(target);
+    $('categoryEditorStatus').textContent='التصنيفات: '+format(editableCategories.length)+' · اضغط ↑ أو ↓ لتعديل ترتيبها.';
+    editableCategories.forEach((item,index)=>{
+      const row=node('div','','category-row');
+      row.classList.toggle('is-hidden',Boolean(item.hidden));
+      const info=node('div','','category-label');
+      info.append(node('strong',item.name),node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن العملاء':'')));
+      const actions=node('div','','category-actions');
+      const buttons=[
+        {label:'↑',title:'رفع التصنيف',action:'up',disabled:index===0},
+        {label:'↓',title:'خفض التصنيف',action:'down',disabled:index===editableCategories.length-1},
+        {label:item.hidden?'إظهار':'إخفاء',title:'تغيير ظهور التصنيف',action:'visibility',disabled:false}
+      ];
+      for(const def of buttons){
+        const b=node('button',def.label,'secondary');
+        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        actions.append(b);
+      }
+      row.append(info,actions);
+      target.append(row);
+    });
+  }
+  async function mutateCategory(index,action){
+    if(categoryMutating)return;
+    const item=editableCategories[index];
+    if(!item)return;
+    const kind=$('categoryKind').value;
+    const body=action==='visibility'?
+      {kind,name:item.name,action:'visibility',hidden:!item.hidden}:
+      {kind,name:item.name,action:'move',direction:action};
+    categoryMutating=true;
+    try{
+      await api('categories',{method:'POST',body});
+      await loadCategories();
+      setMessage('تم حفظ ترتيب وظهور التصنيفات. سينعكس على قوائم Xtream مباشرة.','ok');
+    }catch(error){setMessage('تعذر تحديث التصنيف: '+error.message,'error');}
+    finally{categoryMutating=false;}
+  }
+
   async function syncCatalog() {
     const b=$('syncCatalog');b.disabled=true;
     try {
@@ -386,6 +472,7 @@
   $('refreshSubscribers').addEventListener('click',()=>loadSubscribers().catch(e=>setMessage(e.message,'error')));
   $('createAccountsForm').addEventListener('submit',createAccounts);
   $('downloadCodes').addEventListener('click',downloadCsv);
+  $('issueBulkAppCodes').addEventListener('click',issueBulkAppCodes);
   $('searchSubscribers').addEventListener('input',renderSubscribers);
   $('filterSubscribers').addEventListener('change',renderSubscribers);
   $('subscribersList').addEventListener('click',event=>{
@@ -394,6 +481,17 @@
       .catch(e=>setMessage('تعذر تحديث الحساب: '+e.message,'error')).finally(()=>{b.disabled=false;});
   });
   $('syncCatalog').addEventListener('click',syncCatalog);
+  $('categoryEditor').addEventListener('toggle',()=>{
+    if($('categoryEditor').open)loadCategories().catch(e=>setMessage('تعذر قراءة التصنيفات: '+e.message,'error'));
+  });
+  $('categoryKind').addEventListener('change',()=>loadCategories().catch(e=>setMessage(e.message,'error')));
+  $('categoryEditorRows').addEventListener('click',event=>{
+    const button=event.target.closest('[data-category-action]');
+    if(!button)return;
+    mutateCategory(Number(button.dataset.categoryIndex),button.dataset.categoryAction)
+      .catch(e=>setMessage('تعذر تحديث التصنيف: '+e.message,'error'));
+  });
+
   $('searchCatalog').addEventListener('input',()=>{
     clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCatalog(true).catch(e=>setMessage(e.message,'error')),400);
   });

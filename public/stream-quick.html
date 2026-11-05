@@ -63,8 +63,8 @@
     <button id="generateCodes" type="submit">إنشاء الحسابات</button>
   </form>
   <div id="createdAccountsPanel" class="created" hidden>
-    <div class="row"><h2>الحسابات الجديدة</h2><button id="downloadCodes" type="button" class="secondary">تنزيل CSV</button></div>
-    <p>انسخ بيانات الحسابات واحفظها الآن. كلمات المرور لا يمكن استرجاعها بعد إغلاق الصفحة.</p>
+    <div class="row"><h2>الحسابات الجديدة</h2><div class="category-actions"><button id="issueBulkAppCodes" type="button" class="secondary">إصدار أكواد BLOFY لهذه الحسابات</button><button id="downloadCodes" type="button" class="secondary">تنزيل CSV</button></div></div>
+    <p>انسخ بيانات الحسابات واحفظها الآن. كلمات المرور لا يمكن استرجاعها بعد إغلاق الصفحة.</p><p class="mini-note">كل دفعة لإصدار أكواد التطبيق تشمل 10 حسابات جديدة كحد أقصى. يتطلب ذلك تسجيل الدخول إلى لوحة إدارة BLOFY PLAYER.</p>
     <div id="createdAccountsRows" class="table-scroll"></div>
   </div>
 </section>
@@ -78,6 +78,21 @@
 <section id="catalogPanel" class="panel stream-tab" hidden>
   <div class="row"><div><span class="eyebrow">MEDIA LIBRARY</span><h1>القنوات والأفلام والمسلسلات</h1></div><button id="syncCatalog" type="button" class="secondary">مزامنة المكتبة</button></div>
   <div class="subscriber-search"><input id="searchCatalog" type="search" placeholder="ابحث عن عنوان…" aria-label="بحث المحتوى"><select id="catalogKind"><option value="">الكل</option><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series_episode">حلقات المسلسلات</option></select></div>
+  <details id="categoryEditor" class="category-editor">
+    <summary>ترتيب التصنيفات وإظهارها للعملاء <span class="mini-note">تحكّم في ترتيب القنوات والأفلام والمسلسلات</span></summary>
+    <div class="category-edit-body">
+      <label>نوع المحتوى
+        <select id="categoryKind">
+          <option value="live">القنوات</option>
+          <option value="movie">الأفلام</option>
+          <option value="series">المسلسلات</option>
+        </select>
+      </label>
+      <p class="mini-note">استخدم السهمين لتغيير الترتيب، أو أخفِ تصنيفًا عن تطبيقات المشتركين. التغييرات محفوظة حتى بعد تحديث المصدر.</p>
+      <p id="categoryEditorStatus" class="mini-note">افتح القسم لتحميل التصنيفات.</p>
+      <div id="categoryEditorRows" class="category-list"></div>
+    </div>
+  </details>
   <p id="catalogInfo" class="mini-note">جاري تحميل المكتبة…</p><div id="catalogList" class="catalog-list"></div>
   <div class="row pager"><button id="catalogPrev" type="button" class="secondary" disabled>السابق</button><span id="catalogPage"></span><button id="catalogNext" type="button" class="secondary" disabled>التالي</button></div>
 </section>

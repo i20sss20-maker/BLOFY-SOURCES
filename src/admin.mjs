@@ -119,6 +119,39 @@ export async function adminApi(req,res,url){
     if(!auth)return json(res,200,{ok:true,auth:false,host,error:'invalid_or_expired_xtream_credentials'});
     return json(res,200,{ok:true,auth:true,authSource:auth.source,host,username,stats:{live:stats.live,movies:stats.movies,series:stats.series,episodes:stats.episodes,totalItems:stats.totalItems},playerApi:`${host}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,m3u:`${host}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`,xmltv:`${host}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`});
   }
+  if(url.pathname==='/api/admin/categories'&&req.method==='GET'){
+    const kind=String(url.searchParams.get('kind')||'live');
+    if(!['live','movie','series'].includes(kind))return json(res,400,{ok:false,error:'invalid_category_kind'});
+    const counts=new Map();
+    if(kind==='series'){
+      for(const group of catalog.seriesGroups())counts.set(group.category,(counts.get(group.category)||0)+1);
+    }else{
+      for(const item of catalog.iterKind(kind)){
+        const label=item.category||'Other';
+        counts.set(label,(counts.get(label)||0)+1);
+      }
+    }
+    const categories=catalog.categoryRecords(kind,{includeHidden:true}).map((item,index)=>({
+      id:item.id,name:item.name,position:index+1,
+      hidden:!catalog.isCategoryVisible(kind,item.name),
+      count:counts.get(item.name)||0
+    }));
+    return json(res,200,{ok:true,kind,categories});
+  }
+  if(url.pathname==='/api/admin/categories'&&req.method==='POST'){
+    try{
+      const body=await readJsonBody(req);
+      const kind=String(body.kind||'');
+      const name=String(body.name||'');
+      if(!['live','movie','series'].includes(kind))throw new Error('invalid_category_kind');
+      const options=body.action==='move'?{direction:body.direction}
+        :body.action==='visibility'?{hidden:body.hidden}
+        :null;
+      if(!options)throw new Error('invalid_category_action');
+      await catalog.changeCategory(kind,name,options);
+      return json(res,200,{ok:true,kind,name});
+    }catch(error){return json(res,400,{ok:false,error:String(error.message||error)});}
+  }
   if(url.pathname==='/api/admin/catalog'&&req.method==='GET'){
     const kind=url.searchParams.get('kind')||'',source=url.searchParams.get('source')||'',arabic=['1','true','yes'].includes(String(url.searchParams.get('arabic')||'').toLowerCase()),q=String(url.searchParams.get('q')||'').trim().toLowerCase(),limit=Math.min(200,Math.max(1,Number(url.searchParams.get('limit')||60))),offset=Math.max(0,Number(url.searchParams.get('offset')||0));
     let rows=[...catalog.items.values()];if(kind&&['live','movie','series_episode'].includes(kind))rows=rows.filter(x=>x.kind===kind);if(source)rows=rows.filter(x=>x.source===source);if(arabic)rows=rows.filter(isArabicItem);if(q)rows=rows.filter(x=>`${x.title} ${x.category} ${x.source} ${x.language||''}`.toLowerCase().includes(q));
