@@ -72,3 +72,17 @@ button,input,select{font:inherit}.app-shell{display:grid;grid-template-columns:2
 #view-restream .data-table{overflow:auto}
 #view-restream .data-table table{min-width:570px}
 @media(max-width:800px){.restream-steps{grid-template-columns:1fr}.restream-notice .panel-head{align-items:flex-start}}
+
+/* Live restream diagnostics; no secrets or playback URLs are rendered here. */
+.playback-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:16px 0 20px}
+.playback-health-stat{display:flex;flex-direction:column;gap:9px;padding:13px;border:1px solid var(--line);background:var(--panel2);border-radius:11px}
+.playback-health-stat span{font-size:11px;color:var(--muted)}
+.playback-health-stat strong{font-size:19px;font-variant-numeric:tabular-nums;direction:ltr;text-align:start}
+.playback-health-events{display:grid;gap:7px;max-height:390px;overflow:auto;margin-block:12px}
+.playback-health-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:11px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}
+.playback-health-row strong{font-size:12px;min-width:150px;max-width:100%;overflow-wrap:anywhere}
+.playback-health-row small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.probe-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-block:14px}
+.probe-controls label{font-size:12px;color:var(--muted)}
+.probe-controls .input{flex:1 1 260px;min-width:0}
+@media(max-width:650px){.probe-controls>*{flex-basis:100%}.playback-health-row{gap:6px}.playback-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
