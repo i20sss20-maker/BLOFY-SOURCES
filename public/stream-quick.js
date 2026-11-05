@@ -179,7 +179,13 @@
     freshCodes.forEach((x,index)=>{
       const tr=node('tr');
       tr.append(node('td',x.username,'code-cell'),node('td',x.password,'code-cell'),node('td',readableDate(x.expiresAt)),node('td',x.maxConnections||1));
-      const cell=node('td'),button=node('button','إصدار كود BLOFY','secondary');button.type='button';button.dataset.chooseCode=String(index);cell.append(button);tr.append(cell);
+      const cell=node('td');
+      if(x.appCode)cell.append(node('strong',x.appCode,'code-cell'));
+      else{
+        const button=node('button','إصدار كود BLOFY','secondary');
+        button.type='button';button.dataset.chooseCode=String(index);cell.append(button);
+      }
+      tr.append(cell);
       tbody.append(tr);
     });
     table.append(tbody);target.append(table);
@@ -191,9 +197,9 @@
       if(/^[\s]*[=+\-@]/.test(text))text="'"+text;
       return '"'+text.replaceAll('"','""')+'"';
     };
-    const header=['username','password','host','expires_at','max_connections'];
+    const header=['username','password','host','expires_at','max_connections','blofy_app_code'];
     const rows=[header.join(',')].concat(freshCodes.map(x=>header.map(k=>safe({
-      username:x.username,password:x.password,host:x.host,expires_at:x.expiresAt,max_connections:x.maxConnections
+      username:x.username,password:x.password,host:x.host,expires_at:x.expiresAt,max_connections:x.maxConnections,blofy_app_code:x.appCode||''
     }[k])).join(',')));
     const blob=new Blob(['\ufeff'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -216,6 +222,41 @@
     }catch(e){setMessage('فشل إصدار الحسابات: '+e.message,'error')}
     finally{button.disabled=false;}
   }
+  async function issueBulkAppCodes(){
+    const eligible=freshCodes.filter(row=>row.password&&!row.appCode).slice(0,10);
+    if(!eligible.length){setMessage('لا توجد حسابات جديدة تحتاج إصدار كود تطبيق.','ok');return;}
+    if(!confirm('إصدار أكواد تطبيق BLOFY لعدد '+eligible.length+' من الحسابات الجديدة؟'))return;
+    const button=$('issueBulkAppCodes');button.disabled=true;
+    let issued=0,failed='';
+    try{
+      // Verify the primary application's independent admin session before creating anything.
+      await appApi('code-ops/summary');
+      for(const row of eligible){
+        try{
+          const result=await appApi('blofy-codes',{method:'POST',timeout:25000,body:{
+            source:'custom',host:row.host,username:row.username,password:row.password
+          }});
+          if(!result.code)throw Error('code_not_returned');
+          row.appCode=String(result.code);
+          issued++;
+          renderCreated();
+        }catch(error){
+          // Stop rather than retry automatically: an uncertain request may have
+          // succeeded, and retrying it could issue a duplicate paid code.
+          failed=error.message;
+          break;
+        }
+      }
+      setMessage(issued?'تم إصدار '+issued+' كود تطبيق BLOFY. احفظ ملف CSV الآن.':'لم يصدر أي كود'+(failed?': '+failed:''),
+        issued?'ok':'error');
+      if(failed&&issued)setMessage('صدر '+issued+' كود. توقّف الإصدار عند الخطأ: '+failed+'؛ احفظ الأكواد التي صدرت الآن.','error');
+    }catch(e){
+      setMessage(e.appAuth?
+        'سجّل الدخول أولًا إلى blofyplayer.com/admin ثم ارجع لإصدار أكواد التطبيق.':
+        'تعذر إصدار أكواد التطبيق: '+e.message,'error');
+    }finally{button.disabled=false;}
+  }
+
   async function loadCatalog(reset=false) {
     if(reset)catalogOffset=0;
     const query=$('searchCatalog').value.trim(),kind=$('catalogKind').value;
@@ -431,6 +472,7 @@
   $('refreshSubscribers').addEventListener('click',()=>loadSubscribers().catch(e=>setMessage(e.message,'error')));
   $('createAccountsForm').addEventListener('submit',createAccounts);
   $('downloadCodes').addEventListener('click',downloadCsv);
+  $('issueBulkAppCodes').addEventListener('click',issueBulkAppCodes);
   $('searchSubscribers').addEventListener('input',renderSubscribers);
   $('filterSubscribers').addEventListener('change',renderSubscribers);
   $('subscribersList').addEventListener('click',event=>{
