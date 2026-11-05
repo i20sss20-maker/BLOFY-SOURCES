@@ -158,6 +158,27 @@
         <p>عدد العناصر: <strong id="xtreamSourceCount">0</strong></p>
         <button id="restreamAccountsBtn" class="btn ghost">إدارة المشتركين</button>
       </article>
+      <article class="panel" aria-labelledby="playbackHealthTitle">
+        <div class="panel-head">
+          <div><h3 id="playbackHealthTitle">مراقبة البث المباشر وإعادة البث</h3><p class="muted">نتائج تشغيل فعلية خلال آخر ساعة، وليست ضمانًا لصلاحية جميع عناصر المكتبة.</p></div>
+          <button type="button" class="btn ghost" id="playbackHealthRefresh">تحديث الإحصاءات</button>
+        </div>
+        <div id="playbackHealthSummary" class="playback-health-grid" aria-live="polite">
+          <span class="playback-health-stat">لا توجد بيانات تشغيل حتى الآن</span>
+        </div>
+        <h4>آخر أحداث التشغيل</h4>
+        <div id="playbackHealthEvents" class="playback-health-events" aria-live="polite"><p class="muted">لم تُسجّل أحداث بعد.</p></div>
+      </article>
+      <article class="panel" aria-labelledby="probeTitle">
+        <div class="panel-head"><div><h3 id="probeTitle">فحص عينة من القنوات والأفلام</h3><p class="muted">يفحص بداية البيانات فقط، بحد أقصى 4 عناصر وطلبين متوازيين، ولا يشغّل البث بالكامل.</p></div></div>
+        <div class="probe-controls">
+          <label for="playbackProbeIds">معرّفات العناصر (اختياري، مفصولة بفاصلة)</label>
+          <input class="input" id="playbackProbeIds" type="text" maxlength="90" placeholder="مثال: 901, 902 — اتركه فارغًا لاختيار عينة تلقائية" autocomplete="off">
+          <button type="button" class="btn primary" id="playbackProbeBtn">فحص المصدر</button>
+        </div>
+        <p class="muted" id="playbackProbeNote" role="status">الفحص لا يغيّر اشتراكاتك أو بيانات المصدر، وقد يستخدم اتصالًا مؤقتًا من مزودك.</p>
+        <div id="playbackProbeResults" class="playback-health-events"><p class="muted">لم يتم فحص مصدر بعد.</p></div>
+      </article>
 <div hidden aria-hidden="true">
 <button id="restreamRefreshBtn"></button><button id="restreamSyncBtn"></button>
 <span id="restreamRelayBadge"></span><p id="restreamRelayText"></p>
