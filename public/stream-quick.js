@@ -44,7 +44,7 @@
       button.setAttribute('aria-current',selected?'page':'false');
     });
     if(load) {
-      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:()=>loadCatalog(true),appcodes:()=>{}};
+      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:()=>loadCatalog(true),appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
     if(history.replaceState)history.replaceState(null,'',location.pathname+'#'+name);
@@ -171,12 +171,13 @@
     $('createdAccountsPanel').hidden=freshCodes.length===0;
     if(!freshCodes.length)return;
     const table=node('table'),thead=node('thead'),head=node('tr');
-    ['Username','Password','ينتهي','اتصالات'].forEach(x=>head.append(node('th',x)));
+    ['Username','Password','ينتهي','اتصالات','كود التطبيق'].forEach(x=>head.append(node('th',x)));
     thead.append(head);table.append(thead);
     const tbody=node('tbody');
-    freshCodes.forEach(x=>{
+    freshCodes.forEach((x,index)=>{
       const tr=node('tr');
       tr.append(node('td',x.username,'code-cell'),node('td',x.password,'code-cell'),node('td',readableDate(x.expiresAt)),node('td',x.maxConnections||1));
+      const cell=node('td'),button=node('button','إصدار كود BLOFY','secondary');button.type='button';button.dataset.chooseCode=String(index);cell.append(button);tr.append(cell);
       tbody.append(tr);
     });
     table.append(tbody);target.append(table);
@@ -244,6 +245,92 @@
     finally{b.disabled=false;}
   }
 
+
+  // Main application activation codes stay in BLOFY PLAYER's existing PostgreSQL
+  // and retain its separate admin session, device binding and security policy.
+  // This UI does not store/reveal the original code again after issue.
+  async function appApi(route,{method='GET',body,timeout=18000}={}) {
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+    try {
+      const response=await fetch('/api/v1/admin/'+route,{
+        method,credentials:'same-origin',redirect:'error',cache:'no-store',
+        signal:controller.signal,headers:body===undefined?{}:{'content-type':'application/json'},
+        body:body===undefined?undefined:JSON.stringify(body)
+      });
+      if(response.status===401) {
+        const error=new Error('يلزم دخول إدارة BLOFY PLAYER');
+        error.appAuth=true;throw error;
+      }
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(String(data.error||'HTTP '+response.status));
+      return data;
+    }catch(error) {
+      if(error?.name==='AbortError')throw new Error('انتهت مهلة اتصال أكواد BLOFY');
+      throw error;
+    }finally {clearTimeout(timer);}
+  }
+  async function loadAppCodes() {
+    const notice=$('appCodeLoginNotice'),area=$('appCodesArea');
+    $('appCodesStatus').textContent='جاري قراءة أكواد BLOFY PLAYER…';
+    try {
+      const [summary,list]=await Promise.all([
+        appApi('code-ops/summary'),appApi('blofy-codes')
+      ]);
+      notice.hidden=true;area.hidden=false;
+      const stats=summary.totals||{},entries=list.items||[];
+      $('appStatTotal').textContent=format(stats.total);
+      $('appStatActive').textContent=format(stats.enabled);
+      $('appStatBound').textContent=format(stats.bound);
+      $('appCodesStatus').textContent='أكواد التطبيق تُنشأ من حسابات Xtream صحيحة، وتُربط بأجهزة BLOFY عند الاسترداد.';
+      renderAppCodes(entries);
+    }catch(e) {
+      area.hidden=true;
+      notice.hidden=!(e.appAuth===true);
+      $('appCodesStatus').textContent=e.appAuth
+        ? 'جلسة إدارة BLOFY PLAYER منفصلة. افتح لوحة /admin وسجّل الدخول، ثم ارجع لهذا القسم.'
+        : 'تعذر قراءة أكواد التطبيق: '+e.message;
+    }
+  }
+  function renderAppCodes(entries) {
+    const target=$('appCodesList');clear(target);
+    if(!entries.length){
+      target.append(node('p','لا توجد أكواد تطبيق صادرة بعد.','mini-note'));
+      return;
+    }
+    entries.slice(0,100).forEach(row=>{
+      const box=node('article','','customer'),head=node('div','','row'),info=node('div','','customer-name');
+      info.append(node('strong',row.source||'BLOFY'),node('small','معرف الاشتراك: '+row.providerId+' · ينتهي: '+readableDate(row.expiresAt)));
+      const active=!!row.active&&(row.expiresAt==null||Number(row.expiresAt)>Date.now());
+      head.append(info,node('span',active?'نشط':'متوقف / منتهي','pill '+(active?'ok':'warn')));
+      box.append(head);
+      const actions=node('div','','customer-actions');
+      const device=node('span',row.boundDeviceId?'الجهاز: '+row.boundDeviceId:'غير مرتبط بجهاز','mini-note');
+      actions.append(device);
+      if(row.active){
+        const button=node('button','إلغاء هذا الكود','danger');
+        button.type='button';button.dataset.codeId=row.providerId;actions.append(button);
+      }
+      box.append(actions);target.append(box);
+    });
+  }
+  async function issueAppCode(event) {
+    event.preventDefault();
+    if(!confirm('إصدار كود BLOFY PLAYER لهذا الحساب بعد التحقق منه؟'))return;
+    const button=$('issueAppCode');button.disabled=true;
+    try {
+      const body={
+        source:'custom',host:$('appCodeHost').value.trim(),
+        username:$('appCodeUsername').value.trim(),password:$('appCodePassword').value
+      };
+      const result=await appApi('blofy-codes',{method:'POST',body,timeout:27000});
+      $('appCodePassword').value='';
+      $('issuedAppCodePanel').hidden=false;
+      $('issuedAppCode').textContent=String(result.code||'');
+      setMessage('صدر كود تطبيق BLOFY. انسخه الآن؛ لن تتمكن من رؤيته لاحقًا.','ok');
+      await loadAppCodes();
+    }catch(e){setMessage('تعذر إصدار كود BLOFY: '+e.message,'error');if(e.appAuth)await loadAppCodes();}
+    finally{button.disabled=false;}
+  }
   $('loginForm').addEventListener('submit',async event=>{
     event.preventDefault();const b=$('loginButton');b.disabled=true;
     try{
@@ -271,6 +358,29 @@
   });
   $('refreshButton').addEventListener('click',()=>loadSource().catch(e=>setMessage(e.message,'error')));
   $('refreshOverview').addEventListener('click',()=>loadOverview().catch(e=>setMessage(e.message,'error')));
+  $('refreshAppCodes').addEventListener('click',()=>loadAppCodes().catch(e=>setMessage(e.message,'error')));
+  $('appCodeForm').addEventListener('submit',issueAppCode);
+  $('appCodesList').addEventListener('click',event=>{
+    const button=event.target.closest('[data-code-id]');if(!button)return;
+    const id=button.dataset.codeId;
+    if(!confirm('إلغاء كود التطبيق المحدد؟ لن يعمل بعد الإلغاء.'))return;
+    button.disabled=true;
+    appApi('blofy-codes/ids/'+encodeURIComponent(id),{method:'DELETE'})
+      .then(async()=>{setMessage('تم إلغاء كود تطبيق BLOFY','ok');await loadAppCodes()})
+      .catch(e=>setMessage('تعذر إلغاء الكود: '+e.message,'error'))
+      .finally(()=>{button.disabled=false;});
+  });
+  $('createdAccountsRows').addEventListener('click',event=>{
+    const button=event.target.closest('[data-choose-code]');if(!button)return;
+    const account=freshCodes[Number(button.dataset.chooseCode)];
+    if(!account)return;
+    $('appCodeHost').value=account.host||'';
+    $('appCodeUsername').value=account.username||'';
+    $('appCodePassword').value=account.password||'';
+    selectTab('appcodes');
+    setMessage('تم تعبئة حساب Xtream الجديد. اضغط إنشاء كود التطبيق عند جاهزيتك.','ok');
+  });
+
   $('refreshSubscribers').addEventListener('click',()=>loadSubscribers().catch(e=>setMessage(e.message,'error')));
   $('createAccountsForm').addEventListener('submit',createAccounts);
   $('downloadCodes').addEventListener('click',downloadCsv);
