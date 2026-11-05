@@ -47,8 +47,8 @@ export class CategoryLayout {
     const prefs=this.current[kind];
     if(direction){
       const names=this.ordered(kind,availableNames.map(name=>({name})),{includeHidden:true}).map(x=>x.name);
-      const index=names.indexOf(name),next=index+(direction==='up'?-1:1);
-      if(next>=0&&next<names.length)[names[index],names[next]]=[names[next],names[index]];
+      const index=names.indexOf(name),next=direction==='top'?0:index+(direction==='up'?-1:1);
+      if(next>=0&&next<names.length&&index!==next)names.splice(next,0,...names.splice(index,1));
       prefs.order=names;
     }
     if(hidden!==undefined){
