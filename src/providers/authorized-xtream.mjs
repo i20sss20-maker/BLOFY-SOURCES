@@ -1,6 +1,7 @@
 import { fetchJson, envBool, envInt } from './common.mjs';
 import { blofysatSelection } from '../context.mjs';
 import { managedXtreamCredentials } from '../managed-xtream.mjs';
+import { fetchXtreamM3u } from './xtream-m3u-fallback.mjs';
 
 const SECRET_REF_RE=/^[A-Z0-9][A-Z0-9_]{1,63}$/;
 
@@ -86,6 +87,17 @@ function apiUrl(credentials,action='',params={}){
 
 async function xtreamJson(credentials,action='',params={},timeoutMs=30000){
   return fetchJson(apiUrl(credentials,action,params),timeoutMs);
+}
+
+async function optionalXtreamAction(credentials,action,params={},timeoutMs=30000){
+  try{return await xtreamJson(credentials,action,params,timeoutMs)}
+  catch(error){
+    if(/^http_404_/.test(String(error?.message||''))){
+      console.warn('Xtream optional action not supported: '+action+' (404)');
+      return null;
+    }
+    throw new Error('xtream_action_'+action+'_failed: '+String(error?.message||error));
+  }
 }
 
 function isAuthenticated(payload){
@@ -216,14 +228,16 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   const rows=[];
 
   let liveCategories=new Map(),vodCategories=new Map(),seriesCategories=new Map();
+  let availableSections=0;
   const categoryJobs=[];
-  if(kinds.has('live'))categoryJobs.push(xtreamJson(credentials,'get_live_categories').then(x=>{liveCategories=categoryMap(x)}));
-  if(kinds.has('vod'))categoryJobs.push(xtreamJson(credentials,'get_vod_categories').then(x=>{vodCategories=categoryMap(x)}));
-  if(kinds.has('series'))categoryJobs.push(xtreamJson(credentials,'get_series_categories').then(x=>{seriesCategories=categoryMap(x)}));
+  if(kinds.has('live'))categoryJobs.push(optionalXtreamAction(credentials,'get_live_categories').then(x=>{liveCategories=categoryMap(x)}));
+  if(kinds.has('vod'))categoryJobs.push(optionalXtreamAction(credentials,'get_vod_categories').then(x=>{vodCategories=categoryMap(x)}));
+  if(kinds.has('series'))categoryJobs.push(optionalXtreamAction(credentials,'get_series_categories').then(x=>{seriesCategories=categoryMap(x)}));
   await Promise.all(categoryJobs);
 
   if(kinds.has('live')&&rows.length<itemLimit){
-    const list=await xtreamJson(credentials,'get_live_streams');
+    const list=await optionalXtreamAction(credentials,'get_live_streams');
+    if(Array.isArray(list))availableSections++;
     // Keep licensed upstream Live opaque behind BLOFY. TS can be streamed through the gateway
     // without exposing partner credentials; HLS playlist rewriting is intentionally not used here.
     const liveExt='ts';
@@ -241,7 +255,8 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   }
 
   if(kinds.has('vod')&&rows.length<itemLimit){
-    const list=await xtreamJson(credentials,'get_vod_streams');
+    const list=await optionalXtreamAction(credentials,'get_vod_streams');
+    if(Array.isArray(list))availableSections++;
     for(const raw of Array.isArray(list)?list:[]){
       if(rows.length>=itemLimit)break;
       const id=String(raw?.stream_id??raw?.id??'').trim(),title=String(raw?.name||raw?.title||'').trim();
@@ -257,7 +272,8 @@ export async function syncAuthorizedXtreamFeed(feed={},{
   }
 
   if(kinds.has('series')&&rows.length<itemLimit){
-    const list=await xtreamJson(credentials,'get_series');
+    const list=await optionalXtreamAction(credentials,'get_series');
+    if(Array.isArray(list))availableSections++;
     const maxSeries=Math.max(1,Math.min(selectedOnly?20000:5000,Number(feed.maxSeries||feed.max_series)||seriesLimit));
     const available=Array.isArray(list)?list:[];
     // Filter by the original provider's series IDs BEFORE taking the hydration limit.
@@ -300,5 +316,25 @@ export async function syncAuthorizedXtreamFeed(feed={},{
     }
   }
 
+  if(availableSections===0){
+    // The authenticated provider may not expose get_* action endpoints.
+    // In that case try its standard M3U export once. No limit bypass:
+    // playback continues to use the upstream account and its connection cap.
+    const m3u=await fetchXtreamM3u(credentials,{maxItems:itemLimit});
+    if(!m3u.length)throw new Error('xtream_no_supported_catalog_api_or_m3u_entries');
+    let sequence=0;
+    for(const entry of m3u){
+      if(rows.length>=itemLimit)break;
+      if((entry.kind==='live'&&!kinds.has('live'))||(entry.kind==='movie'&&!kinds.has('vod'))||(entry.kind==='series_episode'&&!kinds.has('series')))continue;
+      if(!includeSelected(entry.kind==='live'?'Live':entry.kind==='movie'?'Movies':'Series',entry.id))continue;
+      rows.push(commonItem({
+        kind:entry.kind,title:entry.name,description:'',icon:entry.icon,
+        category:localizedCategory(entry.category,entry.kind==='live'?'قنوات شريك':entry.kind==='movie'?'أفلام شريك':'مسلسلات شريك',profile),
+        feed,rights,profile,allowHttp,sourceItemId:`xtream:${secretRef}:m3u:${entry.mediaType}:${entry.id}`,
+        epgId:entry.epgId,seriesTitle:entry.kind==='series_episode'?entry.category:'',season:1,episode:++sequence,
+        stream:{resolver:'authorized-xtream',secretRef,mediaType:entry.mediaType,upstreamId:entry.id,extension:entry.extension}
+      }));
+    }
+  }
   return rows.slice(0,itemLimit);
 }
