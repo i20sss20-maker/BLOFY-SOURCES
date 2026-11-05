@@ -68,6 +68,56 @@
       throw error;
     } finally {clearTimeout(timer);}
   }
+  async function loadPlaybackHealth(){
+    const data=(await api('restream',{timeout:18000})).restream||{};
+    const stats=data.playback||{};
+    const metrics=[
+      ['بدأ التشغيل',stats.starts],['فشل',stats.failures],['انقطاع البث',stats.interruptions],
+      ['حد الاتصالات',stats.limits],['بدايات بطيئة',stats.slowStarts],
+      ['الوقت الوسيط للفتح',stats.medianStartMs===null?'—':String(stats.medianStartMs||0)+' ms']
+    ];
+    const wrap=$('quickHealthStats');clear(wrap);
+    metrics.forEach(([label,value])=>{
+      const card=node('div','','quick-health-card');
+      card.append(node('small',label),node('strong',typeof value==='number'?format(value):value));
+      wrap.append(card);
+    });
+    const results=$('quickHealthResults');clear(results);
+    const probe=data.recentChecks||{};
+    for(const row of (probe.results||[]).slice(0,4)){
+      const el=node('div','','quick-health-entry');
+      const status=row.state==='ok'?'تعمل':row.state==='slow'?'بطيئة':'لا تعمل';
+      el.append(node('strong',status+' · '+row.title),node('small',row.reason||''),
+        node('small','ID: '+row.id+(row.startupMs==null?'':' · '+format(row.startupMs)+' ms')));
+      results.append(el);
+    }
+    if(!results.children.length)results.append(node('p','اضغط فحص عينة لقياس بداية التشغيل الفعلية.','mini-note'));
+    const events=$('quickHealthEvents');clear(events);
+    const bad=(stats.latest||[]).filter(x=>['failed','interrupted','limited'].includes(x.outcome)).slice(0,10);
+    for(const row of bad){
+      const el=node('div','','quick-health-entry');
+      el.append(node('strong',row.title||'محتوى #'+row.id),
+        node('small',row.reason||row.outcome),
+        node('small',row.startupMs==null?'':'البداية: '+format(row.startupMs)+' ms'));
+      events.append(el);
+    }
+    if(!bad.length)events.append(node('p','لا توجد أخطاء تشغيل مسجلة خلال آخر ساعة على هذا السيرفر.','mini-note'));
+  }
+  async function runQuickProbe(){
+    const ids=$('quickProbeIds').value.trim().split(/[\\s,;،]+/).filter(Boolean);
+    if(ids.length>4||ids.some(x=>!/^\\d{1,15}$/.test(x))){
+      $('quickHealthNote').textContent='أدخل حتى 4 معرّفات رقمية فقط.';return;
+    }
+    const button=$('quickProbeBtn');button.disabled=true;
+    $('quickHealthNote').textContent='جارٍ فحص بداية البيانات من المصدر…';
+    try{
+      const response=await api('playback/probe',{method:'POST',body:{ids},timeout:65000});
+      const failed=(response.results||[]).filter(row=>row.state==='failed').length;
+      $('quickHealthNote').textContent='فُحص '+format(response.results?.length||0)+' عنصر؛ أخطاء: '+format(failed)+'، ولا يعني نجاح العينة نجاح جميع القنوات.';
+      await loadPlaybackHealth();
+    }catch(error){$('quickHealthNote').textContent='فشل الفحص: '+error.message;}
+    finally{button.disabled=false;}
+  }
   function explainSourceError(raw){
     const error=String(raw||'');
     if(error.includes('http_403_'))return 'المصدر رفض وصول سيرفر BLOFY برمز 403. قائمة المحتوى القديمة محفوظة، لكن التحديث والتشغيل قد لا يعملان حتى يسمح المصدر بالاتصال.';
