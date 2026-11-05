@@ -41,7 +41,7 @@ export class CategoryLayout {
     this._kind(kind);
     name=clean(name);
     if(!name||!availableNames.includes(name))throw new Error('category_not_found');
-    if(direction!==undefined&&!['up','down'].includes(direction))throw new Error('invalid_category_direction');
+    if(direction!==undefined&&!['up','down','top'].includes(direction))throw new Error('invalid_category_direction');
     if(hidden!==undefined&&typeof hidden!=='boolean')throw new Error('invalid_category_visibility');
     if(direction===undefined&&hidden===undefined)throw new Error('missing_category_change');
     const prefs=this.current[kind];
