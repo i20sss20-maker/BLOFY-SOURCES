@@ -44,7 +44,7 @@
       button.setAttribute('aria-current',selected?'page':'false');
     });
     if(load) {
-      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:()=>loadCatalog(true),appcodes:loadAppCodes};
+      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
     const routeNames={overview:'',source:'source',codes:'codes',subscribers:'users',catalog:'content',appcodes:'appcodes'};
@@ -238,6 +238,51 @@
     });
     if(!(data.items||[]).length)target.append(node('p','لا يوجد محتوى مطابق.','mini-note'));
   }
+  let editableCategories=[],categoryMutating=false;
+  async function loadCategories(){
+    const kind=$('categoryKind').value;
+    $('categoryEditorStatus').textContent='جاري تحميل التصنيفات…';
+    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
+    editableCategories=data.categories||[];
+    const target=$('categoryEditorRows');clear(target);
+    $('categoryEditorStatus').textContent='التصنيفات: '+format(editableCategories.length)+' · اضغط ↑ أو ↓ لتعديل ترتيبها.';
+    editableCategories.forEach((item,index)=>{
+      const row=node('div','','category-row');
+      row.classList.toggle('is-hidden',Boolean(item.hidden));
+      const info=node('div','','category-label');
+      info.append(node('strong',item.name),node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن العملاء':'')));
+      const actions=node('div','','category-actions');
+      const buttons=[
+        {label:'↑',title:'رفع التصنيف',action:'up',disabled:index===0},
+        {label:'↓',title:'خفض التصنيف',action:'down',disabled:index===editableCategories.length-1},
+        {label:item.hidden?'إظهار':'إخفاء',title:'تغيير ظهور التصنيف',action:'visibility',disabled:false}
+      ];
+      for(const def of buttons){
+        const b=node('button',def.label,'secondary');
+        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        actions.append(b);
+      }
+      row.append(info,actions);
+      target.append(row);
+    });
+  }
+  async function mutateCategory(index,action){
+    if(categoryMutating)return;
+    const item=editableCategories[index];
+    if(!item)return;
+    const kind=$('categoryKind').value;
+    const body=action==='visibility'?
+      {kind,name:item.name,action:'visibility',hidden:!item.hidden}:
+      {kind,name:item.name,action:'move',direction:action};
+    categoryMutating=true;
+    try{
+      await api('categories',{method:'POST',body});
+      await loadCategories();
+      setMessage('تم حفظ ترتيب وظهور التصنيفات. سينعكس على قوائم Xtream مباشرة.','ok');
+    }catch(error){setMessage('تعذر تحديث التصنيف: '+error.message,'error');}
+    finally{categoryMutating=false;}
+  }
+
   async function syncCatalog() {
     const b=$('syncCatalog');b.disabled=true;
     try {
@@ -394,6 +439,17 @@
       .catch(e=>setMessage('تعذر تحديث الحساب: '+e.message,'error')).finally(()=>{b.disabled=false;});
   });
   $('syncCatalog').addEventListener('click',syncCatalog);
+  $('categoryEditor').addEventListener('toggle',()=>{
+    if($('categoryEditor').open)loadCategories().catch(e=>setMessage('تعذر قراءة التصنيفات: '+e.message,'error'));
+  });
+  $('categoryKind').addEventListener('change',()=>loadCategories().catch(e=>setMessage(e.message,'error')));
+  $('categoryEditorRows').addEventListener('click',event=>{
+    const button=event.target.closest('[data-category-action]');
+    if(!button)return;
+    mutateCategory(Number(button.dataset.categoryIndex),button.dataset.categoryAction)
+      .catch(e=>setMessage('تعذر تحديث التصنيف: '+e.message,'error'));
+  });
+
   $('searchCatalog').addEventListener('input',()=>{
     clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCatalog(true).catch(e=>setMessage(e.message,'error')),400);
   });
