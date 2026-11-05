@@ -80,3 +80,14 @@ button:focus-visible,a:focus-visible{outline:2px solid #c1aaff;outline-offset:3p
 .category-actions{display:flex;gap:5px;flex-shrink:0}
 .category-actions button{min-height:34px;min-width:34px;padding:6px 9px;font-size:12px}
 @media(max-width:560px){.category-row{align-items:flex-start;flex-direction:column}.category-actions{width:100%}.category-actions button{flex:1}}
+
+/* Quick content organization: searchable sections, one-click priority, and safe visibility controls. */
+.category-toolbar{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr);align-items:end;gap:10px}
+.category-toolbar label{margin:8px 0 12px}
+.category-toolbar input,.category-toolbar select{width:100%;min-width:0}
+.category-title{display:flex;align-items:center;gap:10px;min-width:0}
+.category-position{border:1px solid #5b4c77;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;color:#cfc1ea;font:600 12px system-ui;min-width:30px}
+.category-actions .to-top{background:#603a9f;color:#fff}
+.category-row.is-hidden .category-label strong{text-decoration:line-through;text-decoration-color:#9987ad}
+.category-editor[open]{box-shadow:0 8px 28px #0004}
+@media(max-width:620px){.category-toolbar{grid-template-columns:1fr}.category-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.category-actions button{font-size:12px;padding:8px 4px}}
