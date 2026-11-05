@@ -145,8 +145,8 @@
           <label>Host <input class="input" id="xtreamSourceHost" type="url" placeholder="https://example.com:8080" required></label>
           <label>Username <input class="input" id="xtreamSourceUsername" required></label>
           <label>Password <input class="input" id="xtreamSourcePassword" type="password" autocomplete="new-password" required></label>
-          <label>مرجع تصريح المحتوى <input class="input" id="xtreamRightsReference" required></label>
-          <label><input type="checkbox" id="xtreamRightsConfirmed" required> لدي صلاحية توزيع المحتوى.</label>
+          
+          <label><input type="checkbox" id="xtreamRightsConfirmed" required> أؤكد أن لدي صلاحية استخدام هذا المصدر وإعادة توزيع محتواه.</label>
           <div class="create-actions">
             <button class="btn primary" type="submit" id="xtreamSourceSaveBtn">حفظ وتفعيل</button>
             <button class="btn ghost" type="button" id="xtreamSourceRefreshBtn">تحديث</button>
@@ -158,6 +158,13 @@
         <p>عدد العناصر: <strong id="xtreamSourceCount">0</strong></p>
         <button id="restreamAccountsBtn" class="btn ghost">إدارة المشتركين</button>
       </article>
+<div hidden aria-hidden="true">
+<button id="restreamRefreshBtn"></button><button id="restreamSyncBtn"></button>
+<span id="restreamRelayBadge"></span><p id="restreamRelayText"></p>
+<span id="rCandidates"></span><span id="rCatalogTotal"></span><span id="rActiveStreams"></span><span id="rPrivateTitles"></span>
+<table><tbody id="restreamSourceRows"></tbody></table>
+<div id="restreamSampleRows"></div><div id="restreamConnectionRows"></div><p id="restreamConnectionsSummary"></p>
+</div>
     </section>
 
     <section id="view-subscribers" class="view">
@@ -338,5 +345,6 @@
 
 <div id="statusbar" class="toast"></div>
 <script src="/admin-assets/admin.js" defer></script>
+<script src="/admin-assets/xtream-simple.js" defer></script>
 </body>
 </html>
