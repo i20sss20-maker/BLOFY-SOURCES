@@ -78,8 +78,8 @@
 <section id="catalogPanel" class="panel stream-tab" hidden>
   <div class="row"><div><span class="eyebrow">MEDIA LIBRARY</span><h1>القنوات والأفلام والمسلسلات</h1></div><button id="syncCatalog" type="button" class="secondary">مزامنة المكتبة</button></div>
   <div class="subscriber-search"><input id="searchCatalog" type="search" placeholder="ابحث عن عنوان…" aria-label="بحث المحتوى"><select id="catalogKind"><option value="">الكل</option><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series_episode">حلقات المسلسلات</option></select></div>
-  <details id="categoryEditor" class="category-editor">
-    <summary>ترتيب التصنيفات وإظهارها للعملاء <span class="mini-note">تحكّم في ترتيب القنوات والأفلام والمسلسلات</span></summary>
+  <details id="categoryEditor" class="category-editor" open>
+    <summary>تنظيم الأقسام <span class="mini-note">القنوات، الأفلام، المسلسلات · حفظ تلقائي</span></summary>
     <div class="category-edit-body">
       <label>نوع المحتوى
         <select id="categoryKind">
@@ -88,8 +88,16 @@
           <option value="series">المسلسلات</option>
         </select>
       </label>
-      <p class="mini-note">استخدم السهمين لتغيير الترتيب، أو أخفِ تصنيفًا عن تطبيقات المشتركين. التغييرات محفوظة حتى بعد تحديث المصدر.</p>
-      <p id="categoryEditorStatus" class="mini-note">افتح القسم لتحميل التصنيفات.</p>
+      <div class="category-toolbar">
+        <label>بحث في الأقسام
+          <input id="categorySearch" type="search" placeholder="ابحث عن رياضة، أفلام، أطفال..." autocomplete="off">
+        </label>
+        <label>العرض
+          <select id="categoryVisibility"><option value="all">جميع الأقسام</option><option value="visible">الظاهرة فقط</option><option value="hidden">المخفية فقط</option></select>
+        </label>
+      </div>
+      <p class="mini-note">استخدم «للأعلى» لتثبيت القسم أولًا، أو الأسهم لتغيير ترتيبه. يمكنك إخفاء القسم دون حذف محتواه، وسيبقى ترتيبك محفوظًا بعد التحديث.</p>
+      <p id="categoryEditorStatus" class="mini-note" role="status">جارٍ تحميل الأقسام…</p>
       <div id="categoryEditorRows" class="category-list"></div>
     </div>
   </details>
