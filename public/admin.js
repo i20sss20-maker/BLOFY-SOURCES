@@ -160,8 +160,8 @@ function renderPlaybackHealth(data={}){
 }
 async function startPlaybackProbe(){
   const button=$('playbackProbeBtn');
-  const ids=$('playbackProbeIds').value.trim().split(/[\\s,;،]+/).filter(Boolean);
-  if(ids.length>4||ids.some(id=>!/^\\d{1,15}$/.test(id)))return toast('أدخل حتى 4 معرّفات رقمية، أو اترك الحقل فارغًا','error');
+  const ids=$('playbackProbeIds').value.trim().split(/[\s,;،]+/).filter(Boolean);
+  if(ids.length>4||ids.some(id=>!/^\d{1,15}$/.test(id)))return toast('أدخل حتى 4 معرّفات رقمية، أو اترك الحقل فارغًا','error');
   button.disabled=true;
   $('playbackProbeNote').textContent='جارٍ فحص بداية البث؛ قد يستغرق الرد عدة ثوانٍ...';
   try{
