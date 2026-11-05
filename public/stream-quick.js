@@ -527,6 +527,8 @@
     if($('categoryEditor').open)loadCategories().catch(e=>setMessage('تعذر قراءة التصنيفات: '+e.message,'error'));
   });
   $('categoryKind').addEventListener('change',()=>loadCategories().catch(e=>setMessage(e.message,'error')));
+  $('categorySearch').addEventListener('input',renderCategories);
+  $('categoryVisibility').addEventListener('change',renderCategories);
   $('categoryEditorRows').addEventListener('click',event=>{
     const button=event.target.closest('[data-category-action]');
     if(!button)return;
