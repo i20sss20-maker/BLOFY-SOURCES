@@ -80,3 +80,24 @@ button:focus-visible,a:focus-visible{outline:2px solid #c1aaff;outline-offset:3p
 .category-actions{display:flex;gap:5px;flex-shrink:0}
 .category-actions button{min-height:34px;min-width:34px;padding:6px 9px;font-size:12px}
 @media(max-width:560px){.category-row{align-items:flex-start;flex-direction:column}.category-actions{width:100%}.category-actions button{flex:1}}
+
+/* Quick content organization: searchable sections, one-click priority, and safe visibility controls. */
+.category-toolbar{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr);align-items:end;gap:10px}
+.category-toolbar label{margin:8px 0 12px}
+.category-toolbar input,.category-toolbar select{width:100%;min-width:0}
+.category-title{display:flex;align-items:center;gap:10px;min-width:0}
+.category-position{border:1px solid #5b4c77;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;color:#cfc1ea;font:600 12px system-ui;min-width:30px}
+.category-actions .to-top{background:#603a9f;color:#fff}
+.category-row.is-hidden .category-label strong{text-decoration:line-through;text-decoration-color:#9987ad}
+.category-editor[open]{box-shadow:0 8px 28px #0004}
+@media(max-width:620px){.category-toolbar{grid-template-columns:1fr}.category-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.category-actions button{font-size:12px;padding:8px 4px}}
+
+/* Restream quality status in the simple admin panel. */
+.quick-health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
+.quick-health-card{display:flex;flex-direction:column;gap:9px;background:#1c192b;border:1px solid #4c415e;border-radius:10px;padding:13px;min-width:0}
+.quick-health-card small{color:#c4bad3;font-size:12px}
+.quick-health-card strong{font-size:19px;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.quick-health-list{display:grid;gap:7px;max-height:250px;overflow-y:auto;margin:10px 0 18px}
+.quick-health-entry{display:grid;gap:5px;background:#1d192a;border:1px solid #3e354f;border-radius:10px;padding:10px 12px;overflow-wrap:anywhere}
+.quick-health-entry strong{font-size:13px}.quick-health-entry small{font-size:11px;color:#c2bbd2}
+@media(min-width:610px){.quick-health-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}

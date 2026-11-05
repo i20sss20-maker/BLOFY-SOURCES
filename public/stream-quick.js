@@ -44,7 +44,7 @@
       button.setAttribute('aria-current',selected?'page':'false');
     });
     if(load) {
-      const tasks={overview:loadOverview,source:loadSource,codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
+      const tasks={overview:loadOverview,source:async()=>{await Promise.all([loadSource(),loadPlaybackHealth()]);},codes:()=>{},subscribers:loadSubscribers,catalog:async()=>{await loadCatalog(true);if($('categoryEditor').open)await loadCategories();},appcodes:loadAppCodes};
       Promise.resolve(tasks[name]()).catch(e=>setMessage('تعذر تحميل القسم: '+e.message,'error'));
     }
     const routeNames={overview:'',source:'source',codes:'codes',subscribers:'users',catalog:'content',appcodes:'appcodes'};
@@ -67,6 +67,56 @@
       if(error?.name==='AbortError')throw new Error('انتهت مهلة الطلب، جرّب تحديث الحالة.');
       throw error;
     } finally {clearTimeout(timer);}
+  }
+  async function loadPlaybackHealth(){
+    const data=(await api('restream',{timeout:18000})).restream||{};
+    const stats=data.playback||{};
+    const metrics=[
+      ['بدأ التشغيل',stats.starts],['فشل',stats.failures],['انقطاع البث',stats.interruptions],
+      ['حد الاتصالات',stats.limits],['بدايات بطيئة',stats.slowStarts],
+      ['الوقت الوسيط للفتح',stats.medianStartMs===null?'—':String(stats.medianStartMs||0)+' ms']
+    ];
+    const wrap=$('quickHealthStats');clear(wrap);
+    metrics.forEach(([label,value])=>{
+      const card=node('div','','quick-health-card');
+      card.append(node('small',label),node('strong',typeof value==='number'?format(value):value));
+      wrap.append(card);
+    });
+    const results=$('quickHealthResults');clear(results);
+    const probe=data.recentChecks||{};
+    for(const row of (probe.results||[]).slice(0,4)){
+      const el=node('div','','quick-health-entry');
+      const status=row.state==='ok'?'تعمل':row.state==='slow'?'بطيئة':'لا تعمل';
+      el.append(node('strong',status+' · '+row.title),node('small',row.reason||''),
+        node('small','ID: '+row.id+(row.startupMs==null?'':' · '+format(row.startupMs)+' ms')));
+      results.append(el);
+    }
+    if(!results.children.length)results.append(node('p','اضغط فحص عينة لقياس بداية التشغيل الفعلية.','mini-note'));
+    const events=$('quickHealthEvents');clear(events);
+    const bad=(stats.latest||[]).filter(x=>['failed','interrupted','limited'].includes(x.outcome)).slice(0,10);
+    for(const row of bad){
+      const el=node('div','','quick-health-entry');
+      el.append(node('strong',row.title||'محتوى #'+row.id),
+        node('small',row.reason||row.outcome),
+        node('small',row.startupMs==null?'':'البداية: '+format(row.startupMs)+' ms'));
+      events.append(el);
+    }
+    if(!bad.length)events.append(node('p','لا توجد أخطاء تشغيل مسجلة خلال آخر ساعة على هذا السيرفر.','mini-note'));
+  }
+  async function runQuickProbe(){
+    const ids=$('quickProbeIds').value.trim().split(/[\s,;،]+/).filter(Boolean);
+    if(ids.length>4||ids.some(x=>!/^\d{1,15}$/.test(x))){
+      $('quickHealthNote').textContent='أدخل حتى 4 معرّفات رقمية فقط.';return;
+    }
+    const button=$('quickProbeBtn');button.disabled=true;
+    $('quickHealthNote').textContent='جارٍ فحص بداية البيانات من المصدر…';
+    try{
+      const response=await api('playback/probe',{method:'POST',body:{ids},timeout:65000});
+      const failed=(response.results||[]).filter(row=>row.state==='failed').length;
+      $('quickHealthNote').textContent='فُحص '+format(response.results?.length||0)+' عنصر؛ أخطاء: '+format(failed)+'، ولا يعني نجاح العينة نجاح جميع القنوات.';
+      await loadPlaybackHealth();
+    }catch(error){$('quickHealthNote').textContent='فشل الفحص: '+error.message;}
+    finally{button.disabled=false;}
   }
   function explainSourceError(raw){
     const error=String(raw||'');
@@ -301,32 +351,53 @@
     if(!(data.items||[]).length)target.append(node('p','لا يوجد محتوى مطابق.','mini-note'));
   }
   let editableCategories=[],categoryMutating=false;
-  async function loadCategories(){
-    const kind=$('categoryKind').value;
-    $('categoryEditorStatus').textContent='جاري تحميل التصنيفات…';
-    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
-    editableCategories=data.categories||[];
+  function renderCategories(){
+    const q=$('categorySearch').value.trim().toLocaleLowerCase('ar');
+    const visibility=$('categoryVisibility').value;
+    const matches=editableCategories.map((item,index)=>({...item,index})).filter(item=>
+      (!q||item.name.toLocaleLowerCase('ar').includes(q))&&
+      (visibility==='all'||(visibility==='hidden'?item.hidden:!item.hidden))
+    );
+    const hidden=editableCategories.filter(item=>item.hidden).length;
     const target=$('categoryEditorRows');clear(target);
-    $('categoryEditorStatus').textContent='التصنيفات: '+format(editableCategories.length)+' · اضغط ↑ أو ↓ لتعديل ترتيبها.';
-    editableCategories.forEach((item,index)=>{
+    $('categoryEditorStatus').textContent='الأقسام: '+format(editableCategories.length)+
+      ' · الظاهرة: '+format(editableCategories.length-hidden)+
+      ' · المخفية: '+format(hidden)+
+      (q||visibility!=='all'?' · نتائج البحث: '+format(matches.length):'');
+    matches.slice(0,150).forEach(item=>{
+      const index=item.index;
       const row=node('div','','category-row');
       row.classList.toggle('is-hidden',Boolean(item.hidden));
       const info=node('div','','category-label');
-      info.append(node('strong',item.name),node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن العملاء':'')));
+      const title=node('div','','category-title');
+      title.append(node('span',String(index+1),'category-position'),node('strong',item.name));
+      info.append(title,node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن المشتركين':' · ظاهر للمشتركين')));
       const actions=node('div','','category-actions');
       const buttons=[
-        {label:'↑',title:'رفع التصنيف',action:'up',disabled:index===0},
-        {label:'↓',title:'خفض التصنيف',action:'down',disabled:index===editableCategories.length-1},
-        {label:item.hidden?'إظهار':'إخفاء',title:'تغيير ظهور التصنيف',action:'visibility',disabled:false}
+        {label:'للأعلى',title:'انقل هذا القسم إلى أول القائمة',action:'top',disabled:index===0},
+        {label:'↑',title:'ارفع القسم مرتبة واحدة',action:'up',disabled:index===0},
+        {label:'↓',title:'أنزل القسم مرتبة واحدة',action:'down',disabled:index===editableCategories.length-1},
+        {label:item.hidden?'إظهار':'إخفاء',title:item.hidden?'إظهار القسم في تطبيقات المشتركين':'إخفاء القسم من تطبيقات المشتركين',action:'visibility',disabled:false}
       ];
       for(const def of buttons){
         const b=node('button',def.label,'secondary');
-        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);
+        b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        if(def.action==='top')b.classList.add('to-top');
         actions.append(b);
       }
       row.append(info,actions);
       target.append(row);
     });
+    if(!matches.length)target.append(node('p','لا توجد أقسام مطابقة. جرّب تغيير البحث أو فلتر العرض.','mini-note'));
+    if(matches.length>150)target.append(node('p','يُعرض أول 150 قسمًا. استخدم البحث للوصول للقسم المطلوب بسرعة.','mini-note'));
+  }
+  async function loadCategories(){
+    const kind=$('categoryKind').value;
+    $('categoryEditorStatus').textContent='جارٍ تحميل الأقسام…';
+    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
+    editableCategories=data.categories||[];
+    renderCategories();
   }
   async function mutateCategory(index,action){
     if(categoryMutating)return;
@@ -466,6 +537,8 @@
     try{await api('xtream-source/disable',{method:'POST',body:{}});await loadSource()}catch(e){setMessage(e.message,'error')}
   });
   $('refreshButton').addEventListener('click',()=>loadSource().catch(e=>setMessage(e.message,'error')));
+  $('quickHealthRefresh').addEventListener('click',()=>loadPlaybackHealth().catch(e=>$('quickHealthNote').textContent=e.message));
+  $('quickProbeBtn').addEventListener('click',runQuickProbe);
   $('refreshOverview').addEventListener('click',()=>loadOverview().catch(e=>setMessage(e.message,'error')));
   $('refreshAppCodes').addEventListener('click',()=>loadAppCodes().catch(e=>setMessage(e.message,'error')));
   $('appCodeForm').addEventListener('submit',issueAppCode);
@@ -506,6 +579,8 @@
     if($('categoryEditor').open)loadCategories().catch(e=>setMessage('تعذر قراءة التصنيفات: '+e.message,'error'));
   });
   $('categoryKind').addEventListener('change',()=>loadCategories().catch(e=>setMessage(e.message,'error')));
+  $('categorySearch').addEventListener('input',renderCategories);
+  $('categoryVisibility').addEventListener('change',renderCategories);
   $('categoryEditorRows').addEventListener('click',event=>{
     const button=event.target.closest('[data-category-action]');
     if(!button)return;

@@ -14,7 +14,7 @@ async function wait(base,child){for(let i=0;i<80;i++){if(child.exitCode!=null)th
 test('standalone service exposes only its own Xtream/admin routes',async()=>{
   const port=await freePort();
   const dataDir=mkdtempSync(path.join(os.tmpdir(),'blofy-standalone-')),base=`http://127.0.0.1:${port}`;
-  const child=spawn(process.execPath,['src/server.mjs'],{cwd:repoRoot,env:{...process.env,PORT:String(port),DATA_DIR:dataDir,PUBLIC_BASE_URL:base,XTREAM_PUBLIC_BASE_URL:base,ADMIN_PASSWORD:'AdminPass-123',SESSION_SECRET:'d'.repeat(64),XTREAM_USERNAME:'testuser',XTREAM_PASSWORD:'TestPass-123',SYNC_ON_START:'false',ENABLE_XTREAM_SELF_TEST:'false'},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['src/server.mjs'],{cwd:repoRoot,env:{...process.env,PORT:String(port),DATA_DIR:dataDir,PUBLIC_BASE_URL:base,XTREAM_PUBLIC_BASE_URL:base,ADMIN_PASSWORD:'AdminPass-123',SESSION_SECRET:'d'.repeat(64),XTREAM_USERNAME:'testuser',XTREAM_PASSWORD:'TestPass-123',SYNC_ON_START:'false',BLOFY_STREAM_SIMPLE_UI:'true',ENABLE_XTREAM_SELF_TEST:'false'},stdio:['ignore','pipe','pipe']});
   try{
     const health=await wait(base,child);
     assert.equal(health.ok,true);
@@ -25,6 +25,21 @@ test('standalone service exposes only its own Xtream/admin routes',async()=>{
     assert.equal(r.status,200);
     let html=await r.text();
     assert.match(html,/لوحة الإدارة/);
+
+    // The streamlined operator panel exposes practical category sorting & media probes.
+    r=await fetch(base+'/');
+    assert.equal(r.status,200);
+    html=await r.text();
+    assert.match(html,/id="categorySearch"/);
+    assert.match(html,/id="categoryVisibility"/);
+    assert.match(html,/id="quickProbeBtn"/);
+    assert.match(html,/id="quickHealthRefresh"/);
+    r=await fetch(base+'/admin-assets/stream-quick.js');
+    assert.equal(r.status,200);
+    const quickJs=await r.text();
+    assert.match(quickJs,/categorySearch/);
+    assert.match(quickJs,/categoryAction=def.action/);
+    assert.match(quickJs,/playback\/probe/);
 
     r=await fetch(`${base}/xtream`);
     assert.equal(r.status,200);

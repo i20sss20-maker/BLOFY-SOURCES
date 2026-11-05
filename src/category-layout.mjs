@@ -41,14 +41,14 @@ export class CategoryLayout {
     this._kind(kind);
     name=clean(name);
     if(!name||!availableNames.includes(name))throw new Error('category_not_found');
-    if(direction!==undefined&&!['up','down'].includes(direction))throw new Error('invalid_category_direction');
+    if(direction!==undefined&&!['up','down','top'].includes(direction))throw new Error('invalid_category_direction');
     if(hidden!==undefined&&typeof hidden!=='boolean')throw new Error('invalid_category_visibility');
     if(direction===undefined&&hidden===undefined)throw new Error('missing_category_change');
     const prefs=this.current[kind];
     if(direction){
       const names=this.ordered(kind,availableNames.map(name=>({name})),{includeHidden:true}).map(x=>x.name);
-      const index=names.indexOf(name),next=index+(direction==='up'?-1:1);
-      if(next>=0&&next<names.length)[names[index],names[next]]=[names[next],names[index]];
+      const index=names.indexOf(name),next=direction==='top'?0:index+(direction==='up'?-1:1);
+      if(next>=0&&next<names.length&&index!==next)names.splice(next,0,...names.splice(index,1));
       prefs.order=names;
     }
     if(hidden!==undefined){
