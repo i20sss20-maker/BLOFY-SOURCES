@@ -16,6 +16,8 @@ test('category layout moves, hides, persists and restores categories',async()=>{
     await layout.change('live','رياضة',{direction:'up'},names);
     const moved=layout.ordered('live',rows,{includeHidden:true}).map(x=>x.name);
     assert.ok(moved.indexOf('رياضة')<moved.indexOf('أفلام') || moved.indexOf('رياضة')<moved.indexOf('الأخبار'));
+    await layout.change('live','رياضة',{direction:'top'},names);
+    assert.equal(layout.ordered('live',rows,{includeHidden:true})[0].name,'رياضة');
     await layout.change('live','رياضة',{hidden:true},names);
     assert.equal(layout.isVisible('live','رياضة'),false);
     assert.equal(layout.isVisible('movie','رياضة'),true);
