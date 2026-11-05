@@ -70,3 +70,5 @@ export class CategoryLayout {
     return true;
   }
 }
+
+// Keep operator-selected category order persistent across catalog syncs.
