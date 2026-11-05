@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#131023">
-<title>BLOFY STREAM | ربط Xtream</title>
+<title>BLOFY STREAM | مركز التحكم والأكواد</title>
 <link rel="stylesheet" href="/admin-assets/stream-quick.css">
 <script src="/admin-assets/stream-quick.js" defer></script>
 </head>
 <body>
 <main class="shell">
-  <header class="brand"><span class="logo">B</span><div><b>BLOFY STREAM</b><small>إدارة المصدر</small></div></header>
+  <header class="brand"><span class="logo">B</span><div><b>BLOFY STREAM</b><small>مركز التحكم بالمصادر والمشتركين</small></div><span class="brand-tag">CONTROL</span></header>
   <section class="panel" id="loginPanel" hidden>
     <h1>دخول الإدارة</h1>
     <p>ادخل رمز لوحة BLOFY STREAM للمتابعة.</p>
@@ -20,7 +20,74 @@
       <button id="loginButton" type="submit">دخول</button>
     </form>
   </section>
-  <section class="panel" id="sourcePanel" hidden>
+  <nav id="streamNav" class="stream-nav" aria-label="أقسام مركز التحكم" hidden>
+  <button type="button" data-tab="overview" class="selected">الرئيسية</button>
+  <button type="button" data-tab="source">مصدر Xtream</button>
+  <button type="button" data-tab="codes">إصدار الحسابات</button>
+  <button type="button" data-tab="subscribers">المشتركون</button>
+  <button type="button" data-tab="catalog">المكتبة</button>
+  <button type="button" data-tab="appcodes">أكواد BLOFY</button>
+</nav>
+<section id="overviewPanel" class="panel stream-tab" hidden>
+  <div class="row"><div><span class="eyebrow">BLOFY CONTROL CENTER</span><h1>لوحة الإدارة</h1></div><button id="refreshOverview" type="button" class="secondary">تحديث</button></div>
+  <div class="stats-grid" id="overviewMetrics">
+    <div class="stat-card"><small>المحتوى</small><strong id="statTotal">—</strong></div>
+    <div class="stat-card"><small>القنوات</small><strong id="statLive">—</strong></div>
+    <div class="stat-card"><small>الأفلام</small><strong id="statMovies">—</strong></div>
+    <div class="stat-card"><small>الحلقات</small><strong id="statEpisodes">—</strong></div>
+    <div class="stat-card"><small>الحسابات</small><strong id="statUsers">—</strong></div>
+    <div class="stat-card"><small>النشط</small><strong id="statActiveUsers">—</strong></div>
+  </div>
+  <div class="quick-actions">
+    <button class="quick primary" data-open="codes" type="button">+ إصدار حساب Xtream</button>
+    <button class="quick" data-open="subscribers" type="button">إدارة المشتركين</button>
+    <button class="quick" data-open="catalog" type="button">تصفح المحتوى</button>
+    <button class="quick" data-open="source" type="button">إعداد المصدر</button>
+  </div>
+  <p class="info">مصدر Xtream يزوّد المكتبة بالمحتوى. حسابات العملاء مستقلة عن أكواد تفعيل التطبيق، وسعة المشاهدة تتبع حدود المصدر.</p>
+</section>
+<section id="codesPanel" class="panel stream-tab" hidden>
+  <span class="eyebrow">XTREAM ACCOUNTS</span><h1>إصدار حسابات العملاء</h1>
+  <p>أنشئ حسابًا واحدًا أو دفعة حسابات بصلاحية ومدة محددتين. بيانات الدخول تُعرض مرة واحدة بعد الإصدار.</p>
+  <form id="createAccountsForm" class="compact-form">
+    <div class="form-grid">
+      <label>عدد الحسابات (1–100)<input id="codesCount" type="number" min="1" max="100" value="1" required></label>
+      <label>مدة الاشتراك
+        <select id="codesDays"><option value="30">شهر</option><option value="90">3 أشهر</option><option value="180">6 أشهر</option><option value="365">سنة</option><option value="1">يوم واحد</option></select>
+      </label>
+      <label>الأجهزة المتزامنة
+        <select id="codesConnections"><option value="1">جهاز واحد</option><option value="2">جهازان</option><option value="3">3 أجهزة</option></select>
+      </label>
+      <label>اسم المجموعة<input id="codesLabel" maxlength="80" value="BLOFY" required></label>
+    </div>
+    <button id="generateCodes" type="submit">إنشاء الحسابات</button>
+  </form>
+  <div id="createdAccountsPanel" class="created" hidden>
+    <div class="row"><h2>الحسابات الجديدة</h2><button id="downloadCodes" type="button" class="secondary">تنزيل CSV</button></div>
+    <p>انسخ بيانات الحسابات واحفظها الآن. كلمات المرور لا يمكن استرجاعها بعد إغلاق الصفحة.</p>
+    <div id="createdAccountsRows" class="table-scroll"></div>
+  </div>
+</section>
+<section id="subscribersPanel" class="panel stream-tab" hidden>
+  <div class="row"><div><span class="eyebrow">CUSTOMERS</span><h1>إدارة المشتركين</h1></div><button id="refreshSubscribers" class="secondary" type="button">تحديث</button></div>
+  <div class="subscriber-search"><input id="searchSubscribers" type="search" placeholder="ابحث باسم العميل أو اسم المستخدم" aria-label="البحث عن مشترك"><select id="filterSubscribers"><option value="all">الكل</option><option value="active">نشط</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select></div>
+  <div id="subscribersSummary" class="mini-note">جاري قراءة الحسابات…</div>
+  <div id="subscribersList" class="customer-list"></div>
+  <div class="actions"><button type="button" data-open="codes" class="secondary">+ مشترك جديد</button></div>
+</section>
+<section id="catalogPanel" class="panel stream-tab" hidden>
+  <div class="row"><div><span class="eyebrow">MEDIA LIBRARY</span><h1>القنوات والأفلام والمسلسلات</h1></div><button id="syncCatalog" type="button" class="secondary">مزامنة المكتبة</button></div>
+  <div class="subscriber-search"><input id="searchCatalog" type="search" placeholder="ابحث عن عنوان…" aria-label="بحث المحتوى"><select id="catalogKind"><option value="">الكل</option><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series_episode">حلقات المسلسلات</option></select></div>
+  <p id="catalogInfo" class="mini-note">جاري تحميل المكتبة…</p><div id="catalogList" class="catalog-list"></div>
+  <div class="row pager"><button id="catalogPrev" type="button" class="secondary" disabled>السابق</button><span id="catalogPage"></span><button id="catalogNext" type="button" class="secondary" disabled>التالي</button></div>
+</section>
+<section id="appcodesPanel" class="panel stream-tab" hidden>
+  <span class="eyebrow">BLOFY PLAYER ACTIVATION</span><h1>أكواد تطبيق BLOFY</h1>
+  <p>أكواد تفعيل تطبيق BLOFY مرتبطة بنظام التطبيق الحالي، وهي مختلفة عن حسابات Xtream الخاصة بالمشاهدة.</p>
+  <a class="button-link" href="/admin#codes">فتح إدارة أكواد BLOFY PLAYER ←</a>
+  <p class="mini-note">إصدار أكواد التطبيق وربط الأجهزة يتم من لوحة BLOFY الرئيسية على نفس الدومين. الربط التلقائي بين النظامين لم يُفعّل بعد.</p>
+</section>
+<section class="panel stream-tab" id="sourcePanel" hidden>
     <div class="row"><h1>ربط Xtream</h1><span class="badge" id="stateBadge">جاري الفحص</span></div>
     <p>أدخل رابط السيرفر وبيانات الحساب، ثم اضغط حفظ وتفعيل.</p>
     <form id="sourceForm">
@@ -40,7 +107,7 @@
     </div>
   </section>
   <div id="message" class="message" role="status">جاري فحص الخدمة…</div>
-  <p class="foot">تفعيل Xtream لا يتجاوز حدود الاتصالات لدى المصدر. إدارة المشتركين منفصلة عن إعداد المصدر.</p>
+  <p class="foot">BLOFY STREAM · تخضع أعداد المشاهدين المتزامنين لسعة المصدر وحقوق توزيعه.</p>
 </main>
 </body>
 </html>
