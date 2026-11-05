@@ -49,13 +49,13 @@ export async function adminApi(req,res,url){
     try{
       const body=await readJsonBody(req);
       const source=await saveManagedXtream(body);
-      if(!syncState().syncing)syncSource('managed-xtream').catch(e=>console.error('managed Xtream sync failed:',String(e.message||e)));
+      (syncState().syncing ? syncAll().then(()=>syncSource('managed-xtream')) : syncSource('managed-xtream')).catch(e=>console.error('managed Xtream sync failed:',String(e.message||e)));
       return json(res,202,{ok:true,source,syncing:true});
     }catch(e){return json(res,400,{ok:false,error:String(e.message||e)})}
   }
   if(url.pathname==='/api/admin/xtream-source/disable'&&req.method==='POST'){
     const source=await disableManagedXtream();
-    if(!syncState().syncing)syncSource('managed-xtream').catch(e=>console.error('managed Xtream removal sync failed:',String(e.message||e)));
+    (syncState().syncing ? syncAll().then(()=>syncSource('managed-xtream')) : syncSource('managed-xtream')).catch(e=>console.error('managed Xtream removal sync failed:',String(e.message||e)));
     return json(res,200,{ok:true,source});
   }
 
