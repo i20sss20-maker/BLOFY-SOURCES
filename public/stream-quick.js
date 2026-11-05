@@ -301,32 +301,53 @@
     if(!(data.items||[]).length)target.append(node('p','لا يوجد محتوى مطابق.','mini-note'));
   }
   let editableCategories=[],categoryMutating=false;
-  async function loadCategories(){
-    const kind=$('categoryKind').value;
-    $('categoryEditorStatus').textContent='جاري تحميل التصنيفات…';
-    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
-    editableCategories=data.categories||[];
+  function renderCategories(){
+    const q=$('categorySearch').value.trim().toLocaleLowerCase('ar');
+    const visibility=$('categoryVisibility').value;
+    const matches=editableCategories.map((item,index)=>({...item,index})).filter(item=>
+      (!q||item.name.toLocaleLowerCase('ar').includes(q))&&
+      (visibility==='all'||(visibility==='hidden'?item.hidden:!item.hidden))
+    );
+    const hidden=editableCategories.filter(item=>item.hidden).length;
     const target=$('categoryEditorRows');clear(target);
-    $('categoryEditorStatus').textContent='التصنيفات: '+format(editableCategories.length)+' · اضغط ↑ أو ↓ لتعديل ترتيبها.';
-    editableCategories.forEach((item,index)=>{
+    $('categoryEditorStatus').textContent='الأقسام: '+format(editableCategories.length)+
+      ' · الظاهرة: '+format(editableCategories.length-hidden)+
+      ' · المخفية: '+format(hidden)+
+      (q||visibility!=='all'?' · نتائج البحث: '+format(matches.length):'');
+    matches.slice(0,150).forEach(item=>{
+      const index=item.index;
       const row=node('div','','category-row');
       row.classList.toggle('is-hidden',Boolean(item.hidden));
       const info=node('div','','category-label');
-      info.append(node('strong',item.name),node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن العملاء':'')));
+      const title=node('div','','category-title');
+      title.append(node('span',String(index+1),'category-position'),node('strong',item.name));
+      info.append(title,node('small',format(item.count)+' عنصر'+(item.hidden?' · مخفي عن المشتركين':' · ظاهر للمشتركين')));
       const actions=node('div','','category-actions');
       const buttons=[
-        {label:'↑',title:'رفع التصنيف',action:'up',disabled:index===0},
-        {label:'↓',title:'خفض التصنيف',action:'down',disabled:index===editableCategories.length-1},
-        {label:item.hidden?'إظهار':'إخفاء',title:'تغيير ظهور التصنيف',action:'visibility',disabled:false}
+        {label:'للأعلى',title:'انقل هذا القسم إلى أول القائمة',action:'top',disabled:index===0},
+        {label:'↑',title:'ارفع القسم مرتبة واحدة',action:'up',disabled:index===0},
+        {label:'↓',title:'أنزل القسم مرتبة واحدة',action:'down',disabled:index===editableCategories.length-1},
+        {label:item.hidden?'إظهار':'إخفاء',title:item.hidden?'إظهار القسم في تطبيقات المشتركين':'إخفاء القسم من تطبيقات المشتركين',action:'visibility',disabled:false}
       ];
       for(const def of buttons){
         const b=node('button',def.label,'secondary');
-        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        b.type='button';b.title=def.title;b.dataset.categoryIndex=String(index);
+        b.dataset.categoryAction=def.action;b.disabled=def.disabled;
+        if(def.action==='top')b.classList.add('to-top');
         actions.append(b);
       }
       row.append(info,actions);
       target.append(row);
     });
+    if(!matches.length)target.append(node('p','لا توجد أقسام مطابقة. جرّب تغيير البحث أو فلتر العرض.','mini-note'));
+    if(matches.length>150)target.append(node('p','يُعرض أول 150 قسمًا. استخدم البحث للوصول للقسم المطلوب بسرعة.','mini-note'));
+  }
+  async function loadCategories(){
+    const kind=$('categoryKind').value;
+    $('categoryEditorStatus').textContent='جارٍ تحميل الأقسام…';
+    const data=await api('categories?kind='+encodeURIComponent(kind),{timeout:20000});
+    editableCategories=data.categories||[];
+    renderCategories();
   }
   async function mutateCategory(index,action){
     if(categoryMutating)return;
