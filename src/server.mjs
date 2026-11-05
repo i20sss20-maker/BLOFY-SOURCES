@@ -48,6 +48,7 @@ async function serveAdminUi(res,pathname){
   if(pathname==='/'||pathname==='/admin'||pathname==='/xtream'||pathname==='/sources-admin')file='admin.html';
   else if(pathname==='/admin-assets/admin.css'||pathname==='/xtream-assets/admin.css')file='admin.css';
   else if(pathname==='/admin-assets/admin.js'||pathname==='/xtream-assets/admin.js')file='admin.js';
+  else if(pathname==='/admin-assets/xtream-simple.js')file='xtream-simple.js';
   else return false;
   const body=await readFile(path.join(ROOT,'public',file),'utf8');
   const type=file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8';
