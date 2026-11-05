@@ -3,6 +3,7 @@ import { providerDefinitions } from './providers.mjs';
 import { connectionStats } from './connections.mjs';
 import { syncState } from './sync.mjs';
 import { openLicensedMediaProxyAllowed } from './open-licensed-playback.mjs';
+import { playbackObservations,recentProbe } from './playback-health.mjs';
 
 const OPEN_SOURCES=new Set(['wikimedia','internet-archive']);
 const RESTREAM_LIMIT=10;
@@ -55,7 +56,7 @@ export function restreamOverview({items=catalog.items.values(),providers=provide
       metadataOnly:true,playbackConnected:false
     },
     syncing:Boolean(syncing),sources:[...counters.values()],
-    samples,recentChecks:[],
+    samples,recentChecks:recentProbe(),playback:playbackObservations(),
     connections:{total:sessions.total,users:sessions.users}
   };
 }
