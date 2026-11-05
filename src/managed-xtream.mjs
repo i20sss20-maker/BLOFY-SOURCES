@@ -64,6 +64,18 @@ export async function saveManagedXtream({host,username,password,rightsConfirmed,
   const user=String(username||'').trim(),pass=String(password||'');
   if(!user||user.length>128||!pass||pass.length>256)throw new Error('xtream_credentials_required');
   const normalized=await validateManagedXtreamUrl(host);
+  // Verify the provider credentials before changing an already working source.
+  const probe=new URL('/player_api.php',normalized);
+  probe.searchParams.set('username',user);
+  probe.searchParams.set('password',pass);
+  let response;
+  try {
+    response=await fetch(probe,{redirect:'error',signal:AbortSignal.timeout(11000),headers:{accept:'application/json'}});
+  } catch { throw new Error('xtream_connection_failed'); }
+  if(!response.ok)throw new Error('xtream_http_'+response.status);
+  let payload;
+  try{payload=await response.json()}catch{throw new Error('xtream_invalid_response')}
+  if(![1,true,'1'].includes(payload?.user_info?.auth))throw new Error('xtream_invalid_credentials');
   const next={host:normalized,username:user,password:pass,rightsReference:ref,enabled:true,updatedAt:new Date().toISOString()};
   await mkdir(DATA_DIR,{recursive:true});
   const tmp=DEST+'.'+crypto.randomBytes(5).toString('hex')+'.tmp';
