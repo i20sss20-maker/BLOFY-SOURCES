@@ -123,3 +123,18 @@ test('isolated relay rejects private DNS answers even for valid public hostnames
     {lookup:async()=>[{address:'8.8.8.8',family:4},{address:'10.0.0.1',family:4}]}),
     /relay_private_origin/);
 });
+
+test('cross-project bridge health checks bearer without source data',async()=>{
+  await host(async origin=>{
+    const denied=await fetch(origin+'/internal/relay-health');
+    assert.equal(denied.status,401);
+    const ok=await fetch(origin+'/internal/relay-health',
+      {headers:{authorization:'Bearer '+shared}});
+    assert.equal(ok.status,200);
+    const body=await ok.json();
+    assert.equal(body.role,'media_plane');
+    assert.equal(body.customerTrafficEnabled,false);
+    assert.equal(body.relayReady,true);
+    assert.doesNotMatch(JSON.stringify(body),/token|secret|sourceUrl/);
+  });
+});
