@@ -70,6 +70,21 @@ export function createStreamServer({
       return void relayBroker.issue(req,res);
     if(url.pathname.startsWith('/relay/'))
       return void relayBroker.relay(req,res);
+    if(req.method==='GET'&&url.pathname==='/synthetic/transport.ts'){
+      // Small deterministic transport-layer fixture. Not decodable video;
+      // never associate with an Xtream provider or subscriber.
+      const bytes=Buffer.alloc(188*3,0x00);
+      for(let offset=0;offset<bytes.length;offset+=188){
+        bytes[offset]=0x47;
+        bytes[offset+1]=0x1f;
+        bytes[offset+2]=0xff;
+        bytes[offset+3]=0x10;
+      }
+      res.writeHead(200,{'content-type':'video/mp2t','content-length':bytes.length,
+        'cache-control':'no-store','x-content-type-options':'nosniff',
+        'referrer-policy':'no-referrer'});
+      return res.end(bytes);
+    }
     if(req.method==='GET'&&url.pathname==='/health'){
       return safeResponse(res,200,{
         ok:true,service:'BLOFY-STREAM',independentProject:true,stage:'media_canary',
