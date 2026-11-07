@@ -8,8 +8,9 @@ const shared='isolated-relay-test-secret-abcdefghijklmnopqrstuvwxyz123456789';
 const ts=Buffer.alloc(188*3,0x11);
 for(let i=0;i<ts.length;i+=188)ts[i]=0x47;
 
-async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock}={}){
+async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock,redirectSourceOrigin=''}={}){
   const server=createStreamServer({relaySharedToken:token,
+    relayRedirectSourceOrigin:redirectSourceOrigin,
     relayFetchImpl:fetchImpl,
     relayLookup:async()=>[{address:'93.184.216.34',family:4}],
     fetchImpl:async()=>{throw new Error('mock only')},
@@ -136,5 +137,84 @@ test('cross-project bridge health checks bearer without source data',async()=>{
     assert.equal(body.customerTrafficEnabled,false);
     assert.equal(body.relayReady,true);
     assert.doesNotMatch(JSON.stringify(body),/token|secret|sourceUrl/);
+  });
+});
+
+test('provider-issued public CDN redirect is followed ONLY for an explicit approved source origin',async()=>{
+  const visited=[];
+  await host(async origin=>{
+    const issued=await issue(origin,{kind:'live',
+      sourceUrl:'http://annkel.com/live/account/password/42.ts'});
+    assert.equal(issued.status,201);
+    const {path}=await issued.json();
+    const response=await fetch(origin+path);
+    assert.equal(response.status,200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),ts);
+    assert.equal(visited.length,2);
+    assert.equal(visited[0].host,'annkel.com');
+    assert.equal(visited[1].host,'cdn.example');
+    assert.equal(visited[1].headers.authorization,undefined);
+    assert.equal(visited[1].headers.cookie,undefined);
+    assert.equal(visited[1].headers.referer,undefined);
+  },{
+    redirectSourceOrigin:'http://annkel.com',
+    fetchImpl:async(url,opts)=>{
+      visited.push({host:url.hostname,headers:opts.headers});
+      if(visited.length===1)
+        return new Response(null,{status:302,headers:{location:'https://cdn.example/authorized/42.ts'}});
+      return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
+    }
+  });
+});
+test('unrelated providers cannot use approved cross-origin policy',async()=>{
+  let calls=0;
+  await host(async origin=>{
+    const created=await issue(origin,{kind:'live',sourceUrl:'http://other.example/live/u/p/42.ts'});
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    assert.equal((await res.json()).code,'relay_redirect_denied');
+    assert.equal(calls,1);
+  },{
+    redirectSourceOrigin:'http://annkel.com',
+    fetchImpl:async()=>{
+      calls++;
+      return new Response(null,{status:302,headers:{location:'https://cdn.example/item.ts'}});
+    }
+  });
+});
+test('SSRF guard denies private redirect destination even for allowlisted source',async()=>{
+  let calls=0;
+  await host(async origin=>{
+    const created=await issue(origin,{kind:'live',sourceUrl:'http://annkel.com/live/u/p/42.ts'});
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    assert.equal((await res.json()).code,'relay_private_origin');
+    assert.equal(calls,1);
+  },{
+    redirectSourceOrigin:'http://annkel.com',
+    fetchImpl:async()=>{
+      calls++;return new Response(null,{status:302,
+        headers:{location:'http://169.254.169.254/metadata'}});
+    }
+  });
+});
+test('bounded CDN policy prevents chains spanning two additional public origins',async()=>{
+  let calls=0;
+  await host(async origin=>{
+    const created=await issue(origin,{kind:'live',sourceUrl:'http://annkel.com/live/u/p/42.ts'});
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    assert.equal((await res.json()).code,'relay_redirect_denied');
+    assert.equal(calls,2);
+  },{
+    redirectSourceOrigin:'http://annkel.com',
+    fetchImpl:async()=>{
+      calls++;
+      const host=calls===1?'cdn-a.example':'cdn-b.example';
+      return new Response(null,{status:302,headers:{location:'https://'+host+'/media.ts'}});
+    }
   });
 });
