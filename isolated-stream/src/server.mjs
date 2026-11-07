@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -140,6 +141,17 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    if(process.env.BLOFY_OPERATOR_EGRESS_PROBE_ON_BOOT==='1'){
+      const timer=setTimeout(()=>{
+        void runOperatorEgressProbe(process.env.BLOFY_OPERATOR_EGRESS_HOST||'').then(report=>{
+          // No provider hostname, IP, accounts, response body or full URL in logs.
+          console.info('BLOFY_OPERATOR_EGRESS_PROBE',JSON.stringify(report));
+        }).catch(()=>{
+          console.warn('BLOFY_OPERATOR_EGRESS_PROBE',JSON.stringify({ok:false,code:'probe_failed'}));
+        });
+      },4000);
+      timer.unref?.();
+    }
   });
   process.on('SIGTERM',()=>service.app.close(()=>process.exit(0)));
 }
