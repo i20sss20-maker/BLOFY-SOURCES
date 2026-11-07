@@ -9,6 +9,7 @@ import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
+import {createXtreamCatalogRelay} from './xtream-catalog-relay.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -54,6 +55,9 @@ export function createStreamServer({
   const sourceDiagnostic=createCrossProjectSourceDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
+  const catalogRelay=createXtreamCatalogRelay({
+    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
+  });
   let checking=false,checkedAt=0,lastCanary=null;
   async function canary(){
     if(checking)return {ok:false,code:'canary_in_progress',realSourceVerified:false};
@@ -68,6 +72,8 @@ export function createStreamServer({
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);
+    if(url.pathname==='/internal/xtream-catalog-relay')
+      return void catalogRelay.handle(req,res);
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
