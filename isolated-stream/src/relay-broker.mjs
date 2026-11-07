@@ -60,10 +60,20 @@ function permittedReturnHeaders(response){
 }
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
-  maxTickets=MAX_TICKETS
+  maxTickets=MAX_TICKETS,redirectSourceOrigin=''
 }={}){
   const tickets=new Map();
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
+  // Cross-origin media hops are OFF unless explicitly allowed by operator for
+  // one licensed source origin. The provider itself must issue the HTTP 302.
+  let allowCrossOriginFrom='';
+  try{
+    const specified=new URL(String(redirectSourceOrigin||''));
+    if(['http:','https:'].includes(specified.protocol)&&
+       specified.href===specified.origin+'/'&&
+       !specified.username&&!specified.password&&!specified.hash)
+      allowCrossOriginFrom=specified.origin;
+  }catch{}
   function prune(){
     for(const [id,row] of tickets){
       if(row.expiresAt<=clock()||row.uses>=5)tickets.delete(id);
@@ -119,6 +129,8 @@ export function createRelayBroker({
     let upstream;
     try{
       let target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
+      const originalOrigin=target.origin;
+      let crossOriginRedirects=0;
       const headers={accept:'*/*','accept-encoding':'identity',
         'user-agent':'BLOFY-STREAM-Relay/1.0'};
       if(typeof req.headers.range==='string'&&/^bytes=\d*-\d*$/.test(req.headers.range))
@@ -137,7 +149,14 @@ export function createRelayBroker({
           await upstream.body?.cancel().catch(()=>{});
           if(!location||i===3)throw new Error('relay_redirect_denied');
           const next=await assertPublicMediaUrl(new URL(location,target).href,{lookup});
-          if(next.origin!==target.origin)throw new Error('relay_redirect_denied');
+          if(next.origin!==target.origin){
+            // Only the explicitly selected source is allowed one public
+            // provider-issued CDN hop. Never forward cookies, API bearer,
+            // source Authorization or Referer to the target; only Range.
+            if(originalOrigin!==allowCrossOriginFrom||crossOriginRedirects>=1)
+              throw new Error('relay_redirect_denied');
+            crossOriginRedirects++;
+          }
           target=next;continue;
         }
         ready=true;break;
@@ -173,8 +192,17 @@ export function createRelayBroker({
       })());
       try{await pipeline(generator,res,{signal:controller.signal})}
       finally{try{await reader.cancel()}catch{}try{reader.releaseLock()}catch{}}
-    }catch{
-      if(!res.headersSent)return respond(res,502,{ok:false,code:'relay_provider_unavailable'});
+    }catch(error){
+      const reason=String(error?.message||'');
+      const transportCode=String(error?.cause?.code||error?.code||'');
+      const code=reason==='relay_redirect_denied'?'relay_redirect_denied':
+        reason==='relay_private_origin'?'relay_private_origin':
+        reason==='relay_origin_unresolved'?'relay_origin_unresolved':
+        ['ECONNRESET','EPIPE','UND_ERR_SOCKET'].includes(transportCode)?
+          'relay_transport_connection_reset':
+        ['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT'].includes(transportCode)?
+          'relay_transport_timeout':'relay_provider_unavailable';
+      if(!res.headersSent)return respond(res,502,{ok:false,code});
       if(!res.destroyed)res.destroy();
     }finally{
       req.off('aborted',onAborted);res.off('close',onClose);
