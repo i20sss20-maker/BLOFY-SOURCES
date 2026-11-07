@@ -144,7 +144,9 @@ export function createRelayBroker({
       }
       if(!ready||!(upstream.ok||upstream.status===206)){
         await upstream?.body?.cancel().catch(()=>{});
-        return respond(res,502,{ok:false,code:'relay_provider_unavailable'});
+        const upstreamStatus=Number.isInteger(upstream?.status)?upstream.status:null;
+        return respond(res,502,{ok:false,code:'relay_provider_unavailable',
+          upstreamStatus:upstreamStatus>=100&&upstreamStatus<=599?upstreamStatus:null});
       }
       const mime=upstream.headers.get('content-type')||'';
       if(req.method==='HEAD'){
