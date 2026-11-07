@@ -8,6 +8,7 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
+import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -41,6 +42,7 @@ export function createStreamServer({
   relaySharedToken='',
   relayFetchImpl=fetch,
   relayLookup=undefined,
+  diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
   port=3000,
@@ -49,6 +51,9 @@ export function createStreamServer({
   const cfg=safeEnvironment({port,engineUrl});
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup});
+  const sourceDiagnostic=createCrossProjectSourceDiagnostic({
+    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
+  });
   let checking=false,checkedAt=0,lastCanary=null;
   async function canary(){
     if(checking)return {ok:false,code:'canary_in_progress',realSourceVerified:false};
@@ -61,6 +66,8 @@ export function createStreamServer({
   }
   const app=http.createServer((req,res)=>{
     const url=new URL(req.url||'/', 'http://localhost');
+    if(url.pathname==='/internal/xtream-account-diagnostic')
+      return void sourceDiagnostic.handle(req,res);
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
@@ -135,6 +142,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     engineUrl:process.env.BLOFY_RESTREAM_ENGINE_URL||DEFAULT_ENGINE,
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
+    diagnosticAllowedOrigin:process.env.BLOFY_STREAM_DIAGNOSTIC_ALLOW_ORIGIN||'',
     port:process.env.PORT||3000,
     runBootCanary:process.env.BLOFY_STREAM_CANARY_ON_BOOT==='1'
   });
