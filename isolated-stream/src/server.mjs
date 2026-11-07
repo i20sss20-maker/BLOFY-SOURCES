@@ -60,6 +60,12 @@ export function createStreamServer({
   }
   const app=http.createServer((req,res)=>{
     const url=new URL(req.url||'/', 'http://localhost');
+    if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
+      if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
+        return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
+      return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
+        role:'media_plane',relayReady:true,customerTrafficEnabled:false});
+    }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);
     if(url.pathname.startsWith('/relay/'))
