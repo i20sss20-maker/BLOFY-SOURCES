@@ -65,7 +65,7 @@ test('unsafe redirected media URLs are rejected without leaking secrets',async()
  await fixture((req,res)=>{
   if(req.url.startsWith('/get.php')){
    const port=req.headers.host.split(':').at(-1);
-   return res.end('#EXTM3U\\n#EXTINF:-1,First\\nhttp://127.0.0.1:'+port+'/live/u/pass/1.ts');
+   return res.end('#EXTM3U\n#EXTINF:-1,First\nhttp://127.0.0.1:'+port+'/live/u/pass/1.ts');
   }
   res.writeHead(302,{location:'http://169.254.169.254/private?password=secret'});
   res.end();
@@ -81,7 +81,7 @@ test('unsafe redirected media URLs are rejected without leaking secrets',async()
   assert.equal(r.mediaTransportVerified,false);
   assert.equal(r.checks[0].httpStatus,302);
   assert.equal(r.checks[0].redirectPublic,false);
-  assert.doesNotMatch(JSON.stringify(r),/169.254|password|\\/live\\/u\\/pass/);
+  assert.doesNotMatch(JSON.stringify(r),/169.254|password|\/live\/u\/pass/);
  });
 });
 test('one official public redirect to TS media is validated and never leaks signed URL',async()=>{
@@ -89,7 +89,7 @@ test('one official public redirect to TS media is validated and never leaks sign
  await fixture((req,res)=>{
   if(req.url.startsWith('/get.php')){
    const port=req.headers.host.split(':').at(-1);
-   return res.end('#EXTM3U\\n#EXTINF:-1,News\\nhttp://127.0.0.1:'+port+'/live/u/pass/2.ts');
+   return res.end('#EXTM3U\n#EXTINF:-1,News\nhttp://127.0.0.1:'+port+'/live/u/pass/2.ts');
   }
   calls++;
   if(req.url.startsWith('/live/')){
@@ -110,7 +110,7 @@ test('one official public redirect to TS media is validated and never leaks sign
   assert.equal(r.checks[0].redirectStatus,200);
   assert.equal(r.checks[0].redirectMediaFormat,'mpegts');
   assert.equal(calls,2);
-  assert.doesNotMatch(JSON.stringify(r),/authorized-media|127.0.0.1|\\/live\\/u\\/pass/);
+  assert.doesNotMatch(JSON.stringify(r),/authorized-media|127.0.0.1|\/live\/u\/pass/);
  });
 });
 test('unplayable M3U fails distinctly from transient media connection errors',async()=>{
