@@ -21,7 +21,14 @@ async function fetchPart(target,{requestHttp=http.request,requestHttps=https.req
    client=protocol(target,{method:'GET',agent:false,timeout:timeoutMs,
     headers:{'user-agent':'BLOFY-Xtream/1.0','accept':'*/*','connection':'close'}},res=>{
      const status=Number(res.statusCode||0);
-     if(status!==200&&status!==206){res.resume();return done({status,code:'http_status',bytes:0});}
+     if(status!==200&&status!==206){
+       // Internal-only Location is consumed by this module. Never include it
+       // in a returned/logged report, even if it has a signed media token.
+       const redirect=[301,302,303,307,308].includes(status)?
+         String(res.headers.location||'').slice(0,2048):'';
+       res.resume();
+       return done({status,code:'http_status',bytes:0,redirect});
+     }
      res.on('data',chunk=>{
        bytes+=chunk.length;
        parts.push(Buffer.from(chunk));
@@ -100,10 +107,35 @@ export async function compareOfficialM3uOrigin(m3uUrl,{
   // change identity or search another origin; validate public DNS first.
   const r=await fetchPart(u,{requestHttp,requestHttps,maxBytes:MAX_SAMPLE,timeoutMs:7500});
   const kind=format(r.data);
-  summaries.push({index:i+1,stage:'media',route,sameOrigin,
+  const sample={index:i+1,stage:'media',route,sameOrigin,
     scheme:u.protocol==='https:'?'https':'http',httpStatus:r.status??null,
-    code:r.code,format:kind,mediaBytesPresent:kind==='mpegts'||kind==='mp4'});
-  if(kind==='mpegts'||kind==='mp4')break;
+    code:r.code,format:kind,mediaBytesPresent:kind==='mpegts'||kind==='mp4'};
+  // IPTV sources often issue 302 to an official CDN. Diagnose ONE hop only,
+  // with a second public-DNS validation. No arbitrary redirect chains,
+  // no raw Location in outputs, no inherited cookies or Authorization.
+  if(r.redirect){
+    sample.redirectPresent=true;
+    try{
+      const next=await validate(new URL(r.redirect,u).href);
+      sample.redirectSameOrigin=next.origin===u.origin;
+      sample.redirectPublic=true;
+      const second=await fetchPart(next,{requestHttp,requestHttps,
+        maxBytes:MAX_SAMPLE,timeoutMs:6500});
+      sample.redirectStatus=second.status??null;
+      sample.redirectCode=second.code;
+      const detected=format(second.data);
+      sample.redirectMediaFormat=detected;
+      if(detected==='mpegts'||detected==='mp4'){
+        sample.mediaBytesPresent=true;
+        sample.format=detected;
+      }
+    }catch{
+      sample.redirectPublic=false;
+      sample.redirectCode='redirect_unsafe_or_unavailable';
+    }
+  }
+  summaries.push(sample);
+  if(sample.mediaBytesPresent)break;
  }
  return {ok:true,stage:'compared',playlistHttpStatus:part.status,
   playlistMediaUrlsFound:candidates.length,anyDifferentMediaOrigin:summaries.some(x=>x.sameOrigin===false),
