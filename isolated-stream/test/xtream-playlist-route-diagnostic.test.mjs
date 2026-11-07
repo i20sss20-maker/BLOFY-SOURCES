@@ -61,21 +61,56 @@ test('refuses unknown host and denies unauthenticated service calls',async()=>{
   });
  });
 });
-test('does not follow media redirects or leak URLs into result',async()=>{
+test('unsafe redirected media URLs are rejected without leaking secrets',async()=>{
  await fixture((req,res)=>{
   if(req.url.startsWith('/get.php')){
    const port=req.headers.host.split(':').at(-1);
-   return res.end('#EXTM3U\n#EXTINF:-1,First\nhttp://127.0.0.1:'+port+'/live/u/pass/1.ts');
+   return res.end('#EXTM3U\\n#EXTINF:-1,First\\nhttp://127.0.0.1:'+port+'/live/u/pass/1.ts');
   }
-  res.writeHead(302,{location:'https://outside.example/redirect?password=secret'});
+  res.writeHead(302,{location:'http://169.254.169.254/private?password=secret'});
   res.end();
  },async origin=>{
+  const validator=async input=>{
+    const url=new URL(input);
+    if(url.hostname==='169.254.169.254')throw Error('private');
+    return url;
+  };
   const r=await compareOfficialM3uOrigin(origin+'/get.php?username=u&password=p&type=m3u_plus&output=ts',
-    {allowedOrigin:origin,validate:validateLocal});
+    {allowedOrigin:origin,validate:validator});
   assert.equal(r.ok,true);
   assert.equal(r.mediaTransportVerified,false);
   assert.equal(r.checks[0].httpStatus,302);
-  assert.doesNotMatch(JSON.stringify(r),/outside|password|\/live\/u\/pass/);
+  assert.equal(r.checks[0].redirectPublic,false);
+  assert.doesNotMatch(JSON.stringify(r),/169.254|password|\\/live\\/u\\/pass/);
+ });
+});
+test('one official public redirect to TS media is validated and never leaks signed URL',async()=>{
+ let calls=0;
+ await fixture((req,res)=>{
+  if(req.url.startsWith('/get.php')){
+   const port=req.headers.host.split(':').at(-1);
+   return res.end('#EXTM3U\\n#EXTINF:-1,News\\nhttp://127.0.0.1:'+port+'/live/u/pass/2.ts');
+  }
+  calls++;
+  if(req.url.startsWith('/live/')){
+   res.writeHead(302,{location:'/authorized-media/one.ts'});return res.end();
+  }
+  if(req.url.startsWith('/authorized-media/')){
+   const chunk=Buffer.alloc(188*3);
+   for(const n of [0,188,376])chunk[n]=0x47;
+   res.writeHead(200,{'content-type':'video/mp2t'});return res.end(chunk);
+  }
+  res.writeHead(404);res.end();
+ },async origin=>{
+  const r=await compareOfficialM3uOrigin(origin+'/get.php?username=u&password=p&type=m3u_plus&output=ts',
+    {allowedOrigin:origin,validate:validateLocal});
+  assert.equal(r.mediaTransportVerified,true);
+  assert.equal(r.checks[0].redirectPublic,true);
+  assert.equal(r.checks[0].redirectSameOrigin,true);
+  assert.equal(r.checks[0].redirectStatus,200);
+  assert.equal(r.checks[0].redirectMediaFormat,'mpegts');
+  assert.equal(calls,2);
+  assert.doesNotMatch(JSON.stringify(r),/authorized-media|127.0.0.1|\\/live\\/u\\/pass/);
  });
 });
 test('unplayable M3U fails distinctly from transient media connection errors',async()=>{
