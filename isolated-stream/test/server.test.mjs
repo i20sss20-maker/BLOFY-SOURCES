@@ -48,3 +48,15 @@ test('reject cross-project/other origins by construction',()=>{
   assert.throws(()=>createStreamServer({...baseOpts,engineUrl:'https://outside.example'}),
     /blofy_restream_engine_invalid_private_url/);
 });
+
+test('public transport fixture is tiny, static, nonsensitive and not mistaken for decoded A/V',async()=>{
+  await withApp(async url=>{
+    const response=await fetch(url+'/synthetic/transport.ts');
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get('content-type'),'video/mp2t');
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    const bytes=Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.length,564);
+    for(const offset of [0,188,376])assert.equal(bytes[offset],0x47);
+  });
+});
