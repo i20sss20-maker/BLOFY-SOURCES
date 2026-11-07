@@ -6,6 +6,7 @@ import {timingSafeEqual} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
+import {createRelayBroker} from './relay-broker.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -36,12 +37,17 @@ function safeEnvironment({port,engineUrl}){
 export function createStreamServer({
   engineUrl=DEFAULT_ENGINE,
   adminToken='',
+  relaySharedToken='',
+  relayFetchImpl=fetch,
+  relayLookup=undefined,
   fetchImpl=fetch,
   runBootCanary=false,
   port=3000,
   log=console
 }={}){
   const cfg=safeEnvironment({port,engineUrl});
+  const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
+    fetchImpl:relayFetchImpl,lookup:relayLookup});
   let checking=false,checkedAt=0,lastCanary=null;
   async function canary(){
     if(checking)return {ok:false,code:'canary_in_progress',realSourceVerified:false};
@@ -54,10 +60,15 @@ export function createStreamServer({
   }
   const app=http.createServer((req,res)=>{
     const url=new URL(req.url||'/', 'http://localhost');
+    if(url.pathname==='/internal/relay-grants')
+      return void relayBroker.issue(req,res);
+    if(url.pathname.startsWith('/relay/'))
+      return void relayBroker.relay(req,res);
     if(req.method==='GET'&&url.pathname==='/health'){
       return safeResponse(res,200,{
         ok:true,service:'BLOFY-STREAM',independentProject:true,stage:'media_canary',
         customerTrafficEnabled:false,xtreamAccountMigrationComplete:false,
+        relayCapabilityReady:relayBroker.enabled,
         realSourceVerified:false,startedAt
       });
     }
@@ -101,6 +112,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   const service=createStreamServer({
     engineUrl:process.env.BLOFY_RESTREAM_ENGINE_URL||DEFAULT_ENGINE,
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
+    relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     port:process.env.PORT||3000,
     runBootCanary:process.env.BLOFY_STREAM_CANARY_ON_BOOT==='1'
   });
