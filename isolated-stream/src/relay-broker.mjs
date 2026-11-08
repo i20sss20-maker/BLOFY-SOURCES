@@ -176,7 +176,15 @@ export function createRelayBroker({
       if(!upstream.body)throw new Error('relay_upstream_empty');
       const reader=upstream.body.getReader();
       let first;
-      try{first=await reader.read()}catch{throw new Error('relay_upstream_read_failed')}
+      // Some providers send HTTP 200 headers and then never send media bytes.
+      // Bound this pre-playback stall without placing a timeout on a healthy
+      // long-running live stream after its first chunk arrives.
+      const firstByteTimer=setTimeout(()=>
+        controller.abort(new Error('relay_first_byte_timeout')),12000);
+      try{first=await reader.read()}
+      catch{throw new Error(controller.signal.reason?.message==='relay_first_byte_timeout'
+        ?'relay_first_byte_timeout':'relay_upstream_read_failed')}
+      finally{clearTimeout(firstByteTimer)}
       if(first.done||!inspect(first.value,mime,row.kind)){
         await reader.cancel().catch(()=>{});
         return respond(res,502,{ok:false,code:'relay_not_playable_media'});
@@ -195,7 +203,8 @@ export function createRelayBroker({
     }catch(error){
       const reason=String(error?.message||'');
       const transportCode=String(error?.cause?.code||error?.code||'');
-      const code=reason==='relay_redirect_denied'?'relay_redirect_denied':
+      const code=reason==='relay_first_byte_timeout'?'relay_first_byte_timeout':
+        reason==='relay_redirect_denied'?'relay_redirect_denied':
         reason==='relay_private_origin'?'relay_private_origin':
         reason==='relay_origin_unresolved'?'relay_origin_unresolved':
         ['ECONNRESET','EPIPE','UND_ERR_SOCKET'].includes(transportCode)?
