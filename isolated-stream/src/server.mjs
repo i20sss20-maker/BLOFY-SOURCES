@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
+import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -220,6 +221,24 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
         ).catch(()=>console.warn('BLOFY_STREAM_LEGACY_PATH_CLEANUP',
           JSON.stringify({ok:false,code:'cleanup_unavailable'})));
       },8000);timer.unref?.();
+    }
+    // Prove the unified admin bridge talks to the authoritative database.
+    // Only source/account aggregate counts are logged; no customer identities.
+    if(process.env.BLOFY_STREAM_UNIFIED_PROBE_ON_BOOT==='1'){
+      const timer=setTimeout(()=>{
+        const portal=createUnifiedPortalClient({
+          secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||''
+        });
+        void portal.overview().then(({status,body})=>{
+          console.info('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',JSON.stringify({
+            ok:status===200&&body?.ok===true,
+            code:status===200?'connected':String(body?.code||'unavailable').slice(0,70),
+            sources:Number.isInteger(body?.totals?.servers)?body.totals.servers:null,
+            credentialsLogged:false,customerTrafficChanged:false
+          }));
+        }).catch(()=>console.warn('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',
+          JSON.stringify({ok:false,code:'bridge_probe_error'})));
+      },15000);timer.unref?.();
     }
     // Operator-triggered once per deployment. No provider credentials and
     // no subscriber traffic. Railway's three-IP egress can load balance, so
