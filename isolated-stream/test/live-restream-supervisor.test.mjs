@@ -120,7 +120,7 @@ test('explicit backup live channel takes over when primary returns provider 404'
   assert.equal(b.status,201);
   assert.equal(b.body.backupConfigured,true);
   const cmd=JSON.parse(calls.find(x=>x.method==='POST').body).runOnDemand;
-  const token=cmd.match(/\\/internal\\/live-feed\\/([a-f0-9]{48})/)[1];
+  const token=cmd.match(new RegExp('/internal/live-feed/([a-f0-9]{48})'))[1];
   const server=http.createServer((req,res)=>service.streamFeed(req,res,token));
   server.listen(0,'127.0.0.1');await once(server,'listening');
   try{
