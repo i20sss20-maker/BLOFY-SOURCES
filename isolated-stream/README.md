@@ -20,3 +20,27 @@ It performs a **synthetic, on-demand-only HLS acceptance test** inside this Rail
 6. Remove the old in-project restream engine only **after** the new media route is in production and rollback is proven.
 
 Do not treat `synthetic_hls_ts_verified` as customer A/V success.
+
+## Operator control center (separate feature branch, NOT live)
+
+The new read-only `GET /operator` dashboard runs inside this isolated API only after
+`BLOFY_STREAM_ADMIN_TOKEN` is set to a random value **at least 32 characters long**.
+Use browser HTTP Basic authentication: username `operator`, password the secret
+configured in Railway. Keep this secret in Railway variables only, not in Git,
+screenshots, query strings, URLs, or frontend local storage.
+
+The dashboard offers:
+- Server API state and a live connectivity check of the private MediaMTX HLS listener (a MediaMTX 404 on `/` means only that the listener responded, **not** that an IPTV channel plays).
+- Latest **synthetic-only** HLS transport canary, never portrayed as verified real video/audio.
+- A protected, rate-limited button to run the same synthetic canary as `POST /internal/smoke`.
+- Clear labels stating that account migration and customer playback remain disabled.
+
+This is phase 1, **not** the full re-stream management system. Source authorization,
+per-channel FFmpeg lifecycle, MediaMTX Control API, adaptive recovery/failover,
+session monitoring and real-content probe controls require independent design,
+tests, authorization checks and rollout gates. No arbitrary upstream URLs or
+operator-supplied shell commands should be accepted by this API.
+
+Testing: `cd isolated-stream && npm test`. Merge/deploy only after tests
+and authorization are verified. The source `blofy-stream-isolated-20261108`
+remains unchanged by this feature branch.
