@@ -162,6 +162,11 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
 <button class="btn secondary" id="diagnostic-media">فحص الوسائط</button>
 </div><pre id="diagnostic-output" class="log">نتائج فحوص الوسائط ستظهر هنا.</pre></div>
+<div class="panel"><div class="controls"><h3>العناصر التي أعاد المزود لها 404</h3>
+<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث الحالات</button></div>
+<p class="muted">إحصاءات مسجلة من فحوص التشغيل الحقيقية. عدم وجود سجل لا يعني أن جميع عناصر المكتبة تعمل.</p>
+<div class="tablewrap"><table><thead><tr><th>المصدر</th><th>النوع</th><th>الحالة</th><th>العناصر</th><th>تستحق إعادة الفحص</th></tr></thead>
+<tbody id="diagnostic-failures"></tbody></table></div></div>
 </section><footer>BLOFY STREAM · لوحة واحدة لبيانات السيرفر والمصادر والعملاء · جميع الأرقام من الخدمات الفعلية</footer>
 </main></div></div>
 <script nonce="__NONCE__">
@@ -492,7 +497,29 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
   });
-  refresh();loadLive();setInterval(function(){if(!document.hidden){refresh();loadLive()}},60000);
+  async function loadFailures(){
+    var tbody=$("diagnostic-failures");tbody.replaceChildren();
+    try{
+      var d=await api("media-failures");
+      if(!(d.entries||[]).length){
+        var empty=node("tr");var td=cell(empty,"لا توجد نتائج فشل 404 مسجلة حتى الآن");
+        td.colSpan=5;tbody.appendChild(empty);return;
+      }
+      (d.entries||[]).forEach(function(e){
+        var tr=node("tr");
+        var source=(state.overview?.sources||[]).find(function(s){return s.id===e.sourceId});
+        cell(tr,source?.name||String(e.sourceId).slice(0,8));
+        cell(tr,e.kind);cell(tr,e.state);
+        cell(tr,count(e.count));cell(tr,count(e.due));tbody.appendChild(tr);
+      });
+    }catch(e){
+      var row=node("tr");var td=cell(row,"تعذر عرض سجل الأعطال: "+e.message);
+      td.colSpan=5;tbody.appendChild(row);
+    }
+  }
+  $("diagnostic-failures-reload").addEventListener("click",loadFailures);
+  refresh();loadLive();loadFailures();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures()}},60000);
 })();
 </script>
 </body></html>`;
