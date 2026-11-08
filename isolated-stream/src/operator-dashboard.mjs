@@ -43,7 +43,7 @@ async function readAdminJson(req){
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
-  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null}={}){
+  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -90,6 +90,26 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         })).catch(()=>json(res,503,{ok:false,code:'engine_state_unavailable'}));
       return true;
     }
+    // Protected VOD: every byte request is authenticated with operator Basic,
+    // and media originates from an entitlement-checked authoritative catalog.
+    if(vodBroker){
+      if(req.method==='GET'&&path==='/operator/api/vod'){
+        json(res,200,vodBroker.list());return true;
+      }
+      const vodMatch=path.match(/^\/operator\/api\/vod\/([a-f0-9]{48})$/);
+      if(['GET','HEAD'].includes(req.method)&&vodMatch){
+        void vodBroker.play(req,res,vodMatch[1]);return true;
+      }
+      if(req.method==='POST'&&path==='/operator/api/vod'){
+        if(req.headers['x-blofy-operator-action']!=='vod-create'){
+          json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+        }
+        void readAdminJson(req).then(body=>vodBroker.create(body))
+          .then(({status,body})=>json(res,status,body))
+          .catch(e=>json(res,503,{ok:false,code:'vod_action_failed'}));
+        return true;
+      }
+    }
     // Live video and HLS segments remain behind the SAME operator Basic auth
     // as the page. There are no public media URLs and no customer cutover.
     if(liveSupervisor){
@@ -122,6 +142,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/overview':()=>portal.overview(),
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts(),
+      '/operator/api/episodes':()=>portal.episodes({
+        sourceId:uri.searchParams.get('sourceId'),
+        seriesId:uri.searchParams.get('seriesId')
+      }),
       '/operator/api/catalog':()=>portal.catalog({
         type:uri.searchParams.get('type'),serverId:uri.searchParams.get('serverId')||'',
         q:uri.searchParams.get('q')||'',offset:uri.searchParams.get('offset')||0
