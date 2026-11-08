@@ -9,6 +9,7 @@ import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
+import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -90,14 +91,16 @@ export function createStreamServer({
       return report;
     }finally{checking=false;}
   }
-  const liveSupervisor=createLiveRestreamSupervisor({
-    portal:createUnifiedPortalClient({
-      secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
-    }),
-    fetchImpl,mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
+  const unifiedPortal=createUnifiedPortalClient({
+    secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
   });
+  const liveSupervisor=createLiveRestreamSupervisor({
+    portal:unifiedPortal,fetchImpl,
+    mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
+  });
+  const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
   const operatorDashboard=createOperatorDashboard({
-    liveSupervisor,
+    liveSupervisor,vodBroker,
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
