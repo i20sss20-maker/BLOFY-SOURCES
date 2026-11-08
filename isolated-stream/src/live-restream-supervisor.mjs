@@ -159,20 +159,31 @@ export function createLiveRestreamSupervisor({
     if(!safePath(name)||!paths.has(name))
       return safe({ok:false,code:'restream_path_not_found'},404);
     const row=paths.get(name);
-    let report;
-    try{
-      report=await verifyRestreamSmoke(HLS,{fetchImpl,pathName:name,timeoutMs:21000});
-    }catch{report={ok:false,code:'restream_hls_unavailable'}}
-    row.lastProbe={at:clock(),ok:report.ok===true,code:String(report.code||'unknown').slice(0,70),
-      firstMediaBytesVerified:report.ok===true};
-    return safe({ok:report.ok===true,path:name,...row.lastProbe,
-      audioVideoDecoded:false,customerTrafficChanged:false},report.ok?200:503);
+    if(row.probePending)
+      return safe({ok:true,path:name,started:false,probePending:true},202);
+    row.probePending=true;
+    // The on-demand FFmpeg worker may need more time than a Railway HTTP
+    // proxy timeout. Return 202 immediately, then expose the final
+    // transport result in the authenticated GET /operator/api/live listing.
+    void verifyRestreamSmoke(HLS,{fetchImpl,pathName:name,timeoutMs:48000})
+      .then(report=>{
+        row.lastProbe={at:clock(),ok:report.ok===true,
+          code:String(report.code||'unknown').slice(0,70),
+          firstMediaBytesVerified:report.ok===true,
+          audioVideoDecoded:false};
+      }).catch(()=>{
+        row.lastProbe={at:clock(),ok:false,code:'restream_hls_unavailable',
+          firstMediaBytesVerified:false,audioVideoDecoded:false};
+      }).finally(()=>{row.probePending=false});
+    return safe({ok:true,path:name,started:true,probePending:true,
+      customerTrafficChanged:false},202);
   }
   function list(){
     return {ok:true,maxPaths,items:[...paths.values()].map(row=>({
       path:row.name,sourceId:row.sourceId,channelId:row.channelId,
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
+      probePending:row.probePending===true,
       onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
       preferredSource:row.preferredIndex===0?'primary':'backup',
       playlist:'/operator/api/live/'+row.name+'/index.m3u8'
@@ -314,7 +325,7 @@ export function createLiveRestreamSupervisor({
       return response(res,404,{ok:false,code:'restream_path_not_found'});
     // The caller must already have passed the operator Basic auth.
     const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),22000);
+    const timeout=setTimeout(()=>controller.abort(),60000);
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
     res.once('close',onClose);
     try{
