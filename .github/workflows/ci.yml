@@ -21,3 +21,16 @@ jobs:
       - run: npm run check
       - run: bash -n infra/azure/configure-github-oidc.sh
       - run: npm test
+
+  isolated-stream-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: isolated-stream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
