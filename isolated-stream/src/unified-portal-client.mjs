@@ -74,10 +74,17 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function liveChannel({sourceId,channelId,rightsConfirmed}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(channelId||''))||rightsConfirmed!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_live_selection_invalid'}});
+    return call(ROOT+'/live-channel',{method:'POST',body:{
+      sourceId,channelId,rightsConfirmed:true
+    }});
+  }
   function accountAction(id,action){
     if(!UUID.test(id)||!accountActions.has(action))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction};
+  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel};
 }
