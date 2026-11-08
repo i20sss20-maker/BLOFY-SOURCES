@@ -10,9 +10,10 @@ const sourceUrl='https://provider.example/live/user/secret-password/88.ts';
 const mediaName=/\/v3\/config\/paths\/(?:add|delete)\/(live-[a-f0-9]{12})/;
 function createFixture({maxPaths=3,hlsIndex='#EXTM3U\n#EXTINF:2.0,\nseg1.ts\n'}={}){
   const calls=[],portal={configured:true,
-    liveChannel:async ({rightsConfirmed})=>({
+    liveChannel:async ({rightsConfirmed,sourceId})=>({
       status:200,body:{ok:true,kind:'live',extension:'ts',
-        sourceUrl,sourceId:UUID,channelId:'88',name:'News',rightsConfirmed}
+        sourceUrl:sourceId===UUID?sourceUrl:'https://backup.example/live/user/pwd/99.ts',
+        sourceId,channelId:sourceId===UUID?'88':'99',name:'News',rightsConfirmed}
     })
   };
   const ts=Buffer.alloc(188*3);for(let i=0;i<3;i++)ts[i*188]=0x47;
@@ -29,6 +30,9 @@ function createFixture({maxPaths=3,hlsIndex='#EXTM3U\n#EXTINF:2.0,\nseg1.ts\n'}=
           'application/vnd.apple.mpegurl':'video/mp2t'}})
     }
     if(target.startsWith('https://provider.example/'))
+      return new Response(failPrimary?'Not Found':ts,{status:failPrimary?404:200,
+        headers:{'content-type':failPrimary?'text/plain':'video/mp2t'}});
+    if(target.startsWith('https://backup.example/'))
       return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
     throw Error('unexpected fetch: '+target);
   };
@@ -107,4 +111,26 @@ test('real transport feed is private-token scoped and carries TS bytes only',asy
     assert.equal((await reply.arrayBuffer()).byteLength,ts.byteLength);
   }finally{await new Promise(resolve=>server.close(resolve))}
   assert.equal((await service.stop(s.path)).status,200);
+});
+
+test('explicit backup live channel takes over when primary returns provider 404',async()=>{
+  const {service,calls,ts}=createFixture({failPrimary:true});
+  const b=await service.start({...row(),backupSourceId:'550e8400-e29b-41d4-a716-446655440001',
+    backupChannelId:'99'});
+  assert.equal(b.status,201);
+  assert.equal(b.body.backupConfigured,true);
+  const cmd=JSON.parse(calls.find(x=>x.method==='POST').body).runOnDemand;
+  const token=cmd.match(/\\/internal\\/live-feed\\/([a-f0-9]{48})/)[1];
+  const server=http.createServer((req,res)=>service.streamFeed(req,res,token));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{
+    const reply=await fetch('http://127.0.0.1:'+server.address().port+'/internal/live-feed/'+token);
+    assert.equal(reply.status,200);
+    assert.equal((await reply.arrayBuffer()).byteLength,ts.length);
+  }finally{await new Promise(resolve=>server.close(resolve))}
+  const live=service.list().items[0];
+  assert.equal(live.preferredSource,'backup');
+  assert.equal(live.failovers,1);
+  assert.ok(calls.some(x=>x.url.startsWith('https://backup.example/')));
+  assert.equal(JSON.stringify(live).includes('secret-password'),false);
 });
