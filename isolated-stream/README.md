@@ -53,3 +53,33 @@ remains unchanged by this feature branch.
 - Control API metrics require MediaMTX to expose its API to the service over Railway's private network; with its default loopback-only API binding, counts show unknown. Do **not** expose port 9997 publicly or accept arbitrary upstream URLs.
 - Only the synthetic smoke action is enabled. Actual server restarts and subscriber failover are intentionally not enabled without a media verification and rollback path.
 - The repository is not copying Dispatcharr code or branding; it uses an original lightweight BLOFY UI and MediaMTX interface.
+
+## Phase 2: genuine private MediaMTX control (isolated demo path)
+
+The operator dashboard now supports **real** MediaMTX Control API operations:
+- Read authenticated status of ready paths, HLS sessions, and the configured demo path.
+- Create, remove or reinitialize a MediaMTX restream path named exactly `blofy-demo` using `POST /v3/config/paths/add/blofy-demo` and `DELETE /v3/config/paths/delete/blofy-demo`. This path pulls the existing private `rtsp://127.0.0.1:8554/smoke` source on demand. Smoke FFmpeg produces a synthetic video/audio channel; it does **not** fetch customer media.
+- Verify a transport stream HLS segment for the `blofy-demo` path. The test **does not** assert decoding video/audio, or guarantee the availability of a provider's IPTV content.
+
+### Private API authentication and deployment
+
+Only the isolated `blofy-stream-media` service should have the MediaMTX API listening on its private port 9997. Never expose that port on a Railway public domain/TCP proxy.
+
+Configure the media service through Railway **secret** environment variables:
+
+- `MTX_API=true`
+- `MTX_APIADDRESS=:9997`
+- `MTX_AUTHINTERNALUSERS_2_USER=blofy-control`
+- `MTX_AUTHINTERNALUSERS_2_PASS=<independent_random_40+_char_secret>`
+- `MTX_AUTHINTERNALUSERS_2_PERMISSIONS_0_ACTION=api`
+
+The existing default unprivileged and localhost users at indexes 0 and 1 remain untouched. Set matching secrets on the isolated `blofy-stream-api`:
+
+- `BLOFY_STREAM_MEDIAMTX_CONTROL_USER=blofy-control`
+- `BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD=<same_random_secret>`
+
+The private Control API is additionally hard-coded to the media service's private DNS identity. No arbitrary endpoint, hostname, path, user-provided source URL or shell command can be sent to the MediaMTX API from the dashboard. Every mutation requires the operator's existing Basic auth credentials, a custom anti-CSRF header and a cooldown. The initial play path is **demo-only**.
+
+### Not yet migrated
+
+Production Xtream credentials, subscribers, activation, library, live streaming for customers, real provider playback verification and fallback sources remain on the original BLOFY PLAYER control plane. Do not copy those credentials to this project or switch public endpoints solely because the synthetic demo passed. A signed source-to-stream bridge and explicit provider authorization are required first.
