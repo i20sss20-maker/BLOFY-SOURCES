@@ -74,6 +74,18 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function episodes({sourceId,seriesId}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(seriesId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_series_invalid'}});
+    const search=new URLSearchParams({sourceId,seriesId});
+    return call(ROOT+'/episodes?'+search);
+  }
+  function vodItem({sourceId,itemId,type,rightsConfirmed}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,110}$/.test(String(itemId||''))||
+       !['movie','episode'].includes(type)||rightsConfirmed!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_vod_invalid'}});
+    return call(ROOT+'/vod-item',{method:'POST',body:{sourceId,itemId,type,rightsConfirmed:true}});
+  }
   function liveChannel({sourceId,channelId,rightsConfirmed}={}){
     if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(channelId||''))||rightsConfirmed!==true)
       return Promise.resolve({status:400,body:{ok:false,code:'stream_live_selection_invalid'}});
@@ -86,5 +98,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel};
+  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem};
 }
