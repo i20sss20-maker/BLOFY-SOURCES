@@ -131,8 +131,20 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
 <button class="btn" id="library-submit">بحث</button></div></div>
-<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th></tr></thead><tbody id="library-results"></tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+<div class="panel" id="vod-panel" hidden><h3>معاينة فيلم أو حلقة حقيقية</h3>
+<p class="muted" id="vod-selected">اختر عنصرًا من المكتبة.</p>
+<div class="inline" id="vod-episodes-wrap" hidden>
+<select id="vod-episode" aria-label="الحلقة"></select>
+</div>
+<label class="inline" style="margin:12px 0"><input type="checkbox" id="vod-rights">
+أؤكد أن لدي الحق في تشغيل هذا المحتوى ومعاينته.</label>
+<div class="actions"><button class="btn" id="vod-play" type="button">▶ تشغيل المعاينة</button>
+<button class="btn secondary" id="vod-close" type="button">إغلاق</button></div>
+<video id="vod-player" controls playsinline preload="metadata" style="width:min(100%,850px);background:#000;border-radius:11px;margin:14px 0;display:none" aria-label="مشغل الفيلم أو الحلقة"></video>
+<pre id="vod-report" class="log">لن نعرض روابط أو كلمات مرور المصادر في المتصفح.</pre>
+</div>
 </section>
 <section class="view" id="page-accounts">
 <div class="heading"><div><h2>المشتركون</h2><p>حسابات Xtream الفعلية، والصلاحيات والتواريخ من قاعدة البيانات الرئيسية.</p></div><button class="btn" id="toggle-account-form">＋ حساب جديد</button></div>
@@ -157,7 +169,8 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 (function(){
   var $=function(id){return document.getElementById(id)};
   var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null};
+  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null,
+    vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
   function count(n){return n===null||n===undefined?"—":formatter.format(n)}
@@ -261,13 +274,69 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }
     var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(state.libOffset)});
     try{var d=await api("catalog?"+query.toString());var items=d.items||[];
-      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=4;$("library-results").appendChild(tr)}
+      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
         var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===item.serverId});
-        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");cell(tr,item.enabled?"مفعل":"موقوف");$("library-results").appendChild(tr)});
+        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");
+        cell(tr,item.enabled?"مفعل":"موقوف");
+        var controls=node("div",undefined,"actions");
+        if(item.enabled&&(item.type==="movie"||item.type==="series")){
+          controls.appendChild(button(item.type==="movie"?"معاينة فيلم":"عرض الحلقات",
+            function(){prepareVod(item)}));
+        }
+        cell(tr,controls);
+        $("library-results").appendChild(tr)});
       state.libOffset=d.nextOffset||0;$("library-more").hidden=!d.nextOffset;
     }catch(e){show("تعذر تحميل المكتبة: "+e.message,false)}
   }
+  async function prepareVod(item){
+    state.vodSelected=item;
+    $("vod-panel").hidden=false;$("vod-rights").checked=false;
+    var video=$("vod-player");video.pause();video.removeAttribute("src");video.load();
+    video.style.display="none";$("vod-report").textContent="حدد العنصر ووافق على صلاحية المعاينة.";
+    $("vod-episodes-wrap").hidden=item.type!=="series";
+    $("vod-selected").textContent=item.type==="movie"?
+      "معاينة الفيلم: "+item.name:"اختيار حلقة من مسلسل: "+item.name;
+    $("vod-episode").replaceChildren();
+    if(item.type==="series"){
+      $("vod-report").textContent="جار قراءة الحلقات المفهرسة...";
+      try{
+        var params=new URLSearchParams({sourceId:item.serverId,seriesId:item.id});
+        var episodes=await api("episodes?"+params.toString());
+        (episodes.items||[]).forEach(function(e){
+          var option=node("option","حلقة "+e.id+" · "+e.extension);option.value=e.id;
+          $("vod-episode").appendChild(option);
+        });
+        $("vod-report").textContent=episodes.items.length?
+          "اختر الحلقة، ثم وافق على الصلاحية واضغط تشغيل.":"لا توجد حلقات مفهرسة لهذا المسلسل بعد.";
+      }catch(e){$("vod-report").textContent="تعذر قراءة الحلقات: "+e.message}
+    }
+    $("vod-panel").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  $("vod-close").addEventListener("click",function(){
+    var video=$("vod-player");video.pause();video.removeAttribute("src");video.load();
+    video.style.display="none";$("vod-panel").hidden=true;state.vodSelected=null;
+  });
+  $("vod-play").addEventListener("click",async function(){
+    var item=state.vodSelected;
+    if(!item){show("اختر فيلمًا أو مسلسلًا من المكتبة.",false);return}
+    if(!$("vod-rights").checked){show("تأكيد صلاحية معاينة المحتوى مطلوب.",false);return}
+    var type=item.type==="series"?"episode":"movie";
+    var itemId=type==="episode"?$("vod-episode").value:item.id;
+    if(!itemId){show("حدد الحلقة أولًا.",false);return}
+    this.disabled=true;$("vod-report").textContent="جار طلب الرابط المحمي من السيرفر...";
+    try{
+      var info=await action("vod","vod-create",{type,sourceId:item.serverId,itemId,
+        rightsConfirmed:true});
+      var video=$("vod-player");video.src=info.playerUrl;
+      video.style.display="block";video.load();
+      $("vod-report").textContent=info.browserPlayable?
+        "تم تجهيز رابط المعاينة المحمي. اضغط تشغيل للفيديو.":
+        "تم تجهيز المحتوى، لكن صيغة "+info.extension+" قد لا تعمل داخل المتصفح. يلزم مشغل يدعم هذه الصيغة.";
+      show("تم تجهيز معاينة حقيقية من مصدر المحتوى.",true);
+    }catch(e){$("vod-report").textContent="تعذر بدء المعاينة: "+e.message;show(e.message,false)}
+    finally{this.disabled=false}
+  });
   $("library-submit").addEventListener("click",function(){loadCatalog(false)});
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
