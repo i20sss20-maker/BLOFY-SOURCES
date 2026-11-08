@@ -4,6 +4,7 @@
 import {timingSafeEqual} from 'node:crypto';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {compareXtreamNativeHttp11} from './xtream-native-http11-media-diagnostic.mjs';
+import {readProviderDenialHint} from './provider-denial-hint.mjs';
 
 const MAX_JSON=4096;
 const KIND=new Set(['movie','series']);
@@ -73,10 +74,15 @@ async function profileProbe(url,profile,{
    }
    const status=response.status;
    if(status!==200&&status!==206){
+    // Some provider 404 responses are deliberate IP/connection denials.
+    // Inspect only a bounded first chunk and return a vetted reason enum;
+    // never include the upstream body, address or credentials in results.
+    const providerHint=await readProviderDenialHint(response);
     await response.body?.cancel().catch(()=>{});
     return {profile:profile.name,status,mediaBytes:false,
       code:status===404?'provider_not_found':status===403?'provider_forbidden':
       status===456?'provider_limited':'other_http',redirects,
+      ...(providerHint?{providerHint}:{}),
       crossOriginRedirect:crossOrigin>0};
    }
    if(!response.body)return{profile:profile.name,status,
