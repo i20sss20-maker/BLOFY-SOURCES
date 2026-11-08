@@ -87,8 +87,9 @@ export function createXtreamCatalogRelay({
        {ok:false,code:'upstream_rejected'});
     }
     // Content is streamed with backpressure. Manifest audits are capped
-    // separately at 64 MiB and cannot be used as a public playlist endpoint.
-    const maxData=manifestOnly?64*1024*1024:MAX_DATA;
+    // at 256 MiB, streamed with backpressure, never buffered or public.
+    // The real provider's official export exceeds our initial 64 MiB cap.
+    const maxData=MAX_DATA;
     const len=Number(response.headers['content-length']||0);
     if(len>maxData){response.destroy();return safeWrite(res,413,{ok:false,code:'catalog_too_large'});}
     let total=0;
