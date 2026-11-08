@@ -45,6 +45,7 @@ export function createStreamServer({
   relayFetchImpl=fetch,
   relayLookup=undefined,
   relayRedirectSourceOrigin='',
+  relayFirstByteTimeoutMs=12000,
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -54,7 +55,8 @@ export function createStreamServer({
   const cfg=safeEnvironment({port,engineUrl});
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
-    redirectSourceOrigin:relayRedirectSourceOrigin});
+    redirectSourceOrigin:relayRedirectSourceOrigin,
+    firstByteTimeoutMs:relayFirstByteTimeoutMs});
   const sourceDiagnostic=createCrossProjectSourceDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });

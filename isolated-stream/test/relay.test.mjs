@@ -8,9 +8,10 @@ const shared='isolated-relay-test-secret-abcdefghijklmnopqrstuvwxyz123456789';
 const ts=Buffer.alloc(188*3,0x11);
 for(let i=0;i<ts.length;i+=188)ts[i]=0x47;
 
-async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock,redirectSourceOrigin=''}={}){
+async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock,redirectSourceOrigin='',firstByteTimeoutMs=12000}={}){
   const server=createStreamServer({relaySharedToken:token,
     relayRedirectSourceOrigin:redirectSourceOrigin,
+    relayFirstByteTimeoutMs:firstByteTimeoutMs,
     relayFetchImpl:fetchImpl,
     relayLookup:async()=>[{address:'93.184.216.34',family:4}],
     fetchImpl:async()=>{throw new Error('mock only')},
@@ -217,4 +218,26 @@ test('bounded CDN policy prevents chains spanning two additional public origins'
       return new Response(null,{status:302,headers:{location:'https://'+host+'/media.ts'}});
     }
   });
+});
+
+test('HTTP 200 with stalled first media byte returns a bounded sanitized 502',async()=>{
+  let aborted=false;
+  await host(async origin=>{
+    const created=await issue(origin);
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    const body=await res.json();
+    assert.equal(body.code,'relay_first_byte_timeout');
+    assert.equal(aborted,true);
+    assert.doesNotMatch(JSON.stringify(body),/allowed\\.example|\\/u\\/p\\//);
+  },{firstByteTimeoutMs:35,fetchImpl:async(_url,opts)=>{
+    const stream=new ReadableStream({start(controller){
+      opts.signal.addEventListener('abort',()=>{
+        aborted=true;
+        controller.error(new Error('upstream aborted'));
+      },{once:true});
+    }});
+    return new Response(stream,{status:200,headers:{'content-type':'video/mp2t'}});
+  }});
 });
