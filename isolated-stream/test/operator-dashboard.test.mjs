@@ -36,7 +36,7 @@ test('console requires operator authentication for page and status',async()=>{
     assert.equal(status.status,200);
     const data=await status.json();
     assert.equal(data.customerTrafficEnabled,false);
-    assert.equal(data.realSourceVerified,false);
+    assert.equal(data.realSourceMediaVerified,false);
     assert.equal(data.engine.reachable,true); // MediaMTX root 404 still means listener responded
     assert.equal(data.engine.httpStatus,404);
   });
