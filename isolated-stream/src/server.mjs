@@ -6,6 +6,7 @@ import {timingSafeEqual} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
+import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -203,6 +204,31 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    // Operator-approved isolated demo start and proof; safe for the dedicated
+    // FFmpeg synthetic channel only. Never changes BLOFY PLAYER sources.
+    if(process.env.BLOFY_STREAM_DEMO_BOOT_VERIFY==='1'){
+      const timer=setTimeout(()=>{
+        const control=createMediaControlClient({
+          username:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
+          password:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
+        });
+        void control.demoAction('start').then(async result=>{
+          console.info('BLOFY_STREAM_DEMO_LIFECYCLE',JSON.stringify({
+            ok:result.body.ok,code:result.body.code,
+            customerTrafficChanged:false
+          }));
+          if(!result.body.ok)return;
+          const probe=await verifyRestreamSmoke(DEFAULT_ENGINE,{pathName:'blofy-demo'});
+          console.info('BLOFY_STREAM_DEMO_TRANSPORT',JSON.stringify({
+            ok:probe.ok,code:probe.code,elapsedMs:probe.elapsedMs??null,
+            audioVideoDecoded:false,realProviderVerified:false,
+            customerTrafficChanged:false
+          }));
+        }).catch(()=>console.info('BLOFY_STREAM_DEMO_LIFECYCLE',
+          JSON.stringify({ok:false,code:'demo_boot_probe_unavailable'})));
+      },17500);
+      timer.unref?.();
+    }
     // Operator-triggered once per deployment. No provider credentials and
     // no subscriber traffic. Railway's three-IP egress can load balance, so
     // observed IPs must be checked against the full Networking assignment.
