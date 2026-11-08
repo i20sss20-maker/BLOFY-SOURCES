@@ -1,7 +1,7 @@
 // Isolated operator console. It cannot alter subscriber routes, Xtream
 // credentials, source catalogs or production services. No API tokens in HTML.
 import {timingSafeEqual,randomBytes} from 'node:crypto';
-import {renderOperatorDashboard} from './operator-control-view.mjs';
+import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 
