@@ -89,6 +89,8 @@ export function createStreamServer({
   }
   const operatorDashboard=createOperatorDashboard({
     adminToken,engineOrigin:cfg.origin,fetchImpl,
+    controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
+    controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     getSmokeState:()=>({
       checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
@@ -99,6 +101,11 @@ export function createStreamServer({
         return {status:429,body:{ok:false,code:'canary_rate_limited'}};
       const report=await canary();
       return {status:report.ok?200:503,body:report};
+    },
+    runDemoProbe:async()=>{
+      const report=await verifyRestreamSmoke(cfg.origin,{fetchImpl,pathName:'blofy-demo'});
+      return {status:report.ok?200:503,body:{...report,
+        customerTrafficChanged:false,realSourceVerified:false}};
     }
   });
   const app=http.createServer((req,res)=>{
