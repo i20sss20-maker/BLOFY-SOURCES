@@ -8,7 +8,7 @@ const password='private-control-password-with-over-32-characters';
 const UUID='550e8400-e29b-41d4-a716-446655440000';
 const sourceUrl='https://provider.example/live/user/secret-password/88.ts';
 const mediaName=/\/v3\/config\/paths\/(?:add|delete)\/(live-[a-f0-9]{12})/;
-function createFixture({maxPaths=3,hlsIndex='#EXTM3U\n#EXTINF:2.0,\nseg1.ts\n'}={}){
+function createFixture({maxPaths=3,failPrimary=false,hlsIndex='#EXTM3U\n#EXTINF:2.0,\nseg1.ts\n'}={}){
   const calls=[],portal={configured:true,
     liveChannel:async ({rightsConfirmed,sourceId})=>({
       status:200,body:{ok:true,kind:'live',extension:'ts',
