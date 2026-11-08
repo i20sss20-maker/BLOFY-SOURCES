@@ -93,7 +93,7 @@ export function createLiveRestreamSupervisor({
   }
   const idleTimer=setInterval(()=>{void prune().catch(()=>{})},60_000);
   idleTimer.unref?.();
-  async function start({sourceId,channelId,rightsConfirmed}={}){
+  async function start({sourceId,channelId,backupSourceId,backupChannelId,rightsConfirmed}={}){
     if(!auth||!portal?.configured)return safe({ok:false,code:'restream_not_configured'},503);
     if(rightsConfirmed!==true)return safe({ok:false,code:'stream_rights_confirmation_required'},403);
     if(operation)return safe({ok:false,code:'restream_busy'},429);
@@ -108,18 +108,37 @@ export function createLiveRestreamSupervisor({
         return safe({ok:false,code:'restream_source_invalid'},502);
       try{await assertPublicMediaUrl(upstream.body.sourceUrl,{lookup})}
       catch{return safe({ok:false,code:'restream_source_origin_invalid'},400)}
+      const candidates=[upstream.body.sourceUrl];
+      if(backupSourceId||backupChannelId){
+        if(!backupSourceId||!backupChannelId||
+           (backupSourceId===sourceId&&String(backupChannelId)===String(channelId)))
+          return safe({ok:false,code:'restream_backup_invalid'},400);
+        const secondary=await portal.liveChannel({
+          sourceId:backupSourceId,channelId:backupChannelId,rightsConfirmed:true
+        });
+        if(secondary.status!==200||secondary.body?.ok!==true||
+           secondary.body.kind!=='live'||secondary.body.extension!=='ts'||
+           typeof secondary.body.sourceUrl!=='string')
+          return safe({ok:false,code:'restream_backup_unavailable'},409);
+        try{await assertPublicMediaUrl(secondary.body.sourceUrl,{lookup})}
+        catch{return safe({ok:false,code:'restream_backup_invalid'},400)}
+        if(secondary.body.sourceUrl===upstream.body.sourceUrl)
+          return safe({ok:false,code:'restream_backup_duplicate'},400);
+        candidates.push(secondary.body.sourceUrl);
+      }
       const name='live-'+randomBytes(6).toString('hex'),ticket=randomBytes(24).toString('hex');
       const row={name,ticket,sourceUrl:upstream.body.sourceUrl,
         sourceId:upstream.body.sourceId,channelId:upstream.body.channelId,
         title:String(upstream.body.name||'').slice(0,160),
-        createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null};
+        createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
+        candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1};
       const config={source:'publisher',runOnDemand:buildCommand(name,ticket),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:3};
       await mediamtx('POST','/v3/config/paths/add/'+name,config);
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
-        channelId:row.channelId,onDemand:true,
+        channelId:row.channelId,onDemand:true,backupConfigured:row.backupConfigured,
         playbackVerified:false,customerTrafficChanged:false,
         playlist:'/operator/api/live/'+name+'/index.m3u8'},201);
     }catch(e){return safe({ok:false,code:classify(e)},503)}
@@ -154,7 +173,9 @@ export function createLiveRestreamSupervisor({
       path:row.name,sourceId:row.sourceId,channelId:row.channelId,
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
-      onDemand:true,playlist:'/operator/api/live/'+row.name+'/index.m3u8'
+      onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
+      preferredSource:row.preferredIndex===0?'primary':'backup',
+      playlist:'/operator/api/live/'+row.name+'/index.m3u8'
     })),customerTrafficChanged:false};
   }
   async function streamFeed(req,res,token){
