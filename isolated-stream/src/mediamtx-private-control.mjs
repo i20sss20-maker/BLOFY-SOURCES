@@ -57,30 +57,25 @@ export function createMediaControlClient({
       configured:false,online:false,diagnostics:'mediamtx_auth_unconfigured',
       readyPaths:null,hlsSessions:null,demo:null,paths:[]
     };
-    const [info,paths,hls,demo]=await Promise.all([
+    const [info,paths,hls]=await Promise.all([
       safe('info',()=>request('/v3/info')),
       safe('paths',()=>request('/v3/paths/list')),
-      safe('hls',()=>request('/v3/hls/sessions/list')),
-      safe('demo',()=>request(PATH+'get/'+DEMO))
+      safe('hls',()=>request('/v3/hls/sessions/list'))
     ]);
-    const anyAuthFailed=[info,paths,hls,demo].some(x=>x.error==='mediamtx_auth_failed');
+    const anyAuthFailed=[info,paths,hls].some(x=>x.error==='mediamtx_auth_failed');
     const online=info.ok===true||paths.ok===true;
     const items=paths.ok&&Array.isArray(paths.data?.items)?paths.data.items:null;
     const hlsItems=hls.ok&&Array.isArray(hls.data?.items)?hls.data.items:null;
-    const demoExists=demo.ok===true;
     const summary=items===null?[]:items.slice(0,300).map(row=>({
       name:String(row?.name||'').slice(0,90),
       ready:row?.ready===true,readers:Array.isArray(row?.readers)?row.readers.length:0,
       tracks:Array.isArray(row?.tracks)?row.tracks.length:null
-    })).filter(x=>x.name==='smoke'||x.name===DEMO);
+    }));
     return {
       configured:true,online,diagnostics:anyAuthFailed?'mediamtx_auth_failed':
         online?'connected':info.error||paths.error||'mediamtx_unreachable',
       readyPaths:items===null?null:items.filter(x=>x?.ready===true).length,
       hlsSessions:hlsItems===null?null:(Number.isInteger(hls.data?.itemCount)?hls.data.itemCount:hlsItems.length),
-      demo:demoExists?{exists:true,sourceType:'on_demand_private_rtsp',
-        ready:summary.find(x=>x.name===DEMO)?.ready||false}:
-        demo.status===404?{exists:false,sourceType:'on_demand_private_rtsp',ready:false}:null,
       paths:summary,
       // Explicit false; this isolated stream engine has not migrated customers.
       customerTrafficEnabled:false,realProviderVerified:false
