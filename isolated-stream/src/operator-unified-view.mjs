@@ -441,13 +441,18 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     items.forEach(function(item){
       var tr=node("tr");cell(tr,item.title||item.channelId);
       cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
-      cell(tr,String(item.connections||0)+(item.failovers?" · تبديلات: "+item.failovers:""));
+      var status=String(item.connections||0)+(item.failovers?" · تبديلات: "+item.failovers:"");
+      if(item.probePending)status+=" · فحص HLS جار";
+      else if(item.lastProbe)status+=item.lastProbe.ok?" · HLS يعمل":" · HLS فشل: "+item.lastProbe.code;
+      cell(tr,status);
       var controls=node("div",undefined,"actions");
       controls.appendChild(button("فحص HLS",async function(){
         $("live-result").textContent="جار اختبار مقاطع البث الفعلية...";
         try{var d=await action("live/"+item.path+"/probe","live-probe",{});
-          $("live-result").textContent=JSON.stringify(d,null,2);
-          show(d.ok?"وصل مقطع HLS بنجاح؛ تحقق من الصوت والصورة في المشغل.":"فشل فحص HLS.",d.ok);
+          $("live-result").textContent=d.probePending?
+            "بدأ فحص HLS للمسار "+item.path+". ستظهر النتيجة تلقائيًا في حالة القناة بعد اكتماله.":
+            JSON.stringify(d,null,2);
+          show(d.probePending?"بدأ فحص مقطع HLS الحقيقي. النتيجة لم تثبت بعد.":"انتهى الفحص.",d.ok);
         }catch(e){$("live-result").textContent=e.message;show(e.message,false)}
         await loadLive();
       }));
