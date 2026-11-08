@@ -49,3 +49,20 @@ test('mutating operator request rejects missing action header',async()=>{
     assert.equal((await rejected.json()).code,'operator_action_header_required');
   });
 });
+
+test('demo mutations require Basic auth and exact anti-CSRF header',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const denied=await fetch(base+'/operator/api/demo-start',{method:'POST'});
+    assert.equal(denied.status,401);
+    const forbidden=await fetch(base+'/operator/api/demo-start',{
+      method:'POST',headers:{authorization:auth}
+    });
+    assert.equal(forbidden.status,403);
+    assert.equal((await forbidden.json()).code,'operator_action_header_required');
+    const unavailable=await fetch(base+'/operator/api/demo-start',{
+      method:'POST',headers:{authorization:auth,'x-blofy-operator-action':'demo-start'}
+    });
+    assert.equal(unavailable.status,503); // No private MediaMTX auth configured
+    assert.equal((await unavailable.json()).code,'mediamtx_auth_unconfigured');
+  });
+});
