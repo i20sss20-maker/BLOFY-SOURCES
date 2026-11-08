@@ -242,3 +242,28 @@ test('HTTP 200 with stalled first media byte returns a bounded sanitized 502',as
     return new Response(stream,{status:200,headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('confirmed provider 404 is distinguished from generic 502 without leaking provider URL',async()=>{
+  await host(async origin=>{
+    const created=await issue(origin);
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    const body=await res.json();
+    assert.equal(body.code,'relay_provider_not_found');
+    assert.equal(body.upstreamStatus,404);
+    assert.equal(JSON.stringify(body).includes('allowed.example'),false);
+    assert.equal(JSON.stringify(body).includes('/u/p/'),false);
+  },{fetchImpl:async()=>new Response('Not found',{status:404})});
+});
+test('other provider failures retain bounded generic classification',async()=>{
+  await host(async origin=>{
+    const created=await issue(origin);
+    const {path}=await created.json();
+    const res=await fetch(origin+path);
+    assert.equal(res.status,502);
+    const body=await res.json();
+    assert.equal(body.code,'relay_provider_unavailable');
+    assert.equal(body.upstreamStatus,503);
+  },{fetchImpl:async()=>new Response('Unavailable',{status:503})});
+});
