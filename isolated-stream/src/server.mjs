@@ -9,7 +9,7 @@ import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
-import {createXtreamCatalogRelay} from './xtream-catalog-relay.mjs';
+import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catalog-relay.mjs';
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
@@ -63,6 +63,9 @@ export function createStreamServer({
   const catalogRelay=createXtreamCatalogRelay({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
+  const manifestRelay=createXtreamManifestRelay({
+    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
+  });
   const officialM3uDiagnostic=createOfficialM3uDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
@@ -82,6 +85,8 @@ export function createStreamServer({
       return void sourceDiagnostic.handle(req,res);
     if(url.pathname==='/internal/xtream-catalog-relay')
       return void catalogRelay.handle(req,res);
+    if(url.pathname==='/internal/xtream-manifest-relay')
+      return void manifestRelay.handle(req,res);
     if(url.pathname==='/internal/xtream-official-m3u-diagnostic')
       return void officialM3uDiagnostic.handle(req,res);
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
