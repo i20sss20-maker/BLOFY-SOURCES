@@ -104,8 +104,7 @@ export async function compareXtreamMediaClientProfiles(samples,{
   const checks=[];
   for(const profile of profiles){
    const outcome=await profileProbe(item.sourceUrl,profile,{
-    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup,
-    compareHttp11:payload.compareHttp11===true,http11Read});
+    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup});
    checks.push(outcome);
    // A provider denial must never trigger a different client profile.
    if([401,403,456].includes(outcome.status))break;
@@ -158,7 +157,8 @@ export function createXtreamMediaClientProfileDiagnostic({
     samples.push({kind:item.kind,sourceUrl:url.href});
    }
    const result=await compareXtreamMediaClientProfiles(samples,{
-    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup});
+    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup,
+    compareHttp11:payload.compareHttp11===true,http11Read});
    return answer(res,200,result);
   }catch{return answer(res,400,{ok:false,code:'diagnostic_unavailable'})}
   finally{busy=false;}
