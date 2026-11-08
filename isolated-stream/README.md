@@ -30,7 +30,9 @@ configured in Railway. Keep this secret in Railway variables only, not in Git,
 screenshots, query strings, URLs, or frontend local storage.
 
 The dashboard offers:
+- A simple Arabic RTL navigation inspired by a familiar admin control panel: home, sources, restream, library, subscribers and diagnostics. Unintegrated sections are explicitly marked as unavailable, not faked.
 - Server API state and a live connectivity check of the private MediaMTX HLS listener (a MediaMTX 404 on `/` means only that the listener responded, **not** that an IPTV channel plays).
+- Optional read-only counts of ready paths and HLS sessions from the fixed private MediaMTX Control API on port 9997. If its API is not available, counts remain unknown (`—`), rather than displaying a false zero.
 - Latest **synthetic-only** HLS transport canary, never portrayed as verified real video/audio.
 - A protected, rate-limited button to run the same synthetic canary as `POST /internal/smoke`.
 - Clear labels stating that account migration and customer playback remain disabled.
@@ -44,3 +46,10 @@ operator-supplied shell commands should be accepted by this API.
 Testing: `cd isolated-stream && npm test`. Merge/deploy only after tests
 and authorization are verified. The source `blofy-stream-isolated-20261108`
 remains unchanged by this feature branch.
+
+### Current control limitations
+
+- This is **not** an Xtream source manager, subscriber dashboard or live channel switcher yet. Those modules show clear integration gates and a link back to the existing authorized BLOFY PLAYER admin site.
+- Control API metrics require MediaMTX to expose its API to the service over Railway's private network; with its default loopback-only API binding, counts show unknown. Do **not** expose port 9997 publicly or accept arbitrary upstream URLs.
+- Only the synthetic smoke action is enabled. Actual server restarts and subscriber failover are intentionally not enabled without a media verification and rollback path.
+- The repository is not copying Dispatcharr code or branding; it uses an original lightweight BLOFY UI and MediaMTX interface.
