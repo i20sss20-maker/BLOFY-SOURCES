@@ -60,8 +60,10 @@ function permittedReturnHeaders(response){
 }
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
-  maxTickets=MAX_TICKETS,redirectSourceOrigin=''
+  maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000
 }={}){
+  if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
+    throw new Error('relay_first_byte_timeout_invalid');
   const tickets=new Map();
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
@@ -180,7 +182,7 @@ export function createRelayBroker({
       // Bound this pre-playback stall without placing a timeout on a healthy
       // long-running live stream after its first chunk arrives.
       const firstByteTimer=setTimeout(()=>
-        controller.abort(new Error('relay_first_byte_timeout')),12000);
+        controller.abort(new Error('relay_first_byte_timeout')),firstByteTimeoutMs);
       try{first=await reader.read()}
       catch{throw new Error(controller.signal.reason?.message==='relay_first_byte_timeout'
         ?'relay_first_byte_timeout':'relay_upstream_read_failed')}
