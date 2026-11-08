@@ -137,3 +137,40 @@ test('manifest relay does not allow arbitrary query, destinations or unauthentic
   });
  });
 });
+
+test('get_vod_info is authorized for one safe ID and does not expose raw secrets in errors',async()=>{
+ let sourceCalls=0;
+ await fixture((req,res)=>{
+  sourceCalls++;
+  const u=new URL(req.url,'http://localhost');
+  assert.equal(u.pathname,'/player_api.php');
+  assert.equal(u.searchParams.get('action'),'get_vod_info');
+  assert.equal(u.searchParams.get('vod_id'),'1234');
+  res.writeHead(200,{'content-type':'application/json'});
+  res.end(JSON.stringify({movie_data:{stream_id:1234,
+    container_extension:'mkv',direct_source:'https://cdn.example/signed?token=TOPSECRET'}}));
+ },async sourceOrigin=>{
+  const relay=createXtreamCatalogRelay({sharedToken:secret,allowedOrigin:sourceOrigin,
+   validate:async x=>new URL(x)});
+  await fixture((req,res)=>relay.handle(req,res),async endpoint=>{
+   const start=sourceOrigin+'/player_api.php?username=u&password=p&action=get_vod_info&vod_id=1234';
+   const send=async url=>fetch(endpoint,{method:'POST',
+    headers:{authorization:'Bearer '+secret,'content-type':'application/json'},
+    body:JSON.stringify({sourceUrl:url})});
+   const ok=await send(start);
+   assert.equal(ok.status,200);
+   const data=await ok.json();
+   assert.equal(data.movie_data.stream_id,1234);
+   assert.equal(sourceCalls,1);
+   for(const unsafe of [start.replace('vod_id=1234','vod_id=../../bad'),
+     start.replace('vod_id=1234','vod_id='),
+     start+'&action=delete',start+'&extra=yes']){
+    const response=await send(unsafe);
+    assert.equal(response.status,400);
+    const body=await response.text();
+    assert.doesNotMatch(body,/TOPSECRET|cdn.example|password=p/);
+   }
+   assert.equal(sourceCalls,1);
+  });
+ });
+});
