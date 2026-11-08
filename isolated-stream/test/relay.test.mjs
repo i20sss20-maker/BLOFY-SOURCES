@@ -267,3 +267,62 @@ test('other provider failures retain bounded generic classification',async()=>{
     assert.equal(body.upstreamStatus,503);
   },{fetchImpl:async()=>new Response('Unavailable',{status:503})});
 });
+
+test('first-byte movie Range 404 retries once as a plain GET and streams valid media',async()=>{
+  const visited=[];
+  await host(async origin=>{
+    const issued=await issue(origin,{kind:'movie',sourceUrl:'https://allowed.example/movie/u/p/7.mp4'});
+    const {path}=await issued.json();
+    const response=await fetch(origin+path,{headers:{range:'bytes=0-1023','if-range':'etag'}});
+    assert.equal(response.status,200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),ts);
+    assert.deepEqual(visited.map(x=>x.range),['bytes=0-1023',undefined]);
+    assert.equal(visited[1].ifRange,undefined);
+  },{fetchImpl:async(_url,opts)=>{
+    visited.push({range:opts.headers.range,ifRange:opts.headers['if-range']});
+    return visited.length===1?new Response('range unsupported',{status:404}):
+      new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
+  }});
+});
+test('first-byte episode Range 416 gets one bounded plain GET',async()=>{
+  let calls=0;
+  await host(async origin=>{
+    const issued=await issue(origin,{kind:'series',sourceUrl:'https://allowed.example/series/u/p/7.mp4'});
+    const {path}=await issued.json();
+    const response=await fetch(origin+path,{headers:{range:'bytes=0-2047'}});
+    assert.equal(response.status,200);
+    assert.equal(calls,2);
+  },{fetchImpl:async(_url,opts)=>{
+    calls++;
+    if(calls===1)return new Response('bad range',{status:416});
+    assert.equal(opts.headers.range,undefined);
+    return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
+  }});
+});
+test('confirmed 404 remains 404 when plain GET also fails; never retry indefinitely',async()=>{
+  let calls=0;
+  await host(async origin=>{
+    const issued=await issue(origin,{kind:'movie',sourceUrl:'https://allowed.example/movie/u/p/7.mp4'});
+    const {path}=await issued.json();
+    const response=await fetch(origin+path,{headers:{range:'bytes=0-1023'}});
+    assert.equal(response.status,502);
+    assert.equal((await response.json()).code,'relay_provider_not_found');
+    assert.equal(calls,2);
+  },{fetchImpl:async()=>{calls++;return new Response('missing',{status:404})}});
+});
+test('seek, live and provider denials never use Range bypass',async()=>{
+ for(const [kind,range,status] of [
+  ['movie','bytes=500-1000',404],['live','bytes=0-1023',404],
+  ['movie','bytes=0-1023',403],['movie','bytes=0-1023',456]
+ ]){
+  let calls=0;
+  await host(async origin=>{
+    const sourceUrl='https://allowed.example/'+(kind==='live'?'live':'movie')+'/u/p/7.ts';
+    const issued=await issue(origin,{kind,sourceUrl});
+    const {path}=await issued.json();
+    const response=await fetch(origin+path,{headers:{range}});
+    assert.equal(response.status,502);
+    assert.equal(calls,1,kind+' '+range+' '+status);
+  },{fetchImpl:async()=>{calls++;return new Response('denied',{status})}});
+ }
+});
