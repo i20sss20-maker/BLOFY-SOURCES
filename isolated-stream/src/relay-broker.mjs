@@ -139,8 +139,13 @@ export function createRelayBroker({
         headers.range=req.headers.range;
       if(typeof req.headers['if-range']==='string'&&req.headers['if-range'].length<180)
         headers['if-range']=req.headers['if-range'];
-      let ready=false;
-      for(let i=0;i<4;i++){
+      let ready=false,redirectCount=0,rangeFallbackUsed=false;
+      // Certain Xtream VOD hosts wrongly reject an initial bytes=0- range
+      // with 404/416 even though an ordinary GET works. Retry once without
+      // Range only for the first byte of a movie/episode, never a seek or live.
+      // Keep at most three validated provider redirects and five total calls.
+      const firstByteRange=/^bytes=0-(?:[0-9]{0,12})$/i.test(headers.range||'');
+      for(let i=0;i<5;i++){
         const timer=setTimeout(()=>controller.abort(),12000);
         try{
           upstream=await fetchImpl(target,{method:req.method,headers,redirect:'manual',
@@ -149,7 +154,7 @@ export function createRelayBroker({
         if([301,302,303,307,308].includes(upstream.status)){
           const location=upstream.headers.get('location');
           await upstream.body?.cancel().catch(()=>{});
-          if(!location||i===3)throw new Error('relay_redirect_denied');
+          if(!location||redirectCount>=3||i===4)throw new Error('relay_redirect_denied');
           const next=await assertPublicMediaUrl(new URL(location,target).href,{lookup});
           if(next.origin!==target.origin){
             // Only the explicitly selected source is allowed one public
@@ -159,7 +164,16 @@ export function createRelayBroker({
               throw new Error('relay_redirect_denied');
             crossOriginRedirects++;
           }
+          redirectCount++;
           target=next;continue;
+        }
+        if(req.method==='GET'&&row.kind!=='live'&&firstByteRange&&
+           !rangeFallbackUsed&&[404,416].includes(upstream.status)&&i<4){
+          await upstream.body?.cancel().catch(()=>{});
+          rangeFallbackUsed=true;
+          delete headers.range;
+          delete headers['if-range'];
+          continue;
         }
         ready=true;break;
       }
