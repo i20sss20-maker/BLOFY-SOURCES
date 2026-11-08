@@ -2,11 +2,10 @@
 // client URL, a source account, a provider host or a stream ID.
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 
-const PATH='/smoke/';
-function targetUrl(reference,base,origin){
+function targetUrl(reference,base,origin,pathPrefix){
   let url;
   try{url=new URL(reference,base);}catch{throw new Error('restream_smoke_invalid_path');}
-  if(url.origin!==origin || !url.pathname.startsWith(PATH) ||
+  if(url.origin!==origin || !url.pathname.startsWith(pathPrefix) ||
       url.username || url.password || url.hash ||
       /[\\\r\n]/.test(String(reference)))
     throw new Error('restream_smoke_invalid_path');
@@ -53,14 +52,18 @@ async function readBounded(response,{limitBytes=48*1024,firstBytesOnly=false}={}
   }
 }
 export async function verifyRestreamSmoke(originInput,{
-  fetchImpl=fetch,timeoutMs=12000,wait=ms=>new Promise(r=>setTimeout(r,ms))
+  fetchImpl=fetch,timeoutMs=12000,wait=ms=>new Promise(r=>setTimeout(r,ms)),
+  pathName='smoke'
 }={}){
   const origin=normalizePrivateRestreamOrigin(originInput);
+  if(!['smoke','blofy-demo'].includes(pathName))
+    return {ok:false,stage:'configuration',code:'restream_path_not_permitted',mediaVerified:false};
+  const pathPrefix='/'+pathName+'/';
   if(!origin)return {ok:false,stage:'configuration',code:'restream_not_configured',mediaVerified:false};
   const startedAt=Date.now();
   let cookie='';
   async function load(ref,base){
-    let url=targetUrl(ref,base,origin);
+    let url=targetUrl(ref,base,origin,pathPrefix);
     for(let redirects=0;redirects<=3;redirects++){
       let response;
       try{
@@ -76,7 +79,7 @@ export async function verifyRestreamSmoke(originInput,{
         const next=response.headers.get('location');
         await response.body?.cancel().catch(()=>{});
         if(!next||redirects===3)throw new Error('restream_smoke_redirect_invalid');
-        url=targetUrl(next,url,origin);
+        url=targetUrl(next,url,origin,pathPrefix);
         continue;
       }
       if(!response.ok){
@@ -91,7 +94,7 @@ export async function verifyRestreamSmoke(originInput,{
   }
   let stage='master';
   try{
-    const master=await load('/smoke/index.m3u8',origin+'/smoke/');
+    const master=await load(pathPrefix+'index.m3u8',origin+pathPrefix);
     const masterBody=await readBounded(master.response);
     const masterText=masterBody.toString('utf8');
     if(!masterText.startsWith('#EXTM3U'))throw new Error('restream_smoke_manifest_invalid');
