@@ -43,7 +43,7 @@ async function readAdminJson(req){
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
-  controlUsername='',controlPassword='',unifiedSecret=''}={}){
+  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -89,6 +89,34 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           }
         })).catch(()=>json(res,503,{ok:false,code:'engine_state_unavailable'}));
       return true;
+    }
+    // Live video and HLS segments remain behind the SAME operator Basic auth
+    // as the page. There are no public media URLs and no customer cutover.
+    if(liveSupervisor){
+      if(req.method==='GET'&&path==='/operator/api/live'){
+        json(res,200,liveSupervisor.list());return true;
+      }
+      const media=path.match(/^\/operator\/api\/live\/(live-[a-f0-9]{12})\/([a-zA-Z0-9_.-]+)$/);
+      if(req.method==='GET'&&media){
+        void liveSupervisor.proxyHls(req,res,media[1],media[2]);
+        return true;
+      }
+      const management=path.match(/^\/operator\/api\/live\/(live-[a-f0-9]{12})\/(stop|probe)$/);
+      if(req.method==='POST'&&(path==='/operator/api/live/start'||management)){
+        const command=path==='/operator/api/live/start'?'start':management[2];
+        if(req.headers['x-blofy-operator-action']!=='live-'+command){
+          json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+        }
+        void readAdminJson(req).then(body=>{
+          if(command==='start')return liveSupervisor.start(body);
+          return command==='stop'?liveSupervisor.stop(management[1]):
+            liveSupervisor.probe(management[1]);
+        }).then(({status,body})=>json(res,status,body))
+          .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,{
+            ok:false,code:[400,413,415].includes(e?.status)?e.message:'restream_action_failed'
+          }));
+        return true;
+      }
     }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
