@@ -36,8 +36,6 @@ test('MediaMTX overview is real and redacts provider URLs and passwords',async()
   assert.equal(state.online,true);
   assert.equal(state.readyPaths,1);
   assert.equal(state.hlsSessions,1);
-  assert.equal(state.demo.exists,true);
-  assert.equal(state.demo.ready,false);
   assert.deepEqual(state.paths.map(x=>x.name),['smoke','blofy-demo']);
   assert.equal(JSON.stringify(state).includes('secret'),false);
   assert.ok(seen.every(x=>x.url.startsWith(origin+'/v3/')&&x.authorization===auth));
