@@ -182,29 +182,35 @@ export function createLiveRestreamSupervisor({
     if(req.method!=='GET'||!TICKET.test(token)||!tokens.has(token))
       return response(res,404,{ok:false,code:'restream_feed_not_found'});
     const name=tokens.get(token),row=paths.get(name);
-    if(!row)
-      return response(res,410,{ok:false,code:'restream_feed_expired'});
-    if(row.connections>=1)
-      return response(res,429,{ok:false,code:'restream_feed_busy'});
+    if(!row)return response(res,410,{ok:false,code:'restream_feed_expired'});
+    if(row.connections>=1)return response(res,429,{ok:false,code:'restream_feed_busy'});
     row.connections++;row.lastUsedAt=clock();
-    const controller=new AbortController();
-    const onClose=()=>{if(!res.writableEnded)controller.abort()};
+    const controllers=new Set();
+    let closedByReader=false,startedAt=clock();
+    const onClose=()=>{
+      if(!res.writableEnded){
+        closedByReader=true;
+        for(const controller of controllers)controller.abort();
+      }
+    };
     res.once('close',onClose);
-    let upstream;
-    try{
-      let target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
-      let redirects=0,crossOrigin=0;
-      for(let i=0;i<4;i++){
-        const headerTimer=setTimeout(()=>controller.abort(),12000);
-        try{
-          upstream=await fetchImpl(target,{method:'GET',redirect:'manual',
-            headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
-              'user-agent':'BLOFY-STREAM/1.0','accept-encoding':'identity'},
-            signal:controller.signal
-          });
-        }finally{clearTimeout(headerTimer)}
-        if([301,302,303,307,308].includes(upstream.status)){
-          if(i>=3)throw err('restream_provider_redirect_denied');
+    async function acquire(src){
+      const controller=new AbortController();
+      controllers.add(controller);
+      let upstream,reader;
+      try{
+        let target=await assertPublicMediaUrl(src,{lookup}),crossOrigin=0;
+        for(let hop=0;hop<=3;hop++){
+          const timer=setTimeout(()=>controller.abort(),12000);
+          try{
+            upstream=await fetchImpl(target,{
+              method:'GET',redirect:'manual',signal:controller.signal,
+              headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
+                'user-agent':'BLOFY-STREAM/1.0','accept-encoding':'identity'}
+            });
+          }finally{clearTimeout(timer)}
+          if(![301,302,303,307,308].includes(upstream.status))break;
+          if(hop===3)throw err('restream_provider_redirect_denied');
           const location=upstream.headers.get('location');
           await upstream.body?.cancel().catch(()=>{});
           if(!location)throw err('restream_provider_redirect_denied');
@@ -213,47 +219,87 @@ export function createLiveRestreamSupervisor({
             throw err('restream_provider_redirect_denied');
           if(next.origin!==target.origin&&++crossOrigin>1)
             throw err('restream_provider_redirect_denied');
-          target=next;redirects++;continue;
+          target=next;
         }
-        break;
+        if(!upstream.ok){
+          const status=upstream.status;
+          throw err(status===404?'restream_provider_not_found':
+            [401,403,429,456].includes(status)?'restream_provider_denied':
+              'restream_provider_unavailable');
+        }
+        if(!upstream.body)throw err('restream_invalid_media');
+        const mime=String(upstream.headers.get('content-type')||'').toLowerCase();
+        if(/^(text\/|application\/(?:json|xml))/.test(mime))
+          throw err('restream_invalid_media');
+        reader=upstream.body.getReader();
+        let first;
+        const timer=setTimeout(()=>controller.abort(),13000);
+        try{first=await reader.read()}finally{clearTimeout(timer)}
+        if(first.done||!first.value?.byteLength)throw err('restream_invalid_media');
+        const leading=Buffer.from(first.value).subarray(0,100).toString('utf8').trimStart();
+        if(/^<(!doctype|html)|^\{|^#EXTM3U|^(unauthorized|not found)/i.test(leading))
+          throw err('restream_invalid_media');
+        return {controller,reader,first};
+      }catch(e){
+        try{await reader?.cancel?.()}catch{}
+        try{reader?.releaseLock?.()}catch{}
+        if(upstream?.body&&!upstream.bodyUsed)await upstream.body.cancel().catch(()=>{});
+        controllers.delete(controller);controller.abort();
+        throw e;
       }
-      if(!upstream.ok){
-        const status=upstream.status;
-        await upstream.body?.cancel().catch(()=>{});
-        throw err(status===404?'restream_provider_not_found':
-          [401,403,429,456].includes(status)?'restream_provider_denied':'restream_provider_unavailable');
+    }
+    let active=null,sourceIndex=0;
+    try{
+      const primary=Number.isInteger(row.preferredIndex)?row.preferredIndex:0;
+      const order=[primary,...row.candidateUrls.map((_,i)=>i).filter(i=>i!==primary)];
+      let lastError;
+      for(const index of order){
+        try{
+          active=await acquire(row.candidateUrls[index]);
+          sourceIndex=index;break;
+        }catch(e){lastError=e;if(closedByReader)throw e;}
       }
-      if(!upstream.body)throw err('restream_invalid_media');
-      const mime=String(upstream.headers.get('content-type')||'').toLowerCase();
-      if(/^(text\/|application\/(?:json|xml))/.test(mime))
-        throw err('restream_invalid_media');
-      const reader=upstream.body.getReader();
-      let first;
-      const timer=setTimeout(()=>controller.abort(),13000);
-      try{first=await reader.read()}finally{clearTimeout(timer)}
-      if(first.done||!first.value||!first.value.byteLength)throw err('restream_invalid_media');
-      const begin=Buffer.from(first.value).subarray(0,100).toString('utf8').trimStart();
-      if(/^<(!doctype|html)|^\{|^#EXTM3U|^(unauthorized|not found)/i.test(begin))
-        throw err('restream_invalid_media');
+      if(!active)throw lastError||err('restream_provider_unavailable');
+      if(sourceIndex!==row.preferredIndex){
+        row.preferredIndex=sourceIndex;row.failovers++;row.lastError='restream_switched_source';
+      }
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'x-content-type-options':'nosniff'});
       const stream=Readable.from((async function*(){
-        yield Buffer.from(first.value);
-        while(true){const next=await reader.read();if(next.done)return;
-          if(next.value?.byteLength)yield Buffer.from(next.value);}
+        yield Buffer.from(active.first.value);
+        while(true){
+          const next=await active.reader.read();
+          if(next.done)return;
+          if(next.value?.byteLength)yield Buffer.from(next.value);
+        }
       })());
-      try{await pipeline(stream,res,{signal:controller.signal})}
-      finally{try{await reader.cancel()}catch{}try{reader.releaseLock()}catch{}}
-      row.lastError=null;
+      try{
+        await pipeline(stream,res,{signal:active.controller.signal});
+        if(!closedByReader&&row.backupConfigured&&clock()-startedAt<10000){
+          // A provider that closes almost immediately is likely unstable.
+          // FFmpeg reconnects and the next feed tries the explicitly chosen backup.
+          row.preferredIndex=sourceIndex===0?1:0;
+          row.lastError='restream_short_source_disconnect';
+        }else row.lastError=null;
+      }finally{
+        try{await active.reader.cancel()}catch{}
+        try{active.reader.releaseLock()}catch{}
+      }
     }catch(e){
-      row.lastError=classify(e);
-      if(!res.headersSent)response(res,502,{ok:false,code:row.lastError});
+      if(!closedByReader){
+        row.lastError=classify(e);
+        if(row.backupConfigured)
+          row.preferredIndex=sourceIndex===0?1:0;
+      }
+      if(!res.headersSent)
+        response(res,502,{ok:false,code:closedByReader?'restream_cancelled':
+          row.lastError||'restream_provider_unavailable'});
       else if(!res.destroyed)res.destroy();
     }finally{
-      controller.abort();res.off('close',onClose);row.connections=Math.max(0,row.connections-1);
+      for(const controller of controllers)controller.abort();
+      res.off('close',onClose);
+      row.connections=Math.max(0,row.connections-1);
       row.lastUsedAt=clock();
-      if(upstream?.body&&!upstream.bodyUsed)
-        await upstream.body.cancel().catch(()=>{});
     }
   }
   async function proxyHls(req,res,name,file){
