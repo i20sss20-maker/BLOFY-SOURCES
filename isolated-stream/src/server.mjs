@@ -5,6 +5,7 @@ import http from 'node:http';
 import {timingSafeEqual} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
+import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -86,7 +87,22 @@ export function createStreamServer({
       return report;
     }finally{checking=false;}
   }
+  const operatorDashboard=createOperatorDashboard({
+    adminToken,engineOrigin:cfg.origin,fetchImpl,
+    getSmokeState:()=>({
+      checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
+      code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
+      realSourceVerified:false,audioVideoDecoded:false
+    }),
+    runSmoke:async()=>{
+      if(checking||(checkedAt&&Date.now()-checkedAt<30_000))
+        return {status:429,body:{ok:false,code:'canary_rate_limited'}};
+      const report=await canary();
+      return {status:report.ok?200:503,body:report};
+    }
+  });
   const app=http.createServer((req,res)=>{
+    if(operatorDashboard.handle(req,res))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);
