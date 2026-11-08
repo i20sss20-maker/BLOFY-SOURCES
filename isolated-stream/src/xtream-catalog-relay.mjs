@@ -62,8 +62,14 @@ export function createXtreamCatalogRelay({
    if(typeof body?.sourceUrl!=='string'||body.sourceUrl.length>2500)
      return safeWrite(res,400,{ok:false,code:'source_url_invalid'});
    const target=await validate(body.sourceUrl);
+   const action=target.searchParams.get('action')||'';
+   const isVodInfo=action==='get_vod_info';
+   const validVodInfo=!isVodInfo||(
+     /^[A-Za-z0-9_-]{1,128}$/.test(target.searchParams.get('vod_id')||'')&&
+     [...target.searchParams.keys()].sort().join(',')==='action,password,username,vod_id'
+   );
    const isApi=target.pathname.endsWith('/player_api.php')&&
-     ALLOWED_ACTIONS.has(target.searchParams.get('action')||'');
+     ALLOWED_ACTIONS.has(action)&&validVodInfo;
    const isManifest=target.pathname.endsWith('/get.php')&&
      target.searchParams.get('type')==='m3u_plus'&&
      target.searchParams.get('output')==='ts'&&
