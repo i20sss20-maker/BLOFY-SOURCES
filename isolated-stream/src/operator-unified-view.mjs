@@ -1,0 +1,302 @@
+// Original BLOFY STREAM control center. Authenticated, live production data only.
+// No sample sources, fake counters, redirects to legacy pages, or demo buttons.
+export function renderOperatorDashboard(nonce){
+  const html=String.raw\`<!doctype html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#09172c">
+<title>BLOFY STREAM | الإدارة المتكاملة</title>
+<style>
+:root{color-scheme:dark;--bg:#061428;--aside:#07192f;--panel:#0c203b;--panel2:#102941;--border:#263c5d;--font:#edf4ff;--muted:#91a8c6;--purple:#ad89ed;--green:#48d5a5;--red:#fc8992;--amber:#efc66b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--font);font:14px/1.7 system-ui,Tahoma,'Segoe UI',sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.48;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b99bff;outline-offset:2px}a{color:inherit;text-decoration:none}
+.layout{min-height:100vh;display:grid;grid-template-columns:234px minmax(0,1fr)}
+aside{background:var(--aside);border-left:1px solid var(--border);padding:24px 15px;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:12px;margin:0 6px 30px}.logo-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(140deg,#ab93ff,#6351af);color:#11142a;display:grid;place-items:center;font-size:25px;font-weight:900;transform:rotate(-5deg)}
+.logo strong{font-size:18px;letter-spacing:.4px}.logo strong b{color:#ab90f4}.logo small{display:block;color:var(--muted);font-size:11px}.navtitle{font-size:10px;color:#8398b4;font-weight:700;letter-spacing:1px;margin:12px 12px}
+nav{display:grid;gap:3px}.navlink{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid transparent;border-radius:10px;text-align:right;color:#a8bad0;background:none;font-weight:600;width:100%}.navlink.active{color:#f5efff;background:#302850;border-color:#69578d}.navlink:hover{background:#1d3350}.navlink span:first-child{width:22px;font-size:19px;text-align:center}
+nav .navlink .nav-caption{font-size:11px;opacity:.7}.navfoot{margin-top:26px;border-top:1px solid #243957;padding:18px 9px;color:#9bafc7;font-size:12px}
+.content{min-width:0}.top{height:80px;background:#081a30;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 30px}
+.top h1{font-size:19px;margin:0}.top p{margin:2px 0 0;color:var(--muted);font-size:12px}.tools{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.btn{border-radius:9px;border:1px solid #8161b8;background:#815ac8;color:#fff;padding:9px 15px;font-weight:700}.btn.secondary{background:#132d49;border-color:#405b80}.btn.danger{background:#492832;border-color:#8e4b55}.btn:hover{filter:brightness(1.12)}.btn.sm{font-size:12px;padding:6px 10px}
+.pill{display:inline-block;border:1px solid #435371;color:#b5c5dc;border-radius:30px;padding:5px 11px;font-size:12px;white-space:nowrap}.pill.good{color:var(--green);border-color:#2d665a;background:#103129}.pill.bad{color:var(--red);border-color:#7d4554}.pill.warn{color:var(--amber);border-color:#77613e}
+main{padding:26px 30px 50px;max-width:1580px;margin:auto}.view{display:none}.view.active{display:block}.heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:20px}.heading h2{font-size:25px;margin:0}.heading p{color:var(--muted);margin:2px 0}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.stat{background:linear-gradient(150deg,#10243d,#091c34);border:1px solid #2a4160;border-bottom:5px solid #b28af4;border-radius:12px;padding:18px}.stat:nth-child(2){border-bottom-color:#41bca8}.stat:nth-child(3){border-bottom-color:#55b4f1}.stat:nth-child(4){border-bottom-color:#efc264}.stat small{color:var(--muted)}.stat strong{font-size:27px;display:block;margin-top:7px;line-height:1.3}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px}.panel{background:#0c213c;border:1px solid #2c4669;border-radius:13px;padding:20px;min-width:0;margin-bottom:14px}.panel h3{margin:0 0 7px;font-size:17px}.muted{color:var(--muted)}.panel p{margin:0 0 11px}
+.row{display:flex;justify-content:space-between;gap:15px;border-bottom:1px solid #253d5b;padding:10px 0}.row:last-child{border:0}.row .muted{color:var(--muted)}.ok{color:var(--green)}.fail{color:var(--red)}.warn{color:var(--amber)}
+table{width:100%;border-collapse:collapse;text-align:right}th{font-size:12px;font-weight:600;color:#9fb2cb;border-bottom:1px solid #415775;padding:11px 9px}td{padding:11px 9px;border-bottom:1px solid #233954;vertical-align:middle}tbody tr:hover{background:#132a45}
+.tablewrap{overflow-x:auto}.name{font-weight:800}.meta{color:var(--muted);font-size:11px}.num{font-variant-numeric:tabular-nums;direction:ltr;display:inline-block}
+.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:5px 10px}
+input,select{border:1px solid #405a7e;background:#0c1b2e;color:#edf4ff;border-radius:10px;padding:10px 12px;min-width:0;width:100%}input::placeholder{color:#7a93b2}input[type="checkbox"]{width:auto;accent-color:#a17be6}
+.formgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.field label{display:block;color:#c1cde0;font-size:12px;margin-bottom:5px}.field.full{grid-column:1/-1}.inline{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.inline>input,.inline>select{flex:1;min-width:130px}.status{padding:13px 15px;border:1px solid #685632;background:#25281e;color:#f1d9a5;border-radius:10px;margin:0 0 16px}.status.good{background:#102c28;border-color:#286451;color:#93edcc}.status.bad{background:#35212b;border-color:#793c49;color:#ffb5c0}.status[hidden]{display:none}
+.log{margin:12px 0 0;white-space:pre-wrap;word-break:break-word;direction:ltr;text-align:left;background:#08182c;border:1px solid #274464;border-radius:10px;padding:14px;color:#c5e8dd;min-height:80px;max-height:280px;overflow:auto;font:12px/1.5 Consolas,monospace}
+.empty{padding:25px;text-align:center;color:var(--muted)}.controls{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px}.controls .inline{flex:1}.controls .inline>*{max-width:260px}
+.accountsecret{background:#11372e;border:1px solid #287a62;color:#d6fff0;padding:13px;border-radius:10px;overflow-wrap:anywhere}.accountsecret[hidden]{display:none}
+[hidden]{display:none!important}
+footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:740px){.layout{display:block}aside{position:static;height:auto;padding:10px 12px;border-left:0;border-bottom:1px solid var(--border)}.logo{margin:0 0 12px}.logo-icon{width:39px;height:39px;font-size:19px}nav{display:flex;overflow:auto;gap:5px}.navlink{flex:0 0 auto;width:auto;padding:7px 10px;white-space:nowrap}.navtitle,.navfoot{display:none}.top{height:auto;min-height:60px;padding:12px 15px}.top p{display:none}main{padding:17px 13px}.heading h2{font-size:22px}.formgrid{grid-template-columns:1fr}.stat{padding:12px}.stat strong{font-size:22px}}
+</style>
+</head><body><div class="layout"><aside>
+<div class="logo"><div class="logo-icon">B</div><div><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
+<div class="navtitle">الإدارة</div><nav aria-label="الأقسام">
+<button class="navlink active" data-tab="home"><span>▦</span>الرئيسية</button>
+<button class="navlink" data-tab="sources"><span>◫</span>المصادر</button>
+<button class="navlink" data-tab="restream"><span>◉</span>إعادة البث</button>
+<button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
+<button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
+<button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
+</nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
+</aside><div class="content">
+<header class="top"><div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div>
+<div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
+<main><div id="notice" class="status" role="status" hidden></div>
+<section class="view active" id="page-home">
+<div class="heading"><div><h2>مرحبًا بك في BLOFY STREAM</h2><p>معلومات حقيقية من قاعدة بيانات المصادر ومحرك البث.</p></div><button class="btn" data-go="sources">إدارة المصادر</button></div>
+<div class="cards">
+<div class="stat"><small>المصادر</small><strong id="k-sources">—</strong></div>
+<div class="stat"><small>القنوات</small><strong id="k-live">—</strong></div>
+<div class="stat"><small>الأفلام</small><strong id="k-movie">—</strong></div>
+<div class="stat"><small>المسلسلات</small><strong id="k-series">—</strong></div>
+</div>
+<div class="grid">
+<div class="panel"><h3>حالة السيرفر</h3>
+<div class="row"><span class="muted">خدمة STREAM</span><strong id="home-api">جار الفحص</strong></div>
+<div class="row"><span class="muted">محرك MediaMTX</span><strong id="home-media">جار الفحص</strong></div>
+<div class="row"><span class="muted">مسارات HLS النشطة</span><strong id="home-paths">—</strong></div>
+<div class="row"><span class="muted">جلسات HLS</span><strong id="home-sessions">—</strong></div></div>
+<div class="panel"><h3>حالة المشتركين</h3>
+<div class="row"><span class="muted">حسابات Xtream المفعلة</span><strong id="home-accounts">—</strong></div>
+<div class="row"><span class="muted">الأجهزة المفعلة</span><strong id="home-devices">—</strong></div>
+<div class="row"><span class="muted">المصادر المتصلة</span><strong id="home-online">—</strong></div>
+<div class="row"><span class="muted">الارتباط بالنظام الرئيسي</span><strong id="home-bridge">جار الفحص</strong></div></div></div>
+</section>
+<section class="view" id="page-sources">
+<div class="heading"><div><h2>إدارة المصادر</h2><p>إضافة المصادر واختبارها ومزامنتها والتحكم بنشرها من هذه اللوحة.</p></div><button class="btn" id="toggle-source-form">＋ إضافة مصدر</button></div>
+<div class="panel" id="source-form-panel" hidden><h3>إضافة مصدر Xtream</h3><p class="muted">بيانات الدخول تُرسل مشفرة أثناء الاتصال وتحفظ في قاعدة الإدارة الرئيسية، ولا تُخزن في STREAM.</p>
+<form id="source-form"><div class="formgrid">
+<div class="field"><label for="source-name">اسم المصدر</label><input id="source-name" name="name" required maxlength="160"></div>
+<div class="field"><label for="source-url">عنوان السيرفر</label><input id="source-url" name="baseUrl" placeholder="https://server.example:8080" required maxlength="600"></div>
+<div class="field"><label for="source-user">اسم المستخدم</label><input id="source-user" name="username" required autocomplete="off" maxlength="512"></div>
+<div class="field"><label for="source-pass">كلمة المرور</label><input id="source-pass" name="password" type="password" required autocomplete="off" maxlength="1024"></div>
+<div class="field full"><label><input type="checkbox" name="rightsConfirmed" required> أؤكد أن لدي الحق في استخدام هذا المصدر وإعادة بث محتواه ضمن صلاحيات اشتراكي.</label></div>
+</div><div class="actions"><button class="btn" type="submit">حفظ المصدر</button><button class="btn secondary" id="cancel-source" type="button">إلغاء</button></div></form>
+</div>
+<div class="panel"><div class="controls"><h3>مصادر السيرفر</h3><button class="btn secondary sm" id="reload-sources">تحديث القائمة</button></div><div class="tablewrap"><table><thead><tr><th>المصدر</th><th>الحالة</th><th>المحتوى</th><th>التحكم</th></tr></thead><tbody id="source-list"></tbody></table></div></div>
+</section>
+<section class="view" id="page-restream">
+<div class="heading"><div><h2>إعادة البث</h2><p>مراقبة محرك MediaMTX وفحص بث المصادر الفعلية.</p></div></div>
+<div class="cards"><div class="stat"><small>محرك الوسائط</small><strong id="stream-engine">—</strong></div>
+<div class="stat"><small>مسارات جاهزة</small><strong id="stream-paths">—</strong></div>
+<div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
+<div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
+<div class="panel"><h3>فحص تشغيل المصدر</h3><p class="muted">اختبار طلبات وسائط حقيقية من مزودك، وليس مجرد اتصال API. نجاح العينة لا يعني نجاح كل المحتوى.</p>
+<div class="inline"><select id="stream-source" aria-label="المصدر"></select>
+<select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
+<button class="btn" id="stream-probe">▶ فحص تشغيل المصدر</button></div>
+<pre id="stream-report" class="log">اختر مصدرًا لتنفيذ فحص الوسائط.</pre>
+</div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
+</section>
+<section class="view" id="page-library">
+<div class="heading"><div><h2>المكتبة</h2><p>تصفح القنوات والأفلام والمسلسلات المخزنة في الفهرس الحقيقي.</p></div></div>
+<div class="panel"><div class="controls"><div class="inline">
+<select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
+<select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
+<input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
+<button class="btn" id="library-submit">بحث</button></div></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th></tr></thead><tbody id="library-results"></tbody></table></div>
+<div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+</section>
+<section class="view" id="page-accounts">
+<div class="heading"><div><h2>المشتركون</h2><p>حسابات Xtream الفعلية، والصلاحيات والتواريخ من قاعدة البيانات الرئيسية.</p></div><button class="btn" id="toggle-account-form">＋ حساب جديد</button></div>
+<div class="panel" id="account-form-panel" hidden><h3>إنشاء حساب مشترك</h3><form id="account-form"><div class="formgrid">
+<div class="field"><label for="account-label">اسم العميل</label><input id="account-label" name="label" maxlength="120" required></div>
+<div class="field"><label for="account-source">المصدر</label><select id="account-source" name="sourceId"><option value="">جميع المصادر المنشورة</option></select></div>
+<div class="field"><label for="account-max">أقصى اتصالات</label><input id="account-max" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
+<div class="field"><label for="account-expire">تاريخ الانتهاء</label><input id="account-expire" name="expiresAt" type="date" required></div>
+</div><button class="btn" type="submit">إنشاء الحساب</button></form><div id="account-secret" class="accountsecret" hidden></div></div>
+<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3><button class="btn secondary sm" id="reload-accounts">تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>العميل / المستخدم</th><th>المصدر</th><th>الصلاحية</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div></div></section>
+<section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
+<div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
+<select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
+<button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
+<button class="btn secondary" id="diagnostic-media">فحص الوسائط</button>
+</div><pre id="diagnostic-output" class="log">نتائج فحوص الوسائط ستظهر هنا.</pre></div>
+</section><footer>BLOFY STREAM · لوحة واحدة لبيانات السيرفر والمصادر والعملاء · جميع الأرقام من الخدمات الفعلية</footer>
+</main></div></div>
+<script nonce="__NONCE__">
+"use strict";
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",diagnostics:"الفحص والصيانة"};
+  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null};
+  var formatter=new Intl.NumberFormat('en-US');
+  function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
+  function count(n){return n===null||n===undefined?"—":formatter.format(n)}
+  function value(id,text){$(id).textContent=text}
+  function node(tag,text,className){var e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(className)e.className=className;return e}
+  function cell(row,content){var td=node("td");if(typeof content==="string")td.textContent=content;else td.appendChild(content);row.appendChild(td);return td}
+  function button(text,handler,cls){var b=node("button",text,"btn sm "+(cls||"secondary"));b.type="button";b.addEventListener("click",handler);return b}
+  function select(id,sources,first){var el=$(id),old=el.value;el.replaceChildren();if(first){var z=node("option",first);z.value="";el.appendChild(z)}
+    sources.forEach(function(s){var o=node("option",s.name);o.value=s.id;el.appendChild(o)});
+    if(Array.from(el.options).some(function(o){return o.value===old}))el.value=old;
+  }
+  function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
+    document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
+    $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
+    if(id==="accounts")loadAccounts();window.scrollTo({top:0,behavior:"instant"});
+  }
+  document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
+  document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
+  async function api(path){var r=await fetch("/operator/api/"+path,{cache:"no-store",credentials:"same-origin"});var d=await r.json();
+    if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+  async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
+      headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
+    var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+  function stateLabel(s){if(s.status==="online")return "متصل";if(s.status==="offline")return "متوقف";if(s.status==="syncing"||s.syncing)return "جار المزامنة";return s.status||"غير معروف"}
+  function renderHome(){
+    var d=state.overview,e=state.engine;
+    if(d){var t=d.totals||{},s=d.subscribers||{};
+      value("k-sources",count(t.servers));value("k-live",count(t.live));value("k-movie",count(t.movie));value("k-series",count(t.series));
+      value("home-online",count(t.online));value("stream-online",count(t.online));
+      value("home-accounts",count(s.gateway&&s.gateway.active));value("home-devices",count(s.devices&&s.devices.active));
+      value("home-bridge","متصل");$("system-pill").textContent="النظام متصل";$("system-pill").className="pill good";
+      renderSources();
+    }else{$("system-pill").textContent="النظام غير متصل";$("system-pill").className="pill bad";value("home-bridge","غير متصل")}
+    if(e){
+      var m=e.mediaControl||{},ready=e.engine&&e.engine.reachable;
+      value("home-api","ONLINE");value("home-media",ready?"ONLINE":"غير متصل");
+      value("home-paths",count(m.activePaths));value("home-sessions",count(m.hlsSessions));
+      value("stream-engine",ready?"ONLINE":"غير متصل");value("stream-paths",count(m.activePaths));
+      value("stream-sessions",count(m.hlsSessions));
+      value("stream-note",m.controlAvailable?"المحرك متصل. المسارات النشطة تخص MediaMTX فقط، ولا تعني تحويل المشتركين إليه.":"واجهة محرك البث غير متاحة. الحالة غير مؤكدة.");
+    }
+  }
+  function renderSources(){
+    var sources=(state.overview&&state.overview.sources)||[];
+    ["stream-source","diagnostic-source","library-source","account-source"].forEach(function(id){
+      select(id,id==="account-source"?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
+        id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":null);
+    });
+    var tb=$("source-list");tb.replaceChildren();
+    if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
+    sources.forEach(function(s){
+      var row=node("tr");var name=node("div");name.appendChild(node("div",s.name,"name"));
+      name.appendChild(node("div",s.id.slice(0,8),"meta"));cell(row,name);
+      var status=node("div",stateLabel(s),s.status==="online"?"ok":"warn");
+      status.appendChild(node("div",s.enabled?"مفعل":"موقوف","meta"));cell(row,status);
+      cell(row,count(s.counts.live)+" قناة · "+count(s.counts.movie)+" فيلم · "+count(s.counts.series)+" مسلسل");
+      var controls=node("div",undefined,"actions");
+      controls.appendChild(button("اختبار",function(){doSource(s.id,"test")}));
+      controls.appendChild(button("مزامنة",function(){doSource(s.id,"sync")}));
+      controls.appendChild(button("فحص فيديو",function(){doSource(s.id,"probe",{type:"live"})}));
+      controls.appendChild(button(s.enabled?"إيقاف":"تفعيل",function(){
+        if(!confirm(s.enabled?"إيقاف هذا المصدر قد يؤثر على المشتركين. تأكيد؟":"تفعيل هذا المصدر؟"))return;
+        doSource(s.id,s.enabled?"pause":"resume");
+      },s.enabled?"danger":"secondary"));
+      controls.appendChild(button(s.publishCatalog?"إخفاء":"نشر",function(){
+        if(!confirm("تأكيد تغيير نشر هذا المصدر للمشتركين؟"))return;
+        doSource(s.id,s.publishCatalog?"unpublish":"publish");
+      }));
+      cell(row,controls);tb.appendChild(row);
+    });
+  }
+  async function refresh(){try{var results=await Promise.allSettled([api("overview"),api("state")]);
+    if(results[0].status==="fulfilled")state.overview=results[0].value;
+    else{state.overview=null;show("تعذر جلب المصادر: "+results[0].reason.message,false)}
+    if(results[1].status==="fulfilled")state.engine=results[1].value;else state.engine=null;
+    renderHome();
+  }catch(e){show(e.message,false)}}
+  async function doSource(id,cmd,body){try{var d=await action("source/"+id+"/"+cmd,"source-"+cmd,body||{});
+    if(cmd==="probe"){show("وصلت نتيجة فحص الوسائط. راجع التشخيص.",true);
+      $("diagnostic-output").textContent=JSON.stringify(d,null,2);tab("diagnostics")}
+    else show(cmd==="sync"?"بدأت مزامنة فهرس المصدر.":"تم تنفيذ الأمر على المصدر.",true);
+    await refresh();return d;
+  }catch(e){show("تعذر تنفيذ الأمر: "+e.message,false);return null;}}
+  $("refresh").addEventListener("click",refresh);
+  $("reload-sources").addEventListener("click",refresh);
+  $("toggle-source-form").addEventListener("click",function(){$("source-form-panel").hidden=!$("source-form-panel").hidden});
+  $("cancel-source").addEventListener("click",function(){$("source-form-panel").hidden=true});
+  $("source-form").addEventListener("submit",async function(e){e.preventDefault();
+    var data=Object.fromEntries(new FormData(this));data.rightsConfirmed=data.rightsConfirmed==="on";
+    var b=this.querySelector('button[type="submit"]');b.disabled=true;
+    try{await action("sources","source-add",data);show("تم حفظ المصدر. استخدم الاختبار والمزامنة لتحديث بياناته.",true);
+      this.reset();$("source-form-panel").hidden=true;await refresh();}
+    catch(err){show("تعذر إضافة المصدر: "+err.message,false)}
+    finally{b.disabled=false}
+  });
+  async function loadCatalog(more){
+    var type=$("library-type").value,serverId=$("library-source").value,q=$("library-search").value.trim();
+    var params={type:type,serverId:serverId,q:q};
+    if(!more||!state.libParams||JSON.stringify(params)!==JSON.stringify(state.libParams)){
+      state.libOffset=0;state.libParams=params;$("library-results").replaceChildren();
+    }
+    var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(state.libOffset)});
+    try{var d=await api("catalog?"+query.toString());var items=d.items||[];
+      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=4;$("library-results").appendChild(tr)}
+      items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
+        var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===item.serverId});
+        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");cell(tr,item.enabled?"مفعل":"موقوف");$("library-results").appendChild(tr)});
+      state.libOffset=d.nextOffset||0;$("library-more").hidden=!d.nextOffset;
+    }catch(e){show("تعذر تحميل المكتبة: "+e.message,false)}
+  }
+  $("library-submit").addEventListener("click",function(){loadCatalog(false)});
+  $("library-more").addEventListener("click",function(){loadCatalog(true)});
+  $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
+  async function loadAccounts(){try{var d=await api("accounts");state.accounts=d.items||[];var tb=$("account-list");tb.replaceChildren();
+    if(!state.accounts.length){var tr=node("tr");var td=cell(tr,"لا توجد حسابات");td.colSpan=4;tb.appendChild(tr)}
+    state.accounts.forEach(function(a){var tr=node("tr");
+      var identity=node("div");identity.appendChild(node("div",a.label,"name"));
+      identity.appendChild(node("div",a.username,"meta"));cell(tr,identity);
+      var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===a.sourceId});
+      cell(tr,src?src.name:a.sourceId||"المصادر المنشورة");
+      var expiry=a.expiresAt?new Date(a.expiresAt).toLocaleDateString("ar-SA"):"بدون انتهاء";
+      cell(tr,(a.enabled?"مفعل · ":"موقوف · ")+expiry+" · "+a.maxConnections+" اتصال");
+      var ctl=node("div",undefined,"actions");ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
+        if(!confirm("تأكيد تغيير حالة المشترك؟"))return;
+        try{await action("account/"+a.id+"/"+(a.enabled?"disable":"enable"),"account-"+(a.enabled?"disable":"enable"),{});
+          show("تم تحديث حساب المشترك.",true);await loadAccounts();}
+        catch(e){show("تعذر تحديث الحساب: "+e.message,false)}
+      },a.enabled?"danger":"secondary"));cell(tr,ctl);tb.appendChild(tr);
+    });
+  }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}}
+  $("reload-accounts").addEventListener("click",loadAccounts);
+  $("toggle-account-form").addEventListener("click",function(){$("account-form-panel").hidden=!$("account-form-panel").hidden;
+    $("account-secret").hidden=true});
+  $("account-form").addEventListener("submit",async function(e){e.preventDefault();
+    var data=Object.fromEntries(new FormData(this));var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
+    try{var result=await action("accounts","account-add",data);
+      var credentials=result.credentials||{};
+      $("account-secret").hidden=false;
+      $("account-secret").textContent="تم إنشاء الحساب. احفظ البيانات الآن لأنها لن تظهر ثانية: \\nالسيرفر: "+
+        (credentials.serverUrl||"") + "\\nالمستخدم: "+(credentials.username||"")+"\\nكلمة المرور: "+(credentials.password||"");
+      this.reset();show("تم إنشاء حساب حقيقي.",true);await loadAccounts();
+    }catch(err){show("تعذر إنشاء الحساب: "+err.message,false)}
+    finally{submit.disabled=false}
+  });
+  async function probeFrom(sourceId,type,output){
+    if(!sourceId){show("اختر المصدر أولًا.",false);return}
+    $(output).textContent="جار فحص الوسائط من المصدر المحدد...";
+    try{var d=await action("source/"+sourceId+"/probe","source-probe",{type:type});
+      $(output).textContent=JSON.stringify(d,null,2);
+      show(d.playable?"نجح فحص عينات الوسائط.":"عينة الوسائط لم تعمل. راجع التقرير.",d.playable);
+      await refresh();
+    }catch(e){$(output).textContent="تعذر الفحص: "+e.message;show(e.message,false)}
+  }
+  $("stream-probe").addEventListener("click",function(){probeFrom($("stream-source").value,$("stream-type").value,"stream-report")});
+  $("diagnostic-media").addEventListener("click",function(){probeFrom($("diagnostic-source").value,$("diagnostic-type").value,"diagnostic-output")});
+  $("diagnostic-test").addEventListener("click",async function(){
+    var id=$("diagnostic-source").value;if(!id){show("اختر مصدرًا.",false);return}
+    $("diagnostic-output").textContent="جار اختبار اتصال المصدر...";
+    try{var d=await action("source/"+id+"/test","source-test",{});
+      $("diagnostic-output").textContent=JSON.stringify(d,null,2);show("انتهى اختبار الاتصال.",true);await refresh()}
+    catch(e){$("diagnostic-output").textContent="فشل اختبار المصدر: "+e.message;show(e.message,false)}
+  });
+  refresh();setInterval(function(){if(!document.hidden)refresh()},60000);
+})();
+</script>
+</body></html>\`;
+  return html.replace('__NONCE__',nonce);
+}
