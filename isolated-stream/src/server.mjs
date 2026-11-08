@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
+import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -92,6 +93,7 @@ export function createStreamServer({
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    unifiedSecret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',
     getSmokeState:()=>({
       checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
@@ -204,30 +206,39 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
-    // Operator-approved isolated demo start and proof; safe for the dedicated
-    // FFmpeg synthetic channel only. Never changes BLOFY PLAYER sources.
-    if(process.env.BLOFY_STREAM_DEMO_BOOT_VERIFY==='1'){
+    // Retire the old synthetic dashboard path from MediaMTX once. The normal
+    // path 'smoke' remains internal-only for health checks, not the UI.
+    if(process.env.BLOFY_STREAM_PURGE_DEMO_PATH_ON_BOOT==='1'){
       const timer=setTimeout(()=>{
         const control=createMediaControlClient({
           username:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
           password:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
         });
-        void control.demoAction('start').then(async result=>{
-          console.info('BLOFY_STREAM_DEMO_LIFECYCLE',JSON.stringify({
-            ok:result.body.ok,code:result.body.code,
-            customerTrafficChanged:false
+        void control.demoAction('stop').then(result=>
+          console.info('BLOFY_STREAM_LEGACY_PATH_CLEANUP',JSON.stringify({
+            ok:result.body.ok,code:result.body.code,customerTrafficChanged:false
+          }))
+        ).catch(()=>console.warn('BLOFY_STREAM_LEGACY_PATH_CLEANUP',
+          JSON.stringify({ok:false,code:'cleanup_unavailable'})));
+      },8000);timer.unref?.();
+    }
+    // Prove the unified admin bridge talks to the authoritative database.
+    // Only source/account aggregate counts are logged; no customer identities.
+    if(process.env.BLOFY_STREAM_UNIFIED_PROBE_ON_BOOT==='1'){
+      const timer=setTimeout(()=>{
+        const portal=createUnifiedPortalClient({
+          secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||''
+        });
+        void portal.overview().then(({status,body})=>{
+          console.info('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',JSON.stringify({
+            ok:status===200&&body?.ok===true,
+            code:status===200?'connected':String(body?.code||'unavailable').slice(0,70),
+            sources:Number.isInteger(body?.totals?.servers)?body.totals.servers:null,
+            credentialsLogged:false,customerTrafficChanged:false
           }));
-          if(!result.body.ok)return;
-          const probe=await verifyRestreamSmoke(DEFAULT_ENGINE,{pathName:'blofy-demo'});
-          console.info('BLOFY_STREAM_DEMO_TRANSPORT',JSON.stringify({
-            ok:probe.ok,code:probe.code,elapsedMs:probe.elapsedMs??null,
-            audioVideoDecoded:false,realProviderVerified:false,
-            customerTrafficChanged:false
-          }));
-        }).catch(()=>console.info('BLOFY_STREAM_DEMO_LIFECYCLE',
-          JSON.stringify({ok:false,code:'demo_boot_probe_unavailable'})));
-      },17500);
-      timer.unref?.();
+        }).catch(()=>console.warn('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',
+          JSON.stringify({ok:false,code:'bridge_probe_error'})));
+      },15000);timer.unref?.();
     }
     // Operator-triggered once per deployment. No provider credentials and
     // no subscriber traffic. Railway's three-IP egress can load balance, so

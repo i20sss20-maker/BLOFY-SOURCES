@@ -30,39 +30,40 @@ test('console requires operator authentication for page and status',async()=>{
     assert.equal(wrong.status,401);
     const view=await fetch(base+'/operator',{headers:{authorization:auth}});
     assert.equal(view.status,200);
-    assert.match(await view.text(),/مركز التحكم/);
+    assert.match(await view.text(),/مركز الإدارة المتكامل/);
     assert.match(view.headers.get('content-security-policy'),/script-src/);
     const status=await fetch(base+'/operator/api/state',{headers:{authorization:auth}});
     assert.equal(status.status,200);
     const data=await status.json();
     assert.equal(data.customerTrafficEnabled,false);
-    assert.equal(data.realSourceVerified,false);
+    assert.equal(data.realSourceMediaVerified,false);
     assert.equal(data.engine.reachable,true); // MediaMTX root 404 still means listener responded
     assert.equal(data.engine.httpStatus,404);
   });
 });
 
-test('mutating operator request rejects missing action header',async()=>{
+test('mutating real-source request rejects missing action header',async()=>{
   await withServer({adminToken:secret},async base=>{
-    const rejected=await fetch(base+'/operator/api/smoke',{method:'POST',headers:{authorization:auth}});
+    const rejected=await fetch(base+'/operator/api/sources',{method:'POST',headers:{authorization:auth}});
     assert.equal(rejected.status,403);
     assert.equal((await rejected.json()).code,'operator_action_header_required');
   });
 });
 
-test('demo mutations require Basic auth and exact anti-CSRF header',async()=>{
+test('real-source mutations require Basic auth and anti-CSRF header',async()=>{
   await withServer({adminToken:secret},async base=>{
-    const denied=await fetch(base+'/operator/api/demo-start',{method:'POST'});
+    const denied=await fetch(base+'/operator/api/sources',{method:'POST'});
     assert.equal(denied.status,401);
-    const forbidden=await fetch(base+'/operator/api/demo-start',{
+    const forbidden=await fetch(base+'/operator/api/sources',{
       method:'POST',headers:{authorization:auth}
     });
     assert.equal(forbidden.status,403);
-    assert.equal((await forbidden.json()).code,'operator_action_header_required');
-    const unavailable=await fetch(base+'/operator/api/demo-start',{
-      method:'POST',headers:{authorization:auth,'x-blofy-operator-action':'demo-start'}
+    const unavailable=await fetch(base+'/operator/api/sources',{
+      method:'POST',headers:{authorization:auth,
+        'x-blofy-operator-action':'source-add','content-type':'application/json'},
+      body:JSON.stringify({name:'x'})
     });
-    assert.equal(unavailable.status,503); // No private MediaMTX auth configured
-    assert.equal((await unavailable.json()).code,'mediamtx_auth_unconfigured');
+    assert.equal(unavailable.status,503);
+    assert.equal((await unavailable.json()).code,'unified_bridge_not_configured');
   });
 });
