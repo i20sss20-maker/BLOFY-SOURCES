@@ -107,8 +107,9 @@ test('real transport feed is private-token scoped and carries TS bytes only',asy
   try{
     const reply=await fetch('http://127.0.0.1:'+server.address().port+
       '/internal/live-feed/'+token);
-    assert.equal(reply.status,200);
-    assert.equal((await reply.arrayBuffer()).byteLength,ts.byteLength);
+    const body=Buffer.from(await reply.arrayBuffer());
+    assert.equal(reply.status,200,body.toString('utf8').slice(0,240));
+    assert.equal(body.byteLength,ts.byteLength);
   }finally{await new Promise(resolve=>server.close(resolve))}
   assert.equal((await service.stop(s.path)).status,200);
 });
