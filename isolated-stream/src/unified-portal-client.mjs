@@ -74,6 +74,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function mediaFailures({sourceId=''}={}){
+    if(sourceId&&!UUID.test(sourceId))
+      return Promise.resolve({status:400,body:{ok:false,code:'invalid_source_id'}});
+    const params=sourceId?'?'+new URLSearchParams({sourceId}):'';
+    return call(ROOT+'/media-failures'+params);
+  }
   function episodes({sourceId,seriesId}={}){
     if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(seriesId||'')))
       return Promise.resolve({status:400,body:{ok:false,code:'stream_series_invalid'}});
@@ -98,5 +104,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem};
+  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
