@@ -36,10 +36,11 @@ function createFixture({maxPaths=3,hlsIndex='#EXTM3U\n#EXTINF:2.0,\nseg1.ts\n'}=
       return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
     throw Error('unexpected fetch: '+target);
   };
+  const unexpected=[];
   const service=createLiveRestreamSupervisor({portal,fetchImpl,
-    mediaPassword:password,maxPaths,
+    mediaPassword:password,maxPaths,onUnexpectedError:e=>unexpected.push(e),
     lookup:async()=>[{address:'8.8.8.8',family:4}]});
-  return {service,calls,ts,portal};
+  return {service,calls,ts,portal,unexpected};
 }
 const row=()=>({sourceId:UUID,channelId:'88',rightsConfirmed:true});
 test('real live start requires explicit redistribution rights confirmation',async()=>{
@@ -95,7 +96,7 @@ test('invalid live IDs cannot mutate MediaMTX paths',async()=>{
   assert.equal(calls.length,0);
 });
 test('real transport feed is private-token scoped and carries TS bytes only',async()=>{
-  const {service,calls,ts}=createFixture();
+  const {service,calls,ts,unexpected}=createFixture();
   const s=(await service.start(row())).body;
   const cmd=JSON.parse(calls.find(x=>x.method==='POST').body).runOnDemand;
   const token=cmd.match(/\/internal\/live-feed\/([a-f0-9]{48})/)[1];
@@ -108,7 +109,7 @@ test('real transport feed is private-token scoped and carries TS bytes only',asy
     const reply=await fetch('http://127.0.0.1:'+server.address().port+
       '/internal/live-feed/'+token);
     const body=Buffer.from(await reply.arrayBuffer());
-    assert.equal(reply.status,200,body.toString('utf8').slice(0,240));
+    assert.equal(reply.status,200,body.toString('utf8').slice(0,240)+' '+JSON.stringify(unexpected));
     assert.equal(body.byteLength,ts.byteLength);
   }finally{await new Promise(resolve=>server.close(resolve))}
   assert.equal((await service.stop(s.path)).status,200);
