@@ -30,7 +30,7 @@ test('console requires operator authentication for page and status',async()=>{
     assert.equal(wrong.status,401);
     const view=await fetch(base+'/operator',{headers:{authorization:auth}});
     assert.equal(view.status,200);
-    assert.match(await view.text(),/مركز التحكم/);
+    assert.match(await view.text(),/مركز الإدارة المتكامل/);
     assert.match(view.headers.get('content-security-policy'),/script-src/);
     const status=await fetch(base+'/operator/api/state',{headers:{authorization:auth}});
     assert.equal(status.status,200);
