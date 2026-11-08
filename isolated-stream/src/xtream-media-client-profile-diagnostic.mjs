@@ -3,6 +3,7 @@
 // guess IDs, follow arbitrary redirects or expose source credentials.
 import {timingSafeEqual} from 'node:crypto';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
+import {compareXtreamNativeHttp11} from './xtream-native-http11-media-diagnostic.mjs';
 
 const MAX_JSON=4096;
 const KIND=new Set(['movie','series']);
@@ -95,17 +96,25 @@ async function profileProbe(url,profile,{
 }
 export async function compareXtreamMediaClientProfiles(samples,{
  allowedOrigin='',allowRedirectFrom='',fetchImpl=fetch,
- validate=assertPublicMediaUrl,lookup
+ validate=assertPublicMediaUrl,lookup,compareHttp11=false,
+ http11Read
 }={}){
  const results=[];
  for(const [idx,item] of samples.entries()){
   const checks=[];
   for(const profile of profiles){
    const outcome=await profileProbe(item.sourceUrl,profile,{
-    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup});
+    allowedOrigin,allowRedirectFrom,fetchImpl,validate,lookup,
+    compareHttp11:payload.compareHttp11===true,http11Read});
    checks.push(outcome);
    // A provider denial must never trigger a different client profile.
    if([401,403,456].includes(outcome.status))break;
+  }
+  if(compareHttp11&&!checks.some(x=>x.mediaBytes===true)&&
+     !checks.some(x=>[401,403,456].includes(x.status))){
+    checks.push(await compareXtreamNativeHttp11(item.sourceUrl,{
+     allowedOrigin,allowRedirectFrom,validate,lookup,read:http11Read
+    }));
   }
   results.push({index:idx+1,kind:item.kind,checks,
    normalMedia:checks[0]?.mediaBytes===true,
@@ -117,7 +126,7 @@ export async function compareXtreamMediaClientProfiles(samples,{
 }
 export function createXtreamMediaClientProfileDiagnostic({
  sharedToken='',allowedOrigin='',allowRedirectFrom='',
- fetchImpl=fetch,validate=assertPublicMediaUrl,lookup
+ fetchImpl=fetch,validate=assertPublicMediaUrl,lookup,http11Read
 }={}){
  const enabled=sharedToken.length>=32&&/^https?:\/\/[a-z0-9.-]+(?::\d{2,5})?$/i.test(allowedOrigin);
  let busy=false,last=0;
