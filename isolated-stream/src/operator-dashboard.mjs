@@ -2,7 +2,7 @@
 // credentials, source catalogs or production services. No API tokens in HTML.
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-control-view.mjs';
-import {getMediaEngineStatus} from './operator-media-status.mjs';
+import {createMediaControlClient} from './mediamtx-private-control.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -26,7 +26,10 @@ function authorized(req,token){
   }catch{return false;}
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
-  getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}})}={}){
+  getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
+  runDemoProbe=async()=>({status:503,body:{ok:false,code:'demo_not_ready'}}),
+  controlUsername='',controlPassword=''}={}){
+  const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -57,11 +60,15 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     if(req.method==='GET'&&pathname==='/operator/api/state'){
       void Promise.all([
-        engineStatus(),getMediaEngineStatus({fetchImpl})
-      ]).then(([engine,mediaControl])=>json(res,200,{
+        engineStatus(),control.overview()
+      ]).then(([engine,managed])=>json(res,200,{
         ok:true,service:'BLOFY-STREAM',role:'isolated-control',
         customerTrafficEnabled:false,realSourceVerified:false,
-        engine,mediaControl,smoke:getSmokeState()
+        engine,mediaControl:{
+          controlAvailable:managed.online,activePaths:managed.readyPaths,
+          hlsSessions:managed.hlsSessions,diagnostics:managed.diagnostics,
+          demo:managed.demo,paths:managed.paths||[]
+        },smoke:getSmokeState()
       })).catch(()=>json(res,503,{ok:false,code:'engine_status_unavailable'}));
       return true;
     }
@@ -71,6 +78,16 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         json(res,403,{ok:false,code:'operator_action_header_required'});
       else void runSmoke().then(({status,body})=>json(res,status,body))
         .catch(()=>json(res,503,{ok:false,code:'smoke_unavailable'}));
+      return true;
+    }
+    const demoMatch=/^\/operator\/api\/(demo-start|demo-stop|demo-restart|demo-probe)$/.exec(pathname);
+    if(req.method==='POST'&&demoMatch){
+      if(req.headers['x-blofy-operator-action']!==demoMatch[1])
+        return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
+      const action=demoMatch[1].slice(5);
+      const task=action==='probe'?runDemoProbe():control.demoAction(action);
+      void task.then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'demo_operation_failed'}));
       return true;
     }
     json(res,404,{ok:false,code:'route_not_found'});return true;
