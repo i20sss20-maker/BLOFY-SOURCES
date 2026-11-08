@@ -37,7 +37,8 @@ async function getJson(req){
 }
 export function createXtreamCatalogRelay({
  sharedToken='',allowedOrigin='',validate=assertPublicMediaUrl,
- httpRequest=http.request,httpsRequest=https.request,maxConcurrent=2
+ httpRequest=http.request,httpsRequest=https.request,maxConcurrent=2,
+ manifestOnly=false
 }={}){
  const enabled=sharedToken.length>=32&&/^https?:\/\/[a-z0-9.-]+(?::\d{2,5})?$/i.test(allowedOrigin);
  let concurrent=0;
@@ -61,10 +62,15 @@ export function createXtreamCatalogRelay({
    if(typeof body?.sourceUrl!=='string'||body.sourceUrl.length>2500)
      return safeWrite(res,400,{ok:false,code:'source_url_invalid'});
    const target=await validate(body.sourceUrl);
+   const isApi=target.pathname.endsWith('/player_api.php')&&
+     ALLOWED_ACTIONS.has(target.searchParams.get('action')||'');
+   const isManifest=target.pathname.endsWith('/get.php')&&
+     target.searchParams.get('type')==='m3u_plus'&&
+     target.searchParams.get('output')==='ts'&&
+     [...target.searchParams.keys()].sort().join(',')==='output,password,type,username';
    if(target.origin.toLowerCase()!==allowedOrigin.toLowerCase()||
-      !target.pathname.endsWith('/player_api.php')||
       !target.searchParams.get('username')||!target.searchParams.get('password')||
-      !ALLOWED_ACTIONS.has(target.searchParams.get('action')||''))
+      (manifestOnly?!isManifest:!isApi))
      return safeWrite(res,400,{ok:false,code:'source_not_allowlisted'});
    // Single HTTP/1.1 request with a fresh socket. Redirects are deliberately
    // not followed, because the upstream query contains private credentials.
@@ -80,15 +86,18 @@ export function createXtreamCatalogRelay({
      return safeWrite(res,status>=100&&status<=599?status:502,
        {ok:false,code:'upstream_rejected'});
     }
-    // Content is streamed with backpressure; no buffered 290k-row catalogs.
+    // Content is streamed with backpressure. Manifest audits are capped
+    // separately at 64 MiB and cannot be used as a public playlist endpoint.
+    const maxData=manifestOnly?64*1024*1024:MAX_DATA;
     const len=Number(response.headers['content-length']||0);
-    if(len>MAX_DATA){response.destroy();return safeWrite(res,413,{ok:false,code:'catalog_too_large'});}
+    if(len>maxData){response.destroy();return safeWrite(res,413,{ok:false,code:'catalog_too_large'});}
     let total=0;
     response.on('data',part=>{
       total+=part.byteLength;
-      if(total>MAX_DATA)response.destroy(new Error('catalog_too_large'));
+      if(total>maxData)response.destroy(new Error('catalog_too_large'));
     });
-    res.writeHead(200,{'content-type':'application/json; charset=utf-8',
+    res.writeHead(200,{'content-type':manifestOnly?
+       'audio/x-mpegurl; charset=utf-8':'application/json; charset=utf-8',
       'cache-control':'no-store','x-content-type-options':'nosniff',
       'referrer-policy':'no-referrer'});
     void pipeline(response,res,{signal:signal.signal}).catch(()=>{
@@ -109,4 +118,9 @@ export function createXtreamCatalogRelay({
    if(upstream&&!upstream.destroyed)upstream.destroy();
   }
  }};
+}
+
+// Strictly separate the read-only manifest diagnostic from normal catalog API.
+export function createXtreamManifestRelay(options={}){
+ return createXtreamCatalogRelay({...options,manifestOnly:true,maxConcurrent:1});
 }
