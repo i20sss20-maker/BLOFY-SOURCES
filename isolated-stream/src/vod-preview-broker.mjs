@@ -5,7 +5,7 @@ import {randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
-const TTL=25*60*1000,MAX=8,TOKEN=/^[0-9a-f]{48}$/;
+const TTL=3*60*60*1000,MAX=8,TOKEN=/^[0-9a-f]{48}$/;
 const TYPES=new Set(['movie','episode']);
 const CONTENT={
   mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',
