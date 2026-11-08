@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {compareXtreamNativeHttp11} from '../src/xtream-native-http11-media-diagnostic.mjs';
 import {compareXtreamMediaClientProfiles} from '../src/xtream-media-client-profile-diagnostic.mjs';
-const origin='http://provider.example:80',url=origin+'/movie/u/p/12.mkv';
+const origin='http://provider.example',url=origin+'/movie/u/p/12.mkv';
 const validate=async u=>new URL(u);
 test('native HTTP/1.1 offers safe same-item comparison after three fetch 404s',async()=>{
  const calls=[];
