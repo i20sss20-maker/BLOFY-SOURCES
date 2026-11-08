@@ -230,7 +230,8 @@ test('HTTP 200 with stalled first media byte returns a bounded sanitized 502',as
     const body=await res.json();
     assert.equal(body.code,'relay_first_byte_timeout');
     assert.equal(aborted,true);
-    assert.doesNotMatch(JSON.stringify(body),/allowed\\.example|\\/u\\/p\\//);
+    assert.equal(JSON.stringify(body).includes('allowed.example'),false);
+    assert.equal(JSON.stringify(body).includes('/u/p/'),false);
   },{firstByteTimeoutMs:35,fetchImpl:async(_url,opts)=>{
     const stream=new ReadableStream({start(controller){
       opts.signal.addEventListener('abort',()=>{
