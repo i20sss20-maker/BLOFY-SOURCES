@@ -7,7 +7,7 @@ export function renderOperatorDashboard(nonce){
 <title>BLOFY STREAM | لوحة التحكم</title>
 <style>
 :root{--bg:#071426;--nav:#061123;--surface:#0c1c33;--surface2:#10243e;--stroke:#243a58;--text:#edf3ff;--muted:#93a7c2;--accent:#aa82e7;--accent2:#3eaee4;--green:#3ad2a0;--yellow:#f6c56b;--red:#f37d8f}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}button,input,a{font:inherit}button{cursor:pointer}button:disabled{cursor:progress;opacity:.55}a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--accent2);outline-offset:3px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}button,input,a{font:inherit}[hidden]{display:none!important}button{cursor:pointer}button:disabled{cursor:progress;opacity:.55}a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--accent2);outline-offset:3px}
 .layout{min-height:100vh;display:grid;grid-template-columns:248px minmax(0,1fr)}aside{background:#07172b;border-left:1px solid var(--stroke);padding:25px 17px;position:sticky;top:0;height:100vh;overflow-y:auto}
 .brand{display:flex;gap:13px;align-items:center;margin:0 6px 32px}.logo{width:51px;height:51px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(140deg,#b6a4fc,#6a49b2);color:#12102a;font-size:28px;font-weight:950;transform:rotate(-5deg);flex-shrink:0}.brand strong{font-size:18px;letter-spacing:.5px}.brand strong span{color:#af91f5}.brand small{display:block;color:var(--muted);font-size:11px}
 .nav-group{font-size:11px;letter-spacing:1px;color:#718aa8;font-weight:800;margin:21px 13px 8px}.nav-btn{width:100%;display:flex;align-items:center;gap:12px;text-align:right;border:1px solid transparent;border-radius:12px;color:#adbbce;background:none;padding:12px 13px;margin:3px 0}.nav-btn:hover{background:#122944}.nav-btn.active{background:#2a2452;color:#f6eeff;border-color:#6c559b}.nav-ico{font-size:20px;width:24px;text-align:center}.nav-label{flex:1}.nav-badge{font-size:10px;color:var(--yellow)}.aside-foot{margin-top:28px;border-top:1px solid var(--stroke);padding:18px 10px;color:var(--muted);font-size:12px}
@@ -41,7 +41,7 @@ footer{font-size:12px;color:#8294ad;text-align:center;padding:28px 5px}
   <div class="aside-foot"><div>● نظام BLOFY STREAM المستقل</div><div>التحكم بالمشتركين لم يُنقل إليه بعد.</div></div>
 </aside>
 <div class="content">
-<header class="topbar"><div class="topbar-left"><div><h1 id="page-title">لوحة التحكم</h1><p>مركز إدارة السيرفر وإعادة البث</p></div></div><div class="topbar-right">
+<header class="topbar"><div class="topbar-left"><div><h1 id="page-title">لوحة التحكم</h1><p>مركز التحكم في السيرفر وإعادة البث</p></div></div><div class="topbar-right">
   <div class="search"><span>⌕</span><input id="section-search" placeholder="بحث في أقسام اللوحة..." aria-label="بحث في القائمة"></div>
   <span id="api-pill" class="status-pill warn" role="status">جار الاتصال</span>
   <button class="btn secondary sm" id="refresh-top" type="button">↻ تحديث</button>
