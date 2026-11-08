@@ -61,7 +61,7 @@ function buildCommand(name,ticket){
 }
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
-  maxPaths=MAX_PATHS
+  maxPaths=MAX_PATHS,onUnexpectedError=()=>{}
 }={}){
   const auth=optsAuth(mediaPassword);
   const paths=new Map(),tokens=new Map();
@@ -291,6 +291,12 @@ export function createLiveRestreamSupervisor({
         row.lastError=classify(e);
         if(row.backupConfigured)
           row.preferredIndex=sourceIndex===0?1:0;
+      }
+      // A test injection may observe exception classes without ever writing
+      // raw upstream URLs, tokens or provider credentials to production logs.
+      if(row.lastError==='restream_internal_error'){
+        try{onUnexpectedError({name:String(e?.name||'Error'),code:String(e?.code||''),
+          message:String(e?.message||'').slice(0,170)})}catch{}
       }
       if(!res.headersSent)
         response(res,502,{ok:false,code:closedByReader?'restream_cancelled':
