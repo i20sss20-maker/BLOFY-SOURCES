@@ -108,7 +108,15 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 </div>
-<p class="muted" style="margin-top:10px">الحد الحالي: 3 قنوات متزامنة من المحرك المنفصل. مسارات المشتركين الأصلية تظل كما هي.</p>
+<div class="inline" style="margin-top:15px">
+<select id="live-backup-source" aria-label="المصدر الاحتياطي">
+<option value="">بدون مصدر احتياطي</option></select>
+<input id="live-backup-search" placeholder="بحث عن قناة احتياطية مطابقة..." maxlength="85">
+<button class="btn secondary" type="button" id="live-backup-find">بحث البديل</button>
+</div>
+<div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
+<option value="">بدون قناة احتياطية</option></select></div>
+<p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
 </div>
 <div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
 <div class="tablewrap"><table><thead><tr><th>القناة</th><th>المسار</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead><tbody id="live-active"></tbody></table></div>
@@ -194,9 +202,9 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   }
   function renderSources(){
     var sources=(state.overview&&state.overview.sources)||[];
-    ["stream-source","diagnostic-source","library-source","account-source","live-source"].forEach(function(id){
+    ["stream-source","diagnostic-source","library-source","account-source","live-source","live-backup-source"].forEach(function(id){
       select(id,id==="account-source"?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
-        id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":null);
+        id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
     var tb=$("source-list");tb.replaceChildren();
     if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
@@ -328,6 +336,25 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }catch(e){show("تعذر عرض القنوات: "+e.message,false)}
   }
   $("live-find").addEventListener("click",loadLiveChannels);
+  async function loadBackupChannels(){
+    var sourceId=$("live-backup-source").value,q=$("live-backup-search").value.trim();
+    var el=$("live-backup-channel");el.replaceChildren();
+    var empty=node("option","بدون قناة احتياطية");empty.value="";el.appendChild(empty);
+    if(!sourceId)return;
+    try{
+      var query=new URLSearchParams({type:"live",serverId:sourceId,q:q,offset:"0"});
+      var d=await api("catalog?"+query.toString());
+      (d.items||[]).filter(function(item){return item.enabled}).forEach(function(item){
+        var option=node("option",item.name);option.value=item.id;el.appendChild(option);
+      });
+      $("live-result").textContent="تم تحميل خيارات القنوات الاحتياطية. اختر القناة المطابقة لنفس البث.";
+    }catch(e){show("تعذر تحميل القناة الاحتياطية: "+e.message,false)}
+  }
+  $("live-backup-find").addEventListener("click",loadBackupChannels);
+  $("live-backup-search").addEventListener("keydown",function(e){
+    if(e.key==="Enter"){e.preventDefault();loadBackupChannels()}
+  });
+
   $("live-search").addEventListener("keydown",function(e){
     if(e.key==="Enter"){e.preventDefault();loadLiveChannels()}
   });
@@ -339,7 +366,8 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }
     items.forEach(function(item){
       var tr=node("tr");cell(tr,item.title||item.channelId);
-      cell(tr,item.path);cell(tr,String(item.connections||0));
+      cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
+      cell(tr,String(item.connections||0)+(item.failovers?" · تبديلات: "+item.failovers:""));
       var controls=node("div",undefined,"actions");
       controls.appendChild(button("فحص HLS",async function(){
         $("live-result").textContent="جار اختبار مقاطع البث الفعلية...";
@@ -376,8 +404,15 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     if(!$("live-rights").checked){show("تأكيد صلاحية إعادة البث مطلوب.",false);return}
     this.disabled=true;$("live-result").textContent="جار إنشاء مسار على MediaMTX...";
     try{
+      var backupSourceId=$("live-backup-source").value;
+      var backupChannelId=$("live-backup-channel").value;
+      if(Boolean(backupSourceId)!==Boolean(backupChannelId)){
+        show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
+      }
       var result=await action("live/start","live-start",{
-        sourceId:sourceId,channelId:channelId,rightsConfirmed:true
+        sourceId:sourceId,channelId:channelId,
+        backupSourceId:backupSourceId,backupChannelId:backupChannelId,
+        rightsConfirmed:true
       });
       $("live-result").textContent=JSON.stringify({
         ok:result.ok,title:result.title,path:result.path,
