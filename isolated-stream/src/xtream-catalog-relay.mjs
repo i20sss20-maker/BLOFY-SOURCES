@@ -11,7 +11,7 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 const MAX_BODY=4096,MAX_DATA=256*1024*1024;
 const ALLOWED_ACTIONS=new Set(['','get_live_categories','get_vod_categories',
  'get_series_categories','get_live_streams','get_vod_streams','get_series',
- 'get_series_info','get_short_epg','get_simple_data_table']);
+ 'get_series_info','get_vod_info','get_short_epg','get_simple_data_table']);
 function safeWrite(res,code,data){
  if(res.headersSent)return;
  const bytes=Buffer.from(JSON.stringify(data));
