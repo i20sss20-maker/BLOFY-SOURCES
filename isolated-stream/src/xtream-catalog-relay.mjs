@@ -11,7 +11,7 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 const MAX_BODY=4096,MAX_DATA=256*1024*1024;
 const ALLOWED_ACTIONS=new Set(['','get_live_categories','get_vod_categories',
  'get_series_categories','get_live_streams','get_vod_streams','get_series',
- 'get_series_info','get_short_epg','get_simple_data_table']);
+ 'get_series_info','get_vod_info','get_short_epg','get_simple_data_table']);
 function safeWrite(res,code,data){
  if(res.headersSent)return;
  const bytes=Buffer.from(JSON.stringify(data));
@@ -62,8 +62,14 @@ export function createXtreamCatalogRelay({
    if(typeof body?.sourceUrl!=='string'||body.sourceUrl.length>2500)
      return safeWrite(res,400,{ok:false,code:'source_url_invalid'});
    const target=await validate(body.sourceUrl);
+   const action=target.searchParams.get('action')||'';
+   const isVodInfo=action==='get_vod_info';
+   const validVodInfo=!isVodInfo||(
+     /^[A-Za-z0-9_-]{1,128}$/.test(target.searchParams.get('vod_id')||'')&&
+     [...target.searchParams.keys()].sort().join(',')==='action,password,username,vod_id'
+   );
    const isApi=target.pathname.endsWith('/player_api.php')&&
-     ALLOWED_ACTIONS.has(target.searchParams.get('action')||'');
+     ALLOWED_ACTIONS.has(action)&&validVodInfo;
    const isManifest=target.pathname.endsWith('/get.php')&&
      target.searchParams.get('type')==='m3u_plus'&&
      target.searchParams.get('output')==='ts'&&
