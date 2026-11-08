@@ -72,7 +72,19 @@ footer{font-size:12px;color:#8294ad;text-align:center;padding:28px 5px}
 </div></section>
 <section class="view" data-panel="restream"><div class="welcome"><div><h2>إدارة إعادة البث</h2><p>MediaMTX وخيارات التشخيص الآمنة.</p></div><button class="btn" data-go="diagnostics" type="button">تشغيل الفحص ←</button></div>
 <div class="cards"><div class="card stat purple"><div class="stat-head"><h3>اتصال محرك HLS</h3><span class="glyph">◉</span></div><div class="big" id="stream-engine">جار الفحص</div></div><div class="card stat"><div class="stat-head"><h3>المسارات النشطة</h3></div><div class="big" id="stream-paths">—</div></div><div class="card stat green"><div class="stat-head"><h3>جلسات HLS</h3></div><div class="big" id="stream-sessions">—</div></div><div class="card stat yellow"><div class="stat-head"><h3>تشغيل العملاء</h3></div><div class="big warn">غير مفعل</div></div></div>
-<div class="panel"><h3>التحكم الذكي بالقنوات</h3><p>هذا القسم جاهز بصريًا، والتحكم الفعلي بالقنوات لا يبدأ قبل ربط المصادر المصرح بها واختبار فيديو وصوت حقيقي.</p><div class="alert">لن تظهر أزرار إيقاف/إعادة تشغيل لقنوات العملاء قبل توفر مسار مستقر وخطة تراجع، حتى لا ينقطع البث.</div>
+<div class="panel"><h3>تشغيل إعادة البث التجريبي — تحكم فعلي</h3>
+<p>إنشاء أو إزالة مسار بث مستقل داخل MediaMTX من مصدر الاختبار الداخلي الذي يولّد فيديو H.264 وصوت AAC. التشغيل عند الطلب، ولا يستهلك مصدر IPTV.</p>
+<div class="krow"><span>قناة الاختبار <span class="mono">blofy-demo</span></span><strong id="demo-state" class="warn">جار الفحص</strong></div>
+<div class="krow"><span>مسار المشاهدة</span><strong id="demo-path" class="mono">/blofy-demo/index.m3u8</strong></div>
+<div class="actions" style="margin-top:15px">
+<button class="btn" id="demo-start" type="button">▶ تفعيل مسار التجربة</button>
+<button class="btn secondary" id="demo-restart" type="button">↻ إعادة تهيئة المسار</button>
+<button class="btn ghost" id="demo-stop" type="button">■ إيقاف مسار التجربة</button>
+<button class="btn secondary" id="demo-probe" type="button">✓ اختبار وصول مقطع HLS</button>
+</div>
+<div class="alert" id="demo-message" role="status">هذه الأزرار تعمل على مسار تجريبي محدد فقط، ولا تؤثر على مشاهدة المشتركين.</div>
+<div class="krow"><span>حالة ربط المصادر الحقيقية</span><strong class="warn">بانتظار التحقق والتصريح</strong></div>
+<div class="krow"><span>قائمة مسارات الاختبار النشطة</span><strong id="demo-current-paths">جار الفحص</strong></div>
 <div class="krow"><span>الوضع الحالي</span><strong class="warn">اختبار النقل فقط</strong></div><div class="krow"><span>البدائل عند الانقطاع</span><strong class="warn">بانتظار مصادر احتياطية مثبتة</strong></div><div class="krow"><span>التحويل عبر FFmpeg</span><strong class="warn">لم يُفعّل على المحتوى الحقيقي</strong></div>
 </div></section>
 <section class="view" data-panel="library"><div class="welcome"><div><h2>المكتبة</h2><p>الأفلام والمسلسلات والحلقات.</p></div></div><div class="panel"><div class="empty"><strong>تُدار المكتبة حاليًا في BLOFY PLAYER</strong><div>بمجرد اكتمال الجسر الموثّق يمكن إضافة البحث في العناصر وفحص روابط التشغيل من هذه الصفحة.</div></div></div></section>
@@ -114,6 +126,10 @@ footer{font-size:12px;color:#8294ad;text-align:center;padding:28px 5px}
       var d=await res.json();
       var engine=Boolean(d.engine&&d.engine.reachable);
       var mc=d.mediaControl||{};
+      var demo=mc.demo;
+      txt("demo-state",!mc.controlAvailable?"واجهة المحرك غير متاحة":demo===null||demo===undefined?"غير معروف":demo.exists?(demo.ready?"مفعّل · يبث الآن":"مفعّل · ينتظر المشاهد"):"غير مفعّل",
+        demo&&demo.exists?"ok":"warn");
+      txt("demo-current-paths",Array.isArray(mc.paths)&&mc.paths.length?mc.paths.map(function(p){return p.name+(p.ready?" ●":" ○")}).join("، "):"لا توجد مسارات نشطة معروضة");
       mark(true);
       txt("stat-api","ONLINE","ok");txt("row-api","متصل","ok");
       txt("stat-engine",engine?"ONLINE":"غير متصل",engine?"ok":"bad");
@@ -143,6 +159,28 @@ footer{font-size:12px;color:#8294ad;text-align:center;padding:28px 5px}
   $("refresh-top").addEventListener("click",refresh);
   $("refresh-diagnostics").addEventListener("click",refresh);
   $("run-smoke").addEventListener("click",test);
+  async function demoAction(action){
+    var ids=["demo-start","demo-stop","demo-restart","demo-probe"];
+    ids.forEach(function(id){$(id).disabled=true});
+    $("demo-message").textContent="جار تنفيذ الطلب داخل المحرك المستقل...";
+    try{
+      var res=await fetch("/operator/api/demo-"+action,{
+        method:"POST",headers:{"x-blofy-operator-action":"demo-"+action,"content-type":"application/json"},
+        body:"{}",credentials:"same-origin"
+      });
+      var data=await res.json();
+      var msg=data.ok?(action==="start"?"تم إنشاء مسار التجربة. يبدأ البث عند أول طلب مشاهدة.":
+        action==="stop"?"تم إيقاف مسار التجربة.":"تم تنفيذ الطلب بنجاح."):
+        "تعذر تنفيذ الطلب: "+(data.code||res.status);
+      $("demo-message").textContent=msg;
+      if(action==="probe")$("diagnostic-log").textContent=JSON.stringify(data,null,2);
+      await refresh();
+    }catch(e){$("demo-message").textContent="خطأ اتصال: "+e.message}
+    finally{ids.forEach(function(id){$(id).disabled=false})}
+  }
+  ["start","stop","restart","probe"].forEach(function(action){
+    $("demo-"+action).addEventListener("click",function(){demoAction(action)});
+  });
   refresh();
   setInterval(function(){if(!document.hidden&&Date.now()-refreshedAt>28000)refresh()},30000);
 })();
