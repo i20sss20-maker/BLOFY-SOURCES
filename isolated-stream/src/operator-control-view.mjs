@@ -1,7 +1,7 @@
 // BLOFY STREAM operator UI. All counters are real or explicitly unknown.
 // Kept separate from controller logic to simplify design iteration.
 export function renderOperatorDashboard(nonce){
-  const page=String.raw\`<!doctype html>
+  const page=String.raw`<!doctype html>
 <html lang="ar" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BLOFY STREAM | لوحة التحكم</title>
@@ -146,6 +146,6 @@ footer{font-size:12px;color:#8294ad;text-align:center;padding:28px 5px}
   refresh();
   setInterval(function(){if(!document.hidden&&Date.now()-refreshedAt>28000)refresh()},30000);
 })();
-</script></body></html>\`;
+</script></body></html>`;
   return page.replace('__NONCE__',nonce);
 }
