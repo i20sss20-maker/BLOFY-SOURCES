@@ -275,11 +275,12 @@ export function createLiveRestreamSupervisor({
       })());
       try{
         await pipeline(stream,res,{signal:active.controller.signal});
-        if(!closedByReader&&row.backupConfigured&&clock()-startedAt<10000){
-          // A provider that closes almost immediately is likely unstable.
-          // FFmpeg reconnects and the next feed tries the explicitly chosen backup.
-          row.preferredIndex=sourceIndex===0?1:0;
-          row.lastError='restream_short_source_disconnect';
+        if(!closedByReader&&row.backupConfigured&&sourceIndex===0&&
+           clock()-startedAt<10000){
+          // Only switch away from a short-lived PRIMARY feed. Once the
+          // operator-selected backup takes over, do not bounce to a known-bad source.
+          row.preferredIndex=1;
+          row.lastError='restream_short_primary_disconnect';
         }else row.lastError=null;
       }finally{
         try{await active.reader.cancel()}catch{}
