@@ -8,6 +8,7 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
+import {probeOutboundIpv4} from './outbound-ip-proof.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
 import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catalog-relay.mjs';
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
@@ -179,6 +180,18 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    // Operator-triggered once per deployment. No provider credentials and
+    // no subscriber traffic. Railway's three-IP egress can load balance, so
+    // observed IPs must be checked against the full Networking assignment.
+    if(process.env.BLOFY_OPERATOR_EGRESS_IP_ON_BOOT==='1'){
+      const timer=setTimeout(()=>{
+        void probeOutboundIpv4().then(report=>
+          console.info('BLOFY_STREAM_OUTBOUND_IP_PROOF',JSON.stringify(report))
+        ).catch(()=>console.warn('BLOFY_STREAM_OUTBOUND_IP_PROOF',
+          JSON.stringify({ok:false,code:'egress_echo_unavailable'})));
+      },11000);
+      timer.unref?.();
+    }
     if(process.env.BLOFY_OPERATOR_EGRESS_PROBE_ON_BOOT==='1'){
       const timer=setTimeout(()=>{
         void runOperatorEgressProbe(process.env.BLOFY_OPERATOR_EGRESS_HOST||'').then(report=>{
