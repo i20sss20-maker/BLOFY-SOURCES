@@ -96,6 +96,24 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
 <button class="btn" id="stream-probe">▶ فحص تشغيل المصدر</button></div>
 <pre id="stream-report" class="log">اختر مصدرًا لتنفيذ فحص الوسائط.</pre>
+</div>
+<div class="panel"><h3>إعادة بث قناة حقيقية</h3><p class="muted">اختر قناة من المكتبة، ثم فعّل مسار HLS محميًا للمشرف. يبدأ FFmpeg عند المشاهدة ويتوقف بعد انتهاء الطلب. لا يتم نقل المشتركين تلقائيًا.</p>
+<div class="inline">
+<select id="live-source" aria-label="المصدر الفعلي"></select>
+<input id="live-search" placeholder="بحث عن قناة..." maxlength="85" aria-label="بحث عن القناة">
+<button class="btn secondary" id="live-find" type="button">بحث القنوات</button>
+</div>
+<div class="inline" style="margin-top:12px">
+<select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
+<label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
+<button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
+</div>
+<p class="muted" style="margin-top:10px">الحد الحالي: 3 قنوات متزامنة من المحرك المنفصل. مسارات المشتركين الأصلية تظل كما هي.</p>
+</div>
+<div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>القناة</th><th>المسار</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead><tbody id="live-active"></tbody></table></div>
+<video id="live-preview" controls playsinline preload="none" style="display:none;width:min(100%,850px);margin:16px 0;border-radius:10px;background:black" aria-label="معاينة القناة"></video>
+<pre id="live-result" class="log">اختر قناة من مكتبتك ثم ابدأ إعادة البث.</pre>
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
 </section>
 <section class="view" id="page-library">
@@ -176,7 +194,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   }
   function renderSources(){
     var sources=(state.overview&&state.overview.sources)||[];
-    ["stream-source","diagnostic-source","library-source","account-source"].forEach(function(id){
+    ["stream-source","diagnostic-source","library-source","account-source","live-source"].forEach(function(id){
       select(id,id==="account-source"?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
         id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":null);
     });
@@ -294,7 +312,83 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       $("diagnostic-output").textContent=JSON.stringify(d,null,2);show("انتهى اختبار الاتصال.",true);await refresh()}
     catch(e){$("diagnostic-output").textContent="فشل اختبار المصدر: "+e.message;show(e.message,false)}
   });
-  refresh();setInterval(function(){if(!document.hidden)refresh()},60000);
+  async function loadLiveChannels(){
+    var sourceId=$("live-source").value,q=$("live-search").value.trim();
+    var selectBox=$("live-channel");selectBox.replaceChildren();
+    var placeholder=node("option","حدد قناة من النتائج");placeholder.value="";
+    selectBox.appendChild(placeholder);
+    if(!sourceId){show("اختر مصدرًا أولًا.",false);return}
+    try{
+      var query=new URLSearchParams({type:"live",serverId:sourceId,q:q,offset:"0"});
+      var d=await api("catalog?"+query.toString());
+      (d.items||[]).filter(function(x){return x.enabled}).forEach(function(x){
+        var option=node("option",x.name);option.value=x.id;selectBox.appendChild(option);
+      });
+      $("live-result").textContent="عُثر على "+(d.items||[]).length+" قناة في هذه الصفحة. اختر القناة المطلوبة.";
+    }catch(e){show("تعذر عرض القنوات: "+e.message,false)}
+  }
+  $("live-find").addEventListener("click",loadLiveChannels);
+  $("live-search").addEventListener("keydown",function(e){
+    if(e.key==="Enter"){e.preventDefault();loadLiveChannels()}
+  });
+  function renderLive(items){
+    var tbody=$("live-active");tbody.replaceChildren();
+    if(!items.length){
+      var tr=node("tr");var td=cell(tr,"لا توجد قنوات تبثها هذه الخدمة الآن");td.colSpan=4;
+      tbody.appendChild(tr);return;
+    }
+    items.forEach(function(item){
+      var tr=node("tr");cell(tr,item.title||item.channelId);
+      cell(tr,item.path);cell(tr,String(item.connections||0));
+      var controls=node("div",undefined,"actions");
+      controls.appendChild(button("فحص HLS",async function(){
+        $("live-result").textContent="جار اختبار مقاطع البث الفعلية...";
+        try{var d=await action("live/"+item.path+"/probe","live-probe",{});
+          $("live-result").textContent=JSON.stringify(d,null,2);
+          show(d.ok?"وصل مقطع HLS بنجاح؛ تحقق من الصوت والصورة في المشغل.":"فشل فحص HLS.",d.ok);
+        }catch(e){$("live-result").textContent=e.message;show(e.message,false)}
+        await loadLive();
+      }));
+      controls.appendChild(button("معاينة",function(){
+        var video=$("live-preview");video.style.display="block";
+        video.src=item.playlist;video.load();
+        $("live-result").textContent="تم فتح المشغل. إذا لم يدعم المتصفح HLS، استخدم فحص HLS لمعرفة حالة نقل الوسائط.";
+      }));
+      controls.appendChild(button("إيقاف",async function(){
+        if(!confirm("إيقاف إعادة بث هذه القناة؟"))return;
+        try{await action("live/"+item.path+"/stop","live-stop",{});
+          var video=$("live-preview");video.pause();video.removeAttribute("src");video.load();
+          video.style.display="none";show("تم إيقاف إعادة البث لهذه القناة.",true);
+          await loadLive();
+        }catch(e){show("تعذر إيقاف إعادة البث: "+e.message,false)}
+      },"danger"));
+      cell(tr,controls);tbody.appendChild(tr);
+    });
+  }
+  async function loadLive(){
+    try{var d=await api("live");renderLive(d.items||[])}
+    catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
+  }
+  $("live-reload").addEventListener("click",loadLive);
+  $("live-start").addEventListener("click",async function(){
+    var sourceId=$("live-source").value,channelId=$("live-channel").value;
+    if(!sourceId||!channelId){show("اختر مصدرًا وقناة أولًا.",false);return}
+    if(!$("live-rights").checked){show("تأكيد صلاحية إعادة البث مطلوب.",false);return}
+    this.disabled=true;$("live-result").textContent="جار إنشاء مسار على MediaMTX...";
+    try{
+      var result=await action("live/start","live-start",{
+        sourceId:sourceId,channelId:channelId,rightsConfirmed:true
+      });
+      $("live-result").textContent=JSON.stringify({
+        ok:result.ok,title:result.title,path:result.path,
+        playlist:result.playlist,onDemand:result.onDemand
+      },null,2);
+      show("تم إنشاء مسار القناة على المحرك. اضغط فحص HLS أو معاينة للتحقق من الفيديو.",true);
+      await loadLive();
+    }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
+    finally{this.disabled=false}
+  });
+  refresh();loadLive();setInterval(function(){if(!document.hidden){refresh();loadLive()}},60000);
 })();
 </script>
 </body></html>`;
