@@ -11,7 +11,7 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 const MTX='http://blofy-stream-media.railway.internal:9997';
 const HLS='http://blofy-stream-media.railway.internal:8888';
 const INTERNAL='http://blofy-stream-api.railway.internal:3000';
-const MAX_PATHS=3,MAX_AGE_MS=75*60*1000;
+const MAX_PATHS=3,MAX_IDLE_MS=20*60*1000;
 const ID=/^live-[0-9a-f]{12}$/;
 const TICKET=/^[0-9a-f]{48}$/;
 const USERNAME='blofy-control';
@@ -84,19 +84,21 @@ export function createLiveRestreamSupervisor({
     return {status:reply.status,body:content};
   }
   async function prune(){
+    if(operation)return;
     for(const [name,row] of [...paths]){
-      if(clock()-row.createdAt>MAX_AGE_MS){
+      if(row.connections===0&&clock()-(row.lastUsedAt||row.createdAt)>MAX_IDLE_MS){
         await stop(name).catch(()=>{});
       }
     }
   }
+  const idleTimer=setInterval(()=>{void prune().catch(()=>{})},60_000);
+  idleTimer.unref?.();
   async function start({sourceId,channelId,rightsConfirmed}={}){
     if(!auth||!portal?.configured)return safe({ok:false,code:'restream_not_configured'},503);
     if(rightsConfirmed!==true)return safe({ok:false,code:'stream_rights_confirmation_required'},403);
     if(operation)return safe({ok:false,code:'restream_busy'},429);
     operation=true;
     try{
-      await prune();
       if(paths.size>=maxPaths)return safe({ok:false,code:'restream_capacity_reached'},409);
       const upstream=await portal.liveChannel({sourceId,channelId,rightsConfirmed:true});
       if(upstream.status!==200||upstream.body?.ok!==true)
@@ -159,7 +161,7 @@ export function createLiveRestreamSupervisor({
     if(req.method!=='GET'||!TICKET.test(token)||!tokens.has(token))
       return response(res,404,{ok:false,code:'restream_feed_not_found'});
     const name=tokens.get(token),row=paths.get(name);
-    if(!row||clock()-row.createdAt>MAX_AGE_MS)
+    if(!row)
       return response(res,410,{ok:false,code:'restream_feed_expired'});
     if(row.connections>=1)
       return response(res,429,{ok:false,code:'restream_feed_busy'});
@@ -228,6 +230,7 @@ export function createLiveRestreamSupervisor({
       else if(!res.destroyed)res.destroy();
     }finally{
       controller.abort();res.off('close',onClose);row.connections=Math.max(0,row.connections-1);
+      row.lastUsedAt=clock();
       if(upstream?.body&&!upstream.bodyUsed)
         await upstream.body.cancel().catch(()=>{});
     }
