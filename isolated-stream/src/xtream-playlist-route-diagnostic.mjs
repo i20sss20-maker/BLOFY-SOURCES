@@ -68,6 +68,10 @@ function format(data){
  if(/^<html|^<!doctype|^\{\s*"/.test(s))return 'error_document';
  if(b.length>=189&&b[0]===0x47&&b[188]===0x47)return 'mpegts';
  if(b.length>=8&&b.subarray(4,8).toString('ascii')==='ftyp')return 'mp4';
+ if(b.length>=4&&b[0]===0x1a&&b[1]===0x45&&b[2]===0xdf&&b[3]===0xa3)
+   return 'mkv';
+ if(b.length>=12&&b.subarray(0,4).toString('ascii')==='RIFF'&&
+    b.subarray(8,12).toString('ascii')==='AVI ')return 'avi';
  return 'unknown';
 }
 export async function compareOfficialM3uOrigin(m3uUrl,{
@@ -109,7 +113,7 @@ export async function compareOfficialM3uOrigin(m3uUrl,{
   const kind=format(r.data);
   const sample={index:i+1,stage:'media',route,sameOrigin,
     scheme:u.protocol==='https:'?'https':'http',httpStatus:r.status??null,
-    code:r.code,format:kind,mediaBytesPresent:kind==='mpegts'||kind==='mp4'};
+    code:r.code,format:kind,mediaBytesPresent:['mpegts','mp4','mkv','avi'].includes(kind)};
   // IPTV sources often issue 302 to an official CDN. Diagnose ONE hop only,
   // with a second public-DNS validation. No arbitrary redirect chains,
   // no raw Location in outputs, no inherited cookies or Authorization.
@@ -125,7 +129,7 @@ export async function compareOfficialM3uOrigin(m3uUrl,{
       sample.redirectCode=second.code;
       const detected=format(second.data);
       sample.redirectMediaFormat=detected;
-      if(detected==='mpegts'||detected==='mp4'){
+      if(['mpegts','mp4','mkv','avi'].includes(detected)){
         sample.mediaBytesPresent=true;
         sample.format=detected;
       }

@@ -121,3 +121,24 @@ test('unplayable M3U fails distinctly from transient media connection errors',as
   assert.equal(r.code,'no_advertised_media_url');
  });
 });
+
+test('official M3U follows approved CDN redirect to real MKV without logging token',async()=>{
+ await fixture((req,res)=>{
+   const port=req.headers.host.split(':').at(-1);
+   if(req.url.startsWith('/get.php'))
+     return res.end('#EXTM3U\n#EXTINF:-1,Episode\nhttp://127.0.0.1:'+port+'/series/u/p/12.mkv');
+   if(req.url.startsWith('/series/')){
+     res.writeHead(302,{location:'/cdn/signed?token=PRIVATE'});return res.end();
+   }
+   const mkv=Buffer.from([0x1a,0x45,0xdf,0xa3,0x42,0x86,0x81,0x01]);
+   res.writeHead(200,{'content-type':'video/x-matroska'});res.end(mkv);
+ },async origin=>{
+   const result=await compareOfficialM3uOrigin(origin+
+     '/get.php?username=u&password=p&type=m3u_plus&output=ts',
+     {allowedOrigin:origin,validate:validateLocal});
+   assert.equal(result.mediaTransportVerified,true);
+   assert.equal(result.checks[0].format,'mkv');
+   assert.equal(result.checks[0].redirectMediaFormat,'mkv');
+   assert.doesNotMatch(JSON.stringify(result),/PRIVATE|token=|\/cdn\//);
+ });
+});
