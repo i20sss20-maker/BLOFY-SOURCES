@@ -21,65 +21,90 @@ It performs a **synthetic, on-demand-only HLS acceptance test** inside this Rail
 
 Do not treat `synthetic_hls_ts_verified` as customer A/V success.
 
-## Operator control center (separate feature branch, NOT live)
+## BLOFY STREAM operator control center (real data, isolated media engine)
 
-The new read-only `GET /operator` dashboard runs inside this isolated API only after
-`BLOFY_STREAM_ADMIN_TOKEN` is set to a random value **at least 32 characters long**.
-Use browser HTTP Basic authentication: username `operator`, password the secret
-configured in Railway. Keep this secret in Railway variables only, not in Git,
-screenshots, query strings, URLs, or frontend local storage.
+`GET /operator` serves the one-page Arabic administration. It is protected by
+`BLOFY_STREAM_ADMIN_TOKEN` (HTTP Basic username `operator`, 32+ character
+password configured in Railway). All UI requests are same-origin and carry no
+secrets from the authoritative sources to the browser.
 
-The dashboard offers:
-- A simple Arabic RTL navigation inspired by a familiar admin control panel: home, sources, restream, library, subscribers and diagnostics. Unintegrated sections are explicitly marked as unavailable, not faked.
-- Server API state and a live connectivity check of the private MediaMTX HLS listener (a MediaMTX 404 on `/` means only that the listener responded, **not** that an IPTV channel plays).
-- Optional read-only counts of ready paths and HLS sessions from the fixed private MediaMTX Control API on port 9997. If its API is not available, counts remain unknown (`—`), rather than displaying a false zero.
-- Latest **synthetic-only** HLS transport canary, never portrayed as verified real video/audio.
-- A protected, rate-limited button to run the same synthetic canary as `POST /internal/smoke`.
-- Clear labels stating that account migration and customer playback remain disabled.
+The portal in the **separate** BLOFY PLAYER Railway project remains the source
+of truth for customers, accounts, source credentials and catalog records.
+STREAM calls a pinned HTTPS origin with the shared
+`BLOFY_STREAM_UNIFIED_BRIDGE_KEY` (40+ characters, configured only in Railway
+variables of both projects). The authenticated interface supports:
 
-This is phase 1, **not** the full re-stream management system. Source authorization,
-per-channel FFmpeg lifecycle, MediaMTX Control API, adaptive recovery/failover,
-session monitoring and real-content probe controls require independent design,
-tests, authorization checks and rollout gates. No arbitrary upstream URLs or
-operator-supplied shell commands should be accepted by this API.
+- Real saved Xtream sources: listing, adding (with explicit redistribution
+  rights confirmation), enabling, disabling, test, sync and media probe.
+- Real saved catalog: channel/movie/series search and indexed episode map.
+- Existing Xtream gateway accounts: list, create, enable and disable; account
+  proofs, encryption keys and subscriber database remain in PLAYER.
+- Real recorded provider-404 recovery registry statistics, explicitly NOT a
+  guarantee that every untested catalog row plays.
 
-Testing: `cd isolated-stream && npm test`. Merge/deploy only after tests
-and authorization are verified. The source `blofy-stream-isolated-20261108`
-remains unchanged by this feature branch.
+### Real live restream operation
 
-### Current control limitations
+From **إعادة البث** select a registered source and an enabled channel, and
+affirm the right to retransmit it. The STREAM backend resolves the Xtream URL
+using the authenticated PLAYER bridge and holds it **in memory only**.
+No raw Xtream URL, username or password reaches the operator browser or a
+MediaMTX command line.
 
-- This is **not** an Xtream source manager, subscriber dashboard or live channel switcher yet. Those modules show clear integration gates and a link back to the existing authorized BLOFY PLAYER admin site.
-- Control API metrics require MediaMTX to expose its API to the service over Railway's private network; with its default loopback-only API binding, counts show unknown. Do **not** expose port 9997 publicly or accept arbitrary upstream URLs.
-- Only the synthetic smoke action is enabled. Actual server restarts and subscriber failover are intentionally not enabled without a media verification and rollback path.
-- The repository is not copying Dispatcharr code or branding; it uses an original lightweight BLOFY UI and MediaMTX interface.
+For authorized MPEG-TS channels, STREAM registers a random
+`live-<12 lowercase hexadecimal>` path in the private MediaMTX API.
+MediaMTX's FFmpeg-enabled image publishes the selected video/audio from
+`/internal/live-feed/<48 hex>` to a private RTSP path **on demand**.
+Only 3 operator paths may be configured at a time. HLS playback is proxied
+through authenticated `/operator/api/live/<path>/...`; the private MediaMTX
+port is never exposed on Railway's public domain.
 
-## Phase 2: genuine private MediaMTX control (isolated demo path)
+Operators may optionally choose a separately authorized, matching backup
+channel. The supervisor switches to that backup when a primary HTTP connection
+fails, and attempts restart after early disconnect. Without an explicitly
+selected matching channel there is **no automatic substitute**. Worker
+restarts and 20-minute idle cleanup conserve egress resources. Boot recovery
+removes orphaned live paths after an API-service restart.
 
-The operator dashboard now supports **real** MediaMTX Control API operations:
-- Read authenticated status of ready paths, HLS sessions, and the configured demo path.
-- Create, remove or reinitialize a MediaMTX restream path named exactly `blofy-demo` using `POST /v3/config/paths/add/blofy-demo` and `DELETE /v3/config/paths/delete/blofy-demo`. This path pulls the existing private `rtsp://127.0.0.1:8554/smoke` source on demand. Smoke FFmpeg produces a synthetic video/audio channel; it does **not** fetch customer media.
-- Verify a transport stream HLS segment for the `blofy-demo` path. The test **does not** assert decoding video/audio, or guarantee the availability of a provider's IPTV content.
+### Movie and episode previews
 
-### Private API authentication and deployment
+Library movie entries resolve their original file through the same
+authenticated, rights-confirmed bridge. Series episodes are selected from
+the indexed episode map. A temporary operator-only opaque URL streams MP4,
+TS, MKV or other allowlisted media via the STREAM API, including Range requests.
+One initial 404/416 caused by `Range: bytes=0-...` is retried **once**
+without Range, never used to bypass an actual 403 authorization rejection.
+Browsers do not support every codec: MKV, AVI and TS playback may require
+a compatible player even if their media bytes transfer correctly.
 
-Only the isolated `blofy-stream-media` service should have the MediaMTX API listening on its private port 9997. Never expose that port on a Railway public domain/TCP proxy.
+### Important limitations and rollout gates
 
-Configure the media service through Railway **secret** environment variables:
+- **Customer playback routes, subscriptions, activation and applications are
+  not migrated.** Do not turn the operator HLS preview endpoint into a public
+  subscriber URL: it uses an operator-only Basic authentication boundary.
+- Provider HTTP 404, expired accounts, IP restrictions and files missing at the
+  source cannot be repaired by re-streaming. Failed routes remain errors.
+- A successful first media segment proves transport, **not** full decoded audio
+  and video. Verify playback in the intended client before any customer rollout.
+- Per-channel fallback is optional and must be mapped to the SAME broadcast by
+  an operator. No cross-source title guessing or silent channel replacement.
+- The engine limits concurrent operator preview paths; capacity planning,
+  concurrent subscriber session authorization, per-segment HLS credentials,
+  bandwidth measurement, full-library media validation and distributed worker
+  persistence are prerequisites for a public cutover.
 
-- `MTX_API=true`
-- `MTX_APIADDRESS=:9997`
-- `MTX_AUTHINTERNALUSERS_2_USER=blofy-control`
-- `MTX_AUTHINTERNALUSERS_2_PASS=<independent_random_40+_char_secret>`
-- `MTX_AUTHINTERNALUSERS_2_PERMISSIONS_0_ACTION=api`
+### Private MediaMTX authentication
 
-The existing default unprivileged and localhost users at indexes 0 and 1 remain untouched. Set matching secrets on the isolated `blofy-stream-api`:
+`blofy-stream-media` runs `bluenviron/mediamtx:1.19.2-ffmpeg` with API
+restricted to Railway's private network and:
+`MTX_API=true`, `MTX_APIADDRESS=:9997`,
+`MTX_AUTHINTERNALUSERS_2_USER=blofy-control`,
+`MTX_AUTHINTERNALUSERS_2_PERMISSIONS_0_ACTION=api`,
+and a long secret `MTX_AUTHINTERNALUSERS_2_PASS`.
+The STREAM API uses matching
+`BLOFY_STREAM_MEDIAMTX_CONTROL_USER` and
+`BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD` variables.
+Never expose 9997 or 8888 publicly; NEVER put source credentials in Git,
+URLs shown to customers, logs or client JavaScript.
 
-- `BLOFY_STREAM_MEDIAMTX_CONTROL_USER=blofy-control`
-- `BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD=<same_random_secret>`
-
-The private Control API is additionally hard-coded to the media service's private DNS identity. No arbitrary endpoint, hostname, path, user-provided source URL or shell command can be sent to the MediaMTX API from the dashboard. Every mutation requires the operator's existing Basic auth credentials, a custom anti-CSRF header and a cooldown. The initial play path is **demo-only**.
-
-### Not yet migrated
-
-Production Xtream credentials, subscribers, activation, library, live streaming for customers, real provider playback verification and fallback sources remain on the original BLOFY PLAYER control plane. Do not copy those credentials to this project or switch public endpoints solely because the synthetic demo passed. A signed source-to-stream bridge and explicit provider authorization are required first.
+Tests: `cd isolated-stream && npm test`. The Docker build runs tests,
+and GitHub Actions tests should be green before any deployment.
