@@ -11,6 +11,7 @@ import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
 import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catalog-relay.mjs';
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
+import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-profile-diagnostic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -69,6 +70,11 @@ export function createStreamServer({
   const officialM3uDiagnostic=createOfficialM3uDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
+  const clientProfiles=createXtreamMediaClientProfileDiagnostic({
+    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin,
+    allowRedirectFrom:relayRedirectSourceOrigin,fetchImpl:relayFetchImpl,
+    lookup:relayLookup
+  });
   let checking=false,checkedAt=0,lastCanary=null;
   async function canary(){
     if(checking)return {ok:false,code:'canary_in_progress',realSourceVerified:false};
@@ -89,6 +95,8 @@ export function createStreamServer({
       return void manifestRelay.handle(req,res);
     if(url.pathname==='/internal/xtream-official-m3u-diagnostic')
       return void officialM3uDiagnostic.handle(req,res);
+    if(url.pathname==='/internal/xtream-media-client-profiles')
+      return void clientProfiles.handle(req,res);
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
