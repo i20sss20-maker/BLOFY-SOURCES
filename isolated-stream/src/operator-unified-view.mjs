@@ -1,7 +1,7 @@
 // Original BLOFY STREAM control center. Authenticated, live production data only.
 // No sample sources, fake counters, redirects to legacy pages, or demo buttons.
 export function renderOperatorDashboard(nonce){
-  const html=String.raw\`<!doctype html>
+  const html=String.raw`<!doctype html>
 <html lang="ar" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#09172c">
@@ -297,6 +297,6 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   refresh();setInterval(function(){if(!document.hidden)refresh()},60000);
 })();
 </script>
-</body></html>\`;
+</body></html>`;
   return html.replace('__NONCE__',nonce);
 }
