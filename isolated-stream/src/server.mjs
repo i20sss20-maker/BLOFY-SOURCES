@@ -224,13 +224,28 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     service.startBootCanary();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
-    const staleTimer=setTimeout(()=>{
-      void service.liveSupervisor.recoverOldPaths().then(result=>
-        console.info('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify(result))
-      ).catch(()=>console.warn('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify({
-        ok:false,code:'restream_control_unavailable'
-      })));
-    },6500);staleTimer.unref?.();
+    let recoveryAttempts=0;
+    const recoverStalePaths=()=>{
+      recoveryAttempts++;
+      void service.liveSupervisor.recoverOldPaths().then(result=>{
+        console.info('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify({
+          ...result,attempt:recoveryAttempts
+        }));
+        if(!result.ok&&recoveryAttempts<4){
+          const retry=setTimeout(recoverStalePaths,Math.min(30000,4000*recoveryAttempts));
+          retry.unref?.();
+        }
+      }).catch(()=>{
+        console.warn('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify({
+          ok:false,code:'restream_control_unavailable',attempt:recoveryAttempts
+        }));
+        if(recoveryAttempts<4){
+          const retry=setTimeout(recoverStalePaths,Math.min(30000,4000*recoveryAttempts));
+          retry.unref?.();
+        }
+      });
+    };
+    const staleTimer=setTimeout(recoverStalePaths,6500);staleTimer.unref?.();
     // Retire the old synthetic dashboard path from MediaMTX once. The normal
     // path 'smoke' remains internal-only for health checks, not the UI.
     if(process.env.BLOFY_STREAM_PURGE_DEMO_PATH_ON_BOOT==='1'){
