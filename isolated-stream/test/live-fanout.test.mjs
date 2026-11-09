@@ -72,3 +72,43 @@ test('ten simulated viewers receive the same source media from one upstream call
     return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('fifty concurrent simulated viewers share exactly one provider response',async()=>{
+  let upstreamCalls=0,emitter;
+  const upstream=new ReadableStream({start(controller){emitter=controller}});
+  await service(async(base,broker)=>{
+    const requests=Array.from({length:50},()=>fetch(base+'/live'));
+    for(let n=0;n<150&&broker.stats().viewers<50;n++)
+      await new Promise(resolve=>setTimeout(resolve,10));
+    assert.equal(broker.stats().viewers,50);
+    emitter.enqueue(new Uint8Array(packet));
+    const responses=await Promise.all(requests);
+    assert.ok(responses.every(r=>r.status===200));
+    const readers=responses.map(r=>r.body.getReader());
+    const data=await Promise.all(readers.map(r=>r.read()));
+    assert.ok(data.every(d=>Buffer.compare(Buffer.from(d.value),packet)===0));
+    assert.equal(upstreamCalls,1);
+    assert.equal(broker.stats().activeFeeds,1);
+    await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+  },{maxViewersPerFeed:128,fetchImpl:async()=>{
+    upstreamCalls++;return new Response(upstream,{
+      headers:{'content-type':'video/mp2t'}
+    });
+  }});
+});
+test('stalled TS provider is evicted and does not pin viewer sessions',async()=>{
+  let controller;
+  await service(async(base,broker)=>{
+    const response=await fetch(base+'/live');
+    assert.equal(response.status,200);
+    await response.body.getReader().read();
+    for(let n=0;n<80&&broker.stats().activeFeeds>0;n++)
+      await new Promise(resolve=>setTimeout(resolve,10));
+    assert.equal(broker.stats().activeFeeds,0);
+  },{readIdleTimeoutMs:75,fetchImpl:async()=>{
+    const source=new ReadableStream({start(c){
+      controller=c;c.enqueue(new Uint8Array(packet));
+    }});
+    return new Response(source,{headers:{'content-type':'video/mp2t'}});
+  }});
+});

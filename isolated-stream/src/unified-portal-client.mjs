@@ -15,7 +15,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+    const budget=path===ROOT+'/library-ai'&&method==='POST'?25000:timeoutMs;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
       const response=await fetchImpl(url,{
         method,redirect:'manual',signal:controller.signal,cache:'no-store',
@@ -80,6 +81,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'stream_library_selection_invalid'}});
     return call(ROOT+'/library-review?'+new URLSearchParams({sourceId,type}));
+  }
+  const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
+  function libraryAISuggest({sourceId,type,offset=0}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
+      !Number.isInteger(offset)||offset<0||offset>40000||offset%12!==0)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
+    return call(ROOT+'/library-ai',{method:'POST',body:{sourceId,type,offset}});
   }
   function libraryTitle({sourceId,type,itemId,currentName,proposedName}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
@@ -154,5 +162,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }

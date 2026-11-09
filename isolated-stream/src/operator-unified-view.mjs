@@ -149,6 +149,14 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <tbody id="library-review-suggestions"></tbody></table></div>
 <div id="library-review-duplicates" class="muted"></div>
 </div>
+<div class="panel" id="library-ai-panel">
+<div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
+<button class="btn secondary" type="button" id="library-ai-run" disabled>اقترح تصنيف 12 عنوانًا باستخدام AI</button></div>
+<p class="muted" id="library-ai-status">جار فحص إعدادات الذكاء الاصطناعي...</p>
+<p class="muted">ميزة اختيارية ومدفوعة حسب استخدام API. لا ترسل كلمات المرور أو روابط البث أو بيانات العملاء. لا تُطبّق اقتراحات AI تلقائيًا.</p>
+<div class="tablewrap"><table><thead><tr>
+<th>العنوان الحالي</th><th>اقتراح AI</th><th>التصنيف</th><th>الثقة / التفسير</th></tr></thead>
+<tbody id="library-ai-results"></tbody></table></div></div>
 <div class="panel" id="vod-panel" hidden><h3>معاينة فيلم أو حلقة حقيقية</h3>
 <p class="muted" id="vod-selected">اختر عنصرًا من المكتبة.</p>
 <div class="inline" id="vod-episodes-wrap" hidden>
@@ -253,7 +261,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
     document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
     $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
-    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);window.scrollTo({top:0,behavior:"instant"});
+    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);if(id==="library")void updateLibraryAIStatus();window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
   document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
@@ -464,6 +472,50 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     var url=URL.createObjectURL(blob),link=document.createElement("a");
     link.href=url;link.download="blofy-library-review.csv";link.click();
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  });
+  var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="";
+  async function updateLibraryAIStatus(){
+    try{
+      var result=await api("library-ai/status");
+      libraryAIReady=result.configured===true;
+      $("library-ai-run").disabled=!libraryAIReady;
+      $("library-ai-status").textContent=libraryAIReady?
+        "AI متاح. اضغط لتحليل دفعة صغيرة من 12 عنوانًا بعد الموافقة على إرسال بياناتها.":
+        "AI غير مفعّل: أضف BLOFY_LIBRARY_AI_API_KEY في خدمة بوابة التفعيل عبر Railway. يبقى تحليل المكتبة المحلي يعمل دون مفتاح.";
+    }catch(e){
+      libraryAIReady=false;$("library-ai-run").disabled=true;
+      $("library-ai-status").textContent="تعذر التحقق من إعدادات AI: "+e.message;
+    }
+  }
+  $("library-ai-run").addEventListener("click",async function(){
+    if(!libraryAIReady){show("AI غير مهيأ بعد؛ استخدم التحليل المحلي.",false);return}
+    var sourceId=$("library-source").value,type=$("library-type").value;
+    if(!sourceId){show("حدد مصدرًا قبل إرسال طلب AI.",false);return}
+    var selection=sourceId+":"+type;
+    if(libraryAISelection!==selection){libraryAIOffset=0;libraryAISelection=selection}
+    if(!confirm("سيُرسل إلى خدمة OpenAI ما يصل إلى 12 اسم محتوى وفئتها فقط. قد تُحسب تكلفة API. لن تُرسل بيانات المشتركين أو المصدر، ولن يُعدّل شيء تلقائيًا. هل تتابع؟"))return;
+    this.disabled=true;$("library-ai-status").textContent="جارٍ طلب توصيات AI للدفعة "+(libraryAIOffset/12+1)+"...";
+    try{
+      var result=await action("library-ai","library-ai",{sourceId,type,offset:libraryAIOffset});
+      $("library-ai-results").replaceChildren();
+      (result.suggestions||[]).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,item.currentName);cell(tr,item.suggestedName);
+        cell(tr,item.category);
+        cell(tr,item.confidence+" — "+item.reason);
+        $("library-ai-results").appendChild(tr);
+      });
+      $("library-ai-status").textContent=
+        "اقتراحات AI للمراجعة فقط — "+count(result.suggestions?.length||0)+
+        " اقتراحًا من "+count(result.sourceItems)+" عنوانًا • النموذج: "+result.model+
+        " • لا يوجد تعديل تلقائي.";
+      libraryAIOffset=result.nextOffset===null?0:result.nextOffset;
+      show("اكتمل تحليل دفعة AI؛ راجع النتائج دون تغيير أي محتوى.",true);
+    }catch(e){
+      $("library-ai-status").textContent="لم تنجح توصيات AI: "+e.message+
+        ". تحليل المكتبة المحلي يبقى متاحًا.";
+      show("تعذر تحليل AI: "+e.message,false);
+    }finally{this.disabled=!libraryAIReady}
   });
   async function prepareVod(item){
     state.vodSelected=item;

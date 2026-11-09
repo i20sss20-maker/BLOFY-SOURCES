@@ -130,3 +130,21 @@ test('full-library review UI is valid JavaScript with separate deliberate approv
     assert.doesNotThrow(()=>new Function(script[1]),'embedded operator JS parses');
   });
 });
+
+test('optional model AI is visibly distinct from local rules and requires affirmative action',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const reply=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(reply.status,200);
+    const html=await reply.text();
+    assert.match(html,/id="library-ai-run"/);
+    assert.match(html,/id="library-ai-status"/);
+    assert.match(html,/id="library-ai-results"/);
+    assert.match(html,/api\("library-ai\/status"\)/);
+    assert.match(html,/action\("library-ai","library-ai"/);
+    assert.match(html,/confirm\("سيُرسل إلى خدمة OpenAI/);
+    assert.match(html,/لا تُطبّق اقتراحات AI تلقائيًا/);
+    const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script);
+    assert.doesNotThrow(()=>new Function(script[1]));
+  });
+});
