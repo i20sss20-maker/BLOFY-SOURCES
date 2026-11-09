@@ -139,6 +139,16 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <p class="muted" id="library-smart-summary">تصنيف تلقائي بالقواعد من أسماء المحتوى والأقسام، دون إرسال البيانات إلى خدمة ذكاء اصطناعي خارجية. لا يغيّر المصدر.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+<div class="panel" id="library-review-panel">
+<div class="controls"><h3>مراجعة المكتبة كاملة — تحليل ذكي</h3>
+<div class="actions"><button class="btn secondary" id="library-review-run" type="button">تحليل المصدر بالكامل</button>
+<button class="btn secondary" id="library-review-export" type="button" disabled>تصدير التقرير CSV</button></div></div>
+<p class="muted">يفحص مصدرًا ونوع محتوى واحدًا كل مرة حتى 40,000 عنصر، ويعرض التكرارات المحتملة والأسماء المقترحة والأقسام ونقص الصور. تحليل بالقواعد بدون نموذج AI خارجي؛ لا يحذف أو يغيّر شيئًا تلقائيًا. تعتمد التعديلات فرديًا فقط بعد موافقتك.</p>
+<div id="library-review-summary" class="muted">اختر مصدرًا محددًا ونوع المحتوى ثم اضغط تحليل المصدر بالكامل.</div>
+<div class="tablewrap"><table><thead><tr><th>الاسم الحالي</th><th>اقتراح التنظيف</th><th>السبب</th><th>المراجعة</th></tr></thead>
+<tbody id="library-review-suggestions"></tbody></table></div>
+<div id="library-review-duplicates" class="muted"></div>
+</div>
 <div class="panel" id="vod-panel" hidden><h3>معاينة فيلم أو حلقة حقيقية</h3>
 <p class="muted" id="vod-selected">اختر عنصرًا من المكتبة.</p>
 <div class="inline" id="vod-episodes-wrap" hidden>
@@ -374,6 +384,87 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       state.libOffset=d.nextOffset||0;$("library-more").hidden=!d.nextOffset;
     }catch(e){show("تعذر تحميل المكتبة: "+e.message,false)}
   }
+  var libraryReviewReport=null;
+  async function loadLibraryReview(){
+    var sourceId=$("library-source").value,type=$("library-type").value;
+    if(!sourceId){show("حدد المصدر الذي تريد تحليله من قائمة المكتبة أولاً.",false);return}
+    var run=$("library-review-run");run.disabled=true;
+    $("library-review-summary").textContent="جار تحليل فهرس المصدر دون تعديله...";
+    $("library-review-suggestions").replaceChildren();
+    $("library-review-duplicates").replaceChildren();
+    try{
+      var report=await api("library-review?"+new URLSearchParams({sourceId,type}));
+      libraryReviewReport=report;
+      $("library-review-export").disabled=false;
+      var details=[
+        "العناصر المحللة: "+count(report.scanned)+" من "+count(report.total),
+        "النتيجة: "+(report.complete?"اكتمل الفحص":"فحص جزئي"),
+        "مجموعات أسماء متشابهة: "+count(report.duplicateGroupCount),
+        "عناصر ضمن مجموعات التكرار: "+count(report.duplicateItems),
+        "بدون صورة: "+count(report.missingArtwork),
+        "بدون فئة: "+count(report.missingCategory),
+        "غير مفعّلة: "+count(report.hidden)
+      ];
+      if(report.missingYear!==null)details.push("بدون سنة: "+count(report.missingYear));
+      var summary=$("library-review-summary");summary.replaceChildren();
+      summary.appendChild(node("p",details.join(" • ")));
+      summary.appendChild(node("p",String(report.warning||"")));
+      summary.appendChild(node("p","توزيع مقترح: "+(report.categoryGroups||[])
+        .map(function(g){return g.name+" ("+count(g.count)+")"}).join(" • ")));
+      (report.nameSuggestions||[]).forEach(function(item){
+        var row=node("tr");
+        cell(row,item.currentName);
+        cell(row,item.proposedName);
+        cell(row,item.reason+" • ثقة "+item.confidence);
+        var actions=node("div",undefined,"actions");
+        actions.appendChild(button("اعتماد الاسم",async function(){
+          if(!confirm("تعديل اسم العرض فقط من: "+item.currentName+
+            "\nإلى: "+item.proposedName+"؟ لن يتغير رابط القناة أو رقمها."))return;
+          this.disabled=true;
+          try{
+            await action("library-title","library-title",{
+              sourceId:report.sourceId,type:report.type,itemId:item.id,
+              currentName:item.currentName,proposedName:item.proposedName
+            });
+            show("تم اعتماد الاسم بعد موافقتك فقط.",true);
+            row.remove();await loadCatalog(false);
+          }catch(e){show("لم يُعتمد الاقتراح: "+e.message,false);this.disabled=false}
+        }));
+        cell(row,actions);
+        $("library-review-suggestions").appendChild(row);
+      });
+      var duplicates=$("library-review-duplicates");
+      duplicates.appendChild(node("h3","التكرارات المحتملة — مراجعة فقط، لا حذف"));
+      (report.duplicateExamples||[]).forEach(function(group){
+        duplicates.appendChild(node("p",group.title+" • "+group.copies+
+          " عناصر محتملة ("+group.items.map(function(x){return x.id}).join(", ")+")"));
+      });
+      if(!(report.duplicateExamples||[]).length)
+        duplicates.appendChild(node("p","لم تُرصد أسماء متطابقة ضمن الفحص."));
+      show("اكتمل التحليل دون تعديل المكتبة.",true);
+    }catch(e){
+      libraryReviewReport=null;$("library-review-export").disabled=true;
+      $("library-review-summary").textContent="تعذر تحليل الفهرس: "+e.message;
+      show("تعذر تحليل المكتبة: "+e.message,false);
+    }finally{run.disabled=false}
+  }
+  $("library-review-run").addEventListener("click",loadLibraryReview);
+  $("library-review-export").addEventListener("click",function(){
+    var report=libraryReviewReport;if(!report)return;
+    var safe=function(v){
+      var t=String(v??"").replace(/"/g,'""');
+      if(/^[=+@-]/.test(t))t="'"+t;
+      return '"'+t+'"';
+    };
+    var lines=[["type","id","current_name","suggested_name","reason"].map(safe).join(",")];
+    (report.nameSuggestions||[]).forEach(function(x){
+      lines.push([report.type,x.id,x.currentName,x.proposedName,x.reason].map(safe).join(","));
+    });
+    var blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+    var url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download="blofy-library-review.csv";link.click();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  });
   async function prepareVod(item){
     state.vodSelected=item;
     $("vod-panel").hidden=false;$("vod-rights").checked=false;
