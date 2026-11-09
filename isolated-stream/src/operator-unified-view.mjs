@@ -249,6 +249,28 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <p class="muted" id="library-codes-sync-status" role="status" aria-live="polite">الأكواد المرتبطة بالمصدر تستخدم مكتبة BLOFY المشتركة. اختر المصدر واضغط نقل تحديثات Xtream لقراءة القنوات والأفلام والمسلسلات معًا؛ لا تتغير صلاحيات الاشتراكات أو مددها.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+<div class="panel" id="library-ops-panel">
+<h3>⚙️ إدارة المزامنة وإصدارات الأكواد</h3>
+<p class="muted">المصدر المعتمد هو Xtream. المزامنة التلقائية لا تبدأ إلا بعد تفعيلها على مصدر محدد. لن تتغير الأكواد أو الاشتراكات.</p>
+<div class="controls"><div class="inline">
+<label>تكرار المزامنة
+<select id="library-auto-hours" aria-label="عدد الساعات بين المزامنات">
+<option value="12">كل 12 ساعة</option><option value="24" selected>كل 24 ساعة</option>
+<option value="48">كل 48 ساعة</option><option value="168">كل أسبوع</option>
+</select></label>
+<button class="btn" id="library-auto-enable" type="button">تفعيل المزامنة التلقائية</button>
+<button class="btn secondary" id="library-auto-disable" type="button">إيقاف المزامنة التلقائية</button>
+<button class="btn secondary" id="library-ops-refresh" type="button">فحص حالة المصدر والأكواد</button>
+</div></div>
+<p class="muted" id="library-auto-status" role="status" aria-live="polite">اختر مصدرًا ثم افحص المزامنة التلقائية.</p>
+<p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
+<div class="actions">
+<button class="btn secondary" id="library-snapshot-create" type="button">حفظ نسخة من تخصيصات الناشر</button>
+<button class="btn secondary" id="library-snapshots-refresh" type="button">عرض النسخ المحفوظة</button>
+</div>
+<p class="muted">النسخ هنا محدودة لتخصيصات المكتبة (حتى 2000 قسم و2000 عنصر معدل)، وليست نسخة احتياطية كاملة من PostgreSQL.</p>
+<div class="log" id="library-snapshots-status" role="status" aria-live="polite"></div>
+</div>
 <div class="panel" id="library-review-panel">
 <div class="controls"><h3>مراجعة المكتبة كاملة — تحليل ذكي</h3>
 <div class="actions"><button class="btn secondary" id="library-review-run" type="button">تحليل المصدر بالكامل</button>
@@ -1151,6 +1173,107 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       status.textContent="⚠ لم يبدأ نقل تحديثات Xtream: "+e.message;
       this.disabled=false;
     }
+  });
+  function selectedOpsSource(){
+    var id=$("library-source").value;
+    if(!id){$("library-auto-status").textContent="اختر مصدرًا واحدًا أولًا؛ لن نغيّر إعدادات جميع المصادر دفعة واحدة.";}
+    return id;
+  }
+  async function refreshSourceOps(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    $("library-auto-status").textContent="جاري قراءة إعدادات المزامنة التلقائية...";
+    try{
+      var results=await Promise.allSettled([
+        api("ops/schedule?"+new URLSearchParams({sourceId})),
+        api("ops/source-stats?"+new URLSearchParams({sourceId}))
+      ]);
+      if(sourceId!==$("library-source").value)return;
+      if(results[0].status==="fulfilled"){
+        var cfg=results[0].value;
+        $("library-auto-hours").value=String(cfg.intervalHours||24);
+        $("library-auto-status").textContent=cfg.enabled?
+          "✅ المزامنة التلقائية مفعلة كل "+count(cfg.intervalHours)+" ساعة. التشغيل القادم: "+
+            (cfg.nextRunAt?new Date(cfg.nextRunAt).toLocaleString("ar-SA"):"غير محدد"):
+          "المزامنة التلقائية متوقفة لهذا المصدر. اضغط تفعيل لجدولتها؛ لا يبدأ النقل فورًا.";
+      }else $("library-auto-status").textContent="⚠ تعذر قراءة جدول المزامنة: "+results[0].reason.message;
+      if(results[1].status==="fulfilled"){
+        var stats=results[1].value;
+        $("library-ops-stats").textContent=
+          "حالة المصدر: "+String(stats.status||"غير معروفة")+
+          " | آخر مزامنة: "+(stats.lastSyncAt?new Date(stats.lastSyncAt).toLocaleString("ar-SA"):"لا يوجد")+
+          " | إصدار المكتبة: "+count(stats.catalogRevision||0)+
+          " | أكواد: "+count(stats.codes?.total||0)+
+          " (مفعّلة سابقًا: "+count(stats.codes?.redeemed||0)+")"+
+          " | حسابات نشطة: "+count(stats.accounts?.active||0)+
+          " | مشاهدون حاليون: غير مقاس من هذا التقرير.";
+      }else $("library-ops-stats").textContent="⚠ تعذر قراءة إحصائيات الأكواد: "+results[1].reason.message;
+    }catch(e){$("library-auto-status").textContent="خطأ فحص المصدر: "+e.message;}
+  }
+  async function configureAutoSync(enabled,button){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    var hours=Number($("library-auto-hours").value);
+    if(![12,24,48,168].includes(hours))return;
+    var desc=enabled?"تفعيل المزامنة التلقائية كل "+hours+
+      " ساعة لهذا المصدر فقط (القنوات والأفلام والمسلسلات)":
+      "إيقاف المزامنة التلقائية لهذا المصدر";
+    if(!confirm(desc+"؟ لن تتغير أكواد المشتركين أو مددها."))return;
+    button.disabled=true;
+    try{
+      var cfg=await action("ops/schedule","ops-schedule",{sourceId,enabled,intervalHours:hours});
+      $("library-auto-status").textContent=cfg.enabled?
+        "✅ تم حفظ الجدول. أول فحص مجدول بعد "+count(hours)+
+        " ساعة؛ لم تبدأ مزامنة فورية.":"✅ أوقفت المزامنة التلقائية لهذا المصدر.";
+      await refreshSourceOps();
+    }catch(e){$("library-auto-status").textContent="⚠ تعذّر حفظ جدول المزامنة: "+e.message;}
+    finally{button.disabled=false;}
+  }
+  $("library-auto-enable").addEventListener("click",function(){void configureAutoSync(true,this);});
+  $("library-auto-disable").addEventListener("click",function(){void configureAutoSync(false,this);});
+  $("library-ops-refresh").addEventListener("click",function(){void refreshSourceOps();});
+  $("library-source").addEventListener("change",function(){
+    $("library-auto-status").textContent="اختر «فحص حالة المصدر والأكواد» لقراءة الحالة.";
+    $("library-ops-stats").textContent="اختر مصدرًا للتحقق من الأكواد وإصدار المحتوى.";
+    $("library-snapshots-status").replaceChildren();
+  });
+  $("library-snapshots-refresh").addEventListener("click",async function(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    var box=$("library-snapshots-status");
+    box.replaceChildren();box.textContent="جار فحص نسخ التخصيصات...";
+    this.disabled=true;
+    try{
+      var result=await api("ops/snapshots?"+new URLSearchParams({sourceId}));
+      box.replaceChildren();
+      var items=Array.isArray(result.snapshots)?result.snapshots:[];
+      if(!items.length){box.textContent="لا توجد نسخ من تخصيصات هذا المصدر.";return;}
+      items.slice(0,15).forEach(function(x){
+        var line=document.createElement("p");
+        line.textContent=String(x.label||"نسخة")+" — "+
+          (x.createdAt?new Date(x.createdAt).toLocaleString("ar-SA"):"")+
+          " | أقسام: "+count(x.categories||0)+" | تعديلات عناصر: "+count(x.items||0);
+        box.appendChild(line);
+      });
+    }catch(e){box.textContent="⚠ تعذر عرض نسخ التخصيصات: "+e.message;}
+    finally{this.disabled=false;}
+  });
+  $("library-snapshot-create").addEventListener("click",async function(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    if(!confirm("هل تريد حفظ نسخة من تخصيصات هذا المصدر؟ ليست نسخة احتياطية كاملة من محتوى Xtream أو قاعدة البيانات."))return;
+    this.disabled=true;
+    $("library-snapshots-status").textContent="جاري حفظ تخصيصات المصدر...";
+    try{
+      var stamp=new Date().toISOString().slice(0,16).replace("T"," ");
+      var result=await action("ops/snapshot","ops-snapshot",{
+        sourceId,label:"BLOFY before sync "+stamp,confirmed:true
+      });
+      $("library-snapshots-status").textContent="✅ حُفظت تخصيصات "+
+        count(result.categories||0)+" قسمًا و"+count(result.items||0)+
+        " عنصرًا. لا تشمل النسخة محتوى Xtream كاملًا.";
+    }catch(e){$("library-snapshots-status").textContent="⚠ فشل حفظ التخصيصات: "+e.message;}
+    finally{this.disabled=false;}
   });
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});

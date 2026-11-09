@@ -84,6 +84,30 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
   const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
+  // Reuse the verified private bridge; the STREAM API never receives
+  // original Xtream credentials or arbitrary host URLs.
+  function opsRead(path,{sourceId}={}){
+    if(!UUID.test(String(sourceId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_source_id'}});
+    return call(ROOT+'/ops/'+path+'?'+new URLSearchParams({sourceId}));
+  }
+  function opsSchedule({sourceId,enabled,intervalHours}={}){
+    if(!UUID.test(String(sourceId||''))||typeof enabled!=='boolean'||
+       ![6,12,24,48,168].includes(Number(intervalHours)))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_schedule'}});
+    return call(ROOT+'/ops/schedule',{method:'POST',body:{
+      sourceId,enabled,intervalHours:Number(intervalHours)
+    }});
+  }
+  function opsSnapshot({sourceId,label,confirmed}={}){
+    if(!UUID.test(String(sourceId||''))||confirmed!==true||
+       typeof label!=='string'||label.length<4||label.length>60)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_snapshot_confirmation_required'}});
+    return call(ROOT+'/ops/snapshot',{method:'POST',body:{sourceId,label,confirmed:true}});
+  }
+  const opsScheduleStatus=(args)=>opsRead('schedule',args);
+  const opsSnapshots=(args)=>opsRead('snapshots',args);
+  const opsSourceStats=(args)=>opsRead('source-stats',args);
   function libraryAIScanProgress({sourceId,type}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
@@ -193,5 +217,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
