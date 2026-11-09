@@ -6,14 +6,38 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
-  firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now
+  firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
+  providerCooldownMs=2000,maxProviderCooldownMs=30000
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
-     !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000)
+     !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000||
+     !Number.isInteger(providerCooldownMs)||providerCooldownMs<20||providerCooldownMs>60000||
+     !Number.isInteger(maxProviderCooldownMs)||maxProviderCooldownMs<providerCooldownMs||
+       maxProviderCooldownMs>180000)
     throw new Error('fanout_capacity_invalid');
   const feeds=new Map();
+  const cooldowns=new Map();
+  const counters={providerFailures:0,slowViewerDisconnects:0,
+    capacityRejections:0,cooldownRejections:0};
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
+  // Per-source failures are stored as non-reversible hashes only.
+  // Limit both memory and upstream retries during source outages.
+  function activeCooldown(key){
+    const state=cooldowns.get(key);
+    if(!state||state.retryAt<=clock())return null;
+    return state;
+  }
+  function noteProviderFailure(key){
+    const last=cooldowns.get(key);
+    const failures=Math.min(8,(last?.failures||0)+1);
+    const delay=Math.min(maxProviderCooldownMs,
+      providerCooldownMs*Math.pow(2,failures-1));
+    cooldowns.delete(key);
+    cooldowns.set(key,{failures,retryAt:clock()+delay});
+    while(cooldowns.size>64)cooldowns.delete(cooldowns.keys().next().value);
+    counters.providerFailures++;
+  }
   function closeFeed(key,reason='closed',expectedRow=null){
     const row=feeds.get(key);
     if(!row||(expectedRow&&row!==expectedRow))return;
@@ -29,6 +53,7 @@ export function createLiveFanout({
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
       if(viewer.writableLength+chunk.length>512*1024){
+        counters.slowViewerDisconnects++;
         row.viewers.delete(viewer);
         if(!viewer.destroyed)viewer.destroy();
         continue;
@@ -75,6 +100,7 @@ export function createLiveFanout({
           throw Error('provider_not_ts');
         // Permit clients to start only after actual transport bytes arrive.
         row.state='ready';row.startedAt=clock();
+        cooldowns.delete(row.key);
         row.first=Buffer.from(first.value);
         for(const viewer of row.viewers){
           if(!viewer.headersSent)viewer.writeHead(200,{
@@ -85,10 +111,14 @@ export function createLiveFanout({
       }finally{clearTimeout(timer);}
       while(!row.controller.signal.aborted){
         const part=await nextChunk(row,reader,readIdleTimeoutMs);
-        if(part.done)break;
+        if(part.done){
+          if(row.viewers.size)throw new Error('fanout_upstream_ended');
+          break;
+        }
         if(part.value?.length)deliver(row,Buffer.from(part.value));
       }
     }catch{
+      if(row.viewers.size)noteProviderFailure(row.key);
       for(const viewer of row.viewers){
         if(!viewer.headersSent){viewer.writeHead(502,{'content-type':'application/json',
           'cache-control':'no-store'});viewer.end('{"ok":false,"code":"fanout_source_unavailable"}');}
@@ -111,8 +141,22 @@ export function createLiveFanout({
     const url=await assertPublicMediaUrl(sourceUrl,{lookup});
     const key=keyOf(url.href);
     let row=feeds.get(key);
+    // Existing healthy readers are never affected by a cool-down
+    // recorded for a previous failed feed.
+    if(!row){
+      const block=activeCooldown(key);
+      if(block){
+        counters.cooldownRejections++;
+        const retrySeconds=Math.max(1,Math.ceil((block.retryAt-clock())/1000));
+        res.writeHead(503,{'retry-after':String(retrySeconds),
+          'cache-control':'no-store','content-type':'application/json'});
+        res.end('{"ok":false,"code":"fanout_source_cooling_down"}');
+        return;
+      }
+    }
     if(!row){
       if(feeds.size>=maxFeeds){
+        counters.capacityRejections++;
         res.writeHead(503,{'retry-after':'3'});res.end('fanout_capacity_reached');return;
       }
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
@@ -120,6 +164,7 @@ export function createLiveFanout({
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
+      counters.capacityRejections++;
       res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
@@ -142,5 +187,7 @@ export function createLiveFanout({
   }
   return {handle,stats:()=>({activeFeeds:feeds.size,
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
-    maxFeeds,maxViewersPerFeed}),close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
+    cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
+    ...counters,maxFeeds,maxViewersPerFeed}),
+    close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
