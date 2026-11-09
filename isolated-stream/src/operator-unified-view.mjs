@@ -166,17 +166,26 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
 <div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
 <section class="view" id="page-codes">
-<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>مدة الكود لا تبدأ عند الإصدار. تبدأ عند أول تفعيل ناجح، ويُنشأ حساب Xtream تلقائيًا.</p></div>
-<a class="btn secondary" href="https://blofyplayer.com/stream/activate" target="_blank" rel="noopener noreferrer">صفحة تفعيل العميل ↗</a></div>
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div></div>
 <div class="cards" style="margin-bottom:15px">
 <div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
 <div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
 <div class="stat"><small>تم تفعيلها</small><strong id="codes-redeemed">—</strong></div>
 <div class="stat"><small>ملغاة</small><strong id="codes-revoked">—</strong></div></div>
+<div class="grid"><div class="panel"><h3>المبيعات اليدوية المسجلة</h3>
+<div class="row"><span class="muted">عدد الأكواد المباعة</span><strong id="codes-sold-count">—</strong></div>
+<div class="row"><span class="muted">إجمالي الإيراد المسجل</span><strong id="codes-sales-sar">—</strong></div>
+<p class="muted">هذه إحصاءات تسجيل يدوي من لوحة الإدارة، وليست مبالغ مؤكدة من بوابة دفع.</p></div>
+<div class="panel"><h3>إدارة الأجهزة وتجديد الاشتراكات</h3>
+<div class="row"><span class="muted">تستحق الانتهاء خلال 7 أيام</span><strong id="codes-expiring">—</strong></div>
+<div class="row"><span class="muted">نقل جهاز الاشتراك</span><strong id="codes-transfers">—</strong></div>
+<p class="muted">زر «نقل الجهاز» يولّد كود استعادة جديدًا ويبطل جلسة الجهاز القديم، <b>دون بدء مدة جديدة</b>.</p>
+</div></div>
 <div class="panel"><h3>إصدار أكواد جديدة</h3>
 <p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. العدد المبدئي كود واحد، وتقدر تزيده تدريجيًا حتى 20 كودًا في الدفعة. تظهر الأكواد كاملة مرة واحدة عند إنشائها فقط.</p>
 <form id="codes-form"><div class="formgrid">
 <div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
+<div class="field"><label for="codes-channel">نوع الكود</label><select id="codes-channel" name="channel"><option value="app" selected>تطبيق BLOFY STREAM فقط</option><option value="xtream">Xtream خارجي (قديم)</option></select></div>
 <div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
 <option value="1">يوم</option><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option>
 <option value="90">3 أشهر (90 يومًا)</option><option value="180">6 أشهر (180 يومًا)</option>
@@ -187,7 +196,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
 <div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
 <div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>الوصف</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>المبيعات</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
 <tbody id="codes-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
@@ -516,23 +525,83 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
       value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
       renderCodes();
+      void api("sales-summary").then(function(summary){
+        value("codes-sold-count",count(summary.sold));
+        value("codes-sales-sar",
+          (Number(summary.recorded_revenue_halalas||0)/100).toLocaleString("en-US",
+            {minimumFractionDigits:2,maximumFractionDigits:2})+" ر.س");
+        value("codes-expiring",count(summary.expiring_soon));
+        value("codes-transfers",count(summary.transfers));
+      }).catch(function(){ /* code ledger remains available if sales summary fails */ });
     }catch(e){show("تعذر تحميل الأكواد: "+e.message,false)}
   }
   function renderCodes(){
     var tb=$("codes-list");tb.replaceChildren();
     if(!state.codes.length){var tr=node("tr");var td=cell(tr,"لم يتم إصدار أكواد بعد");
-      td.colSpan=7;tb.appendChild(tr)}
+      td.colSpan=8;tb.appendChild(tr)}
     state.codes.forEach(function(code){
       var tr=node("tr");
-      cell(tr,code.label||"BLOFY");
+      cell(tr,(code.label||"BLOFY")+(code.channel==="app"?" · تطبيق فقط":" · Xtream"));
       cell(tr,code.codeHint||"مخفي");
       cell(tr,String(code.durationDays)+" يوم");
       var label=code.status==="unused"?"بانتظار التفعيل":
         code.status==="redeemed"?"تم التفعيل":"ملغى";
       var status=node("strong",label,code.status==="redeemed"?"ok":
         code.status==="unused"?"warn":"fail");cell(tr,status);
+      var sale=code.soldAt?(String((code.salePriceHalalas||0)/100)+" ر.س"):
+        "غير مسجل";
+      var buyer=node("div");
+      buyer.appendChild(node("div",sale,code.soldAt?"ok":"meta"));
+      if(code.buyerName)buyer.appendChild(node("div",code.buyerName,"meta"));
+      if(code.buyerPhone)buyer.appendChild(node("div",code.buyerPhone,"meta num"));
+      cell(tr,buyer);
       cell(tr,dateTime(code.redeemedAt));cell(tr,dateTime(code.expiresAt));
       var controls=node("div",undefined,"actions");
+      if(!code.soldAt&&code.status!=="revoked")
+        controls.appendChild(button("تسجيل بيع",async function(){
+          var price=prompt("السعر بالريال السعودي (تسجيل يدوي، لا يتم تحصيل مبلغ):","70");
+          if(price===null)return;
+          var normalized=String(price).trim().replace(",",".");
+          if(!/^\d+(\.\d{1,2})?$/.test(normalized)){
+            show("أدخل مبلغًا صحيحًا بالريال، حتى خانتين عشريتين.",false);return;
+          }
+          var buyerName=prompt("اسم العميل (اختياري):","");if(buyerName===null)return;
+          var buyerPhone=prompt("رقم الجوال اختياري، أرقام فقط (اتركه فارغًا):","");
+          if(buyerPhone===null)return;
+          try{await action("code/"+code.id+"/sell","code-sell",{
+            priceSar:Number(normalized),buyerName,buyerPhone,channel:"manual"
+          });show("تم تسجيل البيع اليدوي.",true);
+            await loadCodes(false)}catch(e){show("تعذر تسجيل البيع: "+e.message,false)}
+        }));
+      if(code.status==="redeemed")
+        controls.appendChild(button("تمديد",async function(){
+          var input=prompt("كم يومًا تضيف إلى الاشتراك؟ (1 إلى 730):","30");
+          if(input===null)return;
+          var days=Number(input);
+          if(!Number.isInteger(days)||days<1||days>730){
+            show("اختر مدة من يوم إلى 730 يومًا.",false);return;
+          }
+          if(!confirm("سيتم تمديد تاريخ انتهاء الاشتراك الحالي، دون بدء اشتراك جديد."))return;
+          try{
+            var d=await action("code/"+code.id+"/extend","code-extend",{days});
+            show("تم التمديد إلى "+dateTime(d.item?.expiresAt),true);
+            await loadCodes(false);await loadAccounts(false)
+          }catch(e){show("تعذر التمديد: "+e.message,false)}
+        }));
+      if(code.status==="redeemed"&&code.channel==="app"&&!code.deviceTransferPending)
+        controls.appendChild(button("نقل الجهاز",async function(){
+          if(!confirm("سيتم إلغاء وصول الجهاز الحالي فورًا، وإنشاء كود جديد للجهاز الآخر. المدة المتبقية لا تتغير. هل تتابع؟"))return;
+          try{
+            var d=await action("code/"+code.id+"/transfer","code-transfer",{});
+            var target=$("codes-issued");target.hidden=false;target.replaceChildren();
+            target.appendChild(node("strong","كود استعادة الجهاز الجديد — يظهر مرة واحدة"));
+            attachCopy(target,"الكود الجديد",d.code);
+            attachCopy(target,"ينتهي الاشتراك في",dateTime(d.expiresAt));
+            target.scrollIntoView({behavior:"smooth",block:"center"});
+            show("تم إلغاء جلسة الجهاز السابق. أعطِ العميل الكود الجديد.",true);
+            await loadCodes(false);
+          }catch(e){show("تعذر نقل الجهاز: "+e.message,false)}
+        },"danger"));
       if(code.status==="unused")
         controls.appendChild(button("إلغاء",async function(){
           if(!confirm("إلغاء هذا الكود غير المفعّل؟ لن يمكن استخدامه بعدها."))return;
@@ -540,7 +609,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
             show("تم إلغاء الكود.",true);await loadCodes(false)}
           catch(e){show("تعذر الإلغاء: "+e.message,false)}
         },"danger"));
-      else controls.appendChild(node("span","—","muted"));
+      if(controls.childNodes.length===0)controls.appendChild(node("span","—","muted"));
       cell(tr,controls);tb.appendChild(tr);
     });
     $("codes-pagination").textContent="المعروض "+state.codes.length+" كود";
@@ -555,8 +624,11 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       var d=await action("codes","code-issue",data);
       var target=$("codes-issued");target.hidden=false;target.replaceChildren();
       target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
-      var activation="https://blofyplayer.com/stream/activate";
-      attachCopy(target,"رابط تفعيل العميل",activation);
+      if(data.channel==="app"){
+        target.appendChild(node("div","هذه الأكواد للتفعيل من تطبيق BLOFY STREAM فقط. لا ترسل رابط صفحة تفعيل Xtream للعميل.","muted"));
+      } else {
+        attachCopy(target,"رابط تفعيل Xtream الخارجي","https://blofyplayer.com/stream/activate");
+      }
       (d.items||[]).forEach(function(item,index){
         attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
       });
