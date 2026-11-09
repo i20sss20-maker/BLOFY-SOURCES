@@ -176,3 +176,31 @@ test('shared source circuit and slow-viewer metrics are visible only in operator
     assert.doesNotThrow(()=>new Function(script[1]));
   });
 });
+
+test('premium operator UX preserves every workflow and is accessible on TV/mobile',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/class="quick-hero"/);
+    assert.match(html,/data-go="codes" data-focus="codes-label"/);
+    assert.match(html,/data-go="library" data-focus="library-source"/);
+    assert.match(html,/data-go="restream" data-focus="live-source"/);
+    assert.match(html,/data-go="diagnostics" data-focus="diagnostic-source"/);
+    assert.match(html,/id="command-palette"/);
+    assert.match(html,/id="command-search"/);
+    assert.match(html,/aria-keyshortcuts="Control\+K"/);
+    assert.match(html,/aria-pressed="false"/);
+    assert.match(html,/id="last-updated"/);
+    assert.match(html,/prefers-reduced-motion/);
+    assert.match(html,/code\.copyAvailable/);
+    assert.match(html,/id="library-review-run"/);
+    assert.match(html,/id="library-ai-run"/);
+    assert.match(html,/id="fanout-cooldowns"/);
+    assert.match(html,/timeZone:"Asia\/Riyadh"/);
+    assert.doesNotMatch(html,/https:\/\/fonts\./);
+    const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script,'nonce-bound operator script exists');
+    assert.doesNotThrow(()=>new Function(script[1]),'all dashboard JS remains valid');
+  });
+});
