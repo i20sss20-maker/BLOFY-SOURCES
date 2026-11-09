@@ -84,6 +84,11 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
   const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
+  function libraryAIScanProgress({sourceId,type}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
+    return call(ROOT+'/library-ai/scan-progress?'+new URLSearchParams({sourceId,type}));
+  }
   function libraryAIPublishStatus({sourceId}={}){
     if(!UUID.test(String(sourceId||'')))
       return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
@@ -188,5 +193,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
