@@ -15,7 +15,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+    const budget=path===ROOT+'/library-ai'&&method==='POST'?25000:timeoutMs;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
       const response=await fetchImpl(url,{
         method,redirect:'manual',signal:controller.signal,cache:'no-store',
