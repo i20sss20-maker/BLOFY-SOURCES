@@ -141,7 +141,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     const readable={
       '/operator/api/overview':()=>portal.overview(),
       '/operator/api/sources':()=>portal.sources(),
-      '/operator/api/accounts':()=>portal.accounts(),
+      '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
+      '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
       }),
@@ -154,6 +155,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         q:uri.searchParams.get('q')||'',offset:uri.searchParams.get('offset')||0
       })
     };
+    const detail=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/credentials$/i);
+    if(req.method==='GET'&&detail){
+      void portal.accountCredentials(detail[1]).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&readable[path]){
       void readable[path]().then(({status,body})=>json(res,status,body))
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
@@ -161,17 +168,22 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     if(req.method==='POST'&&path.startsWith('/operator/api/')){
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
-      const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable)$/i);
+      const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
+      const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/revoke$/i);
       const action=path==='/operator/api/sources'?'source-add':
         path==='/operator/api/accounts'?'account-add':
-        src?'source-'+src[2]:acc?'account-'+acc[2]:null;
+        path==='/operator/api/codes'?'code-issue':
+        src?'source-'+src[2]:acc?'account-'+acc[2]:code?'code-revoke':null;
       if(!action)return json(res,404,{ok:false,code:'route_not_found'}),true;
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
         if(action==='source-add')return portal.addSource(data);
         if(action==='account-add')return portal.addAccount(data);
+        if(action==='code-issue')return portal.issueCodes(data);
+        if(code)return portal.revokeCode(code[1]);
         if(src)return portal.sourceAction(src[1],src[2],data);
+        if(acc&&acc[2]==='reset')return portal.resetAccount(acc[1]);
         return portal.accountAction(acc[1],acc[2]);
       }).then(({status,body})=>json(res,status,body))
         .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,{

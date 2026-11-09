@@ -46,6 +46,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="navlink" data-tab="restream"><span>◉</span>إعادة البث</button>
 <button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
 <button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
+<button class="navlink" data-tab="codes"><span>▤</span>أكواد الاشتراك</button>
 <button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
 </nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
 </aside><div class="content">
@@ -154,8 +155,43 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="field"><label for="account-max">أقصى اتصالات</label><input id="account-max" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
 <div class="field"><label for="account-expire">تاريخ الانتهاء</label><input id="account-expire" name="expiresAt" type="date" required></div>
 </div><button class="btn" type="submit">إنشاء الحساب</button></form><div id="account-secret" class="accountsecret" hidden></div></div>
-<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3><button class="btn secondary sm" id="reload-accounts">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>العميل / المستخدم</th><th>المصدر</th><th>الصلاحية</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div></div></section>
+<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3>
+<div class="inline"><input id="account-search" placeholder="بحث باسم العميل أو اليوزر" aria-label="بحث المشتركين" style="max-width:270px">
+<select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
+<option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
+<button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
+<p class="muted">الهوست: <strong class="num">https://blofyplayer.com</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
+<div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
+<section class="view" id="page-codes">
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>مدة الكود لا تبدأ عند الإصدار. تبدأ عند أول تفعيل ناجح، ويُنشأ حساب Xtream تلقائيًا.</p></div>
+<a class="btn secondary" href="https://blofyplayer.com/stream/activate" target="_blank" rel="noopener noreferrer">صفحة تفعيل العميل ↗</a></div>
+<div class="cards" style="margin-bottom:15px">
+<div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
+<div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
+<div class="stat"><small>تم تفعيلها</small><strong id="codes-redeemed">—</strong></div>
+<div class="stat"><small>ملغاة</small><strong id="codes-revoked">—</strong></div></div>
+<div class="panel"><h3>إصدار أكواد جديدة</h3>
+<p class="muted">يمكن إصدار دفعة حتى 20 كودًا. أكواد الاشتراك تظهر كاملة مرة واحدة عند إنشائها فقط؛ لا تخزن بصيغتها الأصلية.</p>
+<form id="codes-form"><div class="formgrid">
+<div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
+<div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
+<option value="1">يوم</option><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option>
+<option value="90">3 أشهر (90 يومًا)</option><option value="180">6 أشهر (180 يومًا)</option>
+<option value="365">سنة (365 يومًا)</option><option value="730">سنتان (730 يومًا)</option></select></div>
+<div class="field"><label for="codes-quantity">عدد الأكواد</label><input id="codes-quantity" name="quantity" type="number" min="1" max="20" value="1" required></div>
+<div class="field"><label for="codes-source">المصدر</label><select id="codes-source" name="sourceId"><option value="">جميع المصادر المنشورة</option></select></div>
+<div class="field"><label for="codes-connections">أقصى الاتصالات</label><input id="codes-connections" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
+</div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
+<div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
+<div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>الوصف</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<tbody id="codes-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
+</div></section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -173,8 +209,8 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 "use strict";
 (function(){
   var $=function(id){return document.getElementById(id)};
-  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null,
+  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",diagnostics:"الفحص والصيانة"};
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
     vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
@@ -190,7 +226,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
     document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
     $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
-    if(id==="accounts")loadAccounts();window.scrollTo({top:0,behavior:"instant"});
+    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
   document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
@@ -220,9 +256,9 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   }
   function renderSources(){
     var sources=(state.overview&&state.overview.sources)||[];
-    ["stream-source","diagnostic-source","library-source","account-source","live-source","live-backup-source"].forEach(function(id){
-      select(id,id==="account-source"?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
-        id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
+    ["stream-source","diagnostic-source","library-source","account-source","codes-source","live-source","live-backup-source"].forEach(function(id){
+      select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
+        id==="library-source"?"جميع المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
     var tb=$("source-list");tb.replaceChildren();
     if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
@@ -345,35 +381,188 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   $("library-submit").addEventListener("click",function(){loadCatalog(false)});
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
-  async function loadAccounts(){try{var d=await api("accounts");state.accounts=d.items||[];var tb=$("account-list");tb.replaceChildren();
-    if(!state.accounts.length){var tr=node("tr");var td=cell(tr,"لا توجد حسابات");td.colSpan=4;tb.appendChild(tr)}
-    state.accounts.forEach(function(a){var tr=node("tr");
-      var identity=node("div");identity.appendChild(node("div",a.label,"name"));
-      identity.appendChild(node("div",a.username,"meta"));cell(tr,identity);
-      var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===a.sourceId});
-      cell(tr,src?src.name:a.sourceId||"المصادر المنشورة");
-      var expiry=a.expiresAt?new Date(a.expiresAt).toLocaleDateString("ar-SA"):"بدون انتهاء";
-      cell(tr,(a.enabled?"مفعل · ":"موقوف · ")+expiry+" · "+a.maxConnections+" اتصال");
-      var ctl=node("div",undefined,"actions");ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
-        if(!confirm("تأكيد تغيير حالة المشترك؟"))return;
-        try{await action("account/"+a.id+"/"+(a.enabled?"disable":"enable"),"account-"+(a.enabled?"disable":"enable"),{});
-          show("تم تحديث حساب المشترك.",true);await loadAccounts();}
-        catch(e){show("تعذر تحديث الحساب: "+e.message,false)}
-      },a.enabled?"danger":"secondary"));cell(tr,ctl);tb.appendChild(tr);
+  function dateTime(value){
+    if(!value)return "—";
+    return new Date(value).toLocaleString("en-GB",{timeZone:"Asia/Riyadh",
+      year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  }
+  function attachCopy(target,label,data){
+    var line=node("div",undefined,"row");var title=node("span",label,"muted");
+    var val=node("strong",data||"—","num");val.style.maxWidth="65%";val.style.overflowWrap="anywhere";
+    line.appendChild(title);line.appendChild(val);
+    if(data){line.appendChild(button("نسخ",async function(){
+      try{await navigator.clipboard.writeText(String(data));show("تم النسخ.",true)}
+      catch{show("حدد النص وانسخه يدويًا.",false)}
+    }));}
+    target.appendChild(line);
+  }
+  function showCredentials(target,creds,label){
+    target.hidden=false;target.replaceChildren();
+    target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
+    var host=creds.serverUrl||"https://blofyplayer.com";
+    var m3u=creds.m3uUrl||(
+      host+"/get.php?"+new URLSearchParams({username:creds.username||"",
+      password:creds.password||"",type:"m3u_plus",output:"ts"}).toString());
+    attachCopy(target,"الهوست",host);
+    attachCopy(target,"اليوزر",creds.username||"");
+    attachCopy(target,"الباسورد (يظهر مرة واحدة)",creds.password||"");
+    attachCopy(target,"M3U",creds.password?m3u:"");
+  }
+  function renderAccounts(){
+    var tb=$("account-list");tb.replaceChildren();
+    var q=$("account-search").value.trim().toLowerCase();
+    var filter=$("account-status-filter").value;
+    var selected=state.accounts.filter(function(a){
+      return (!filter||a.status===filter)&&
+        (!q||[a.label,a.username,a.sourceName,a.sourceId].some(function(v){return String(v||"").toLowerCase().includes(q)}));
     });
-  }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}}
-  $("reload-accounts").addEventListener("click",loadAccounts);
-  $("toggle-account-form").addEventListener("click",function(){$("account-form-panel").hidden=!$("account-form-panel").hidden;
-    $("account-secret").hidden=true});
-  $("account-form").addEventListener("submit",async function(e){e.preventDefault();
-    var data=Object.fromEntries(new FormData(this));var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
-    try{var result=await action("accounts","account-add",data);
+    if(!selected.length){var tr=node("tr");var empty=cell(tr,"لا توجد حسابات مطابقة");empty.colSpan=6;tb.appendChild(tr);}
+    selected.forEach(function(a){
+      var tr=node("tr"),who=node("div");
+      who.appendChild(node("div",a.label,"name"));
+      who.appendChild(node("div",a.username,"meta num"));cell(tr,who);
+      cell(tr,a.sourceName||a.sourceId||"جميع المصادر");
+      var status=a.status==="active"?"ساري":a.status==="expired"?"منتهي":"موقوف";
+      var line=node("div");line.appendChild(node("strong",status,
+        a.status==="active"?"ok":a.status==="expired"?"fail":"warn"));
+      line.appendChild(node("div",String(a.maxConnections||1)+" اتصال"+
+        (a.durationDays?" · "+a.durationDays+" يوم":" · اشتراك يدوي"),"meta"));
+      cell(tr,line);
+      var dates=node("div");
+      dates.appendChild(node("div","بدأ: "+dateTime(a.activatedAt||a.createdAt),"meta"));
+      dates.appendChild(node("div","ينتهي: "+dateTime(a.expiresAt),"meta"));
+      if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
+      cell(tr,dates);
+      var urls=node("div");
+      urls.appendChild(node("div","https://blofyplayer.com","meta num"));
+      urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
+      urls.appendChild(button("نسخ الهوست",function(){
+        navigator.clipboard.writeText("https://blofyplayer.com")
+          .then(function(){show("تم نسخ الهوست.",true)})
+          .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
+      }));
+      cell(tr,urls);
+      var ctl=node("div",undefined,"actions");
+      ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
+        if(!confirm("هل تريد تغيير حالة هذا المشترك؟"))return;
+        try{await action("account/"+a.id+"/"+(a.enabled?"disable":"enable"),
+          "account-"+(a.enabled?"disable":"enable"),{});
+          show("تم تحديث المشترك.",true);await loadAccounts(false)}
+        catch(e){show("تعذر تحديث المشترك: "+e.message,false)}
+      },a.enabled?"danger":"secondary"));
+      ctl.appendChild(button("عرض بيانات الدخول",async function(){
+        try{
+          var d=await api("account/"+a.id+"/credentials");
+          if(!d.credentials||!d.credentials.password)throw Error("لا توجد بيانات محفوظة");
+          showCredentials($("account-detail"),d.credentials,
+            "بيانات "+a.username+" — الهوست واليوزر والباسورد وM3U");
+          $("account-detail").scrollIntoView({behavior:"smooth",block:"center"});
+        }catch(e){show(a.passwordAvailable?
+          "تعذر عرض البيانات: "+e.message:
+          "هذا الحساب قديم ولم تُحفظ كلمة مروره. استخدم إعادة تعيين الباسورد إذا رغبت في بيانات جديدة.",false)}
+      }));
+      ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
+        if(!confirm("سيتم إلغاء كلمة المرور القديمة فورًا! هل أنت متأكد؟"))return;
+        try{var d=await action("account/"+a.id+"/reset","account-reset",{});
+          if(!d.credentials||!d.credentials.password)throw Error("لا توجد بيانات جديدة");
+          showCredentials($("account-detail"),d.credentials,
+            "بيانات "+a.username+" الجديدة — احفظها وشاركها مع العميل مرة واحدة");
+          $("account-detail").scrollIntoView({behavior:"smooth",block:"center"});
+          show("تم تعيين كلمة مرور جديدة. لم تعد القديمة تعمل.",true)}
+        catch(e){show("تعذر إعادة التعيين: "+e.message,false)}
+      }));
+      cell(tr,ctl);tb.appendChild(tr);
+    });
+    $("accounts-pagination").textContent="المعروض "+state.accounts.length+" من "+(state.accountsTotal||state.accounts.length);
+    $("accounts-next").hidden=state.accountsNext===null;
+  }
+  async function loadAccounts(more){
+    try{
+      var offset=more?state.accountsNext||0:0;
+      var d=await api("accounts?offset="+offset);
+      state.accounts=more?state.accounts.concat(d.items||[]):d.items||[];
+      state.accountsNext=d.nextOffset===undefined?null:d.nextOffset;
+      state.accountsTotal=d.total;
+      renderAccounts();
+    }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}
+  }
+  $("reload-accounts").addEventListener("click",function(){loadAccounts(false)});
+  $("accounts-next").addEventListener("click",function(){loadAccounts(true)});
+  $("account-search").addEventListener("input",renderAccounts);
+  $("account-status-filter").addEventListener("change",renderAccounts);
+  $("toggle-account-form").addEventListener("click",function(){
+    $("account-form-panel").hidden=!$("account-form-panel").hidden;
+    $("account-secret").hidden=true;
+  });
+  $("account-form").addEventListener("submit",async function(e){
+    e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
+    try{
+      var result=await action("accounts","account-add",data);
       var credentials=result.credentials||{};
-      $("account-secret").hidden=false;
-      $("account-secret").textContent="تم إنشاء الحساب. احفظ البيانات الآن لأنها لن تظهر ثانية: \\nالسيرفر: "+
-        (credentials.serverUrl||"") + "\\nالمستخدم: "+(credentials.username||"")+"\\nكلمة المرور: "+(credentials.password||"");
-      this.reset();show("تم إنشاء حساب حقيقي.",true);await loadAccounts();
+      showCredentials($("account-secret"),credentials,
+        "تم إنشاء الحساب. احفظ بيانات الهوست واليوزر والباسورد وM3U الآن.");
+      this.reset();show("تم إنشاء حساب حقيقي.",true);await loadAccounts(false);
     }catch(err){show("تعذر إنشاء الحساب: "+err.message,false)}
+    finally{submit.disabled=false}
+  });
+  async function loadCodes(more){
+    try{
+      var offset=more?state.codesNext||0:0;
+      var d=await api("codes?offset="+offset);
+      state.codes=more?state.codes.concat(d.items||[]):d.items||[];
+      state.codesNext=d.nextOffset===undefined?null:d.nextOffset;
+      var totals=d.totals||{};
+      value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
+      value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
+      renderCodes();
+    }catch(e){show("تعذر تحميل الأكواد: "+e.message,false)}
+  }
+  function renderCodes(){
+    var tb=$("codes-list");tb.replaceChildren();
+    if(!state.codes.length){var tr=node("tr");var td=cell(tr,"لم يتم إصدار أكواد بعد");
+      td.colSpan=7;tb.appendChild(tr)}
+    state.codes.forEach(function(code){
+      var tr=node("tr");
+      cell(tr,code.label||"BLOFY");
+      cell(tr,code.codeHint||"مخفي");
+      cell(tr,String(code.durationDays)+" يوم");
+      var label=code.status==="unused"?"بانتظار التفعيل":
+        code.status==="redeemed"?"تم التفعيل":"ملغى";
+      var status=node("strong",label,code.status==="redeemed"?"ok":
+        code.status==="unused"?"warn":"fail");cell(tr,status);
+      cell(tr,dateTime(code.redeemedAt));cell(tr,dateTime(code.expiresAt));
+      var controls=node("div",undefined,"actions");
+      if(code.status==="unused")
+        controls.appendChild(button("إلغاء",async function(){
+          if(!confirm("إلغاء هذا الكود غير المفعّل؟ لن يمكن استخدامه بعدها."))return;
+          try{await action("code/"+code.id+"/revoke","code-revoke",{});
+            show("تم إلغاء الكود.",true);await loadCodes(false)}
+          catch(e){show("تعذر الإلغاء: "+e.message,false)}
+        },"danger"));
+      else controls.appendChild(node("span","—","muted"));
+      cell(tr,controls);tb.appendChild(tr);
+    });
+    $("codes-pagination").textContent="المعروض "+state.codes.length+" كود";
+    $("codes-next").hidden=state.codesNext===null;
+  }
+  $("reload-codes").addEventListener("click",function(){loadCodes(false)});
+  $("codes-next").addEventListener("click",function(){loadCodes(true)});
+  $("codes-form").addEventListener("submit",async function(e){
+    e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
+    try{
+      var d=await action("codes","code-issue",data);
+      var target=$("codes-issued");target.hidden=false;target.replaceChildren();
+      target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
+      var activation="https://blofyplayer.com/stream/activate";
+      attachCopy(target,"رابط تفعيل العميل",activation);
+      (d.items||[]).forEach(function(item,index){
+        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
+      });
+      show("تم إصدار "+(d.items||[]).length+" كود. مدتها لم تبدأ بعد.",true);
+      await loadCodes(false);
+    }catch(e){show("تعذر إصدار الأكواد: "+e.message,false)}
     finally{submit.disabled=false}
   });
   async function probeFrom(sourceId,type,output){

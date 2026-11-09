@@ -39,7 +39,33 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const overview=()=>call(ROOT+'/overview');
   const sources=()=>call(ROOT+'/overview');
-  const accounts=()=>call(ROOT+'/accounts');
+  const accounts=({offset=0}={})=>call(ROOT+'/accounts?'+
+    new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
+  const codes=({offset=0}={})=>call(ROOT+'/codes?'+
+    new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
+  function issueCodes(data){
+    return call(ROOT+'/codes',{method:'POST',body:{
+      label:String(data.label||'BLOFY STREAM').slice(0,100),
+      durationDays:Number(data.durationDays),quantity:Number(data.quantity)||1,
+      maxConnections:Number(data.maxConnections)||1,
+      sourceId:data.sourceId||null
+    }});
+  }
+  function revokeCode(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_code_id'}});
+    return call(ROOT+'/codes/'+id+'/revoke',{method:'POST',body:{}});
+  }
+  function accountCredentials(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/credentials');
+  }
+  function resetAccount(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/reset',{method:'POST',body:{}});
+  }
   function catalog({type,serverId='',q='',offset=0}={}){
     if(!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_media_type'}});
@@ -104,5 +130,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
