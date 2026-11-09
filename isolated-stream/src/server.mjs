@@ -53,6 +53,7 @@ export function createStreamServer({
   relayLookup=undefined,
   relayRedirectSourceOrigin='',
   relayFirstByteTimeoutMs=12000,
+  sharedLiveEnabled=false,
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -63,7 +64,7 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs});
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled});
   const sourceDiagnostic=createCrossProjectSourceDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
@@ -211,6 +212,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     engineUrl:process.env.BLOFY_RESTREAM_ENGINE_URL||DEFAULT_ENGINE,
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
+    sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
     diagnosticAllowedOrigin:process.env.BLOFY_STREAM_DIAGNOSTIC_ALLOW_ORIGIN||'',
     port:process.env.PORT||3000,
