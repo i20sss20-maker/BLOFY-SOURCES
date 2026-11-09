@@ -187,6 +187,20 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
+<div class="panel" id="auto-health-panel">
+<div class="controls"><div><h3>🛡 BLOFY AUTO HEALTH</h3><p class="muted">مراقبة مسارات إعادة البث التابعة للمشرف فقط. لا يتضمن التشغيل العادي للعملاء.</p></div>
+<button class="btn secondary" id="auto-health-refresh" type="button">↻ تحديث الحالة</button></div>
+<div class="inline"><span class="pill" id="auto-health-status">جار الفحص</span>
+<span class="pill">مسارات: <strong id="auto-health-total">—</strong></span>
+<span class="pill">عينة ناجحة: <strong id="auto-health-good">—</strong></span>
+<span class="pill">عينة فاشلة: <strong id="auto-health-bad">—</strong></span>
+<span class="pill">غير مفحوص/قديم: <strong id="auto-health-unknown">—</strong></span></div>
+<p id="auto-health-mode" class="muted">لا نعيد الاتصال بالمصدر تلقائيًا إلا بإعداد اختياري.</p>
+<div class="grid"><div><h3>حالة المسارات</h3><div class="tablewrap">
+<table><thead><tr><th>القناة</th><th>الفحص</th><th>البديل</th></tr></thead><tbody id="auto-health-paths"></tbody></table>
+</div></div><div><h3>آخر أحداث الصحة</h3><div class="tablewrap">
+<table><thead><tr><th>الوقت</th><th>المسار</th><th>الحدث</th></tr></thead><tbody id="auto-health-events"></tbody></table>
+</div></div></div></div>
 <div class="panel"><h3>فحص تشغيل المصدر</h3><p class="muted">اختبار طلبات وسائط حقيقية من مزودك، وليس مجرد اتصال API. نجاح العينة لا يعني نجاح كل المحتوى.</p>
 <div class="inline"><select id="stream-source" aria-label="المصدر"></select>
 <select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -1178,6 +1192,42 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     });
   }
   var liveProbeRefresh=null;
+  async function loadAutoHealth(){
+    try{
+      var d=await api("auto-health");
+      value("auto-health-status",d.ok?(d.checkedAt?"المراقبة تعمل":"جار بدء المراقبة"):"الحالة غير متاحة");
+      value("auto-health-total",count(d.totals?.paths));
+      value("auto-health-good",count(d.totals?.healthy));
+      value("auto-health-bad",count(d.totals?.failed));
+      value("auto-health-unknown",count((d.totals?.untested||0)+(d.totals?.stale||0)+(d.totals?.warning||0)));
+      value("auto-health-mode",d.recoveryProbeEnabled?
+        "مسموح بإعادة فحص مسار واحد عند تكرر فشل عينة HLS، بشرط وجود مصدر احتياطي، وبدون تغيير تشغيل العملاء.":
+        "مراقبة دورية للبيانات فقط؛ بدون اتصالات مصدر جديدة أو تعديل اشتراكات العملاء.");
+      var l=$("auto-health-paths");l.replaceChildren();
+      var statuses={healthy:"نجحت عينة HLS",failed:"فشلت عينة HLS",checking:"الفحص جار",
+        stale:"نتيجة قديمة",untested:"لم يُختبر",warning:"تعثر سحب المصدر"};
+      (d.paths||[]).forEach(function(item){
+        var tr=node("tr"),description=node("div");
+        description.appendChild(node("div",item.title||item.path,"name"));
+        description.appendChild(node("small",item.path,"meta"));
+        cell(tr,description);
+        cell(tr,node("span",statuses[item.status]||"غير معروف",
+          item.status==="healthy"?"ok":item.status==="failed"?"fail":"warn"));
+        cell(tr,item.backupConfigured?"متوفر":"غير محدد");l.appendChild(tr);
+      });
+      if(!(d.paths||[]).length){var tr=node("tr"),td=cell(tr,"لا توجد مسارات مراقبة حتى الآن.");td.colSpan=3;l.appendChild(tr);}
+      var log=$("auto-health-events");log.replaceChildren();
+      var kinds={transport_failure:"تعثر النقل",transport_restored:"استعادة عينة HLS",
+        controlled_reprobe_requested:"إعادة فحص محدودة",reprobe_unavailable:"فشل إعادة الفحص"};
+      (d.events||[]).slice(0,24).forEach(function(ev){
+        var tr=node("tr");
+        cell(tr,Number.isFinite(ev.at)?new Date(ev.at).toLocaleTimeString("en-GB",{timeZone:"Asia/Riyadh"}):"—");
+        cell(tr,ev.path);cell(tr,kinds[ev.kind]||"تحديث الحالة");log.appendChild(tr);
+      });
+      if(!(d.events||[]).length){var tr=node("tr"),td=cell(tr,"لا توجد أحداث خلال عمر هذه النسخة.");td.colSpan=3;log.appendChild(tr);}
+    }catch(e){value("auto-health-status","غير متاح");value("auto-health-mode","تعذر قراءة التقرير: "+e.message)}
+  }
+  $("auto-health-refresh").addEventListener("click",loadAutoHealth);
   async function loadLive(){
     if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
     try{
@@ -1239,8 +1289,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth()}},60000);
 })();
 </script>
 </body></html>`;
