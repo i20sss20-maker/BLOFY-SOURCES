@@ -264,7 +264,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <textarea id="library-ai-command" rows="3" maxlength="480" style="width:100%;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--font);font:inherit" placeholder="مثلاً: نظّم أقسام القنوات وخلي الرياضة والأخبار أولاً، ثم اعرض لي الخطة"></textarea>
 <div class="actions">
 <button class="btn" type="button" id="library-ai-chat-send">ارسل إلى AI</button>
-<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر ترتيب الأقسام</button>
+<button class="btn secondary" type="button" id="library-ai-item-next" disabled>تصنيف الدفعة التالية (12 عنصرًا)</button>
+<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر التعديلات المحددة</button>
 </div>
 <p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
 <div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
@@ -666,6 +667,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   });
   var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
   var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
+  var libraryAIItemOffset=0,libraryAIItemNextOffset=null,libraryAILastItemPrompt='';
   function libraryChatLine(who,text){
     var box=$("library-ai-chat-history");
     var line=node("p",(who==="me"?"أنت: ":"BLOFY AI: ")+String(text||"").slice(0,650));
@@ -685,6 +687,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
     $("library-ai-chat-preview").replaceChildren();
+    if(message!==libraryAILastItemPrompt){libraryAIItemOffset=0;libraryAIItemNextOffset=null;}
+    $("library-ai-item-next").disabled=true;
     if(message.length<4||message.length>480){
       $("library-ai-chat-status").textContent="اكتب طلبًا واضحًا من 4 إلى 480 حرفًا.";return;
     }
@@ -696,18 +700,41 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     libraryChatLine("me",message);
     try{
       var result=await action("library-ai/chat","library-ai-chat",{
-        sourceId,type,message,history:libraryAIUserHistory.slice(-4)});
+        sourceId,type,message,history:libraryAIUserHistory.slice(-4),
+        offset:libraryAIItemOffset});
       libraryAIUserHistory.push(message);
       if(libraryAIUserHistory.length>4)libraryAIUserHistory.shift();
       libraryChatLine("ai",result.reply||"تم تحليل الطلب.");
+      if(result.action==="classify_items"){
+        libraryAILastItemPrompt=message;
+        libraryAIItemNextOffset=Number.isInteger(result.nextOffset)?result.nextOffset:null;
+        $("library-ai-item-next").disabled=libraryAIItemNextOffset===null;
+      }else{
+        libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+        $("library-ai-item-next").disabled=true;
+      }
       if(result.requiresApproval&&result.planId){
         libraryAIProposedPlan={id:result.planId,sourceId,type,summary:result.summary};
         $("library-ai-chat-apply").disabled=false;
         var review=$("library-ai-chat-preview");review.replaceChildren();
+        var assignments=Array.isArray(result.itemAssignments)?result.itemAssignments:[];
+        if(assignments.length){
+          var heading=document.createElement("strong");
+          heading.textContent="مراجعة نقل العناصر إلى فئات موجودة، ثقة مرتفعة فقط:";
+          review.appendChild(heading);
+          assignments.slice(0,12).forEach(function(x){
+            var item=document.createElement("p");
+            item.textContent=String(x.title||"")+" ← "+String(x.newCategoryName||"")+
+              " · "+String(x.reason||"");
+            review.appendChild(item);
+          });
+        }
         var beforeAfter=Array.isArray(result.proposedChanges)?result.proposedChanges:[];
         var categories=Array.isArray(result.categoryPreview)?result.categoryPreview:[];
         var complete=Array.isArray(result.fullCatalogPreview)?result.fullCatalogPreview:[];
-        if(complete.length){
+        if(assignments.length){
+          // Moves are displayed above; do not display any unrelated sorting preview.
+        }else if(complete.length){
           var head=document.createElement("strong");
           head.textContent="معاينة ترتيب الأقسام لجميع الأنواع الثلاثة:";
           review.appendChild(head);
@@ -754,6 +781,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       $("library-ai-chat-status").textContent="تعذر تحليل الطلب: "+e.message;
     }finally{libraryAIChatBusy=false;this.disabled=false;}
   });
+  $("library-ai-item-next").addEventListener("click",function(){
+    if(libraryAIChatBusy||libraryAIItemNextOffset===null)return;
+    libraryAIItemOffset=libraryAIItemNextOffset;
+    $("library-ai-command").value=libraryAILastItemPrompt;
+    $("library-ai-chat-send").click();
+  });
   $("library-ai-chat-apply").addEventListener("click",async function(){
     if(!libraryAIProposedPlan||libraryAIChatBusy)return;
     var plan=libraryAIProposedPlan;
@@ -770,18 +803,22 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var r=await action("library-ai/apply","library-ai-apply",{planId:plan.id,approve:true});
       libraryChatLine("ai","تم تطبيق الترتيب في السيرفر. تحديث القوائم عند العملاء يحتاج إعادة جلبها من التطبيق؛ لم تُرسل إشعارات دفع للأجهزة.");
       $("library-ai-chat-status").textContent=r.changedOnServer?
-        "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناوين تم تنظيفها: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
+        "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناصر نقلت: "+count(r.movedItems||0)+"، عناوين نظفت: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
         "تعذر إثبات حفظ التغيير.";
     }catch(e){
       $("library-ai-chat-status").textContent="لم يُنشر التغيير: "+e.message;
     }finally{libraryAIChatBusy=false;}
   });
   $("library-ai-source").addEventListener("change",function(){
+    libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+    $("library-ai-item-next").disabled=true;
     libraryAIProposedPlan=null;libraryAIUserHistory=[];
     $("library-ai-chat-apply").disabled=true;
     $("library-ai-chat-preview").replaceChildren();
   });
   $("library-type").addEventListener("change",function(){
+    libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+    $("library-ai-item-next").disabled=true;
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
   });
 
