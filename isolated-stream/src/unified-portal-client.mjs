@@ -15,7 +15,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=(path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test')&&method==='POST'?25000:timeoutMs;
+    const budget=(path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
       const response=await fetchImpl(url,{
@@ -84,6 +84,18 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
   const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
+  function libraryAIChat({sourceId,type,message}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
+       typeof message!=='string'||message.trim().length<4||message.length>480)
+      return Promise.resolve({status:400,body:{ok:false,code:'ai_instruction_invalid'}});
+    return call(ROOT+'/library-ai/chat',{method:'POST',body:{sourceId,type,message}});
+  }
+  function libraryAIApply({planId,approve}={}){
+    if(typeof planId!=='string'||!/^[0-9a-f]{48}$/.test(planId)||approve!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_approval_invalid'}});
+    return call(ROOT+'/library-ai/apply',{method:'POST',body:{planId,approve:true}});
+  }
+
   function libraryAISuggest({sourceId,type,offset=0}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
       !Number.isInteger(offset)||offset<0||offset>40000||offset%12!==0)
@@ -163,5 +175,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
