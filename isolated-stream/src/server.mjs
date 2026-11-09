@@ -102,6 +102,7 @@ export function createStreamServer({
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,
+    sharedRelayStats:()=>relayBroker.stats(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
