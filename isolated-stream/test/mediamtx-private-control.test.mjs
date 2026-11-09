@@ -27,7 +27,7 @@ test('MediaMTX overview is real and redacts provider URLs and passwords',async()
         {name:'blofy-demo',ready:false,readers:[]}],
       itemCount:2
     });
-    if(String(url).endsWith('/v3/hls/sessions/list'))return reply(200,{items:[{}],itemCount:1});
+    if(String(url).endsWith('/v3/hls/sessions/list'))return reply(200,{items:[{path:'smoke'}],itemCount:1});
     if(String(url).endsWith('/v3/config/paths/get/blofy-demo'))return reply(200,{source:'rtsp://127.0.0.1:8554/smoke'});
     throw Error('unexpected operation');
   };
@@ -37,6 +37,7 @@ test('MediaMTX overview is real and redacts provider URLs and passwords',async()
   assert.equal(state.readyPaths,1);
   assert.equal(state.hlsSessions,1);
   assert.deepEqual(state.paths.map(x=>x.name),['smoke','blofy-demo']);
+  assert.deepEqual(state.paths.map(x=>x.hlsViewers),[0,0]);
   assert.equal(JSON.stringify(state).includes('secret'),false);
   assert.ok(seen.every(x=>x.url.startsWith(origin+'/v3/')&&x.authorization===auth));
   assert.equal(state.customerTrafficEnabled,false);
@@ -81,4 +82,29 @@ test('media API auth failure does not produce invented counters',async()=>{
   assert.equal(info.readyPaths,null);
   assert.equal(info.diagnostics,'mediamtx_auth_failed');
   assert.equal((await client.demoAction('start')).status,503);
+});
+
+test('per-path HLS viewer counts are aggregated without exposing IDs or tokens',async()=>{
+  const fetchImpl=async url=>{
+    if(String(url).endsWith('/v3/info'))return reply(200,{version:'1.19.2'});
+    if(String(url).endsWith('/v3/paths/list'))return reply(200,{
+      items:[{name:'live-abcdef123456',ready:true,readers:[{}]},
+        {name:'live-abcdef123457',ready:true,readers:[]}],itemCount:2
+    });
+    if(String(url).endsWith('/v3/hls/sessions/list'))return reply(200,{
+      items:[
+        {path:'live-abcdef123456',id:'sensitive-session-one',remoteAddr:'127.0.0.1'},
+        {pathName:'live-abcdef123456',id:'sensitive-session-two'},
+        {path:'live-abcdef123457',id:'sensitive-session-three'}
+      ],itemCount:3
+    });
+    throw Error('unexpected path');
+  };
+  const state=await createMediaControlClient({
+    fetchImpl,username:'blofy-control',password
+  }).overview();
+  assert.equal(state.hlsSessions,3);
+  assert.deepEqual(state.paths.map(x=>x.hlsViewers),[2,1]);
+  assert.equal(JSON.stringify(state).includes('sensitive-session'),false);
+  assert.equal(JSON.stringify(state).includes('remoteAddr'),false);
 });
