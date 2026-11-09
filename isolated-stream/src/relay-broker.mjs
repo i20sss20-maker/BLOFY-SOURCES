@@ -67,6 +67,13 @@ export function createRelayBroker({
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
   const tickets=new Map();
+  // Aggregate sanitized failure reasons only: no ticket IDs, provider
+  // hostnames, source credentials or customer IPs appear in the counters.
+  const failureCounts=Object.create(null);
+  const failRelay=(res,code,extra={})=>{
+    failureCounts[code]=(failureCounts[code]||0)+1;
+    return respond(res,502,{ok:false,code,...extra});
+  };
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
@@ -130,7 +137,7 @@ export function createRelayBroker({
     if(row.uses>=5)tickets.delete(match[1]);
     if(row.sharedLive){
       try{return await fanout.handle(req,res,row.sourceUrl)}
-      catch{return respond(res,502,{ok:false,code:'relay_provider_unavailable'})}
+      catch{return failRelay(res,'relay_provider_unavailable')}
     }
     const controller=new AbortController();
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
@@ -189,8 +196,8 @@ export function createRelayBroker({
       if(!ready||!(upstream.ok||upstream.status===206)){
         await upstream?.body?.cancel().catch(()=>{});
         const upstreamStatus=Number.isInteger(upstream?.status)?upstream.status:null;
-        return respond(res,502,{ok:false,
-          code:upstreamStatus===404?'relay_provider_not_found':'relay_provider_unavailable',
+        return failRelay(res,upstreamStatus===404?'relay_provider_not_found':
+          'relay_provider_unavailable',{
           upstreamStatus:upstreamStatus>=100&&upstreamStatus<=599?upstreamStatus:null});
       }
       const mime=upstream.headers.get('content-type')||'';
@@ -213,7 +220,7 @@ export function createRelayBroker({
       finally{clearTimeout(firstByteTimer)}
       if(first.done||!inspect(first.value,mime,row.kind)){
         await reader.cancel().catch(()=>{});
-        return respond(res,502,{ok:false,code:'relay_not_playable_media'});
+        return failRelay(res,'relay_not_playable_media');
       }
       res.writeHead(upstream.status,permittedReturnHeaders(upstream));
       const generator=Readable.from((async function*(){
@@ -237,7 +244,9 @@ export function createRelayBroker({
           'relay_transport_connection_reset':
         ['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT'].includes(transportCode)?
           'relay_transport_timeout':'relay_provider_unavailable';
-      if(!res.headersSent)return respond(res,502,{ok:false,code});
+      if(!res.headersSent)return failRelay(res,code);
+      failureCounts.relay_interrupted_after_start=
+        (failureCounts.relay_interrupted_after_start||0)+1;
       if(!res.destroyed)res.destroy();
     }finally{
       req.off('aborted',onAborted);res.off('close',onClose);
@@ -246,5 +255,7 @@ export function createRelayBroker({
     }
   }
   return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size,
-    sharedLiveEnabled,fanout:fanout.stats()})};
+    sharedLiveEnabled,fanout:fanout.stats(),
+    relayFailureTotal:Object.values(failureCounts).reduce((a,b)=>a+b,0),
+    relayFailureCounts:{...failureCounts}})};
 }
