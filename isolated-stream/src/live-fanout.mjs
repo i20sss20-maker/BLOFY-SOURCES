@@ -87,8 +87,12 @@ export function createLiveFanout({
     }
   }
   async function handle(req,res,sourceUrl){
+    if(req.method==='HEAD'){
+      res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
+        'x-content-type-options':'nosniff'});res.end();return;
+    }
     if(req.method!=='GET'){
-      res.writeHead(405,{allow:'GET'});res.end();return;
+      res.writeHead(405,{allow:'GET, HEAD'});res.end();return;
     }
     const url=await assertPublicMediaUrl(sourceUrl,{lookup});
     const key=keyOf(url.href);
