@@ -37,6 +37,91 @@ input,select{border:1px solid #405a7e;background:#0c1b2e;color:#edf4ff;border-ra
 footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:740px){.layout{display:block}aside{position:static;height:auto;padding:10px 12px;border-left:0;border-bottom:1px solid var(--border)}.logo{margin:0 0 12px}.logo-icon{width:39px;height:39px;font-size:19px}nav{display:flex;overflow:auto;gap:5px}.navlink{flex:0 0 auto;width:auto;padding:7px 10px;white-space:nowrap}.navtitle,.navfoot{display:none}.top{height:auto;min-height:60px;padding:12px 15px}.top p{display:none}main{padding:17px 13px}.heading h2{font-size:22px}.formgrid{grid-template-columns:1fr}.stat{padding:12px}.stat strong{font-size:22px}}
+
+/* BLOFY STREAM premium control-room layer; no remote fonts or third-party scripts. */
+:root{--bg:#070a16;--aside:#0b1020;--panel:#12192c;--panel2:#182239;--border:#303a59;--font:#f4f3ff;--muted:#b4bbd5;--purple:#bd9cfb;--green:#6be5bb;--red:#ffa0aa;--amber:#ffda88}
+html{scroll-behavior:smooth}body{
+ background:radial-gradient(ellipse 70% 55% at 85% -15%,#31244d 0%,transparent 65%),
+ radial-gradient(ellipse 50% 45% at 8% 95%,#143349 0%,transparent 68%),var(--bg);
+ background-attachment:fixed;letter-spacing:.03px}
+.layout{grid-template-columns:258px minmax(0,1fr)}
+aside{background:linear-gradient(160deg,#10172b,#0a1020 70%);border-left-color:#323457;padding:26px 17px;box-shadow:-10px 0 46px #0507154d;z-index:5}
+.logo{margin:0 4px 33px}.logo-icon{width:54px;height:54px;transform:none;border-radius:19px;background:linear-gradient(140deg,#e0bbff 0%,#9665e1 48%,#4e60a9 100%);color:#100d22;box-shadow:0 8px 32px #8a63c15c, inset 0 1px #ffffff70}
+.logo strong{font-size:20px;letter-spacing:.7px}.logo strong b{color:#c3a5ff}.logo small{font-size:11px;letter-spacing:.3px}
+.navtitle{color:#9ca8c7;text-transform:uppercase}
+nav{gap:7px}.navlink{border-radius:13px;padding:12px 13px;transition:background .15s,border-color .15s,transform .15s;color:#bcc3df}
+.navlink.active{background:linear-gradient(110deg,#674a9b77,#39335b66);color:#fff;border-color:#9c75df77;box-shadow:inset -3px 0 #c7a6ff,0 5px 20px #1b13302d}
+.navlink:hover{background:#252f4b;transform:translateX(-2px)}
+.navfoot{color:#a0a9c3;border-top-color:#313955}
+.top{position:sticky;top:0;z-index:4;min-height:81px;height:auto;background:#0b1022e8;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-color:#303856;padding:16px 32px}
+.top h1{font-size:21px;font-weight:800}.top p{color:#aab3d2}
+.top .tools{justify-content:flex-end}
+main{padding:32px clamp(16px,3vw,45px) 68px;max-width:1800px}
+.heading{margin-bottom:23px}.heading h2{font-size:clamp(24px,2.2vw,32px);letter-spacing:-.5px}
+.heading p{font-size:13px}
+.cards{gap:17px;margin-bottom:20px}
+.stat{position:relative;overflow:hidden;border:1px solid #55547766;border-bottom:1px solid #55547766;background:linear-gradient(136deg,#20223a 0%,#101b30 100%);border-radius:19px;padding:23px 22px;box-shadow:0 12px 28px #040a192e}
+.stat:before{content:"";position:absolute;right:0;top:0;width:5px;height:100%;background:linear-gradient(#d9bcff,#8362c7)}
+.stat:nth-child(2):before{background:linear-gradient(#95ffe0,#268f80)}
+.stat:nth-child(3):before{background:linear-gradient(#9bdfff,#397ba8)}
+.stat:nth-child(4):before{background:linear-gradient(#ffdf9f,#aa8050)}
+.stat:after{content:"";position:absolute;width:90px;height:90px;border-radius:100%;background:#b58eff12;left:-30px;top:-38px;filter:blur(5px)}
+.stat small{font-size:12px;font-weight:700;color:#b9c0d8}
+.stat strong{font-size:clamp(26px,2.5vw,38px);letter-spacing:.2px;margin-top:9px;color:#fff}
+.panel{background:linear-gradient(145deg,#172037f7,#101a2eeb);border-color:#404b6988;border-radius:20px;padding:clamp(16px,2vw,25px);box-shadow:0 12px 35px #03091824}
+.panel h3{font-size:18px;margin-bottom:12px}.panel .muted{line-height:1.9}
+.grid{gap:18px}
+.btn{border-radius:12px;min-height:40px;box-shadow:0 3px 13px #08081230;background:linear-gradient(130deg,#a47add,#7349b7);border-color:#bc93ec88;transition:filter .15s,transform .15s,box-shadow .15s}
+.btn:hover{filter:brightness(1.14);transform:translateY(-1px);box-shadow:0 7px 22px #7851bd36}
+.btn:active{transform:translateY(0)}.btn.secondary{background:#212c46;border-color:#475a7a;color:#e9ecff}.btn.danger{background:#55313f;border-color:#a25970}
+.pill{background:#1c2741bb;border-color:#506080;border-radius:999px;color:#d4d9ee}
+.pill.good{background:#123f37a8;color:#7ae6b8}.pill.bad{background:#532c39a0;color:#ffa3ae}.pill.warn{background:#54432988;color:#ffdfa1}
+input,select{background:#0b1529;border-color:#445777;border-radius:12px;min-height:42px;color:#f0f0fc}
+input:focus,select:focus{border-color:#ae8eef;box-shadow:0 0 0 3px #a286f525;outline:0}
+table{border-spacing:0;border-collapse:separate}th{position:sticky;top:0;z-index:1;background:#1b2741;color:#dae0f3;font-size:12px;padding:15px 12px;border-bottom-color:#505c7e}
+td{padding:14px 12px;border-bottom-color:#3b476052}tbody tr:hover{background:#7f63b91c}
+.tablewrap{border:1px solid #354661;border-radius:14px;overflow:auto;max-height:72vh;scrollbar-color:#645784 #162139}
+.empty{color:#c1c6df}.log{border-color:#495978;background:#091428;color:#d5f5ec}
+.status{border-radius:14px;border-color:#88703f}
+.quick-hero{border:1px solid #a07bdb66;border-radius:23px;padding:clamp(22px,3vw,36px);margin-bottom:23px;background:radial-gradient(ellipse at 85% 10%,#a46ad83b,transparent 58%),linear-gradient(120deg,#292343,#11283e);box-shadow:0 14px 42px #0509193d;position:relative;overflow:hidden}
+.quick-hero:after{content:"B";position:absolute;left:30px;bottom:-80px;color:#ffffff08;font-weight:900;font-size:240px;line-height:1;pointer-events:none}
+.quick-hero>*{position:relative;z-index:1}.quick-eyebrow{font-size:11px;letter-spacing:2px;color:#dbbfff;font-weight:900;margin-bottom:7px}
+.quick-hero h3{font-size:clamp(23px,2.5vw,32px);margin:0 0 8px;color:#fff}
+.quick-hero p{max-width:680px;line-height:2;color:#c8d3ea}
+.quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:21px}.quick-actions .btn{min-width:140px;justify-content:center}
+.quick-actions .btn.secondary{background:#172e46d9}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#72e9ba;margin-left:7px;box-shadow:0 0 12px #72e9ba88}
+.top-status-secondary{font-size:11px;color:#bac6df;direction:ltr;white-space:nowrap}
+.density-toggle{white-space:nowrap}
+#command-palette{width:min(95vw,560px);max-height:82vh;overflow:auto;background:#111a2e;border:1px solid #7465a2;border-radius:21px;padding:24px;box-shadow:0 25px 95px #000b;color:#f2f0ff}
+#command-palette::backdrop{background:#02040bbb;backdrop-filter:blur(7px)}
+#command-palette h2{margin:0 0 14px;font-size:20px}
+#command-palette .command-list{display:grid;gap:8px;margin-top:15px}
+#command-palette .command-item{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:right;border:1px solid #364461;border-radius:11px;background:#1c2941;color:#f3f0ff;padding:12px 14px;min-height:47px}
+#command-palette .command-item:hover,#command-palette .command-item:focus-visible{border-color:#ad88ed;background:#3c315b}
+#command-palette .command-item[hidden]{display:none!important}
+body.compact .panel{padding:12px 16px;border-radius:14px}
+body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .stat strong{font-size:25px}
+@media(max-width:1100px){.layout{grid-template-columns:220px minmax(0,1fr)}.navlink{gap:9px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){
+ body{background-attachment:scroll}
+ .layout{display:block}aside{position:relative;height:auto;padding:11px 12px;border-left:0;border-bottom:1px solid #363d5d}
+ .logo{margin:0 0 12px}.logo-icon{width:40px;height:40px;border-radius:12px}
+ nav{display:flex;gap:5px;overflow-x:auto;padding-bottom:6px}.navlink{flex:0 0 auto;width:auto;min-height:42px;padding:9px 12px;white-space:nowrap}
+ .navlink:hover{transform:none}
+ .top{top:0;padding:12px 14px;align-items:flex-start;gap:8px}.top h1{font-size:18px}
+ .top .tools{gap:6px}.top .tools .btn{min-height:35px;font-size:11px;padding:6px 9px}
+ .top-status-secondary{display:none}main{padding:17px 12px 52px}
+ .quick-hero{padding:23px 17px}.quick-hero:after{left:-15px}
+ .quick-actions .btn{flex:1 1 130px;min-width:0}.cards{gap:10px}
+ .stat{padding:14px}.stat strong{font-size:25px}
+ .heading h2{font-size:23px}
+ .panel{border-radius:16px;padding:16px}
+ .tablewrap{max-height:64vh}.formgrid{grid-template-columns:1fr}
+ .controls .inline>*{max-width:none}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
+
 </style>
 </head><body><div class="layout"><aside>
 <div class="logo"><div class="logo-icon">B</div><div><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
@@ -51,10 +136,19 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 </nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
 </aside><div class="content">
 <header class="top"><div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div>
-<div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
+<div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
 <main><div id="notice" class="status" role="status" hidden></div>
 <section class="view active" id="page-home">
-<div class="heading"><div><h2>مرحبًا بك في BLOFY STREAM</h2><p>معلومات حقيقية من قاعدة بيانات المصادر ومحرك البث.</p></div><button class="btn" data-go="sources">إدارة المصادر</button></div>
+<div class="heading"><div><h2>مركز القيادة</h2><p>إدارة البث والمشتركين والمحتوى من لوحة واحدة.</p></div><button class="btn secondary" id="home-refresh" type="button">↻ تحديث الحالة</button></div>
+<div class="quick-hero"><div class="quick-eyebrow"><span class="live-dot"></span>BLOFY STREAM · CONTROL ROOM</div>
+<h3>كل تفاصيل السيرفر تحت سيطرتك</h3>
+<p>تابع مصادر البث وأكواد العملاء وفهرس المكتبة. كل الأرقام متصلة بخدماتك الفعلية، ولا يتم إنشاء اشتراكات أو تغيير مصدر دون أمرك.</p>
+<div class="quick-actions" aria-label="اختصارات الإدارة">
+<button class="btn" type="button" data-go="codes" data-focus="codes-label">＋ إصدار اشتراك</button>
+<button class="btn secondary" type="button" data-go="library" data-focus="library-source">▣ تنظيم المكتبة</button>
+<button class="btn secondary" type="button" data-go="restream" data-focus="live-source">◉ مراقبة البث</button>
+<button class="btn secondary" type="button" data-go="diagnostics" data-focus="diagnostic-source">⚙ فحص النظام</button>
+</div></div>
 <div class="cards">
 <div class="stat"><small>المصادر</small><strong id="k-sources">—</strong></div>
 <div class="stat"><small>القنوات</small><strong id="k-live">—</strong></div>
@@ -240,6 +334,12 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <tbody id="diagnostic-failures"></tbody></table></div></div>
 </section><footer>BLOFY STREAM · لوحة واحدة لبيانات السيرفر والمصادر والعملاء · جميع الأرقام من الخدمات الفعلية</footer>
 </main></div></div>
+<dialog id="command-palette" aria-label="اختصارات لوحة الإدارة">
+<form method="dialog"><div class="controls"><h2>الوصول السريع</h2><button class="btn secondary sm" type="submit">إغلاق ×</button></div></form>
+<input id="command-search" type="search" placeholder="اكتب: أكواد، مكتبة، بث، مشترك..." autocomplete="off" aria-label="ابحث في الأقسام">
+<div class="command-list" id="command-list"></div>
+<p class="muted">Ctrl + K للفتح • Esc للإغلاق</p>
+</dialog>
 <script nonce="__NONCE__">
 "use strict";
 (function(){
