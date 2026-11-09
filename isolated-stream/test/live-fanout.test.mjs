@@ -112,3 +112,41 @@ test('stalled TS provider is evicted and does not pin viewer sessions',async()=>
     return new Response(source,{headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('provider failure cools only its shared feed, prevents retry storms and limits disclosure',async()=>{
+  let calls=0,now=1000;
+  await service(async(base,broker)=>{
+    const first=await fetch(base+'/live');
+    assert.equal(first.status,502);
+    assert.equal((await first.json()).code,'fanout_source_unavailable');
+    assert.equal(calls,1);
+    const fastRetry=await fetch(base+'/live');
+    assert.equal(fastRetry.status,503);
+    assert.equal(fastRetry.headers.get('retry-after'),'1');
+    assert.equal((await fastRetry.json()).code,'fanout_source_cooling_down');
+    assert.equal(calls,1);
+    assert.equal(broker.stats().providerFailures,1);
+    assert.equal(broker.stats().cooldownRejections,1);
+    assert.equal(broker.stats().cooldownFeeds,1);
+    assert.equal(JSON.stringify(broker.stats()).includes('licensed.example'),false);
+    now+=50;
+    const attemptedAgain=await fetch(base+'/live');
+    assert.equal(attemptedAgain.status,502);
+    assert.equal(calls,2);
+    assert.equal(broker.stats().providerFailures,2);
+    now+=50;
+    const exponential=await fetch(base+'/live');
+    assert.equal(exponential.status,503);
+    assert.equal(calls,2,'second failure must back off longer');
+    now+=51;
+    const third=await fetch(base+'/live');
+    assert.equal(third.status,502);
+    assert.equal(calls,3);
+  },{clock:()=>now,providerCooldownMs:50,maxProviderCooldownMs:500,
+    fetchImpl:async()=>{calls++;return new Response('unavailable',{status:503})}});
+});
+test('provider cool-down settings are strictly bounded',()=>{
+  assert.throws(()=>createLiveFanout({providerCooldownMs:0}),/fanout_capacity_invalid/);
+  assert.throws(()=>createLiveFanout({
+    providerCooldownMs:3000,maxProviderCooldownMs:1000}),/fanout_capacity_invalid/);
+});
