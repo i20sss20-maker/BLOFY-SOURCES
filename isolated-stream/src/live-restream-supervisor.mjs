@@ -186,8 +186,11 @@ export function createLiveRestreamSupervisor({
     // transport result in the authenticated GET /operator/api/live listing.
     void verifyRestreamSmoke(HLS,{fetchImpl,pathName:name,timeoutMs:48000})
       .then(report=>{
+        const feedError=row.lastError&&/^restream_[a-z_]+$/.test(row.lastError)
+          ?row.lastError:null;
         row.lastProbe={at:clock(),ok:report.ok===true,
-          code:String(report.code||'unknown').slice(0,70),
+          code:String(report.ok===true?'ok':feedError||report.code||'unknown').slice(0,70),
+          transportCode:String(report.code||'unknown').slice(0,70),
           firstMediaBytesVerified:report.ok===true,
           audioVideoDecoded:false};
       }).catch(()=>{
