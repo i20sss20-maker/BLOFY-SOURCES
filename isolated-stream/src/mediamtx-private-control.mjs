@@ -71,17 +71,19 @@ export function createMediaControlClient({
     // never presented as zero viewers, and client IPs/IDs are not exposed.
     const liveName=/^live-[a-f0-9]{12}$/;
     const sessionPaths=hlsItems===null?null:new Map();
+    let incompleteSessionPaths=false;
     if(sessionPaths){
       for(const session of hlsItems){
         const path=String(session?.path??session?.pathName??'');
         if(liveName.test(path))sessionPaths.set(path,(sessionPaths.get(path)||0)+1);
+        else if(!path)incompleteSessionPaths=true;
       }
     }
     const summary=items===null?[]:items.slice(0,300).map(row=>{
       const name=String(row?.name||'').slice(0,90);
       return {name,ready:row?.ready===true,
         readers:Array.isArray(row?.readers)?row.readers.length:null,
-        hlsViewers:sessionPaths===null?null:sessionPaths.get(name)||0,
+        hlsViewers:sessionPaths===null||incompleteSessionPaths?null:sessionPaths.get(name)||0,
         tracks:Array.isArray(row?.tracks)?row.tracks.length:null};
     });
     return {
