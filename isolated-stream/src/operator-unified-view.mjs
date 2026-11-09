@@ -166,8 +166,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
 <div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
 <section class="view" id="page-codes">
-<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>مدة الكود لا تبدأ عند الإصدار. تبدأ عند أول تفعيل ناجح، ويُنشأ حساب Xtream تلقائيًا.</p></div>
-<a class="btn secondary" href="https://blofyplayer.com/stream/activate" target="_blank" rel="noopener noreferrer">صفحة تفعيل العميل ↗</a></div>
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div></div>
 <div class="cards" style="margin-bottom:15px">
 <div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
 <div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
@@ -177,6 +176,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. العدد المبدئي كود واحد، وتقدر تزيده تدريجيًا حتى 20 كودًا في الدفعة. تظهر الأكواد كاملة مرة واحدة عند إنشائها فقط.</p>
 <form id="codes-form"><div class="formgrid">
 <div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
+<div class="field"><label for="codes-channel">نوع الكود</label><select id="codes-channel" name="channel"><option value="app" selected>تطبيق BLOFY STREAM فقط</option><option value="xtream">Xtream خارجي (قديم)</option></select></div>
 <div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
 <option value="1">يوم</option><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option>
 <option value="90">3 أشهر (90 يومًا)</option><option value="180">6 أشهر (180 يومًا)</option>
@@ -187,7 +187,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
 <div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
 <div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>الوصف</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
 <tbody id="codes-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
@@ -524,7 +524,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       td.colSpan=7;tb.appendChild(tr)}
     state.codes.forEach(function(code){
       var tr=node("tr");
-      cell(tr,code.label||"BLOFY");
+      cell(tr,(code.label||"BLOFY")+(code.channel==="app"?" · تطبيق فقط":" · Xtream"));
       cell(tr,code.codeHint||"مخفي");
       cell(tr,String(code.durationDays)+" يوم");
       var label=code.status==="unused"?"بانتظار التفعيل":
@@ -555,8 +555,11 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       var d=await action("codes","code-issue",data);
       var target=$("codes-issued");target.hidden=false;target.replaceChildren();
       target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
-      var activation="https://blofyplayer.com/stream/activate";
-      attachCopy(target,"رابط تفعيل العميل",activation);
+      if(data.channel==="app"){
+        target.appendChild(node("div","هذه الأكواد للتفعيل من تطبيق BLOFY STREAM فقط. لا ترسل رابط صفحة تفعيل Xtream للعميل.","muted"));
+      } else {
+        attachCopy(target,"رابط تفعيل Xtream الخارجي","https://blofyplayer.com/stream/activate");
+      }
       (d.items||[]).forEach(function(item,index){
         attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
       });
