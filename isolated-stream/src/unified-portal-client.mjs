@@ -84,11 +84,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
   const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
-  function libraryAIChat({sourceId,type,message}={}){
+  function libraryAIChat({sourceId,type,message,history=[]}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
        typeof message!=='string'||message.trim().length<4||message.length>480)
       return Promise.resolve({status:400,body:{ok:false,code:'ai_instruction_invalid'}});
-    return call(ROOT+'/library-ai/chat',{method:'POST',body:{sourceId,type,message}});
+    const previous=Array.isArray(history)?history.slice(-4)
+      .filter(x=>typeof x==='string'&&x.length>=4&&x.length<=480):[];
+    return call(ROOT+'/library-ai/chat',{method:'POST',body:{sourceId,type,message,history:previous}});
   }
   function libraryAIApply({planId,approve}={}){
     if(typeof planId!=='string'||!/^[0-9a-f]{48}$/.test(planId)||approve!==true)
