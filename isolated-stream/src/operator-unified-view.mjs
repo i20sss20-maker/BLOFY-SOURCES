@@ -619,20 +619,47 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   $("codes-next").addEventListener("click",function(){loadCodes(true)});
   $("codes-form").addEventListener("submit",async function(e){
     e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    // Clear stale one-time codes before a new issue, without persisting secrets.
+    $("codes-issued").hidden=true;$("codes-issued").replaceChildren();
     var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
     try{
       var d=await action("codes","code-issue",data);
-      var target=$("codes-issued");target.hidden=false;target.replaceChildren();
-      target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
+      var issued=Array.isArray(d.items)?d.items:[];
+      var target=$("codes-issued");
+      target.hidden=false;target.replaceChildren();
+      if(!issued.length||issued.some(function(item){return !item||!item.code;})){
+        target.appendChild(node("strong","تمت معالجة الطلب لكن لم تصل الأكواد الكاملة إلى المتصفح."));
+        target.appendChild(node("p","راجع سجل الأكواد بالأسفل قبل محاولة إصدار دفعة أخرى، لتجنب إنشاء أكواد مكررة.","muted"));
+        target.scrollIntoView({behavior:"smooth",block:"center"});
+        await loadCodes(false);return;
+      }
+      target.appendChild(node("strong","تم إصدار "+issued.length+" كود بنجاح — انسخها قبل مغادرة الصفحة"));
+      target.appendChild(node("p","تظهر الأرقام الكاملة الآن فقط. سجل الأكواد أدناه يعرض أرقامًا مخفية حمايةً للاشتراكات.","muted"));
       if(data.channel==="app"){
-        target.appendChild(node("div","هذه الأكواد للتفعيل من تطبيق BLOFY STREAM فقط. لا ترسل رابط صفحة تفعيل Xtream للعميل.","muted"));
-      } else {
+        target.appendChild(node("div","الأكواد لتطبيق BLOFY STREAM فقط؛ الهوست داخلي.","muted"));
+      }else{
         attachCopy(target,"رابط تفعيل Xtream الخارجي","https://blofyplayer.com/stream/activate");
       }
-      (d.items||[]).forEach(function(item,index){
-        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
+      var fullCodes=issued.map(function(item){return String(item.code);});
+      var batchActions=node("div",undefined,"actions");
+      batchActions.appendChild(button("نسخ جميع الأكواد",async function(){
+        try{
+          await navigator.clipboard.writeText(fullCodes.join("\\n"));
+          show("تم نسخ جميع الأكواد.",true);
+        }catch(e){show("تعذر النسخ التلقائي؛ انسخ الأرقام من الأسفل.",false);}
+      }));
+      batchActions.appendChild(button("حفظ الأكواد TXT",function(){
+        var blob=new Blob([fullCodes.join("\\n")+"\\n"],{type:"text/plain;charset=utf-8"});
+        var url=URL.createObjectURL(blob),link=document.createElement("a");
+        link.href=url;link.download="blofy-stream-issued-codes.txt";link.click();
+        setTimeout(function(){URL.revokeObjectURL(url)},1000);
+      }));
+      target.appendChild(batchActions);
+      issued.forEach(function(item,index){
+        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",String(item.code));
       });
-      show("تم إصدار "+(d.items||[]).length+" كود. مدتها لم تبدأ بعد.",true);
+      target.scrollIntoView({behavior:"smooth",block:"center"});
+      show("تم إصدار "+issued.length+" كود. مدتها لم تبدأ بعد.",true);
       await loadCodes(false);
     }catch(e){show("تعذر إصدار الأكواد: "+e.message,false)}
     finally{submit.disabled=false}
