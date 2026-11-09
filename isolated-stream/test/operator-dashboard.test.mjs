@@ -204,3 +204,26 @@ test('premium operator UX preserves every workflow and is accessible on TV/mobil
     assert.doesNotThrow(()=>new Function(script[1]),'all dashboard JS remains valid');
   });
 });
+
+test('AUTO HEALTH read endpoint requires operator credentials and never exposes subscriber secrets',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const noAuth=await fetch(base+'/operator/api/auto-health');
+    assert.equal(noAuth.status,401);
+    const response=await fetch(base+'/operator/api/auto-health',{
+      headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const data=await response.json();
+    assert.equal(data.customerTrafficChanged,false);
+    assert.equal(data.scope,'operator_restream_only');
+    assert.equal(data.recoveryProbeEnabled,false);
+    assert.equal(JSON.stringify(data).includes('password'),false);
+    const html=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+    assert.match(html,/id="auto-health-panel"/);
+    assert.match(html,/id="auto-health-status"/);
+    assert.match(html,/id="auto-health-events"/);
+    assert.match(html,/loadAutoHealth\(\)/);
+    assert.match(html,/لا نعيد الاتصال بالمصدر تلقائيًا/);
+    const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
+  });
+});
