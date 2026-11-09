@@ -44,7 +44,7 @@ async function readAdminJson(req){
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
-  sharedRelayStats=()=>null}={}){
+  sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'})}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -77,6 +77,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/auto-health'){
+      json(res,200,autoHealth());return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){
       void Promise.all([engineStatus(),control.overview()])
