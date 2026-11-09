@@ -13,9 +13,9 @@ export function createLiveFanout({
     throw new Error('fanout_capacity_invalid');
   const feeds=new Map();
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
-  function closeFeed(key,reason='closed'){
+  function closeFeed(key,reason='closed',expectedRow=null){
     const row=feeds.get(key);
-    if(!row)return;
+    if(!row||(expectedRow&&row!==expectedRow))return;
     feeds.delete(key);clearTimeout(row.idleTimer);
     row.controller.abort();
     for(const viewer of row.viewers){
@@ -33,7 +33,7 @@ export function createLiveFanout({
       }
     }
     if(!row.viewers.size&&!row.idleTimer){
-      row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle'),idleMs);
+      row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
       row.idleTimer.unref?.();
     }
   }
@@ -79,7 +79,7 @@ export function createLiveFanout({
     }finally{
       try{await reader?.cancel()}catch{}
       try{reader?.releaseLock()}catch{}
-      closeFeed(row.key);
+      closeFeed(row.key,'closed',row);
     }
   }
   async function handle(req,res,sourceUrl){
@@ -105,7 +105,7 @@ export function createLiveFanout({
     const onClose=()=>{
       row.viewers.delete(res);
       if(!row.viewers.size&&!row.idleTimer){
-        row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle'),idleMs);
+        row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
         row.idleTimer.unref?.();
       }
     };
