@@ -236,15 +236,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
 </section>
 <section class="view" id="page-library">
-<div class="heading"><div><h2>المكتبة</h2><p>تصفح القنوات والأفلام والمسلسلات المخزنة في الفهرس الحقيقي.</p></div></div>
+<div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
 <div class="panel"><div class="controls"><div class="inline">
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
 <button class="btn" id="library-submit">بحث</button>
 <button class="btn secondary" id="library-refresh-source" type="button">↻ تحديث محتوى المصدر</button>
-<button class="btn secondary" id="library-smart-toggle" type="button">تنظيم ذكي: تشغيل</button></div></div>
-<p class="muted" id="library-smart-summary">تصنيف تلقائي بالقواعد من أسماء المحتوى والأقسام، دون إرسال البيانات إلى خدمة ذكاء اصطناعي خارجية. لا يغيّر المصدر.</p>
+<button class="btn secondary" id="library-smart-toggle" type="button" aria-pressed="false">عرض تجميعي اختياري: إيقاف</button></div></div>
+<p class="muted" id="library-smart-summary">الترتيب الأصلي من Xtream هو المعتمد. بعد ترتيب المحتوى من لوحة Xtream اختر المصدر واضغط «↻ تحديث محتوى المصدر»، ثم حدّث المكتبة في تطبيق العميل.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
 <div class="panel" id="library-review-panel">
@@ -259,9 +259,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div>
 <div class="panel" id="library-ai-chat-panel">
 <h3>✦ BLOFY AI — اكتب طلبك للمكتبة</h3>
-<p class="muted">اكتب طلبك بشكل طبيعي؛ سيقترح Gemini خطة آمنة للمصدر المحدد. يمكن اعتماد ترتيب الأقسام بعد المعاينة، أما حذف المحتوى أو تعديل الاشتراكات فلا ينفّذه من المحادثة.</p>
+<p class="muted">ترتيب الأقسام تديره الآن من لوحة Xtream، وليس Gemini. استخدم AI لفحص الأسماء واقتراح تصنيف العناصر بعد المعاينة. التعديلات لا تُنشر إلا بعد موافقتك.</p>
 <label for="library-ai-command">وش تبي يسوي AI؟</label>
-<textarea id="library-ai-command" rows="3" maxlength="480" style="width:100%;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--font);font:inherit" placeholder="مثلاً: نظّم أقسام القنوات وخلي الرياضة والأخبار أولاً، ثم اعرض لي الخطة"></textarea>
+<textarea id="library-ai-command" rows="3" maxlength="480" style="width:100%;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--font);font:inherit" placeholder="مثلاً: حلل أسماء الأفلام واقترح تصحيح التصنيفات دون تغيير ترتيب Xtream"></textarea>
 <div class="actions">
 <button class="btn" type="button" id="library-ai-chat-send">ارسل إلى AI</button>
 <button class="btn secondary" type="button" id="library-ai-item-next" disabled>تصنيف الدفعة التالية (12 عنصرًا)</button>
@@ -546,7 +546,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     catch(err){show("تعذر إضافة المصدر: "+err.message,false)}
     finally{b.disabled=false}
   });
-  var smartLibraryOn=true;
+  var smartLibraryOn=false;
   function smartGroup(item){
     var t=String((item.categoryName||"")+" "+(item.name||"")).toLowerCase();
     if(/sport|sports|ssc|bein|رياض|مباريات|كرة|match/.test(t))return "رياضة";
@@ -558,7 +558,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   }
   $("library-smart-toggle").addEventListener("click",function(){
     smartLibraryOn=!smartLibraryOn;
-    this.textContent="تنظيم ذكي: "+(smartLibraryOn?"تشغيل":"إيقاف");
+    this.textContent="عرض تجميعي اختياري: "+(smartLibraryOn?"تشغيل":"إيقاف");
+    this.setAttribute("aria-pressed",String(smartLibraryOn));
     loadCatalog(false);
   });
   async function loadCatalog(more){
@@ -575,7 +576,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           .sort(function(a,b){return ranks.indexOf(a.group)-ranks.indexOf(b.group)||a.index-b.index})
           .map(function(row){return row.item});
         $("library-smart-summary").textContent="تنظيم تلقائي للقائمة المعروضة (حتى 40 عنصرًا في الصفحة) • رياضة، أخبار، أطفال، أفلام، مسلسلات • لا يعدّل فئات المصدر ولا يستخدم نموذج AI خارجي.";
-      }else $("library-smart-summary").textContent="ترتيب المصدر الأصلي؛ لم يُعد ترتيب النتائج.";
+      }else $("library-smart-summary").textContent="عرض المصدر بترتيب Xtream بعد آخر مزامنة؛ لم يُطبّق أي ترتيب ذكي على النتائج.";
 
       if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
@@ -1079,7 +1080,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     this.disabled=true;
     try{
       var result=await action("source/"+source+"/sync","source-sync",{types:[typ]});
-      show("تم إرسال طلب تحديث محتوى المصدر. قد يستغرق الفهرس وقتًا حتى يكتمل.",true);
+      show("تم إرسال طلب مزامنة Xtream. بعد اكتماله اضغط بحث لتظهر نفس قائمة المصدر وترتيبه.",true);
       await refresh();await loadCatalog(false);
     }catch(e){show("تعذر تحديث المحتوى: "+e.message,false)}
     finally{this.disabled=false}
