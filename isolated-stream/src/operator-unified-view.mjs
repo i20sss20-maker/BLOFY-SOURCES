@@ -92,7 +92,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="stat"><small>مسارات جاهزة</small><strong id="stream-paths">—</strong></div>
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
-<div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span></div></div>
+<div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
 <div class="panel"><h3>فحص تشغيل المصدر</h3><p class="muted">اختبار طلبات وسائط حقيقية من مزودك، وليس مجرد اتصال API. نجاح العينة لا يعني نجاح كل المحتوى.</p>
 <div class="inline"><select id="stream-source" aria-label="المصدر"></select>
 <select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -286,6 +286,13 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       value("shared-mode",shared.sharedLiveEnabled?"مفعّل للمشتركين المسموحين":"غير مفعّل");
       value("shared-feeds",shared.sharedLiveEnabled?count(fanout.activeFeeds):"—");
       value("shared-viewers",shared.sharedLiveEnabled?count(fanout.viewers):"—");
+      value("relay-errors",shared.relayFailureTotal===undefined?"غير متاح":
+        count(shared.relayFailureTotal));
+      $("relay-error-breakdown").textContent=
+        "أسباب 502 منذ بدء تشغيل الخادم الحالي (لا يشمل النسخ القديمة): "+
+        Object.entries(shared.relayFailureCounts||{}).map(function(entry){
+          return entry[0]+": "+count(entry[1])
+        }).join(" • ");
       value("home-api","ONLINE");value("home-media",ready?"ONLINE":"غير متصل");
       value("home-paths",count(m.activePaths));value("home-sessions",count(m.hlsSessions));
       value("stream-engine",ready?"ONLINE":"غير متصل");value("stream-paths",count(m.activePaths));
