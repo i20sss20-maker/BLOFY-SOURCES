@@ -120,7 +120,8 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
 </div>
 <div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>القناة</th><th>المسار</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead><tbody id="live-active"></tbody></table></div>
+<p class="muted">عداد HLS يعرض الجلسات التي يراها محرك إعادة البث المنفصل فقط، وليس جميع مشتركي تطبيق BLOFY. أما اتصال المصدر فيعني اتصال السحب من المزود، وليس عدد العملاء.</p>
+<div class="tablewrap"><table><thead><tr><th>القناة</th><th>المسار</th><th>المشاهدون (HLS)</th><th>اتصال المصدر</th><th>الإجراءات</th></tr></thead><tbody id="live-active"></tbody></table></div>
 <video id="live-preview" controls playsinline preload="none" style="display:none;width:min(100%,850px);margin:16px 0;border-radius:10px;background:black" aria-label="معاينة القناة"></video>
 <pre id="live-result" class="log">اختر قناة من مكتبتك ثم ابدأ إعادة البث.</pre>
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
@@ -739,16 +740,19 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   $("live-search").addEventListener("keydown",function(e){
     if(e.key==="Enter"){e.preventDefault();loadLiveChannels()}
   });
-  function renderLive(items){
+  function renderLive(items,mediaPaths){
+    var byPath=new Map((mediaPaths||[]).map(function(p){return [p.name,p]}));
     var tbody=$("live-active");tbody.replaceChildren();
     if(!items.length){
-      var tr=node("tr");var td=cell(tr,"لا توجد قنوات تبثها هذه الخدمة الآن");td.colSpan=4;
+      var tr=node("tr");var td=cell(tr,"لا توجد قنوات تبثها هذه الخدمة الآن");td.colSpan=5;
       tbody.appendChild(tr);return;
     }
     items.forEach(function(item){
       var tr=node("tr");cell(tr,item.title||item.channelId);
       cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
-      var status=String(item.connections||0)+(item.failovers?" · تبديلات: "+item.failovers:"");
+      var mt=byPath.get(item.path);
+      cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?String(mt.hlsViewers):"غير متاح");
+      var status=String(item.connections||0)+" سحب مباشر"+(item.failovers?" · تبديلات: "+item.failovers:"");
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe)status+=item.lastProbe.ok?" · HLS يعمل":" · HLS فشل: "+item.lastProbe.code;
       cell(tr,status);
@@ -780,7 +784,13 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     });
   }
   async function loadLive(){
-    try{var d=await api("live");renderLive(d.items||[])}
+    try{
+      var results=await Promise.allSettled([api("live"),api("state")]);
+      if(results[0].status!=="fulfilled")throw results[0].reason;
+      var d=results[0].value;
+      var media=results[1].status==="fulfilled"?results[1].value.mediaControl:null;
+      renderLive(d.items||[],media&&media.paths||[]);
+    }
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
   $("live-reload").addEventListener("click",loadLive);

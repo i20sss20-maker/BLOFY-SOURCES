@@ -66,11 +66,26 @@ export function createMediaControlClient({
     const online=info.ok===true||paths.ok===true;
     const items=paths.ok&&Array.isArray(paths.data?.items)?paths.data.items:null;
     const hlsItems=hls.ok&&Array.isArray(hls.data?.items)?hls.data.items:null;
-    const summary=items===null?[]:items.slice(0,300).map(row=>({
-      name:String(row?.name||'').slice(0,90),
-      ready:row?.ready===true,readers:Array.isArray(row?.readers)?row.readers.length:0,
-      tracks:Array.isArray(row?.tracks)?row.tracks.length:null
-    }));
+    // MediaMTX reports HLS sessions separately from RTSP/path readers.
+    // Count only sessions with a validated live path; unknown path data is
+    // never presented as zero viewers, and client IPs/IDs are not exposed.
+    const liveName=/^live-[a-f0-9]{12}$/;
+    const sessionPaths=hlsItems===null?null:new Map();
+    let incompleteSessionPaths=false;
+    if(sessionPaths){
+      for(const session of hlsItems){
+        const path=String(session?.path??session?.pathName??'');
+        if(liveName.test(path))sessionPaths.set(path,(sessionPaths.get(path)||0)+1);
+        else if(!path)incompleteSessionPaths=true;
+      }
+    }
+    const summary=items===null?[]:items.slice(0,300).map(row=>{
+      const name=String(row?.name||'').slice(0,90);
+      return {name,ready:row?.ready===true,
+        readers:Array.isArray(row?.readers)?row.readers.length:null,
+        hlsViewers:sessionPaths===null||incompleteSessionPaths?null:sessionPaths.get(name)||0,
+        tracks:Array.isArray(row?.tracks)?row.tracks.length:null};
+    });
     return {
       configured:true,online,diagnostics:anyAuthFailed?'mediamtx_auth_failed':
         online?'connected':info.error||paths.error||'mediamtx_unreachable',
