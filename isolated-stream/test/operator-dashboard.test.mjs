@@ -97,3 +97,19 @@ test('live dashboard refreshes running HLS probes and clarifies unsupported nati
     assert.match(html,/القناة غير موجودة لدى المصدر/);
   });
 });
+
+test('newly issued encrypted codes have a persistent authenticated copy control',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const reply=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(reply.status,200);
+    const html=await reply.text();
+    assert.match(html,/id="codes-copy-visible"/);
+    assert.match(html,/id="library-refresh-source"/);
+    assert.match(html,/id="library-smart-toggle"/);
+    assert.match(html,/code\.copyAvailable/);
+    assert.match(html,/copyCode\(code\)/);
+    assert.match(html,/api\("code\/"\+key\+"\/reveal"\)/);
+    assert.match(html,/source-sync/);
+    assert.match(html,/لا يستخدم نموذج AI خارجي/);
+  });
+});
