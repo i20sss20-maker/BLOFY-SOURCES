@@ -257,6 +257,19 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="library-review-suggestions"></tbody></table></div>
 <div id="library-review-duplicates" class="muted"></div>
 </div>
+<div class="panel" id="library-ai-chat-panel">
+<h3>✦ BLOFY AI — اكتب طلبك للمكتبة</h3>
+<p class="muted">اكتب طلبك بشكل طبيعي؛ سيقترح Gemini خطة آمنة للمصدر المحدد. يمكن اعتماد ترتيب الأقسام بعد المعاينة، أما حذف المحتوى أو تعديل الاشتراكات فلا ينفّذه من المحادثة.</p>
+<label for="library-ai-command">وش تبي يسوي AI؟</label>
+<textarea id="library-ai-command" rows="3" maxlength="480" style="width:100%;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--font);font:inherit" placeholder="مثلاً: نظّم أقسام القنوات وخلي الرياضة والأخبار أولاً، ثم اعرض لي الخطة"></textarea>
+<div class="actions">
+<button class="btn" type="button" id="library-ai-chat-send">ارسل إلى AI</button>
+<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر ترتيب الأقسام</button>
+</div>
+<p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
+<div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
+<div id="library-ai-chat-history" class="log" aria-label="سجل المحادثة" style="white-space:pre-wrap"></div>
+</div>
 <div class="panel" id="library-ai-panel">
 <div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
 <label class="inline">مصدر AI
@@ -652,6 +665,103 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
   });
   var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
+  var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
+  function libraryChatLine(who,text){
+    var box=$("library-ai-chat-history");
+    var line=node("p",(who==="me"?"أنت: ":"BLOFY AI: ")+String(text||"").slice(0,650));
+    box.appendChild(line);
+    if(box.childNodes.length>24)box.firstChild.remove();
+  }
+  $("library-ai-chat-send").addEventListener("click",async function(){
+    if(libraryAIChatBusy)return;
+    var message=$("library-ai-command").value.trim(),
+      sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    // Conversational "ارسله للسيرفر" confirms ONLY the already-reviewed plan.
+    // Approval still requires an explicit browser confirmation dialog.
+    if(libraryAIProposedPlan&&/^(?:اعتمد(?: الخطة)?|انشر(?:ها)?(?: الآن)?|ارسل(?:ه|ها)?(?: للسيرفر)?|طبّق(?:ها)?(?: الآن)?)\.?$/u.test(message)){
+      libraryChatLine("me",message);
+      $("library-ai-chat-apply").click();return;
+    }
+    libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+    $("library-ai-chat-preview").replaceChildren();
+    if(message.length<4||message.length>480){
+      $("library-ai-chat-status").textContent="اكتب طلبًا واضحًا من 4 إلى 480 حرفًا.";return;
+    }
+    if(!sourceId){
+      $("library-ai-chat-status").textContent="اختر «مصدر AI» أولاً، ثم اكتب طلبك.";$("library-ai-source").focus();return;
+    }
+    libraryAIChatBusy=true;this.disabled=true;
+    $("library-ai-chat-status").textContent="Gemini يجهّز خطة للمراجعة، ولا يغيّر شيئًا الآن...";
+    libraryChatLine("me",message);
+    try{
+      var result=await action("library-ai/chat","library-ai-chat",{
+        sourceId,type,message,history:libraryAIUserHistory.slice(-4)});
+      libraryAIUserHistory.push(message);
+      if(libraryAIUserHistory.length>4)libraryAIUserHistory.shift();
+      libraryChatLine("ai",result.reply||"تم تحليل الطلب.");
+      if(result.requiresApproval&&result.planId){
+        libraryAIProposedPlan={id:result.planId,sourceId,type,summary:result.summary};
+        $("library-ai-chat-apply").disabled=false;
+        var review=$("library-ai-chat-preview");review.replaceChildren();
+        var beforeAfter=Array.isArray(result.proposedChanges)?result.proposedChanges:[];
+        var categories=Array.isArray(result.categoryPreview)?result.categoryPreview:[];
+        if(beforeAfter.length){
+          var title=document.createElement("strong");title.textContent="الأسماء قبل ← بعد:";
+          review.appendChild(title);
+          beforeAfter.slice(0,12).forEach(function(x){
+            var line=document.createElement("p");
+            line.textContent=String(x.before||"")+"  ←  "+String(x.after||"");
+            review.appendChild(line);
+          });
+        }else if(categories.length){
+          var head=document.createElement("strong");head.textContent="أول 12 قسمًا بعد الترتيب:";
+          review.appendChild(head);
+          categories.slice(0,12).forEach(function(x,index){
+            var line=document.createElement("p");line.textContent=(index+1)+" — "+String(x.name||"");
+            review.appendChild(line);
+          });
+        }
+        $("library-ai-chat-status").textContent="خطة جاهزة للمراجعة: "+result.summary+
+          ". لن تنشر إلا بعد الضغط على زر الاعتماد.";
+      }else{
+        $("library-ai-chat-status").textContent=result.reply||"تمت مراجعة الطلب؛ لا يوجد تغيير معتمد للنشر.";
+      }
+    }catch(e){
+      $("library-ai-chat-status").textContent="تعذر تحليل الطلب: "+e.message;
+    }finally{libraryAIChatBusy=false;this.disabled=false;}
+  });
+  $("library-ai-chat-apply").addEventListener("click",async function(){
+    if(!libraryAIProposedPlan||libraryAIChatBusy)return;
+    var plan=libraryAIProposedPlan;
+    if(plan.sourceId!==($("library-ai-source").value||$("library-source").value)||
+       plan.type!==$("library-type").value){
+      this.disabled=true;libraryAIProposedPlan=null;
+      $("library-ai-chat-status").textContent="تغير المصدر أو نوع المحتوى. أعد إنشاء الخطة.";return;
+    }
+    if(!confirm("هل تعتمد تغيير ترتيب الأقسام في مصدر BLOFY المحدد؟\\n"+
+      plan.summary+"\\nقد تظهر النتيجة للعملاء بعد تحديث مكتبتهم. لن نعدل اشتراكاتهم أو وسائط التشغيل."))return;
+    this.disabled=true;libraryAIChatBusy=true;libraryAIProposedPlan=null;
+    $("library-ai-chat-status").textContent="جاري حفظ ترتيب الأقسام في السيرفر...";
+    try{
+      var r=await action("library-ai/apply","library-ai-apply",{planId:plan.id,approve:true});
+      libraryChatLine("ai","تم تطبيق الترتيب في السيرفر. تحديث القوائم عند العملاء يحتاج إعادة جلبها من التطبيق؛ لم تُرسل إشعارات دفع للأجهزة.");
+      $("library-ai-chat-status").textContent=r.changedOnServer?
+        "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناوين تم تنظيفها: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
+        "تعذر إثبات حفظ التغيير.";
+    }catch(e){
+      $("library-ai-chat-status").textContent="لم يُنشر التغيير: "+e.message;
+    }finally{libraryAIChatBusy=false;}
+  });
+  $("library-ai-source").addEventListener("change",function(){
+    libraryAIProposedPlan=null;libraryAIUserHistory=[];
+    $("library-ai-chat-apply").disabled=true;
+    $("library-ai-chat-preview").replaceChildren();
+  });
+  $("library-type").addEventListener("change",function(){
+    libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+  });
+
   async function updateLibraryAIStatus(){
     $("library-ai-status").textContent="جارٍ التحقق من حالة Gemini...";
     try{
