@@ -76,6 +76,20 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       body:{ok:false,code:'invalid_account_id'}});
     return call(ROOT+'/accounts/'+id+'/reset',{method:'POST',body:{}});
   }
+  function libraryReview({sourceId,type}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_library_selection_invalid'}});
+    return call(ROOT+'/library-review?'+new URLSearchParams({sourceId,type}));
+  }
+  function libraryTitle({sourceId,type,itemId,currentName,proposedName}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
+      !/^[A-Za-z0-9._-]{1,128}$/.test(String(itemId||''))||
+      typeof proposedName!=='string'||proposedName.length>180||
+      typeof currentName!=='string'||currentName.length>220)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_library_title_invalid'}});
+    return call(ROOT+'/library-title',{method:'POST',
+      body:{sourceId,type,itemId,currentName,proposedName}});
+  }
   function catalog({type,serverId='',q='',offset=0}={}){
     if(!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_media_type'}});
@@ -140,5 +154,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
