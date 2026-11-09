@@ -43,7 +43,7 @@ async function readAdminJson(req){
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
-  controlUsername='',controlPassword='',unifiedSecret=''}={}){
+  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -90,15 +90,78 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         })).catch(()=>json(res,503,{ok:false,code:'engine_state_unavailable'}));
       return true;
     }
+    // Protected VOD: every byte request is authenticated with operator Basic,
+    // and media originates from an entitlement-checked authoritative catalog.
+    if(vodBroker){
+      if(req.method==='GET'&&path==='/operator/api/vod'){
+        json(res,200,vodBroker.list());return true;
+      }
+      const vodMatch=path.match(/^\/operator\/api\/vod\/([a-f0-9]{48})$/);
+      if(['GET','HEAD'].includes(req.method)&&vodMatch){
+        void vodBroker.play(req,res,vodMatch[1]);return true;
+      }
+      if(req.method==='POST'&&path==='/operator/api/vod'){
+        if(req.headers['x-blofy-operator-action']!=='vod-create'){
+          json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+        }
+        void readAdminJson(req).then(body=>vodBroker.create(body))
+          .then(({status,body})=>json(res,status,body))
+          .catch(e=>json(res,503,{ok:false,code:'vod_action_failed'}));
+        return true;
+      }
+    }
+    // Live video and HLS segments remain behind the SAME operator Basic auth
+    // as the page. There are no public media URLs and no customer cutover.
+    if(liveSupervisor){
+      if(req.method==='GET'&&path==='/operator/api/live'){
+        json(res,200,liveSupervisor.list());return true;
+      }
+      const media=path.match(/^\/operator\/api\/live\/(live-[a-f0-9]{12})\/([a-zA-Z0-9_.-]+)$/);
+      if(req.method==='GET'&&media){
+        void liveSupervisor.proxyHls(req,res,media[1],media[2]);
+        return true;
+      }
+      const management=path.match(/^\/operator\/api\/live\/(live-[a-f0-9]{12})\/(stop|probe)$/);
+      if(req.method==='POST'&&(path==='/operator/api/live/start'||management)){
+        const command=path==='/operator/api/live/start'?'start':management[2];
+        if(req.headers['x-blofy-operator-action']!=='live-'+command){
+          json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+        }
+        void readAdminJson(req).then(body=>{
+          if(command==='start')return liveSupervisor.start(body);
+          return command==='stop'?liveSupervisor.stop(management[1]):
+            liveSupervisor.probe(management[1]);
+        }).then(({status,body})=>json(res,status,body))
+          .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,{
+            ok:false,code:[400,413,415].includes(e?.status)?e.message:'restream_action_failed'
+          }));
+        return true;
+      }
+    }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
       '/operator/api/sources':()=>portal.sources(),
-      '/operator/api/accounts':()=>portal.accounts(),
+      '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
+      '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
+      '/operator/api/sales-summary':()=>portal.salesSummary(),
+      '/operator/api/media-failures':()=>portal.mediaFailures({
+        sourceId:uri.searchParams.get('sourceId')||''
+      }),
+      '/operator/api/episodes':()=>portal.episodes({
+        sourceId:uri.searchParams.get('sourceId'),
+        seriesId:uri.searchParams.get('seriesId')
+      }),
       '/operator/api/catalog':()=>portal.catalog({
         type:uri.searchParams.get('type'),serverId:uri.searchParams.get('serverId')||'',
         q:uri.searchParams.get('q')||'',offset:uri.searchParams.get('offset')||0
       })
     };
+    const detail=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/credentials$/i);
+    if(req.method==='GET'&&detail){
+      void portal.accountCredentials(detail[1]).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&readable[path]){
       void readable[path]().then(({status,body})=>json(res,status,body))
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
@@ -106,17 +169,23 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     if(req.method==='POST'&&path.startsWith('/operator/api/')){
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
-      const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable)$/i);
+      const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
+      const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer)$/i);
       const action=path==='/operator/api/sources'?'source-add':
         path==='/operator/api/accounts'?'account-add':
-        src?'source-'+src[2]:acc?'account-'+acc[2]:null;
+        path==='/operator/api/codes'?'code-issue':
+        src?'source-'+src[2]:acc?'account-'+acc[2]:code?'code-'+code[2]:null;
       if(!action)return json(res,404,{ok:false,code:'route_not_found'}),true;
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
         if(action==='source-add')return portal.addSource(data);
         if(action==='account-add')return portal.addAccount(data);
+        if(action==='code-issue')return portal.issueCodes(data);
+        if(code)return code[2]==='revoke'?portal.revokeCode(code[1]):
+          portal.codeAction(code[1],code[2],data);
         if(src)return portal.sourceAction(src[1],src[2],data);
+        if(acc&&acc[2]==='reset')return portal.resetAccount(acc[1]);
         return portal.accountAction(acc[1],acc[2]);
       }).then(({status,body})=>json(res,status,body))
         .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,{

@@ -46,6 +46,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="navlink" data-tab="restream"><span>◉</span>إعادة البث</button>
 <button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
 <button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
+<button class="navlink" data-tab="codes"><span>▤</span>أكواد الاشتراك</button>
 <button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
 </nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
 </aside><div class="content">
@@ -96,6 +97,32 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
 <button class="btn" id="stream-probe">▶ فحص تشغيل المصدر</button></div>
 <pre id="stream-report" class="log">اختر مصدرًا لتنفيذ فحص الوسائط.</pre>
+</div>
+<div class="panel"><h3>إعادة بث قناة حقيقية</h3><p class="muted">اختر قناة من المكتبة، ثم فعّل مسار HLS محميًا للمشرف. يبدأ FFmpeg عند المشاهدة ويتوقف بعد انتهاء الطلب. لا يتم نقل المشتركين تلقائيًا.</p>
+<div class="inline">
+<select id="live-source" aria-label="المصدر الفعلي"></select>
+<input id="live-search" placeholder="بحث عن قناة..." maxlength="85" aria-label="بحث عن القناة">
+<button class="btn secondary" id="live-find" type="button">بحث القنوات</button>
+</div>
+<div class="inline" style="margin-top:12px">
+<select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
+<label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
+<button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
+</div>
+<div class="inline" style="margin-top:15px">
+<select id="live-backup-source" aria-label="المصدر الاحتياطي">
+<option value="">بدون مصدر احتياطي</option></select>
+<input id="live-backup-search" placeholder="بحث عن قناة احتياطية مطابقة..." maxlength="85">
+<button class="btn secondary" type="button" id="live-backup-find">بحث البديل</button>
+</div>
+<div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
+<option value="">بدون قناة احتياطية</option></select></div>
+<p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
+</div>
+<div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>القناة</th><th>المسار</th><th>الاتصالات</th><th>الإجراءات</th></tr></thead><tbody id="live-active"></tbody></table></div>
+<video id="live-preview" controls playsinline preload="none" style="display:none;width:min(100%,850px);margin:16px 0;border-radius:10px;background:black" aria-label="معاينة القناة"></video>
+<pre id="live-result" class="log">اختر قناة من مكتبتك ثم ابدأ إعادة البث.</pre>
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
 </section>
 <section class="view" id="page-library">
@@ -105,8 +132,20 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
 <button class="btn" id="library-submit">بحث</button></div></div>
-<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th></tr></thead><tbody id="library-results"></tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+<div class="panel" id="vod-panel" hidden><h3>معاينة فيلم أو حلقة حقيقية</h3>
+<p class="muted" id="vod-selected">اختر عنصرًا من المكتبة.</p>
+<div class="inline" id="vod-episodes-wrap" hidden>
+<select id="vod-episode" aria-label="الحلقة"></select>
+</div>
+<label class="inline" style="margin:12px 0"><input type="checkbox" id="vod-rights">
+أؤكد أن لدي الحق في تشغيل هذا المحتوى ومعاينته.</label>
+<div class="actions"><button class="btn" id="vod-play" type="button">▶ تشغيل المعاينة</button>
+<button class="btn secondary" id="vod-close" type="button">إغلاق</button></div>
+<video id="vod-player" controls playsinline preload="metadata" style="width:min(100%,850px);background:#000;border-radius:11px;margin:14px 0;display:none" aria-label="مشغل الفيلم أو الحلقة"></video>
+<pre id="vod-report" class="log">لن نعرض روابط أو كلمات مرور المصادر في المتصفح.</pre>
+</div>
 </section>
 <section class="view" id="page-accounts">
 <div class="heading"><div><h2>المشتركون</h2><p>حسابات Xtream الفعلية، والصلاحيات والتواريخ من قاعدة البيانات الرئيسية.</p></div><button class="btn" id="toggle-account-form">＋ حساب جديد</button></div>
@@ -116,22 +155,72 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="field"><label for="account-max">أقصى اتصالات</label><input id="account-max" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
 <div class="field"><label for="account-expire">تاريخ الانتهاء</label><input id="account-expire" name="expiresAt" type="date" required></div>
 </div><button class="btn" type="submit">إنشاء الحساب</button></form><div id="account-secret" class="accountsecret" hidden></div></div>
-<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3><button class="btn secondary sm" id="reload-accounts">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>العميل / المستخدم</th><th>المصدر</th><th>الصلاحية</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div></div></section>
+<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3>
+<div class="inline"><input id="account-search" placeholder="بحث باسم العميل أو اليوزر" aria-label="بحث المشتركين" style="max-width:270px">
+<select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
+<option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
+<button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
+<p class="muted">الهوست: <strong class="num">https://blofyplayer.com</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
+<div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
+<section class="view" id="page-codes">
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div></div>
+<div class="cards" style="margin-bottom:15px">
+<div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
+<div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
+<div class="stat"><small>تم تفعيلها</small><strong id="codes-redeemed">—</strong></div>
+<div class="stat"><small>ملغاة</small><strong id="codes-revoked">—</strong></div></div>
+<div class="grid"><div class="panel"><h3>المبيعات اليدوية المسجلة</h3>
+<div class="row"><span class="muted">عدد الأكواد المباعة</span><strong id="codes-sold-count">—</strong></div>
+<div class="row"><span class="muted">إجمالي الإيراد المسجل</span><strong id="codes-sales-sar">—</strong></div>
+<p class="muted">هذه إحصاءات تسجيل يدوي من لوحة الإدارة، وليست مبالغ مؤكدة من بوابة دفع.</p></div>
+<div class="panel"><h3>إدارة الأجهزة وتجديد الاشتراكات</h3>
+<div class="row"><span class="muted">تستحق الانتهاء خلال 7 أيام</span><strong id="codes-expiring">—</strong></div>
+<div class="row"><span class="muted">نقل جهاز الاشتراك</span><strong id="codes-transfers">—</strong></div>
+<p class="muted">زر «نقل الجهاز» يولّد كود استعادة جديدًا ويبطل جلسة الجهاز القديم، <b>دون بدء مدة جديدة</b>.</p>
+</div></div>
+<div class="panel"><h3>إصدار أكواد جديدة</h3>
+<p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. العدد المبدئي كود واحد، وتقدر تزيده تدريجيًا حتى 20 كودًا في الدفعة. تظهر الأكواد كاملة مرة واحدة عند إنشائها فقط.</p>
+<form id="codes-form"><div class="formgrid">
+<div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
+<div class="field"><label for="codes-channel">نوع الكود</label><select id="codes-channel" name="channel"><option value="app" selected>تطبيق BLOFY STREAM فقط</option><option value="xtream">Xtream خارجي (قديم)</option></select></div>
+<div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
+<option value="1">يوم</option><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option>
+<option value="90">3 أشهر (90 يومًا)</option><option value="180">6 أشهر (180 يومًا)</option>
+<option value="365">سنة (365 يومًا)</option><option value="730">سنتان (730 يومًا)</option></select></div>
+<div class="field"><label for="codes-quantity">عدد الأكواد</label><input id="codes-quantity" name="quantity" type="number" min="1" max="20" value="1" required></div>
+<div class="field"><label for="codes-source">المصدر</label><select id="codes-source" name="sourceId"><option value="">جميع المصادر المنشورة</option></select></div>
+<div class="field"><label for="codes-connections">أقصى الاتصالات</label><input id="codes-connections" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
+</div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
+<div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
+<div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>المبيعات</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<tbody id="codes-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
+</div></section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
 <button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
 <button class="btn secondary" id="diagnostic-media">فحص الوسائط</button>
 </div><pre id="diagnostic-output" class="log">نتائج فحوص الوسائط ستظهر هنا.</pre></div>
+<div class="panel"><div class="controls"><h3>العناصر التي أعاد المزود لها 404</h3>
+<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث الحالات</button></div>
+<p class="muted">إحصاءات مسجلة من فحوص التشغيل الحقيقية. عدم وجود سجل لا يعني أن جميع عناصر المكتبة تعمل.</p>
+<div class="tablewrap"><table><thead><tr><th>المصدر</th><th>النوع</th><th>الحالة</th><th>العناصر</th><th>تستحق إعادة الفحص</th></tr></thead>
+<tbody id="diagnostic-failures"></tbody></table></div></div>
 </section><footer>BLOFY STREAM · لوحة واحدة لبيانات السيرفر والمصادر والعملاء · جميع الأرقام من الخدمات الفعلية</footer>
 </main></div></div>
 <script nonce="__NONCE__">
 "use strict";
 (function(){
   var $=function(id){return document.getElementById(id)};
-  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null};
+  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",diagnostics:"الفحص والصيانة"};
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
+    vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
   function count(n){return n===null||n===undefined?"—":formatter.format(n)}
@@ -146,7 +235,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
     document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
     $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
-    if(id==="accounts")loadAccounts();window.scrollTo({top:0,behavior:"instant"});
+    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
   document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
@@ -176,9 +265,9 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   }
   function renderSources(){
     var sources=(state.overview&&state.overview.sources)||[];
-    ["stream-source","diagnostic-source","library-source","account-source"].forEach(function(id){
-      select(id,id==="account-source"?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
-        id==="library-source"?"جميع المصادر":id==="account-source"?"جميع المصادر المنشورة":null);
+    ["stream-source","diagnostic-source","library-source","account-source","codes-source","live-source","live-backup-source"].forEach(function(id){
+      select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
+        id==="library-source"?"جميع المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
     var tb=$("source-list");tb.replaceChildren();
     if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
@@ -235,45 +324,317 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }
     var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(state.libOffset)});
     try{var d=await api("catalog?"+query.toString());var items=d.items||[];
-      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=4;$("library-results").appendChild(tr)}
+      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
         var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===item.serverId});
-        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");cell(tr,item.enabled?"مفعل":"موقوف");$("library-results").appendChild(tr)});
+        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");
+        cell(tr,item.enabled?"مفعل":"موقوف");
+        var controls=node("div",undefined,"actions");
+        if(item.enabled&&(item.type==="movie"||item.type==="series")){
+          controls.appendChild(button(item.type==="movie"?"معاينة فيلم":"عرض الحلقات",
+            function(){prepareVod(item)}));
+        }
+        cell(tr,controls);
+        $("library-results").appendChild(tr)});
       state.libOffset=d.nextOffset||0;$("library-more").hidden=!d.nextOffset;
     }catch(e){show("تعذر تحميل المكتبة: "+e.message,false)}
   }
+  async function prepareVod(item){
+    state.vodSelected=item;
+    $("vod-panel").hidden=false;$("vod-rights").checked=false;
+    var video=$("vod-player");video.pause();video.removeAttribute("src");video.load();
+    video.style.display="none";$("vod-report").textContent="حدد العنصر ووافق على صلاحية المعاينة.";
+    $("vod-episodes-wrap").hidden=item.type!=="series";
+    $("vod-selected").textContent=item.type==="movie"?
+      "معاينة الفيلم: "+item.name:"اختيار حلقة من مسلسل: "+item.name;
+    $("vod-episode").replaceChildren();
+    if(item.type==="series"){
+      $("vod-report").textContent="جار قراءة الحلقات المفهرسة...";
+      try{
+        var params=new URLSearchParams({sourceId:item.serverId,seriesId:item.id});
+        var episodes=await api("episodes?"+params.toString());
+        (episodes.items||[]).forEach(function(e){
+          var option=node("option","حلقة "+e.id+" · "+e.extension);option.value=e.id;
+          $("vod-episode").appendChild(option);
+        });
+        $("vod-report").textContent=episodes.items.length?
+          "اختر الحلقة، ثم وافق على الصلاحية واضغط تشغيل.":"لا توجد حلقات مفهرسة لهذا المسلسل بعد.";
+      }catch(e){$("vod-report").textContent="تعذر قراءة الحلقات: "+e.message}
+    }
+    $("vod-panel").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  $("vod-close").addEventListener("click",function(){
+    var video=$("vod-player");video.pause();video.removeAttribute("src");video.load();
+    video.style.display="none";$("vod-panel").hidden=true;state.vodSelected=null;
+  });
+  $("vod-play").addEventListener("click",async function(){
+    var item=state.vodSelected;
+    if(!item){show("اختر فيلمًا أو مسلسلًا من المكتبة.",false);return}
+    if(!$("vod-rights").checked){show("تأكيد صلاحية معاينة المحتوى مطلوب.",false);return}
+    var type=item.type==="series"?"episode":"movie";
+    var itemId=type==="episode"?$("vod-episode").value:item.id;
+    if(!itemId){show("حدد الحلقة أولًا.",false);return}
+    this.disabled=true;$("vod-report").textContent="جار طلب الرابط المحمي من السيرفر...";
+    try{
+      var info=await action("vod","vod-create",{type,sourceId:item.serverId,itemId,
+        rightsConfirmed:true});
+      var video=$("vod-player");video.src=info.playerUrl;
+      video.style.display="block";video.load();
+      $("vod-report").textContent=info.browserPlayable?
+        "تم تجهيز رابط المعاينة المحمي. اضغط تشغيل للفيديو.":
+        "تم تجهيز المحتوى، لكن صيغة "+info.extension+" قد لا تعمل داخل المتصفح. يلزم مشغل يدعم هذه الصيغة.";
+      show("تم تجهيز معاينة حقيقية من مصدر المحتوى.",true);
+    }catch(e){$("vod-report").textContent="تعذر بدء المعاينة: "+e.message;show(e.message,false)}
+    finally{this.disabled=false}
+  });
   $("library-submit").addEventListener("click",function(){loadCatalog(false)});
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
-  async function loadAccounts(){try{var d=await api("accounts");state.accounts=d.items||[];var tb=$("account-list");tb.replaceChildren();
-    if(!state.accounts.length){var tr=node("tr");var td=cell(tr,"لا توجد حسابات");td.colSpan=4;tb.appendChild(tr)}
-    state.accounts.forEach(function(a){var tr=node("tr");
-      var identity=node("div");identity.appendChild(node("div",a.label,"name"));
-      identity.appendChild(node("div",a.username,"meta"));cell(tr,identity);
-      var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===a.sourceId});
-      cell(tr,src?src.name:a.sourceId||"المصادر المنشورة");
-      var expiry=a.expiresAt?new Date(a.expiresAt).toLocaleDateString("ar-SA"):"بدون انتهاء";
-      cell(tr,(a.enabled?"مفعل · ":"موقوف · ")+expiry+" · "+a.maxConnections+" اتصال");
-      var ctl=node("div",undefined,"actions");ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
-        if(!confirm("تأكيد تغيير حالة المشترك؟"))return;
-        try{await action("account/"+a.id+"/"+(a.enabled?"disable":"enable"),"account-"+(a.enabled?"disable":"enable"),{});
-          show("تم تحديث حساب المشترك.",true);await loadAccounts();}
-        catch(e){show("تعذر تحديث الحساب: "+e.message,false)}
-      },a.enabled?"danger":"secondary"));cell(tr,ctl);tb.appendChild(tr);
+  function dateTime(value){
+    if(!value)return "—";
+    return new Date(value).toLocaleString("en-GB",{timeZone:"Asia/Riyadh",
+      year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  }
+  function attachCopy(target,label,data){
+    var line=node("div",undefined,"row");var title=node("span",label,"muted");
+    var val=node("strong",data||"—","num");val.style.maxWidth="65%";val.style.overflowWrap="anywhere";
+    line.appendChild(title);line.appendChild(val);
+    if(data){line.appendChild(button("نسخ",async function(){
+      try{await navigator.clipboard.writeText(String(data));show("تم النسخ.",true)}
+      catch{show("حدد النص وانسخه يدويًا.",false)}
+    }));}
+    target.appendChild(line);
+  }
+  function showCredentials(target,creds,label){
+    target.hidden=false;target.replaceChildren();
+    target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
+    var host=creds.serverUrl||"https://blofyplayer.com";
+    var m3u=creds.m3uUrl||(
+      host+"/get.php?"+new URLSearchParams({username:creds.username||"",
+      password:creds.password||"",type:"m3u_plus",output:"ts"}).toString());
+    attachCopy(target,"الهوست",host);
+    attachCopy(target,"اليوزر",creds.username||"");
+    attachCopy(target,"الباسورد (يظهر مرة واحدة)",creds.password||"");
+    attachCopy(target,"M3U",creds.password?m3u:"");
+  }
+  function renderAccounts(){
+    var tb=$("account-list");tb.replaceChildren();
+    var q=$("account-search").value.trim().toLowerCase();
+    var filter=$("account-status-filter").value;
+    var selected=state.accounts.filter(function(a){
+      return (!filter||a.status===filter)&&
+        (!q||[a.label,a.username,a.sourceName,a.sourceId].some(function(v){return String(v||"").toLowerCase().includes(q)}));
     });
-  }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}}
-  $("reload-accounts").addEventListener("click",loadAccounts);
-  $("toggle-account-form").addEventListener("click",function(){$("account-form-panel").hidden=!$("account-form-panel").hidden;
-    $("account-secret").hidden=true});
-  $("account-form").addEventListener("submit",async function(e){e.preventDefault();
-    var data=Object.fromEntries(new FormData(this));var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
-    try{var result=await action("accounts","account-add",data);
+    if(!selected.length){var tr=node("tr");var empty=cell(tr,"لا توجد حسابات مطابقة");empty.colSpan=6;tb.appendChild(tr);}
+    selected.forEach(function(a){
+      var tr=node("tr"),who=node("div");
+      who.appendChild(node("div",a.label,"name"));
+      who.appendChild(node("div",a.username,"meta num"));cell(tr,who);
+      cell(tr,a.sourceName||a.sourceId||"جميع المصادر");
+      var status=a.status==="active"?"ساري":a.status==="expired"?"منتهي":"موقوف";
+      var line=node("div");line.appendChild(node("strong",status,
+        a.status==="active"?"ok":a.status==="expired"?"fail":"warn"));
+      line.appendChild(node("div",String(a.maxConnections||1)+" اتصال"+
+        (a.durationDays?" · "+a.durationDays+" يوم":" · اشتراك يدوي"),"meta"));
+      cell(tr,line);
+      var dates=node("div");
+      dates.appendChild(node("div","بدأ: "+dateTime(a.activatedAt||a.createdAt),"meta"));
+      dates.appendChild(node("div","ينتهي: "+dateTime(a.expiresAt),"meta"));
+      if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
+      cell(tr,dates);
+      var urls=node("div");
+      urls.appendChild(node("div","https://blofyplayer.com","meta num"));
+      urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
+      urls.appendChild(button("نسخ الهوست",function(){
+        navigator.clipboard.writeText("https://blofyplayer.com")
+          .then(function(){show("تم نسخ الهوست.",true)})
+          .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
+      }));
+      cell(tr,urls);
+      var ctl=node("div",undefined,"actions");
+      ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
+        if(!confirm("هل تريد تغيير حالة هذا المشترك؟"))return;
+        try{await action("account/"+a.id+"/"+(a.enabled?"disable":"enable"),
+          "account-"+(a.enabled?"disable":"enable"),{});
+          show("تم تحديث المشترك.",true);await loadAccounts(false)}
+        catch(e){show("تعذر تحديث المشترك: "+e.message,false)}
+      },a.enabled?"danger":"secondary"));
+      ctl.appendChild(button("عرض بيانات الدخول",async function(){
+        try{
+          var d=await api("account/"+a.id+"/credentials");
+          if(!d.credentials||!d.credentials.password)throw Error("لا توجد بيانات محفوظة");
+          showCredentials($("account-detail"),d.credentials,
+            "بيانات "+a.username+" — الهوست واليوزر والباسورد وM3U");
+          $("account-detail").scrollIntoView({behavior:"smooth",block:"center"});
+        }catch(e){show(a.passwordAvailable?
+          "تعذر عرض البيانات: "+e.message:
+          "هذا الحساب قديم ولم تُحفظ كلمة مروره. استخدم إعادة تعيين الباسورد إذا رغبت في بيانات جديدة.",false)}
+      }));
+      ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
+        if(!confirm("سيتم إلغاء كلمة المرور القديمة فورًا! هل أنت متأكد؟"))return;
+        try{var d=await action("account/"+a.id+"/reset","account-reset",{});
+          if(!d.credentials||!d.credentials.password)throw Error("لا توجد بيانات جديدة");
+          showCredentials($("account-detail"),d.credentials,
+            "بيانات "+a.username+" الجديدة — احفظها وشاركها مع العميل مرة واحدة");
+          $("account-detail").scrollIntoView({behavior:"smooth",block:"center"});
+          show("تم تعيين كلمة مرور جديدة. لم تعد القديمة تعمل.",true)}
+        catch(e){show("تعذر إعادة التعيين: "+e.message,false)}
+      }));
+      cell(tr,ctl);tb.appendChild(tr);
+    });
+    $("accounts-pagination").textContent="المعروض "+state.accounts.length+" من "+(state.accountsTotal||state.accounts.length);
+    $("accounts-next").hidden=state.accountsNext===null;
+  }
+  async function loadAccounts(more){
+    try{
+      var offset=more?state.accountsNext||0:0;
+      var d=await api("accounts?offset="+offset);
+      state.accounts=more?state.accounts.concat(d.items||[]):d.items||[];
+      state.accountsNext=d.nextOffset===undefined?null:d.nextOffset;
+      state.accountsTotal=d.total;
+      renderAccounts();
+    }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}
+  }
+  $("reload-accounts").addEventListener("click",function(){loadAccounts(false)});
+  $("accounts-next").addEventListener("click",function(){loadAccounts(true)});
+  $("account-search").addEventListener("input",renderAccounts);
+  $("account-status-filter").addEventListener("change",renderAccounts);
+  $("toggle-account-form").addEventListener("click",function(){
+    $("account-form-panel").hidden=!$("account-form-panel").hidden;
+    $("account-secret").hidden=true;
+  });
+  $("account-form").addEventListener("submit",async function(e){
+    e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
+    try{
+      var result=await action("accounts","account-add",data);
       var credentials=result.credentials||{};
-      $("account-secret").hidden=false;
-      $("account-secret").textContent="تم إنشاء الحساب. احفظ البيانات الآن لأنها لن تظهر ثانية: \\nالسيرفر: "+
-        (credentials.serverUrl||"") + "\\nالمستخدم: "+(credentials.username||"")+"\\nكلمة المرور: "+(credentials.password||"");
-      this.reset();show("تم إنشاء حساب حقيقي.",true);await loadAccounts();
+      showCredentials($("account-secret"),credentials,
+        "تم إنشاء الحساب. احفظ بيانات الهوست واليوزر والباسورد وM3U الآن.");
+      this.reset();show("تم إنشاء حساب حقيقي.",true);await loadAccounts(false);
     }catch(err){show("تعذر إنشاء الحساب: "+err.message,false)}
+    finally{submit.disabled=false}
+  });
+  async function loadCodes(more){
+    try{
+      var offset=more?state.codesNext||0:0;
+      var d=await api("codes?offset="+offset);
+      state.codes=more?state.codes.concat(d.items||[]):d.items||[];
+      state.codesNext=d.nextOffset===undefined?null:d.nextOffset;
+      var totals=d.totals||{};
+      value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
+      value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
+      renderCodes();
+      void api("sales-summary").then(function(summary){
+        value("codes-sold-count",count(summary.sold));
+        value("codes-sales-sar",
+          (Number(summary.recorded_revenue_halalas||0)/100).toLocaleString("en-US",
+            {minimumFractionDigits:2,maximumFractionDigits:2})+" ر.س");
+        value("codes-expiring",count(summary.expiring_soon));
+        value("codes-transfers",count(summary.transfers));
+      }).catch(function(){ /* code ledger remains available if sales summary fails */ });
+    }catch(e){show("تعذر تحميل الأكواد: "+e.message,false)}
+  }
+  function renderCodes(){
+    var tb=$("codes-list");tb.replaceChildren();
+    if(!state.codes.length){var tr=node("tr");var td=cell(tr,"لم يتم إصدار أكواد بعد");
+      td.colSpan=8;tb.appendChild(tr)}
+    state.codes.forEach(function(code){
+      var tr=node("tr");
+      cell(tr,(code.label||"BLOFY")+(code.channel==="app"?" · تطبيق فقط":" · Xtream"));
+      cell(tr,code.codeHint||"مخفي");
+      cell(tr,String(code.durationDays)+" يوم");
+      var label=code.status==="unused"?"بانتظار التفعيل":
+        code.status==="redeemed"?"تم التفعيل":"ملغى";
+      var status=node("strong",label,code.status==="redeemed"?"ok":
+        code.status==="unused"?"warn":"fail");cell(tr,status);
+      var sale=code.soldAt?(String((code.salePriceHalalas||0)/100)+" ر.س"):
+        "غير مسجل";
+      var buyer=node("div");
+      buyer.appendChild(node("div",sale,code.soldAt?"ok":"meta"));
+      if(code.buyerName)buyer.appendChild(node("div",code.buyerName,"meta"));
+      if(code.buyerPhone)buyer.appendChild(node("div",code.buyerPhone,"meta num"));
+      cell(tr,buyer);
+      cell(tr,dateTime(code.redeemedAt));cell(tr,dateTime(code.expiresAt));
+      var controls=node("div",undefined,"actions");
+      if(!code.soldAt&&code.status!=="revoked")
+        controls.appendChild(button("تسجيل بيع",async function(){
+          var price=prompt("السعر بالريال السعودي (تسجيل يدوي، لا يتم تحصيل مبلغ):","70");
+          if(price===null)return;
+          var normalized=String(price).trim().replace(",",".");
+          if(!/^\d+(\.\d{1,2})?$/.test(normalized)){
+            show("أدخل مبلغًا صحيحًا بالريال، حتى خانتين عشريتين.",false);return;
+          }
+          var buyerName=prompt("اسم العميل (اختياري):","");if(buyerName===null)return;
+          var buyerPhone=prompt("رقم الجوال اختياري، أرقام فقط (اتركه فارغًا):","");
+          if(buyerPhone===null)return;
+          try{await action("code/"+code.id+"/sell","code-sell",{
+            priceSar:Number(normalized),buyerName,buyerPhone,channel:"manual"
+          });show("تم تسجيل البيع اليدوي.",true);
+            await loadCodes(false)}catch(e){show("تعذر تسجيل البيع: "+e.message,false)}
+        }));
+      if(code.status==="redeemed")
+        controls.appendChild(button("تمديد",async function(){
+          var input=prompt("كم يومًا تضيف إلى الاشتراك؟ (1 إلى 730):","30");
+          if(input===null)return;
+          var days=Number(input);
+          if(!Number.isInteger(days)||days<1||days>730){
+            show("اختر مدة من يوم إلى 730 يومًا.",false);return;
+          }
+          if(!confirm("سيتم تمديد تاريخ انتهاء الاشتراك الحالي، دون بدء اشتراك جديد."))return;
+          try{
+            var d=await action("code/"+code.id+"/extend","code-extend",{days});
+            show("تم التمديد إلى "+dateTime(d.item?.expiresAt),true);
+            await loadCodes(false);await loadAccounts(false)
+          }catch(e){show("تعذر التمديد: "+e.message,false)}
+        }));
+      if(code.status==="redeemed"&&code.channel==="app"&&!code.deviceTransferPending)
+        controls.appendChild(button("نقل الجهاز",async function(){
+          if(!confirm("سيتم إلغاء وصول الجهاز الحالي فورًا، وإنشاء كود جديد للجهاز الآخر. المدة المتبقية لا تتغير. هل تتابع؟"))return;
+          try{
+            var d=await action("code/"+code.id+"/transfer","code-transfer",{});
+            var target=$("codes-issued");target.hidden=false;target.replaceChildren();
+            target.appendChild(node("strong","كود استعادة الجهاز الجديد — يظهر مرة واحدة"));
+            attachCopy(target,"الكود الجديد",d.code);
+            attachCopy(target,"ينتهي الاشتراك في",dateTime(d.expiresAt));
+            target.scrollIntoView({behavior:"smooth",block:"center"});
+            show("تم إلغاء جلسة الجهاز السابق. أعطِ العميل الكود الجديد.",true);
+            await loadCodes(false);
+          }catch(e){show("تعذر نقل الجهاز: "+e.message,false)}
+        },"danger"));
+      if(code.status==="unused")
+        controls.appendChild(button("إلغاء",async function(){
+          if(!confirm("إلغاء هذا الكود غير المفعّل؟ لن يمكن استخدامه بعدها."))return;
+          try{await action("code/"+code.id+"/revoke","code-revoke",{});
+            show("تم إلغاء الكود.",true);await loadCodes(false)}
+          catch(e){show("تعذر الإلغاء: "+e.message,false)}
+        },"danger"));
+      if(controls.childNodes.length===0)controls.appendChild(node("span","—","muted"));
+      cell(tr,controls);tb.appendChild(tr);
+    });
+    $("codes-pagination").textContent="المعروض "+state.codes.length+" كود";
+    $("codes-next").hidden=state.codesNext===null;
+  }
+  $("reload-codes").addEventListener("click",function(){loadCodes(false)});
+  $("codes-next").addEventListener("click",function(){loadCodes(true)});
+  $("codes-form").addEventListener("submit",async function(e){
+    e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
+    try{
+      var d=await action("codes","code-issue",data);
+      var target=$("codes-issued");target.hidden=false;target.replaceChildren();
+      target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
+      if(data.channel==="app"){
+        target.appendChild(node("div","هذه الأكواد للتفعيل من تطبيق BLOFY STREAM فقط. لا ترسل رابط صفحة تفعيل Xtream للعميل.","muted"));
+      } else {
+        attachCopy(target,"رابط تفعيل Xtream الخارجي","https://blofyplayer.com/stream/activate");
+      }
+      (d.items||[]).forEach(function(item,index){
+        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
+      });
+      show("تم إصدار "+(d.items||[]).length+" كود. مدتها لم تبدأ بعد.",true);
+      await loadCodes(false);
+    }catch(e){show("تعذر إصدار الأكواد: "+e.message,false)}
     finally{submit.disabled=false}
   });
   async function probeFrom(sourceId,type,output){
@@ -294,7 +655,137 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       $("diagnostic-output").textContent=JSON.stringify(d,null,2);show("انتهى اختبار الاتصال.",true);await refresh()}
     catch(e){$("diagnostic-output").textContent="فشل اختبار المصدر: "+e.message;show(e.message,false)}
   });
-  refresh();setInterval(function(){if(!document.hidden)refresh()},60000);
+  async function loadLiveChannels(){
+    var sourceId=$("live-source").value,q=$("live-search").value.trim();
+    var selectBox=$("live-channel");selectBox.replaceChildren();
+    var placeholder=node("option","حدد قناة من النتائج");placeholder.value="";
+    selectBox.appendChild(placeholder);
+    if(!sourceId){show("اختر مصدرًا أولًا.",false);return}
+    try{
+      var query=new URLSearchParams({type:"live",serverId:sourceId,q:q,offset:"0"});
+      var d=await api("catalog?"+query.toString());
+      (d.items||[]).filter(function(x){return x.enabled}).forEach(function(x){
+        var option=node("option",x.name);option.value=x.id;selectBox.appendChild(option);
+      });
+      $("live-result").textContent="عُثر على "+(d.items||[]).length+" قناة في هذه الصفحة. اختر القناة المطلوبة.";
+    }catch(e){show("تعذر عرض القنوات: "+e.message,false)}
+  }
+  $("live-find").addEventListener("click",loadLiveChannels);
+  async function loadBackupChannels(){
+    var sourceId=$("live-backup-source").value,q=$("live-backup-search").value.trim();
+    var el=$("live-backup-channel");el.replaceChildren();
+    var empty=node("option","بدون قناة احتياطية");empty.value="";el.appendChild(empty);
+    if(!sourceId)return;
+    try{
+      var query=new URLSearchParams({type:"live",serverId:sourceId,q:q,offset:"0"});
+      var d=await api("catalog?"+query.toString());
+      (d.items||[]).filter(function(item){return item.enabled}).forEach(function(item){
+        var option=node("option",item.name);option.value=item.id;el.appendChild(option);
+      });
+      $("live-result").textContent="تم تحميل خيارات القنوات الاحتياطية. اختر القناة المطابقة لنفس البث.";
+    }catch(e){show("تعذر تحميل القناة الاحتياطية: "+e.message,false)}
+  }
+  $("live-backup-find").addEventListener("click",loadBackupChannels);
+  $("live-backup-search").addEventListener("keydown",function(e){
+    if(e.key==="Enter"){e.preventDefault();loadBackupChannels()}
+  });
+
+  $("live-search").addEventListener("keydown",function(e){
+    if(e.key==="Enter"){e.preventDefault();loadLiveChannels()}
+  });
+  function renderLive(items){
+    var tbody=$("live-active");tbody.replaceChildren();
+    if(!items.length){
+      var tr=node("tr");var td=cell(tr,"لا توجد قنوات تبثها هذه الخدمة الآن");td.colSpan=4;
+      tbody.appendChild(tr);return;
+    }
+    items.forEach(function(item){
+      var tr=node("tr");cell(tr,item.title||item.channelId);
+      cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
+      var status=String(item.connections||0)+(item.failovers?" · تبديلات: "+item.failovers:"");
+      if(item.probePending)status+=" · فحص HLS جار";
+      else if(item.lastProbe)status+=item.lastProbe.ok?" · HLS يعمل":" · HLS فشل: "+item.lastProbe.code;
+      cell(tr,status);
+      var controls=node("div",undefined,"actions");
+      controls.appendChild(button("فحص HLS",async function(){
+        $("live-result").textContent="جار اختبار مقاطع البث الفعلية...";
+        try{var d=await action("live/"+item.path+"/probe","live-probe",{});
+          $("live-result").textContent=d.probePending?
+            "بدأ فحص HLS للمسار "+item.path+". ستظهر النتيجة تلقائيًا في حالة القناة بعد اكتماله.":
+            JSON.stringify(d,null,2);
+          show(d.probePending?"بدأ فحص مقطع HLS الحقيقي. النتيجة لم تثبت بعد.":"انتهى الفحص.",d.ok);
+        }catch(e){$("live-result").textContent=e.message;show(e.message,false)}
+        await loadLive();
+      }));
+      controls.appendChild(button("معاينة",function(){
+        var video=$("live-preview");video.style.display="block";
+        video.src=item.playlist;video.load();
+        $("live-result").textContent="تم فتح المشغل. إذا لم يدعم المتصفح HLS، استخدم فحص HLS لمعرفة حالة نقل الوسائط.";
+      }));
+      controls.appendChild(button("إيقاف",async function(){
+        if(!confirm("إيقاف إعادة بث هذه القناة؟"))return;
+        try{await action("live/"+item.path+"/stop","live-stop",{});
+          var video=$("live-preview");video.pause();video.removeAttribute("src");video.load();
+          video.style.display="none";show("تم إيقاف إعادة البث لهذه القناة.",true);
+          await loadLive();
+        }catch(e){show("تعذر إيقاف إعادة البث: "+e.message,false)}
+      },"danger"));
+      cell(tr,controls);tbody.appendChild(tr);
+    });
+  }
+  async function loadLive(){
+    try{var d=await api("live");renderLive(d.items||[])}
+    catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
+  }
+  $("live-reload").addEventListener("click",loadLive);
+  $("live-start").addEventListener("click",async function(){
+    var sourceId=$("live-source").value,channelId=$("live-channel").value;
+    if(!sourceId||!channelId){show("اختر مصدرًا وقناة أولًا.",false);return}
+    if(!$("live-rights").checked){show("تأكيد صلاحية إعادة البث مطلوب.",false);return}
+    this.disabled=true;$("live-result").textContent="جار إنشاء مسار على MediaMTX...";
+    try{
+      var backupSourceId=$("live-backup-source").value;
+      var backupChannelId=$("live-backup-channel").value;
+      if(Boolean(backupSourceId)!==Boolean(backupChannelId)){
+        show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
+      }
+      var result=await action("live/start","live-start",{
+        sourceId:sourceId,channelId:channelId,
+        backupSourceId:backupSourceId,backupChannelId:backupChannelId,
+        rightsConfirmed:true
+      });
+      $("live-result").textContent=JSON.stringify({
+        ok:result.ok,title:result.title,path:result.path,
+        playlist:result.playlist,onDemand:result.onDemand
+      },null,2);
+      show("تم إنشاء مسار القناة على المحرك. اضغط فحص HLS أو معاينة للتحقق من الفيديو.",true);
+      await loadLive();
+    }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
+    finally{this.disabled=false}
+  });
+  async function loadFailures(){
+    var tbody=$("diagnostic-failures");tbody.replaceChildren();
+    try{
+      var d=await api("media-failures");
+      if(!(d.entries||[]).length){
+        var empty=node("tr");var td=cell(empty,"لا توجد نتائج فشل 404 مسجلة حتى الآن");
+        td.colSpan=5;tbody.appendChild(empty);return;
+      }
+      (d.entries||[]).forEach(function(e){
+        var tr=node("tr");
+        var source=(state.overview?.sources||[]).find(function(s){return s.id===e.sourceId});
+        cell(tr,source?.name||String(e.sourceId).slice(0,8));
+        cell(tr,e.kind);cell(tr,e.state);
+        cell(tr,count(e.count));cell(tr,count(e.due));tbody.appendChild(tr);
+      });
+    }catch(e){
+      var row=node("tr");var td=cell(row,"تعذر عرض سجل الأعطال: "+e.message);
+      td.colSpan=5;tbody.appendChild(row);
+    }
+  }
+  $("diagnostic-failures-reload").addEventListener("click",loadFailures);
+  refresh();loadLive();loadFailures();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures()}},60000);
 })();
 </script>
 </body></html>`;

@@ -56,7 +56,7 @@ export async function verifyRestreamSmoke(originInput,{
   pathName='smoke'
 }={}){
   const origin=normalizePrivateRestreamOrigin(originInput);
-  if(!['smoke','blofy-demo'].includes(pathName))
+  if(!['smoke','blofy-demo'].includes(pathName)&&!/^live-[a-f0-9]{12}$/.test(pathName))
     return {ok:false,stage:'configuration',code:'restream_path_not_permitted',mediaVerified:false};
   const pathPrefix='/'+pathName+'/';
   if(!origin)return {ok:false,stage:'configuration',code:'restream_not_configured',mediaVerified:false};

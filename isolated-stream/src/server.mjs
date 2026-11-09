@@ -8,6 +8,8 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
+import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
+import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -89,7 +91,16 @@ export function createStreamServer({
       return report;
     }finally{checking=false;}
   }
+  const unifiedPortal=createUnifiedPortalClient({
+    secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
+  });
+  const liveSupervisor=createLiveRestreamSupervisor({
+    portal:unifiedPortal,fetchImpl,
+    mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
+  });
+  const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
   const operatorDashboard=createOperatorDashboard({
+    liveSupervisor,vodBroker,
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
@@ -112,6 +123,8 @@ export function createStreamServer({
     }
   });
   const app=http.createServer((req,res)=>{
+    const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
+    if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
@@ -190,7 +203,7 @@ export function createStreamServer({
     },9000);
     t.unref?.();
   }
-  return {app,config:cfg,startBootCanary,canary};
+  return {app,config:cfg,startBootCanary,canary,liveSupervisor};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -206,6 +219,15 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    // Restore safety after app restarts: the prior process held short-lived
+    // private feed credentials only in memory. Clear orphaned worker configs.
+    const staleTimer=setTimeout(()=>{
+      void service.liveSupervisor.recoverOldPaths().then(result=>
+        console.info('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify(result))
+      ).catch(()=>console.warn('BLOFY_STREAM_LIVE_RECOVERY',JSON.stringify({
+        ok:false,code:'restream_control_unavailable'
+      })));
+    },6500);staleTimer.unref?.();
     // Retire the old synthetic dashboard path from MediaMTX once. The normal
     // path 'smoke' remains internal-only for health checks, not the UI.
     if(process.env.BLOFY_STREAM_PURGE_DEMO_PATH_ON_BOOT==='1'){

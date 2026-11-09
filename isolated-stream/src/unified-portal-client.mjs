@@ -39,7 +39,40 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const overview=()=>call(ROOT+'/overview');
   const sources=()=>call(ROOT+'/overview');
-  const accounts=()=>call(ROOT+'/accounts');
+  const accounts=({offset=0}={})=>call(ROOT+'/accounts?'+
+    new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
+  const codes=({offset=0}={})=>call(ROOT+'/codes?'+
+    new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
+  const salesSummary=()=>call(ROOT+'/codes/sales-summary');
+  function codeAction(id,action,data={}){
+    if(!UUID.test(id)||!['sell','extend','transfer'].includes(action))
+      return Promise.resolve({status:400,body:{ok:false,code:'invalid_code_action'}});
+    return call(ROOT+'/codes/'+id+'/'+action,{method:'POST',body:data});
+  }
+  function issueCodes(data){
+    return call(ROOT+'/codes',{method:'POST',body:{
+      label:String(data.label||'BLOFY STREAM').slice(0,100),
+      durationDays:Number(data.durationDays),quantity:Number(data.quantity)||1,
+      maxConnections:Number(data.maxConnections)||1,
+      sourceId:data.sourceId||null,
+      channel:data.channel==='app'?'app':'xtream'
+    }});
+  }
+  function revokeCode(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_code_id'}});
+    return call(ROOT+'/codes/'+id+'/revoke',{method:'POST',body:{}});
+  }
+  function accountCredentials(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/credentials');
+  }
+  function resetAccount(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/reset',{method:'POST',body:{}});
+  }
   function catalog({type,serverId='',q='',offset=0}={}){
     if(!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_media_type'}});
@@ -74,10 +107,35 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function mediaFailures({sourceId=''}={}){
+    if(sourceId&&!UUID.test(sourceId))
+      return Promise.resolve({status:400,body:{ok:false,code:'invalid_source_id'}});
+    const params=sourceId?'?'+new URLSearchParams({sourceId}):'';
+    return call(ROOT+'/media-failures'+params);
+  }
+  function episodes({sourceId,seriesId}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(seriesId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_series_invalid'}});
+    const search=new URLSearchParams({sourceId,seriesId});
+    return call(ROOT+'/episodes?'+search);
+  }
+  function vodItem({sourceId,itemId,type,rightsConfirmed}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,110}$/.test(String(itemId||''))||
+       !['movie','episode'].includes(type)||rightsConfirmed!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_vod_invalid'}});
+    return call(ROOT+'/vod-item',{method:'POST',body:{sourceId,itemId,type,rightsConfirmed:true}});
+  }
+  function liveChannel({sourceId,channelId,rightsConfirmed}={}){
+    if(!UUID.test(sourceId)||!/^[a-zA-Z0-9._-]{1,100}$/.test(String(channelId||''))||rightsConfirmed!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_live_selection_invalid'}});
+    return call(ROOT+'/live-channel',{method:'POST',body:{
+      sourceId,channelId,rightsConfirmed:true
+    }});
+  }
   function accountAction(id,action){
     if(!UUID.test(id)||!accountActions.has(action))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,catalog,addSource,sourceAction,addAccount,accountAction};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,salesSummary,codeAction,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
