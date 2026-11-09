@@ -259,7 +259,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div>
 <div class="panel" id="library-ai-panel">
 <div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
-<button class="btn secondary" type="button" id="library-ai-run" disabled>اقترح تصنيف 12 عنوانًا باستخدام AI</button></div>
+<button class="btn secondary" type="button" id="library-ai-check">فحص Gemini</button>
+<button class="btn secondary" type="button" id="library-ai-run">اقترح تصنيف 12 عنوانًا باستخدام Gemini</button></div>
 <p class="muted" id="library-ai-status">جار فحص إعدادات الذكاء الاصطناعي...</p>
 <p class="muted">ميزة اختيارية ومدفوعة حسب استخدام API. لا ترسل كلمات المرور أو روابط البث أو بيانات العملاء. لا تُطبّق اقتراحات AI تلقائيًا.</p>
 <div class="tablewrap"><table><thead><tr>
@@ -643,27 +644,42 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     link.href=url;link.download="blofy-library-review.csv";link.click();
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
   });
-  var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="";
+  var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
   async function updateLibraryAIStatus(){
+    $("library-ai-status").textContent="جارٍ التحقق من حالة Gemini...";
     try{
       var result=await api("library-ai/status");
       libraryAIReady=result.configured===true;
-      $("library-ai-run").disabled=!libraryAIReady;
+      libraryAIProvider=result.provider||"غير معروف";
+      $("library-ai-run").disabled=false;
       $("library-ai-status").textContent=libraryAIReady?
-        "AI متاح. اضغط لتحليل دفعة صغيرة من 12 عنوانًا بعد الموافقة على إرسال بياناتها.":
-        "AI غير مفعّل: أضف BLOFY_LIBRARY_AI_API_KEY في خدمة بوابة التفعيل عبر Railway. يبقى تحليل المكتبة المحلي يعمل دون مفتاح.";
+        "✅ "+(libraryAIProvider==="gemini"?"Gemini":"AI "+libraryAIProvider)+
+        " مهيأ في خدمة التفعيل. اضغط اقتراح تصنيف 12 عنوانًا لاختبار أول طلب فعلي. الحالة لا تثبت صلاحية المفتاح.":
+        "⚠ الذكاء الاصطناعي غير مهيأ في خدمة التفعيل؛ مزود الخدمة: "+
+        libraryAIProvider+". تحقّق من BLOFY_LIBRARY_AI_PROVIDER وBLOFY_LIBRARY_GEMINI_API_KEY في Railway.";
+      return result;
     }catch(e){
-      libraryAIReady=false;$("library-ai-run").disabled=true;
-      $("library-ai-status").textContent="تعذر التحقق من إعدادات AI: "+e.message;
+      libraryAIReady=false;$("library-ai-run").disabled=false;
+      $("library-ai-status").textContent="⚠ فشل فحص إعدادات Gemini: "+e.message+
+        ". الزر متاح لإظهار حالة المشكلة بدل تعطيله بصمت.";
+      return null;
     }
   }
+  $("library-ai-check").addEventListener("click",async function(){
+    this.disabled=true;
+    try{await updateLibraryAIStatus();}finally{this.disabled=false;}
+  });
   $("library-ai-run").addEventListener("click",async function(){
-    if(!libraryAIReady){show("AI غير مهيأ بعد؛ استخدم التحليل المحلي.",false);return}
+    if(!libraryAIReady){
+      await updateLibraryAIStatus();
+      if(!libraryAIReady){show("Gemini غير مهيأ أو خدمة الربط لا تستجيب. راجع الرسالة داخل قسم AI.",false);return}
+    }
     var sourceId=$("library-source").value,type=$("library-type").value;
     if(!sourceId){show("حدد مصدرًا قبل إرسال طلب AI.",false);return}
     var selection=sourceId+":"+type;
     if(libraryAISelection!==selection){libraryAIOffset=0;libraryAISelection=selection}
-    if(!confirm("سيُرسل إلى خدمة OpenAI ما يصل إلى 12 اسم محتوى وفئتها فقط. قد تُحسب تكلفة API. لن تُرسل بيانات المشتركين أو المصدر، ولن يُعدّل شيء تلقائيًا. هل تتابع؟"))return;
+    if(!confirm("سيُرسل إلى "+(libraryAIProvider==="gemini"?"Google Gemini":"مزود الذكاء الاصطناعي")+
+        " ما يصل إلى 12 اسم محتوى وفئتها فقط. قد تُحسب تكلفة API. لا توجد تعديلات تلقائية. هل تتابع؟"))return;
     this.disabled=true;$("library-ai-status").textContent="جارٍ طلب توصيات AI للدفعة "+(libraryAIOffset/12+1)+"...";
     try{
       var result=await action("library-ai","library-ai",{sourceId,type,offset:libraryAIOffset});
@@ -685,7 +701,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       $("library-ai-status").textContent="لم تنجح توصيات AI: "+e.message+
         ". تحليل المكتبة المحلي يبقى متاحًا.";
       show("تعذر تحليل AI: "+e.message,false);
-    }finally{this.disabled=!libraryAIReady}
+    }finally{this.disabled=false}
   });
   async function prepareVod(item){
     state.vodSelected=item;
