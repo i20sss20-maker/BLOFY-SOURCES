@@ -148,3 +148,16 @@ test('optional model AI is visibly distinct from local rules and requires affirm
     assert.doesNotThrow(()=>new Function(script[1]));
   });
 });
+
+test('operator shows sanitized relay error counts separately from viewer numbers',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/id="relay-errors"/);
+    assert.match(html,/id="relay-error-breakdown"/);
+    assert.match(html,/relayFailureCounts/);
+    assert.match(html,/أخطاء Relay منذ آخر تشغيل/);
+    assert.match(html,/لا يشمل النسخ القديمة/);
+  });
+});
