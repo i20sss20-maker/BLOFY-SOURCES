@@ -8,10 +8,11 @@ const shared='isolated-relay-test-secret-abcdefghijklmnopqrstuvwxyz123456789';
 const ts=Buffer.alloc(188*3,0x11);
 for(let i=0;i<ts.length;i+=188)ts[i]=0x47;
 
-async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock,redirectSourceOrigin='',firstByteTimeoutMs=12000}={}){
+async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers:{'content-type':'video/mp2t','accept-ranges':'bytes'}}),clock,redirectSourceOrigin='',firstByteTimeoutMs=12000,sharedLiveEnabled=false}={}){
   const server=createStreamServer({relaySharedToken:token,
     relayRedirectSourceOrigin:redirectSourceOrigin,
     relayFirstByteTimeoutMs:firstByteTimeoutMs,
+    sharedLiveEnabled,
     relayFetchImpl:fetchImpl,
     relayLookup:async()=>[{address:'93.184.216.34',family:4}],
     fetchImpl:async()=>{throw new Error('mock only')},
@@ -325,4 +326,44 @@ test('seek, live and provider denials never use Range bypass',async()=>{
     assert.equal(calls,1,kind+' '+range+' '+status);
   },{fetchImpl:async()=>{calls++;return new Response('denied',{status})}});
  }
+});
+
+test('ten independent authorized relay grants share a single TS source and tolerate viewer exits',async()=>{
+  let upstreamCalls=0,controller,ticker;
+  const upstream=new ReadableStream({
+    start(c){
+      controller=c;
+      ticker=setInterval(()=>{try{c.enqueue(new Uint8Array(ts))}catch{}},20);
+    },
+    cancel(){clearInterval(ticker)}
+  });
+  try{
+    await host(async origin=>{
+      const grants=await Promise.all(Array.from({length:10},()=>issue(origin,{
+        kind:'live',sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true
+      })));
+      assert.ok(grants.every(g=>g.status===201));
+      const issued=await Promise.all(grants.map(g=>g.json()));
+      assert.equal(new Set(issued.map(g=>g.path)).size,10,
+        'each subscriber has a distinct limited capability');
+      const responses=await Promise.all(issued.map(g=>fetch(origin+g.path)));
+      assert.ok(responses.every(r=>r.status===200));
+      const readers=responses.map(r=>r.body.getReader());
+      const first=await Promise.all(readers.map(r=>r.read()));
+      assert.ok(first.every(x=>!x.done&&x.value.length>=188));
+      assert.equal(upstreamCalls,1,'one source session for ten separate grants');
+      await readers[0].cancel();
+      const remaining=await Promise.all(readers.slice(1).map(r=>r.read()));
+      assert.ok(remaining.every(x=>!x.done&&x.value.length>=188),
+        'disconnecting one viewer must not disconnect remaining viewers');
+      assert.equal(upstreamCalls,1);
+      await Promise.all(readers.slice(1).map(r=>r.cancel().catch(()=>{})));
+    },{sharedLiveEnabled:true,fetchImpl:async()=>{
+      upstreamCalls++;
+      return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
+    }});
+  }finally{
+    clearInterval(ticker);
+    try{await controller?.close()}catch{}
+  }
 });
