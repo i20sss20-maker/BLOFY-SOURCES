@@ -17,5 +17,5 @@ test('scan status uses the protected operator-to-activation bridge',async()=>{
  const client=await readFile(new URL('../src/unified-portal-client.mjs',import.meta.url),'utf8');
  assert.match(server,/operator\/api\/library-ai\/scan-progress/);
  assert.match(server,/portal\.libraryAIScanProgress/);
- assert.match(client,/ROOT\+'\/library-ai\/scan-progress'/);
+ assert.match(client,/ROOT\+'\/library-ai\/scan-progress\?'/);
 });
