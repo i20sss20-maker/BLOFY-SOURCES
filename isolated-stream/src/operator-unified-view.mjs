@@ -667,7 +667,38 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   }
   $("library-ai-check").addEventListener("click",async function(){
     this.disabled=true;
-    try{await updateLibraryAIStatus();}finally{this.disabled=false;}
+    $("library-ai-status").textContent="جارٍ إرسال مثال آمن وصغير إلى Gemini للتحقق من المفتاح والنموذج...";
+    try{
+      var statusResult=await updateLibraryAIStatus();
+      if(!statusResult?.configured){
+        $("library-ai-status").textContent="⚠ Gemini غير مهيأ في Railway؛ افحص مزود AI والمفتاح في بوابة التفعيل.";
+        return;
+      }
+      if(statusResult.provider!=="gemini"){
+        $("library-ai-status").textContent="⚠ المزود النشط ليس Gemini: "+statusResult.provider;
+        return;
+      }
+      var result=await action("library-ai/test","library-ai-test",{});
+      $("library-ai-status").textContent=result.ok?
+        "✅ اتصال Gemini ناجح بالمفتاح والنموذج الحالي. الاقتراحات التجريبية: "+
+          count(result.suggestionsReturned||0)+" (لم يتغير أي محتوى).":
+        "⚠ اختبار Gemini لم ينجح: "+(result.code||"unknown");
+    }catch(e){
+      var messages={
+        stream_ai_provider_auth_failed:"المفتاح غير صالح أو لا يملك تصريحًا.",
+        stream_ai_provider_quota:"انتهت الحصة أو تم تجاوز حدود Gemini.",
+        stream_ai_provider_model_missing:"النموذج المختار غير متاح للمفتاح.",
+        stream_ai_provider_bad_request:"Gemini رفض تنسيق الطلب؛ يلزم تصحيح البرمجة.",
+        stream_ai_model_not_allowed:"النموذج غير مسموح في إعدادات BLOFY.",
+        stream_ai_incomplete:"النموذج لم يكمل الرد.",
+        stream_ai_invalid_output:"رد Gemini لا يطابق الصيغة المطلوبة.",
+        stream_ai_request_failed:"تعذّر اتصال بوابة التفعيل بـ Gemini أو انتهت المهلة.",
+        gemini_connection_test_cooldown:"الفحص محدود: مرة كل دقيقة وخمس مرات بالساعة.",
+        unified_bridge_unreachable:"بوابة التفعيل لا تستجيب عبر الربط المحمي.",
+        unified_bridge_not_configured:"الربط الداخلي بين الخدمات غير مهيأ."
+      };
+      $("library-ai-status").textContent="⚠ فشل اختبار Gemini: "+(messages[e.message]||e.message);
+    }finally{this.disabled=false;}
   });
   $("library-ai-run").addEventListener("click",async function(){
     if(!libraryAIReady){
