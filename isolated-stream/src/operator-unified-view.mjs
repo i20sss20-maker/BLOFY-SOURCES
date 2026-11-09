@@ -243,8 +243,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
 <button class="btn" id="library-submit">بحث</button>
 <button class="btn secondary" id="library-refresh-source" type="button">↻ تحديث محتوى المصدر</button>
+<button class="btn" id="library-codes-sync-all" type="button">نقل تحديثات Xtream إلى الأكواد</button>
 <button class="btn secondary" id="library-smart-toggle" type="button" aria-pressed="false">عرض تجميعي اختياري: إيقاف</button></div></div>
 <p class="muted" id="library-smart-summary">الترتيب الأصلي من Xtream هو المعتمد. بعد ترتيب المحتوى من لوحة Xtream اختر المصدر واضغط «↻ تحديث محتوى المصدر»، ثم حدّث المكتبة في تطبيق العميل.</p>
+<p class="muted" id="library-codes-sync-status" role="status" aria-live="polite">الأكواد المرتبطة بالمصدر تستخدم مكتبة BLOFY المشتركة. اختر المصدر واضغط نقل تحديثات Xtream لقراءة القنوات والأفلام والمسلسلات معًا؛ لا تتغير صلاحيات الاشتراكات أو مددها.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
 <div class="panel" id="library-review-panel">
@@ -1084,6 +1086,71 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       await refresh();await loadCatalog(false);
     }catch(e){show("تعذر تحديث المحتوى: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("library-codes-sync-all").addEventListener("click",async function(){
+    var sourceId=$("library-source").value;
+    var status=$("library-codes-sync-status");
+    if(!sourceId){
+      status.textContent="⚠ اختر مصدر Xtream محددًا (مثل saleh) أولًا. لن نزامن جميع المصادر بدون تحديد.";
+      $("library-source").focus();return;
+    }
+    var original=(state.overview?.sources||[]).find(function(x){return x.id===sourceId;});
+    if(!original){status.textContent="المصدر المحدد غير موجود في قائمة BLOFY.";return;}
+    if(!original.enabled||!original.publishCatalog){
+      status.textContent="المصدر غير مفعل أو غير منشور. لن نغيّر إعداداته أو اشتراكات العملاء.";
+      return;
+    }
+    if(original.syncing||original.queued){
+      status.textContent="المصدر يتزامن بالفعل. ننتظر اكتمال المزامنة الحالية.";return;
+    }
+    if(!confirm("هل أقرأ الترتيب والمحتوى الحالي من لوحة Xtream لمصدر "+
+      original.name+" للقنوات والأفلام والمسلسلات؟ سيظهر للأكواد المرتبطة بعد اكتمال المزامنة وتحديث العملاء للمحتوى، حسب ما ترجعه واجهة المصدر. لا نغيّر الاشتراكات."))return;
+    this.disabled=true;
+    var button=this,lastSync=Number(original.lastSyncAt)||0;
+    status.textContent="جاري إرسال مزامنة الأنواع الثلاثة لمصدر "+original.name+"...";
+    try{
+      var sent=await action("source/"+sourceId+"/sync","source-sync",{
+        types:["live","movie","series"]
+      });
+      status.textContent=sent.queued?
+        "✅ أُضيفت مزامنة المصدر إلى الانتظار. لم تكتمل بعد.":
+        "✅ تم قبول الطلب وبدأت المزامنة. متابعة القنوات والأفلام والمسلسلات...";
+      var attempt=0,maxAttempts=36;
+      async function check(){
+        if(++attempt>maxAttempts){
+          status.textContent="المزامنة استغرقت أكثر من مدة المتابعة. راجع حالة المصدر من لوحة المصادر؛ لا يمكن تأكيد وصول الترتيب للأكواد بعد.";
+          button.disabled=false;return;
+        }
+        try{
+          var response=await api("overview");
+          var updated=(response.sources||[]).find(function(x){return x.id===sourceId;});
+          if(!updated){
+            status.textContent="تعذر العثور على المصدر بعد طلب المزامنة.";
+            button.disabled=false;return;
+          }
+          if(updated.status==="error"&&!updated.syncing&&!updated.queued){
+            status.textContent="⚠ فشلت مزامنة Xtream. راجع المصدر وسجلات الخطأ، ولا تعتمد أن الأكواد تحدثت.";
+            button.disabled=false;return;
+          }
+          if(updated.status==="online"&&Number(updated.lastSyncAt)>lastSync){
+            status.textContent="✅ اكتملت مزامنة المصدر حسب حالة السيرفر. الأكواد المرتبطة تستخدم نفس الفهرس الآن عند إعادة جلب المحتوى. تأكد من ترتيب عينة على كود تجريبي؛ واجهة 8K قد لا تنقل ترتيب الباقات نفسه.";
+            button.disabled=false;
+            await refresh();await loadCatalog(false);return;
+          }
+          status.textContent="جار المزامنة... "+(updated.queued?
+            "بانتظار دور المصدر":"حالة المصدر: "+stateLabel(updated))+
+            " (فحص "+count(attempt)+" من "+count(maxAttempts)+").";
+        }catch(e){
+          status.textContent="متابعة المزامنة غير متاحة مؤقتًا: "+e.message+
+            ". سأعيد الفحص؛ لا نعتبرها مكتملة.";
+        }
+        window.setTimeout(check,5000);
+      }
+      window.setTimeout(check,5000);
+    }catch(e){
+      status.textContent="⚠ لم يبدأ نقل تحديثات Xtream: "+e.message;
+      this.disabled=false;
+    }
   });
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
