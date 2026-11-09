@@ -26,3 +26,14 @@ test('operator routes require the same protected action-header mechanism',async(
  assert.match(client,/ROOT\+'\/library-ai\/chat'/);
  assert.match(client,/ROOT\+'\/library-ai\/apply'/);
 });
+
+test('full catalog plan preview displays three media sections and avoids false full classification claims',()=>{
+ const html=renderOperatorDashboard('nonce-full-sort');
+ assert.match(html,/result\.fullCatalogPreview/);
+ assert.match(html,/معاينة ترتيب الأقسام لجميع الأنواع الثلاثة/);
+ assert.match(html,/القنوات/);
+ assert.match(html,/فرز الأقسام الحالية فقط/);
+ const embedded=html.match(/<script nonce="nonce-full-sort">([\s\S]*?)<\/script>/);
+ assert.ok(embedded);
+ assert.doesNotThrow(()=>new vm.Script(embedded[1]));
+});
