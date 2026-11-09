@@ -133,7 +133,10 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
-<button class="btn" id="library-submit">بحث</button></div></div>
+<button class="btn" id="library-submit">بحث</button>
+<button class="btn secondary" id="library-refresh-source" type="button">↻ تحديث محتوى المصدر</button>
+<button class="btn secondary" id="library-smart-toggle" type="button">تنظيم ذكي: تشغيل</button></div></div>
+<p class="muted" id="library-smart-summary">تصنيف تلقائي بالقواعد من أسماء المحتوى والأقسام، دون إرسال البيانات إلى خدمة ذكاء اصطناعي خارجية. لا يغيّر المصدر.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
 <div class="panel" id="vod-panel" hidden><h3>معاينة فيلم أو حلقة حقيقية</h3>
@@ -184,7 +187,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <p class="muted">زر «نقل الجهاز» يولّد كود استعادة جديدًا ويبطل جلسة الجهاز القديم، <b>دون بدء مدة جديدة</b>.</p>
 </div></div>
 <div class="panel"><h3>إصدار أكواد جديدة</h3>
-<p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. العدد المبدئي كود واحد، وتقدر تزيده تدريجيًا حتى 20 كودًا في الدفعة. تظهر الأكواد كاملة مرة واحدة عند إنشائها فقط.</p>
+<p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. يمكنك إصدار 20 كودًا في الدفعة. تُحفظ الأكواد الجديدة مشفّرة وتظهر للمدير عند طلب نسخها؛ أما الأكواد القديمة غير المحفوظة فلا يمكن استعادتها.</p>
 <form id="codes-form"><div class="formgrid">
 <div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
 <div class="field"><label for="codes-channel">نوع الكود</label><select id="codes-channel" name="channel"><option value="app" selected>تطبيق BLOFY STREAM فقط</option><option value="xtream">Xtream خارجي (قديم)</option></select></div>
@@ -197,8 +200,10 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="field"><label for="codes-connections">أقصى الاتصالات</label><input id="codes-connections" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
 <div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div>
- <p class="muted" style="margin-top:12px">مهم: الأكواد السابقة تظهر مخفية في السجل لحماية العملاء، ولا يمكن استعادة رقمها الكامل من التخزين القديم. الأكواد التي تُصدرها الآن يمكن نسخها من نتيجة الإصدار ومن السجل خلال بقاء الصفحة مفتوحة.</p></div>
-<div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
+ <p class="muted" style="margin-top:12px">مهم: الأكواد القديمة غير المحفوظة مشفّرة لا يمكن استرجاعها. الأكواد الصادرة بعد هذا التحديث متاحة للنسخ بعد تحديث الصفحة، للمشرف المصرّح فقط.</p></div>
+<div class="panel"><div class="controls"><h3>سجل الأكواد</h3>
+<div class="actions"><button class="btn secondary sm" id="codes-copy-visible" type="button">نسخ الأكواد القابلة للاسترجاع</button><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div></div>
+<p class="muted">زر النسخ ثابت لكل كود جديد مشفّر في الخادم، حتى بعد تحديث الصفحة. الأكواد القديمة التي لم تُحفظ مشفّرة لا يمكن استرجاعها. لا تنسخ الأكواد الملغاة.</p>
 <div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود / النسخ</th><th>المدة</th><th>الحالة</th><th>المبيعات</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
 <tbody id="codes-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
@@ -323,6 +328,21 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     catch(err){show("تعذر إضافة المصدر: "+err.message,false)}
     finally{b.disabled=false}
   });
+  var smartLibraryOn=true;
+  function smartGroup(item){
+    var t=String((item.categoryName||"")+" "+(item.name||"")).toLowerCase();
+    if(/sport|sports|ssc|bein|رياض|مباريات|كرة|match/.test(t))return "رياضة";
+    if(/news|أخبار|اخبار|إخبار/.test(t))return "أخبار";
+    if(/kids|cartoon|أطفال|اطفال|كرتون|animation|anime|أنمي/.test(t))return "أطفال وأنمي";
+    if(/movie|film|cinema|فيلم|أفلام|افلام/.test(t))return "أفلام";
+    if(/series|season|مسلسل|دراما/.test(t))return "مسلسلات";
+    return "عام";
+  }
+  $("library-smart-toggle").addEventListener("click",function(){
+    smartLibraryOn=!smartLibraryOn;
+    this.textContent="تنظيم ذكي: "+(smartLibraryOn?"تشغيل":"إيقاف");
+    loadCatalog(false);
+  });
   async function loadCatalog(more){
     var type=$("library-type").value,serverId=$("library-source").value,q=$("library-search").value.trim();
     var params={type:type,serverId:serverId,q:q};
@@ -331,10 +351,18 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }
     var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(state.libOffset)});
     try{var d=await api("catalog?"+query.toString());var items=d.items||[];
+      if(smartLibraryOn){
+        var ranks=["رياضة","أخبار","أطفال وأنمي","أفلام","مسلسلات","عام"];
+        items=items.map(function(item,i){return {item:item,index:i,group:smartGroup(item)}})
+          .sort(function(a,b){return ranks.indexOf(a.group)-ranks.indexOf(b.group)||a.index-b.index})
+          .map(function(row){return row.item});
+        $("library-smart-summary").textContent="تنظيم تلقائي للقائمة المعروضة (حتى 40 عنصرًا في الصفحة) • رياضة، أخبار، أطفال، أفلام، مسلسلات • لا يعدّل فئات المصدر ولا يستخدم نموذج AI خارجي.";
+      }else $("library-smart-summary").textContent="ترتيب المصدر الأصلي؛ لم يُعد ترتيب النتائج.";
+
       if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
         var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===item.serverId});
-        cell(tr,src?src.name:item.serverId);cell(tr,item.categoryName||"—");
+        cell(tr,src?src.name:item.serverId);cell(tr,(smartLibraryOn?"["+smartGroup(item)+"] ":"")+(item.categoryName||"—"));
         cell(tr,item.enabled?"مفعل":"موقوف");
         var controls=node("div",undefined,"actions");
         if(item.enabled&&(item.type==="movie"||item.type==="series")){
@@ -395,6 +423,19 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     finally{this.disabled=false}
   });
   $("library-submit").addEventListener("click",function(){loadCatalog(false)});
+  $("library-refresh-source").addEventListener("click",async function(){
+    var source=$("library-source").value;
+    if(!source){show("اختر مصدرًا محددًا قبل تحديث المحتوى حتى لا نضغط على كل المصادر.",false);return}
+    var typ=$("library-type").value;
+    if(!confirm("تحديث فهرس "+(typ==="live"?"القنوات":typ==="movie"?"الأفلام":"المسلسلات")+" للمصدر المحدد؟ سيعمل في الخلفية داخل الخدمة."))return;
+    this.disabled=true;
+    try{
+      var result=await action("source/"+source+"/sync","source-sync",{types:[typ]});
+      show("تم إرسال طلب تحديث محتوى المصدر. قد يستغرق الفهرس وقتًا حتى يكتمل.",true);
+      await refresh();await loadCatalog(false);
+    }catch(e){show("تعذر تحديث المحتوى: "+e.message,false)}
+    finally{this.disabled=false}
+  });
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
   function dateTime(value){
@@ -526,6 +567,20 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   // The database persists irreversible code proofs. Never write plaintext to
   // localStorage, sessionStorage, URL parameters or the shared code ledger.
   var recentlyIssuedCodes=new Map();
+  async function copyCode(code){
+    var key=String(code.id||"");
+    if(!code.copyAvailable&&!recentlyIssuedCodes.has(key)){
+      show("هذا الكود قديم وغير قابل للاسترجاع؛ لا تصدر كودًا بديلًا إلا عند الحاجة.",false);return;
+    }
+    try{
+      var actual=recentlyIssuedCodes.get(key);
+      if(!actual){
+        var revealed=await api("code/"+key+"/reveal");actual=revealed.code;
+      }
+      await navigator.clipboard.writeText(String(actual));
+      show("تم نسخ الكود المحدد.",true);
+    }catch(e){show("تعذر نسخ الكود: "+e.message,false)}
+  }
   async function loadCodes(more){
     try{
       var offset=more?state.codesNext||0:0;
@@ -556,14 +611,11 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       var visibleCode=recentlyIssuedCodes.get(String(code.id||""));
       var codeCell=node("div");
       codeCell.appendChild(node("strong",visibleCode||code.codeHint||"مخفي","num"));
-      if(visibleCode){
-        codeCell.appendChild(button("نسخ الكود",async function(){
-          try{await navigator.clipboard.writeText(visibleCode);show("تم نسخ الكود.",true)}
-          catch{show("حدد الكود وانسخه يدويًا.",false)}
-        },"secondary sm"));
-      }else{
-        codeCell.appendChild(node("small"," الرقم الكامل غير محفوظ","muted"));
-      }
+      var copyBtn=button("نسخ الكود",function(){void copyCode(code)},"secondary sm");
+      copyBtn.disabled=code.status==="revoked"||(!code.copyAvailable&&!visibleCode);
+      codeCell.appendChild(copyBtn);
+      if(!visibleCode)codeCell.appendChild(node("small",
+        code.copyAvailable?" محفوظ مشفّر — انسخه عند الحاجة":" الرقم الكامل غير قابل للاسترجاع","muted"));
       cell(tr,codeCell);
       cell(tr,String(code.durationDays)+" يوم");
       var label=code.status==="unused"?"بانتظار التفعيل":
@@ -615,6 +667,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
           if(!confirm("سيتم إلغاء وصول الجهاز الحالي فورًا، وإنشاء كود جديد للجهاز الآخر. المدة المتبقية لا تتغير. هل تتابع؟"))return;
           try{
             var d=await action("code/"+code.id+"/transfer","code-transfer",{});
+            if(d.code)recentlyIssuedCodes.set(String(code.id),String(d.code));
             var target=$("codes-issued");target.hidden=false;target.replaceChildren();
             target.appendChild(node("strong","كود استعادة الجهاز الجديد — يظهر مرة واحدة"));
             attachCopy(target,"الكود الجديد",d.code);
@@ -638,6 +691,24 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     $("codes-next").hidden=state.codesNext===null;
   }
   $("reload-codes").addEventListener("click",function(){loadCodes(false)});
+  $("codes-copy-visible").addEventListener("click",async function(){
+    var available=state.codes.filter(function(c){
+      return c.status!=="revoked"&&(c.copyAvailable||recentlyIssuedCodes.has(String(c.id)));
+    });
+    if(!available.length){show("لا توجد أكواد كاملة قابلة للاسترجاع في هذه الصفحة.",false);return}
+    this.disabled=true;
+    try{
+      var codes=[];
+      for(const code of available){
+        var secret=recentlyIssuedCodes.get(String(code.id));
+        if(!secret){var reply=await api("code/"+code.id+"/reveal");secret=reply.code;}
+        codes.push(String(secret));
+      }
+      await navigator.clipboard.writeText(codes.join("\n"));
+      show("تم نسخ "+codes.length+" كودًا قابلًا للاسترجاع من الصفحة المعروضة.",true);
+    }catch(e){show("تعذر نسخ المجموعة: "+e.message,false)}
+    finally{this.disabled=false}
+  });
   $("codes-next").addEventListener("click",function(){loadCodes(true)});
   $("codes-form").addEventListener("submit",async function(e){
     e.preventDefault();var data=Object.fromEntries(new FormData(this));
@@ -659,7 +730,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
         await loadCodes(false);return;
       }
       target.appendChild(node("strong","تم إصدار "+issued.length+" كود بنجاح — انسخها قبل مغادرة الصفحة"));
-      target.appendChild(node("p","تظهر الأرقام الكاملة الآن فقط. سجل الأكواد أدناه يعرض أرقامًا مخفية حمايةً للاشتراكات.","muted"));
+      target.appendChild(node("p","تظهر الأرقام الكاملة هنا، ويمكن استرجاع الأكواد الجديدة لاحقًا بزر نسخ الكود؛ تُحفظ مشفّرة في قاعدة البيانات.","muted"));
       if(data.channel==="app"){
         target.appendChild(node("div","الأكواد لتطبيق BLOFY STREAM فقط؛ الهوست داخلي.","muted"));
       }else{
