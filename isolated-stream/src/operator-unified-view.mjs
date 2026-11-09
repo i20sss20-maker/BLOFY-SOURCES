@@ -450,6 +450,17 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
           show("تم تحديث المشترك.",true);await loadAccounts(false)}
         catch(e){show("تعذر تحديث المشترك: "+e.message,false)}
       },a.enabled?"danger":"secondary"));
+      ctl.appendChild(button("عرض بيانات الدخول",async function(){
+        try{
+          var d=await api("account/"+a.id+"/credentials");
+          if(!d.credentials||!d.credentials.password)throw Error("لا توجد بيانات محفوظة");
+          showCredentials($("account-detail"),d.credentials,
+            "بيانات "+a.username+" — الهوست واليوزر والباسورد وM3U");
+          $("account-detail").scrollIntoView({behavior:"smooth",block:"center"});
+        }catch(e){show(a.passwordAvailable?
+          "تعذر عرض البيانات: "+e.message:
+          "هذا الحساب قديم ولم تُحفظ كلمة مروره. استخدم إعادة تعيين الباسورد إذا رغبت في بيانات جديدة.",false)}
+      }));
       ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
         if(!confirm("سيتم إلغاء كلمة المرور القديمة فورًا! هل أنت متأكد؟"))return;
         try{var d=await action("account/"+a.id+"/reset","account-reset",{});
