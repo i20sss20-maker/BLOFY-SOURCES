@@ -259,6 +259,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div>
 <div class="panel" id="library-ai-panel">
 <div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
+<label class="inline">مصدر AI
+<select id="library-ai-source" aria-label="اختر مصدرًا لتحليل Gemini"><option value="">اختر مصدرًا</option></select></label>
 <button class="btn secondary" type="button" id="library-ai-check">فحص Gemini</button>
 <button class="btn secondary" type="button" id="library-ai-run">اقترح تصنيف 12 عنوانًا باستخدام Gemini</button></div>
 <p class="muted" id="library-ai-status">جار فحص إعدادات الذكاء الاصطناعي...</p>
@@ -463,6 +465,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
         id==="library-source"?"جميع المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
+    // AI works against exactly one source. Populate a nearby selector so
+    // the operator does not have to scroll back to the catalog filters.
+    select("library-ai-source",sources,"اختر مصدرًا");
+    var aiSource=$("library-ai-source");
+    if(!aiSource.value&&sources.length===1)aiSource.value=sources[0].id;
     var tb=$("source-list");tb.replaceChildren();
     if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
     sources.forEach(function(s){
@@ -665,6 +672,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       return null;
     }
   }
+  $("library-ai-source").addEventListener("change",function(){
+    libraryAIOffset=0;libraryAISelection="";
+    $("library-ai-results").replaceChildren();
+    $("library-ai-status").textContent=this.value?
+      "المصدر محدد. اضغط «اقترح تصنيف 12 عنوانًا» لطلب اقتراحات Gemini.":
+      "اختر مصدرًا محددًا من القائمة القريبة لتفعيل اقتراحات Gemini.";
+  });
   $("library-ai-check").addEventListener("click",async function(){
     this.disabled=true;
     $("library-ai-status").textContent="جارٍ إرسال مثال آمن وصغير إلى Gemini للتحقق من المفتاح والنموذج...";
@@ -705,8 +719,19 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       await updateLibraryAIStatus();
       if(!libraryAIReady){show("Gemini غير مهيأ أو خدمة الربط لا تستجيب. راجع الرسالة داخل قسم AI.",false);return}
     }
-    var sourceId=$("library-source").value,type=$("library-type").value;
-    if(!sourceId){show("حدد مصدرًا قبل إرسال طلب AI.",false);return}
+    var sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    if(!sourceId){
+      var sources=(state.overview&&state.overview.sources)||[];
+      if(sources.length===1){sourceId=sources[0].id;$("library-ai-source").value=sourceId;}
+    }
+    if(!sourceId){
+      $("library-ai-status").textContent="⚠ اختر مصدر Xtream من قائمة «مصدر AI» الموجودة هنا أولًا، لأن «جميع المصادر» لا يصلح لاقتراح 12 عنوانًا.";
+      $("library-ai-source").focus();
+      return;
+    }
+    $("library-ai-status").textContent="تم اختيار المصدر: "+
+      ($("library-ai-source").selectedOptions[0]?.textContent||sourceId.slice(0,8));
     var selection=sourceId+":"+type;
     if(libraryAISelection!==selection){libraryAIOffset=0;libraryAISelection=selection}
     if(!confirm("سيُرسل إلى "+(libraryAIProvider==="gemini"?"Google Gemini":"مزود الذكاء الاصطناعي")+
