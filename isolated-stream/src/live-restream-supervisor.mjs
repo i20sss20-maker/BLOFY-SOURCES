@@ -12,6 +12,9 @@ const MTX='http://blofy-stream-media.railway.internal:9997';
 const HLS='http://blofy-stream-media.railway.internal:8888';
 const INTERNAL='http://blofy-stream-api.railway.internal:3000';
 const MAX_PATHS=3,MAX_IDLE_MS=20*60*1000;
+// Reader capacity is per shared MediaMTX path, not per upstream connection.
+// Keep the number of distinct upstream paths bounded separately.
+const MAX_SHARED_READERS=256;
 const ID=/^live-[0-9a-f]{12}$/;
 const TICKET=/^[0-9a-f]{48}$/;
 const USERNAME='blofy-control';
@@ -61,8 +64,10 @@ function buildCommand(name,ticket){
 }
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
-  maxPaths=MAX_PATHS,onUnexpectedError=()=>{}
+  maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,onUnexpectedError=()=>{}
 }={}){
+  if(!Number.isInteger(maxSharedReaders)||maxSharedReaders<1||maxSharedReaders>2048)
+    throw new Error('restream_shared_readers_invalid');
   const auth=optsAuth(mediaPassword);
   const paths=new Map(),tokens=new Map();
   let operation=false,cleanupAt=0;
@@ -99,6 +104,16 @@ export function createLiveRestreamSupervisor({
     if(operation)return safe({ok:false,code:'restream_busy'},429);
     operation=true;
     try{
+      // Reuse one FFmpeg/MediaMTX path when the same licensed channel is opened
+      // again. Otherwise each start would consume a separate upstream stream.
+      const existing=[...paths.values()].find(row=>
+        row.sourceId===sourceId&&String(row.channelId)===String(channelId)&&
+        (!backupSourceId||row.candidateUrls.length>1));
+      if(existing)return safe({ok:true,path:existing.name,title:existing.title,
+        sourceId:existing.sourceId,channelId:existing.channelId,
+        onDemand:true,backupConfigured:existing.backupConfigured,
+        playbackVerified:false,customerTrafficChanged:false,
+        reused:true,playlist:'/operator/api/live/'+existing.name+'/index.m3u8'});
       if(paths.size>=maxPaths)return safe({ok:false,code:'restream_capacity_reached'},409);
       const upstream=await portal.liveChannel({sourceId,channelId,rightsConfirmed:true});
       if(upstream.status!==200||upstream.body?.ok!==true)
@@ -134,7 +149,7 @@ export function createLiveRestreamSupervisor({
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1};
       const config={source:'publisher',runOnDemand:buildCommand(name,ticket),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
-        runOnDemandCloseAfter:'15s',maxReaders:3};
+        runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
       await mediamtx('POST','/v3/config/paths/add/'+name,config);
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
@@ -179,7 +194,7 @@ export function createLiveRestreamSupervisor({
       customerTrafficChanged:false},202);
   }
   function list(){
-    return {ok:true,maxPaths,items:[...paths.values()].map(row=>({
+    return {ok:true,maxPaths,maxSharedReaders,items:[...paths.values()].map(row=>({
       path:row.name,sourceId:row.sourceId,channelId:row.channelId,
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
