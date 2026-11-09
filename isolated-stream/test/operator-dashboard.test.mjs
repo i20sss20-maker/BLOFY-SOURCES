@@ -79,6 +79,9 @@ test('code issuance view exposes copy, export and safe masked ledger',async()=>{
     assert.match(html,/حفظ الأكواد TXT/);
     assert.match(html,/لم تصل الأكواد الكاملة/);
     assert.match(html,/code\.codeHint/);
+    assert.match(html,/recentlyIssuedCodes/);
+    assert.match(html,/نسخ الكود/);
+    assert.match(html,/الرقم الكامل غير محفوظ/);
     assert.doesNotMatch(html,/localStorage\.setItem\([^)]*code/);
   });
 });
