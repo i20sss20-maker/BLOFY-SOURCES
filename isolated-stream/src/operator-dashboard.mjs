@@ -157,6 +157,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       }),
       '/operator/api/library-ai/status':()=>portal.libraryAIStatus(),
       '/operator/api/library-ai/publish-status':()=>portal.libraryAIPublishStatus({sourceId:uri.searchParams.get('sourceId')||''}),
+      '/operator/api/library-ai/scan-progress':()=>portal.libraryAIScanProgress({sourceId:uri.searchParams.get('sourceId')||'',type:uri.searchParams.get('type')||''}),
       '/operator/api/library-review':()=>portal.libraryReview({
         sourceId:uri.searchParams.get('sourceId')||'',type:uri.searchParams.get('type')||''
       }),
