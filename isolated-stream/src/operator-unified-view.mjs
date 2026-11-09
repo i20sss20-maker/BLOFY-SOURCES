@@ -677,6 +677,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     var message=$("library-ai-command").value.trim(),
       sourceId=$("library-ai-source").value||$("library-source").value,
       type=$("library-type").value;
+    // Conversational "ارسله للسيرفر" confirms ONLY the already-reviewed plan.
+    // Approval still requires an explicit browser confirmation dialog.
+    if(libraryAIProposedPlan&&/^(?:اعتمد(?: الخطة)?|انشر(?:ها)?(?: الآن)?|ارسل(?:ه|ها)?(?: للسيرفر)?|طبّق(?:ها)?(?: الآن)?)\.?$/u.test(message)){
+      libraryChatLine("me",message);
+      $("library-ai-chat-apply").click();return;
+    }
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
     $("library-ai-chat-preview").replaceChildren();
     if(message.length<4||message.length>480){
@@ -719,7 +725,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         $("library-ai-chat-status").textContent="خطة جاهزة للمراجعة: "+result.summary+
           ". لن تنشر إلا بعد الضغط على زر الاعتماد.";
       }else{
-        $("library-ai-chat-status").textContent="الطلب تم تحليله، لكن هذا الإجراء غير مدعوم للتنفيذ التلقائي حاليًا.";
+        $("library-ai-chat-status").textContent=result.reply||"تمت مراجعة الطلب؛ لا يوجد تغيير معتمد للنشر.";
       }
     }catch(e){
       $("library-ai-chat-status").textContent="تعذر تحليل الطلب: "+e.message;
