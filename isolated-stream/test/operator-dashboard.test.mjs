@@ -161,3 +161,18 @@ test('operator shows sanitized relay error counts separately from viewer numbers
     assert.match(html,/لا يشمل النسخ القديمة/);
   });
 });
+
+test('shared source circuit and slow-viewer metrics are visible only in operator view',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(r.status,200);
+    const html=await r.text();
+    assert.match(html,/id="fanout-cooldowns"/);
+    assert.match(html,/id="fanout-provider-failures"/);
+    assert.match(html,/id="fanout-slow-disconnects"/);
+    assert.match(html,/fanout\.cooldownFeeds/);
+    const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script);
+    assert.doesNotThrow(()=>new Function(script[1]));
+  });
+});
