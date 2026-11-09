@@ -270,6 +270,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
 <div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
 <div id="library-ai-chat-history" class="log" aria-label="سجل المحادثة" style="white-space:pre-wrap"></div>
+<div class="actions" style="margin-top:12px">
+<button class="btn secondary" type="button" id="library-ai-history-refresh">سجل نشر AI والتراجع</button>
+</div>
+<p id="library-ai-revision" class="muted" role="status" aria-live="polite">لم يتم فحص إصدار المكتبة بعد.</p>
+<div id="library-ai-history" class="log" aria-label="آخر تعديلات الذكاء الاصطناعي"></div>
 </div>
 <div class="panel" id="library-ai-panel">
 <div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
@@ -667,6 +672,65 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   });
   var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
   var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
+  async function refreshAiPublishJournal(){
+    var sourceId=$("library-ai-source").value||$("library-source").value;
+    var area=$("library-ai-history");
+    area.replaceChildren();
+    if(!sourceId){
+      $("library-ai-revision").textContent="حدد مصدر AI حتى تشوف إصدارات المكتبة وسجل نشر التعديلات.";
+      return;
+    }
+    $("library-ai-revision").textContent="جاري قراءة سجل التغييرات المعتمدة...";
+    try{
+      var journal=await api("library-ai/publish-status?"+new URLSearchParams({sourceId}));
+      $("library-ai-revision").textContent="إصدار التغييرات المعتمدة من AI: "+
+        count(journal.revision||0)+". حفظ الإصدار لا يعني وصوله لأجهزة العملاء؛ يحتاجون جلب المحتوى من جديد.";
+      var edits=Array.isArray(journal.changes)?journal.changes:[];
+      if(!edits.length){
+        var empty=document.createElement("p");
+        empty.textContent="ما فيه تعديلات AI مسجلة لهذا المصدر إلى الآن.";
+        area.appendChild(empty);
+      }
+      edits.slice(0,20).forEach(function(x){
+        var line=document.createElement("div");
+        line.style.margin="8px 0";
+        var label=document.createElement("span");
+        label.textContent=(x.operation==="classify_items"?"تصنيف عناصر":x.operation||"تعديل")+
+          " — "+count(x.moved||0)+" عنصرًا — "+
+          (x.reverted?"تم التراجع": "منشور")+" — "+
+          (x.createdAt?new Date(x.createdAt).toLocaleString("ar-SA"):"");
+        line.appendChild(label);
+        if(x.operation==="classify_items"&&!x.reverted){
+          var undo=document.createElement("button");
+          undo.className="btn secondary";undo.type="button";
+          undo.style.marginInlineStart="12px";undo.textContent="تراجع عن هذا النشر";
+          undo.addEventListener("click",async function(){
+            if(!confirm("تأكيد التراجع عن تصنيف هذه الدفعة فقط؟ سيتم التحقق من عدم تغيير العناصر بعدها. قد يحتاج العملاء تحديث المحتوى."))return;
+            this.disabled=true;
+            try{
+              var r=await action("library-ai/rollback","library-ai-rollback",{
+                sourceId,planId:x.planId
+              });
+              $("library-ai-chat-status").textContent="✅ تم إرجاع "+count(r.restored||0)+
+                " عناصر إلى تصنيفاتها السابقة. إصدار التغييرات: "+count(r.revision||0)+
+                ". لم يتم إرسال تحديث تلقائي إلى الأجهزة.";
+              await refreshAiPublishJournal();
+            }catch(e){
+              $("library-ai-chat-status").textContent="⚠ لم يتم التراجع: "+e.message+
+                ". لن يتم تغيير العناصر التي تغيّرت بعد النشر.";
+              this.disabled=false;
+            }
+          });
+          line.appendChild(undo);
+        }
+        area.appendChild(line);
+      });
+    }catch(e){
+      $("library-ai-revision").textContent="تعذّر قراءة سجل تغييرات AI: "+e.message;
+    }
+  }
+  $("library-ai-history-refresh").addEventListener("click",function(){void refreshAiPublishJournal();});
+
   var libraryAIItemOffset=0,libraryAIItemNextOffset=null,libraryAILastItemPrompt='';
   function libraryChatLine(who,text){
     var box=$("library-ai-chat-history");
@@ -801,6 +865,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     $("library-ai-chat-status").textContent="جاري حفظ ترتيب الأقسام في السيرفر...";
     try{
       var r=await action("library-ai/apply","library-ai-apply",{planId:plan.id,approve:true});
+      if(r.catalogRevision!=null)void refreshAiPublishJournal();
       libraryChatLine("ai","تم تطبيق الترتيب في السيرفر. تحديث القوائم عند العملاء يحتاج إعادة جلبها من التطبيق؛ لم تُرسل إشعارات دفع للأجهزة.");
       $("library-ai-chat-status").textContent=r.changedOnServer?
         "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناصر نقلت: "+count(r.movedItems||0)+"، عناوين نظفت: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
@@ -814,6 +879,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     $("library-ai-item-next").disabled=true;
     libraryAIProposedPlan=null;libraryAIUserHistory=[];
     $("library-ai-chat-apply").disabled=true;
+    $("library-ai-history").replaceChildren();
+    $("library-ai-revision").textContent="اختر «سجل نشر AI والتراجع» لعرض إصدار المصدر.";
     $("library-ai-chat-preview").replaceChildren();
   });
   $("library-type").addEventListener("change",function(){

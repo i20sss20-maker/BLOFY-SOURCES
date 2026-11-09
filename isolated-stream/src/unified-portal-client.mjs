@@ -84,6 +84,17 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
   const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
+  function libraryAIPublishStatus({sourceId}={}){
+    if(!UUID.test(String(sourceId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
+    return call(ROOT+'/library-ai/publish-status?'+new URLSearchParams({sourceId}));
+  }
+  function libraryAIRollback({sourceId,planId}={}){
+    if(!UUID.test(String(sourceId||''))||!/^[0-9a-f]{48}$/.test(String(planId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_rollback_invalid'}});
+    return call(ROOT+'/library-ai/rollback',{method:'POST',body:{sourceId,planId}});
+  }
+
   function libraryAIChat({sourceId,type,message,history=[]}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
        typeof message!=='string'||message.trim().length<4||message.length>480)
@@ -177,5 +188,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAIConnectionTest,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }

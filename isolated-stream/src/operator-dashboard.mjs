@@ -156,6 +156,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         seriesId:uri.searchParams.get('seriesId')
       }),
       '/operator/api/library-ai/status':()=>portal.libraryAIStatus(),
+      '/operator/api/library-ai/publish-status':()=>portal.libraryAIPublishStatus({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/library-review':()=>portal.libraryReview({
         sourceId:uri.searchParams.get('sourceId')||'',type:uri.searchParams.get('type')||''
       }),
@@ -185,7 +186,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer)$/i);
-      const action=path==='/operator/api/library-ai/chat'?'library-ai-chat':
+      const action=path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
+        path==='/operator/api/library-ai/chat'?'library-ai-chat':
         path==='/operator/api/library-ai/apply'?'library-ai-apply':
         path==='/operator/api/library-ai/test'?'library-ai-test':
         path==='/operator/api/library-ai'?'library-ai':
@@ -198,6 +200,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='library-ai-rollback')return portal.libraryAIRollback(data);
         if(action==='library-ai-chat')return portal.libraryAIChat(data);
         if(action==='library-ai-apply')return portal.libraryAIApply(data);
         if(action==='library-ai-test')return portal.libraryAIConnectionTest();
