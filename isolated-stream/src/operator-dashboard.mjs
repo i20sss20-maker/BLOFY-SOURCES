@@ -43,7 +43,8 @@ async function readAdminJson(req){
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
-  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null}={}){
+  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
+  sharedRelayStats=()=>null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -82,7 +83,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .then(([engine,mediaControl])=>json(res,200,{
           ok:true,service:'BLOFY-STREAM',role:'independent-control',
           customerTrafficEnabled:false,realSourceMediaVerified:false,
-          engine,mediaControl:{
+          engine,sharedRelay:sharedRelayStats(),mediaControl:{
             controlAvailable:mediaControl.online,activePaths:mediaControl.readyPaths,
             hlsSessions:mediaControl.hlsSessions,diagnostics:mediaControl.diagnostics,
             paths:mediaControl.paths||[]
