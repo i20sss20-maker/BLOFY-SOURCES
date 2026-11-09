@@ -43,6 +43,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
   const codes=({offset=0}={})=>call(ROOT+'/codes?'+
     new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
+  const salesSummary=()=>call(ROOT+'/codes/sales-summary');
+  function codeAction(id,action,data={}){
+    if(!UUID.test(id)||!['sell','extend','transfer'].includes(action))
+      return Promise.resolve({status:400,body:{ok:false,code:'invalid_code_action'}});
+    return call(ROOT+'/codes/'+id+'/'+action,{method:'POST',body:data});
+  }
   function issueCodes(data){
     return call(ROOT+'/codes',{method:'POST',body:{
       label:String(data.label||'BLOFY STREAM').slice(0,100),
@@ -131,5 +137,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,salesSummary,codeAction,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
