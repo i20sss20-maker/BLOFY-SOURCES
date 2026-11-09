@@ -27,10 +27,14 @@ export function createLiveFanout({
     for(const viewer of [...row.viewers]){
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
-      if(viewer.writableLength>512*1024||!viewer.write(chunk)){
+      if(viewer.writableLength+chunk.length>512*1024){
         row.viewers.delete(viewer);
         if(!viewer.destroyed)viewer.destroy();
+        continue;
       }
+      // write() returning false only signals backpressure, not a dropped
+      // client. Retain the connection while its bounded queue drains.
+      viewer.write(chunk);
     }
     if(!row.viewers.size&&!row.idleTimer){
       row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
