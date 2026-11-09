@@ -273,6 +273,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="actions" style="margin-top:12px">
 <button class="btn secondary" type="button" id="library-ai-history-refresh">سجل نشر AI والتراجع</button>
 </div>
+<div class="actions"><button class="btn secondary" type="button" id="library-ai-progress-refresh">تقدّم تحليل المكتبة</button></div>
+<p id="library-ai-scan-progress" class="muted" role="status" aria-live="polite">لم تُقرأ نسبة التحليل بعد.</p>
+<progress id="library-ai-progress-bar" max="100" value="0" style="width:100%" aria-label="نسبة العناصر التي حللها Gemini"></progress>
 <p id="library-ai-revision" class="muted" role="status" aria-live="polite">لم يتم فحص إصدار المكتبة بعد.</p>
 <div id="library-ai-history" class="log" aria-label="آخر تعديلات الذكاء الاصطناعي"></div>
 </div>
@@ -672,6 +675,26 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   });
   var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
   var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
+  async function refreshAiScanProgress(){
+    var sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    var label=$("library-ai-scan-progress");
+    if(!sourceId){label.textContent="اختر مصدر AI لعرض تقدّم التحليل.";return;}
+    label.textContent="جاري قراءة تقدّم التحليل...";
+    try{
+      var result=await api("library-ai/scan-progress?"+
+        new URLSearchParams({sourceId,type}));
+      $("library-ai-progress-bar").value=Math.min(100,Math.max(0,result.estimatedPercent||0));
+      label.textContent="Gemini حلّل "+count(result.analyzedItems||0)+
+        " من "+count(result.totalItems||0)+" عنصرًا — "+count(result.estimatedPercent||0)+
+        "% تقريبًا، "+count(result.analyzedBatches||0)+" دفعة، "+
+        count(result.suggestedMoves||0)+" اقتراحًا عالي الثقة. التحليل لا يعني اعتماد التغييرات أو وصولها للعملاء.";
+    }catch(e){
+      label.textContent="⚠ تعذر قراءة تقدّم تحليل AI: "+e.message;
+    }
+  }
+  $("library-ai-progress-refresh").addEventListener("click",function(){void refreshAiScanProgress();});
+
   async function refreshAiPublishJournal(){
     var sourceId=$("library-ai-source").value||$("library-source").value;
     var area=$("library-ai-history");
@@ -769,6 +792,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       libraryAIUserHistory.push(message);
       if(libraryAIUserHistory.length>4)libraryAIUserHistory.shift();
       libraryChatLine("ai",result.reply||"تم تحليل الطلب.");
+      if(result.action==="classify_items")void refreshAiScanProgress();
       if(result.action==="classify_items"){
         libraryAILastItemPrompt=message;
         libraryAIItemNextOffset=Number.isInteger(result.nextOffset)?result.nextOffset:null;
@@ -881,6 +905,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     $("library-ai-chat-apply").disabled=true;
     $("library-ai-history").replaceChildren();
     $("library-ai-revision").textContent="اختر «سجل نشر AI والتراجع» لعرض إصدار المصدر.";
+    $("library-ai-scan-progress").textContent="اختر «تقدّم تحليل المكتبة» لقراءة إحصاءات المصدر.";
+    $("library-ai-progress-bar").value=0;
     $("library-ai-chat-preview").replaceChildren();
   });
   $("library-type").addEventListener("change",function(){
