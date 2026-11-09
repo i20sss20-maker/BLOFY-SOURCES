@@ -85,3 +85,15 @@ test('code issuance view exposes copy, export and safe masked ledger',async()=>{
     assert.doesNotMatch(html,/localStorage\.setItem\([^)]*code/);
   });
 });
+
+test('live dashboard refreshes running HLS probes and clarifies unsupported native HLS',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const reply=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(reply.status,200);
+    const html=await reply.text();
+    assert.match(html,/liveProbeRefresh=setTimeout\(loadLive,4000\)/);
+    assert.match(html,/canPlayType\("application\/vnd\.apple\.mpegurl"\)/);
+    assert.match(html,/restream_provider_denied/);
+    assert.match(html,/القناة غير موجودة لدى المصدر/);
+  });
+});

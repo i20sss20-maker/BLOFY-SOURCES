@@ -759,7 +759,20 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?String(mt.hlsViewers):"غير متاح");
       var status=String(item.connections||0)+" سحب مباشر"+(item.failovers?" · تبديلات: "+item.failovers:"");
       if(item.probePending)status+=" · فحص HLS جار";
-      else if(item.lastProbe)status+=item.lastProbe.ok?" · HLS يعمل":" · HLS فشل: "+item.lastProbe.code;
+      else if(item.lastProbe){
+        var reason=String(item.lastProbe.code||"");
+        var cause={
+          restream_provider_not_found:"القناة غير موجودة لدى المصدر (404)",
+          restream_provider_denied:"المصدر رفض الاتصال أو بلغ حد الاتصالات",
+          restream_provider_unavailable:"اتصال المصدر غير متاح",
+          restream_invalid_media:"المصدر لم يرسل فيديو TS صالحًا",
+          restream_hls_unavailable:"محرك HLS لم يقدم مقطعًا",
+          restream_smoke_http_error:"فشل طلب HLS من المحرك"
+        };
+        status+=item.lastProbe.ok?" · HLS يعمل":" · فشل: "+(cause[reason]||reason);
+      }
+      if(item.lastError&&!item.probePending)
+        status+=" · المصدر: "+String(item.lastError).slice(0,70);
       cell(tr,status);
       var controls=node("div",undefined,"actions");
       controls.appendChild(button("فحص HLS",async function(){
@@ -773,9 +786,15 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
         await loadLive();
       }));
       controls.appendChild(button("معاينة",function(){
-        var video=$("live-preview");video.style.display="block";
-        video.src=item.playlist;video.load();
-        $("live-result").textContent="تم فتح المشغل. إذا لم يدعم المتصفح HLS، استخدم فحص HLS لمعرفة حالة نقل الوسائط.";
+        var video=$("live-preview");
+        if(!video.canPlayType("application/vnd.apple.mpegurl")){
+          video.pause();video.removeAttribute("src");video.load();
+          video.style.display="none";
+          $("live-result").textContent="هذا المتصفح لا يدعم HLS مباشرة. شاشة سوداء هنا لا تعني أن القناة متوقفة. استخدم فحص HLS لتأكيد وصول المقاطع، أو مشغل HLS يدعمها مثل VLC.";
+          return;
+        }
+        video.style.display="block";video.src=item.playlist;video.load();
+        $("live-result").textContent="تم فتح معاينة HLS. تأكد من ظهور فيديو فعلي، وليس الصورة الثابتة للقناة.";
       }));
       controls.appendChild(button("إيقاف",async function(){
         if(!confirm("إيقاف إعادة بث هذه القناة؟"))return;
@@ -788,13 +807,18 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       cell(tr,controls);tbody.appendChild(tr);
     });
   }
+  var liveProbeRefresh=null;
   async function loadLive(){
+    if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
     try{
       var results=await Promise.allSettled([api("live"),api("state")]);
       if(results[0].status!=="fulfilled")throw results[0].reason;
       var d=results[0].value;
       var media=results[1].status==="fulfilled"?results[1].value.mediaControl:null;
       renderLive(d.items||[],media&&media.paths||[]);
+      if((d.items||[]).some(function(item){return item.probePending;})){
+        liveProbeRefresh=setTimeout(loadLive,4000);
+      }
     }
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
