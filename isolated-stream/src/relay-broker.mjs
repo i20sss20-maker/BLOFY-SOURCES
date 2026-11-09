@@ -5,6 +5,7 @@ import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
+import {createLiveFanout} from './live-fanout.mjs';
 
 const TTL=45_000,MAX_TICKETS=1024,MAX_ISSUE_BYTES=4096;
 const TICKET_PATH=/^\/relay\/([0-9a-f]{48})$/;
@@ -60,11 +61,13 @@ function permittedReturnHeaders(response){
 }
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
-  maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000
+  maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
+  sharedLiveEnabled=false
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
   const tickets=new Map();
+  const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.
@@ -106,7 +109,9 @@ export function createRelayBroker({
     const id=issueToken();
     if(!/^[0-9a-f]{48}$/.test(id)||tickets.has(id))
       return respond(res,503,{ok:false,code:'relay_issue_unavailable'});
-    tickets.set(id,{sourceUrl:url.href,kind:input.kind,expiresAt:clock()+TTL,uses:0});
+    tickets.set(id,{sourceUrl:url.href,kind:input.kind,
+      sharedLive:sharedLiveEnabled===true&&input.kind==='live'&&input.sharedLive===true,
+      expiresAt:clock()+TTL,uses:0});
     return respond(res,201,{ok:true,path:'/relay/'+id,expiresInSeconds:45});
   }
   async function relay(req,res){
@@ -123,6 +128,10 @@ export function createRelayBroker({
     }
     row.uses++;
     if(row.uses>=5)tickets.delete(match[1]);
+    if(row.sharedLive){
+      try{return await fanout.handle(req,res,row.sourceUrl)}
+      catch{return respond(res,502,{ok:false,code:'relay_provider_unavailable'})}
+    }
     const controller=new AbortController();
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
     const onAborted=()=>controller.abort();
@@ -236,5 +245,6 @@ export function createRelayBroker({
       if(upstream?.body&&!upstream.bodyUsed){try{await upstream.body.cancel()}catch{}}
     }
   }
-  return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size})};
+  return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size,
+    sharedLiveEnabled,fanout:fanout.stats()})};
 }
