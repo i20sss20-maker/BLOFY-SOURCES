@@ -50,3 +50,25 @@ test('invalid capacities and non-media provider replies fail closed',async()=>{
     status:200,headers:{'content-type':'text/html'}
   })});
 });
+
+test('ten simulated viewers receive the same source media from one upstream call',async()=>{
+  let upstreamCalls=0,emitter;
+  const upstream=new ReadableStream({start(controller){emitter=controller}});
+  await service(async(base,broker)=>{
+    const viewers=Array.from({length:10},()=>fetch(base+'/live'));
+    for(let n=0;n<100&&broker.stats().viewers<10;n++){
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    assert.equal(broker.stats().viewers,10);
+    emitter.enqueue(new Uint8Array(packet));
+    const responses=await Promise.all(viewers);
+    assert.ok(responses.every(r=>r.status===200));
+    const readers=responses.map(r=>r.body.getReader());
+    const chunks=await Promise.all(readers.map(r=>r.read()));
+    assert.ok(chunks.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+    assert.equal(upstreamCalls,1);
+    await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+  },{fetchImpl:async()=>{upstreamCalls++;
+    return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
+  }});
+});
