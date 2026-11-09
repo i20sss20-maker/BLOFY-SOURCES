@@ -644,12 +644,12 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
       var batchActions=node("div",undefined,"actions");
       batchActions.appendChild(button("نسخ جميع الأكواد",async function(){
         try{
-          await navigator.clipboard.writeText(fullCodes.join("\\n"));
+          await navigator.clipboard.writeText(fullCodes.join("\n"));
           show("تم نسخ جميع الأكواد.",true);
         }catch(e){show("تعذر النسخ التلقائي؛ انسخ الأرقام من الأسفل.",false);}
       }));
       batchActions.appendChild(button("حفظ الأكواد TXT",function(){
-        var blob=new Blob([fullCodes.join("\\n")+"\\n"],{type:"text/plain;charset=utf-8"});
+        var blob=new Blob([fullCodes.join("\n")+"\n"],{type:"text/plain;charset=utf-8"});
         var url=URL.createObjectURL(blob),link=document.createElement("a");
         link.href=url;link.download="blofy-stream-issued-codes.txt";link.click();
         setTimeout(function(){URL.revokeObjectURL(url)},1000);
