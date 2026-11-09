@@ -81,7 +81,7 @@ test('code issuance view exposes copy, export and safe masked ledger',async()=>{
     assert.match(html,/code\.codeHint/);
     assert.match(html,/recentlyIssuedCodes/);
     assert.match(html,/نسخ الكود/);
-    assert.match(html,/الرقم الكامل غير محفوظ/);
+    assert.match(html,/الرقم الكامل غير قابل للاسترجاع/);
     assert.doesNotMatch(html,/localStorage\.setItem\([^)]*code/);
   });
 });
@@ -95,5 +95,21 @@ test('live dashboard refreshes running HLS probes and clarifies unsupported nati
     assert.match(html,/canPlayType\("application\/vnd\.apple\.mpegurl"\)/);
     assert.match(html,/restream_provider_denied/);
     assert.match(html,/القناة غير موجودة لدى المصدر/);
+  });
+});
+
+test('newly issued encrypted codes have a persistent authenticated copy control',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const reply=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(reply.status,200);
+    const html=await reply.text();
+    assert.match(html,/id="codes-copy-visible"/);
+    assert.match(html,/id="library-refresh-source"/);
+    assert.match(html,/id="library-smart-toggle"/);
+    assert.match(html,/code\.copyAvailable/);
+    assert.match(html,/copyCode\(code\)/);
+    assert.match(html,/api\("code\/"\+key\+"\/reveal"\)/);
+    assert.match(html,/source-sync/);
+    assert.match(html,/لا يستخدم نموذج AI خارجي/);
   });
 });

@@ -157,6 +157,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         q:uri.searchParams.get('q')||'',offset:uri.searchParams.get('offset')||0
       })
     };
+    const codeReveal=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/reveal$/i);
+    if(req.method==='GET'&&codeReveal){
+      void portal.codeReveal(codeReveal[1]).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
+      return true;
+    }
     const detail=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/credentials$/i);
     if(req.method==='GET'&&detail){
       void portal.accountCredentials(detail[1]).then(({status,body})=>json(res,status,body))
