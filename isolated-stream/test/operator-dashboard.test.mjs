@@ -141,7 +141,8 @@ test('optional model AI is visibly distinct from local rules and requires affirm
     assert.match(html,/id="library-ai-results"/);
     assert.match(html,/api\("library-ai\/status"\)/);
     assert.match(html,/action\("library-ai","library-ai"/);
-    assert.match(html,/confirm\("سيُرسل إلى خدمة OpenAI/);
+    assert.match(html,/libraryAIProvider==="gemini"/);
+    assert.match(html,/id="library-ai-check"/);
     assert.match(html,/لا تُطبّق اقتراحات AI تلقائيًا/);
     const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
     assert.ok(script);
