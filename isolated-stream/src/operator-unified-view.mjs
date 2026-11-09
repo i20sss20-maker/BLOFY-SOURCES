@@ -46,6 +46,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <button class="navlink" data-tab="restream"><span>◉</span>إعادة البث</button>
 <button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
 <button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
+<button class="navlink" data-tab="codes"><span>▤</span>أكواد الاشتراك</button>
 <button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
 </nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
 </aside><div class="content">
@@ -154,8 +155,43 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="field"><label for="account-max">أقصى اتصالات</label><input id="account-max" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
 <div class="field"><label for="account-expire">تاريخ الانتهاء</label><input id="account-expire" name="expiresAt" type="date" required></div>
 </div><button class="btn" type="submit">إنشاء الحساب</button></form><div id="account-secret" class="accountsecret" hidden></div></div>
-<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3><button class="btn secondary sm" id="reload-accounts">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>العميل / المستخدم</th><th>المصدر</th><th>الصلاحية</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div></div></section>
+<div class="panel"><div class="controls"><h3>الحسابات المسجلة</h3>
+<div class="inline"><input id="account-search" placeholder="بحث باسم العميل أو اليوزر" aria-label="بحث المشتركين" style="max-width:270px">
+<select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
+<option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
+<button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
+<p class="muted">الهوست: <strong class="num">https://blofyplayer.com</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
+<div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
+<section class="view" id="page-codes">
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>مدة الكود لا تبدأ عند الإصدار. تبدأ عند أول تفعيل ناجح، ويُنشأ حساب Xtream تلقائيًا.</p></div>
+<a class="btn secondary" href="https://blofyplayer.com/stream/activate" target="_blank" rel="noopener noreferrer">صفحة تفعيل العميل ↗</a></div>
+<div class="cards" style="margin-bottom:15px">
+<div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
+<div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
+<div class="stat"><small>تم تفعيلها</small><strong id="codes-redeemed">—</strong></div>
+<div class="stat"><small>ملغاة</small><strong id="codes-revoked">—</strong></div></div>
+<div class="panel"><h3>إصدار أكواد جديدة</h3>
+<p class="muted">يمكن إصدار دفعة حتى 20 كودًا. أكواد الاشتراك تظهر كاملة مرة واحدة عند إنشائها فقط؛ لا تخزن بصيغتها الأصلية.</p>
+<form id="codes-form"><div class="formgrid">
+<div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
+<div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
+<option value="1">يوم</option><option value="7">7 أيام</option><option value="30" selected>30 يومًا</option>
+<option value="90">3 أشهر (90 يومًا)</option><option value="180">6 أشهر (180 يومًا)</option>
+<option value="365">سنة (365 يومًا)</option><option value="730">سنتان (730 يومًا)</option></select></div>
+<div class="field"><label for="codes-quantity">عدد الأكواد</label><input id="codes-quantity" name="quantity" type="number" min="1" max="20" value="1" required></div>
+<div class="field"><label for="codes-source">المصدر</label><select id="codes-source" name="sourceId"><option value="">جميع المصادر المنشورة</option></select></div>
+<div class="field"><label for="codes-connections">أقصى الاتصالات</label><input id="codes-connections" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
+</div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
+<div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
+<div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>الوصف</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<tbody id="codes-list"></tbody></table></div>
+<div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
+<button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
+</div></section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -173,8 +209,8 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 "use strict";
 (function(){
   var $=function(id){return document.getElementById(id)};
-  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],libOffset:0,libParams:null,
+  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",diagnostics:"الفحص والصيانة"};
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
     vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
@@ -190,7 +226,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
     document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
     $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
-    if(id==="accounts")loadAccounts();window.scrollTo({top:0,behavior:"instant"});
+    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
   document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
