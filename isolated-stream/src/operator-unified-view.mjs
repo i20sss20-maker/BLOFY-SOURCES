@@ -265,7 +265,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="actions">
 <button class="btn" type="button" id="library-ai-chat-send">ارسل إلى AI</button>
 <button class="btn secondary" type="button" id="library-ai-item-next" disabled>تصنيف الدفعة التالية (12 عنصرًا)</button>
-<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر ترتيب الأقسام</button>
+<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر التعديلات المحددة</button>
 </div>
 <p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
 <div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
