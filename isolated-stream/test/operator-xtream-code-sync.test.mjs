@@ -19,7 +19,7 @@ test('Xtream 8K package changes can be requested for all 3 types from one select
 });
 test('operator sync uses existing authenticated source-scoped action and no browser secrets',async()=>{
  const source=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
- assert.match(source,/source-sync/);
+ assert.match(source,/x-blofy-operator-action/);
  const html=renderOperatorDashboard('nonce-code-sync');
  assert.doesNotMatch(html,/password=|api_key=/i);
  assert.match(html,/لا تتغير صلاحيات الاشتراكات أو مددها/);
