@@ -267,6 +267,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر ترتيب الأقسام</button>
 </div>
 <p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
+<div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
 <div id="library-ai-chat-history" class="log" aria-label="سجل المحادثة" style="white-space:pre-wrap"></div>
 </div>
 <div class="panel" id="library-ai-panel">
@@ -677,6 +678,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       sourceId=$("library-ai-source").value||$("library-source").value,
       type=$("library-type").value;
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+    $("library-ai-chat-preview").replaceChildren();
     if(message.length<4||message.length>480){
       $("library-ai-chat-status").textContent="اكتب طلبًا واضحًا من 4 إلى 480 حرفًا.";return;
     }
@@ -692,6 +694,25 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(result.requiresApproval&&result.planId){
         libraryAIProposedPlan={id:result.planId,sourceId,type,summary:result.summary};
         $("library-ai-chat-apply").disabled=false;
+        var review=$("library-ai-chat-preview");review.replaceChildren();
+        var beforeAfter=Array.isArray(result.proposedChanges)?result.proposedChanges:[];
+        var categories=Array.isArray(result.categoryPreview)?result.categoryPreview:[];
+        if(beforeAfter.length){
+          var title=document.createElement("strong");title.textContent="الأسماء قبل ← بعد:";
+          review.appendChild(title);
+          beforeAfter.slice(0,12).forEach(function(x){
+            var line=document.createElement("p");
+            line.textContent=String(x.before||"")+"  ←  "+String(x.after||"");
+            review.appendChild(line);
+          });
+        }else if(categories.length){
+          var head=document.createElement("strong");head.textContent="أول 12 قسمًا بعد الترتيب:";
+          review.appendChild(head);
+          categories.slice(0,12).forEach(function(x,index){
+            var line=document.createElement("p");line.textContent=(index+1)+" — "+String(x.name||"");
+            review.appendChild(line);
+          });
+        }
         $("library-ai-chat-status").textContent="خطة جاهزة للمراجعة: "+result.summary+
           ". لن تنشر إلا بعد الضغط على زر الاعتماد.";
       }else{
@@ -717,7 +738,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var r=await action("library-ai/apply","library-ai-apply",{planId:plan.id,approve:true});
       libraryChatLine("ai","تم تطبيق الترتيب في السيرفر. تحديث القوائم عند العملاء يحتاج إعادة جلبها من التطبيق؛ لم تُرسل إشعارات دفع للأجهزة.");
       $("library-ai-chat-status").textContent=r.changedOnServer?
-        "✅ تم حفظ ترتيب الأقسام على السيرفر. العملاء يحتاجون تحديث المكتبة. الفئات المحدّثة: "+count(r.updatedCategories||0):
+        "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناوين تم تنظيفها: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
         "تعذر إثبات حفظ التغيير.";
     }catch(e){
       $("library-ai-chat-status").textContent="لم يُنشر التغيير: "+e.message;
@@ -725,6 +746,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   });
   $("library-ai-source").addEventListener("change",function(){
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+    $("library-ai-chat-preview").replaceChildren();
   });
   $("library-type").addEventListener("change",function(){
     libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
