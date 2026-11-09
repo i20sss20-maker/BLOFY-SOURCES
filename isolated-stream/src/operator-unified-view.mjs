@@ -364,7 +364,46 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);if(id==="library")void updateLibraryAIStatus();window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
-  document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.go)})});
+  document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){
+    tab(e.dataset.go);
+    var target=e.dataset.focus;
+    if(target)requestAnimationFrame(function(){var field=$(target);if(field)field.focus()});
+  })});
+  // Keyboard-friendly command palette: navigation only, never mutates data.
+  var commandPalette=$("command-palette"),commandSearch=$("command-search");
+  Object.keys(tabs).forEach(function(id){
+    var item=node("button",tabs[id],"command-item");
+    item.type="button";item.dataset.commandLabel=tabs[id];item.dataset.target=id;
+    item.addEventListener("click",function(){
+      commandPalette.close();commandSearch.value="";filterCommands();tab(id);
+    });
+    $("command-list").appendChild(item);
+  });
+  function filterCommands(){
+    var query=commandSearch.value.trim().toLowerCase();
+    $("command-list").querySelectorAll(".command-item").forEach(function(item){
+      item.hidden=!!query&&!item.dataset.commandLabel.toLowerCase().includes(query);
+    });
+  }
+  commandSearch.addEventListener("input",filterCommands);
+  function openCommands(){
+    if(typeof commandPalette.showModal!=="function")return;
+    if(!commandPalette.open)commandPalette.showModal();
+    commandSearch.value="";filterCommands();commandSearch.focus();
+  }
+  $("open-command").addEventListener("click",openCommands);
+  document.addEventListener("keydown",function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){
+      e.preventDefault();
+      if(commandPalette.open)commandPalette.close();
+      else openCommands();
+    }
+  });
+  $("density-toggle").addEventListener("click",function(){
+    var compact=document.body.classList.toggle("compact");
+    this.setAttribute("aria-pressed",compact?"true":"false");
+    this.textContent=compact?"عرض مريح":"عرض مكثف";
+  });
   async function api(path){var r=await fetch("/operator/api/"+path,{cache:"no-store",credentials:"same-origin"});var d=await r.json();
     if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
   async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
@@ -437,6 +476,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     else{state.overview=null;show("تعذر جلب المصادر: "+results[0].reason.message,false)}
     if(results[1].status==="fulfilled")state.engine=results[1].value;else state.engine=null;
     renderHome();
+    if(state.overview&&state.engine){
+      var saudiTime=new Intl.DateTimeFormat("en-GB",{
+        hour:"2-digit",minute:"2-digit",timeZone:"Asia/Riyadh"
+      }).format(new Date());
+      value("last-updated","آخر تحديث: "+saudiTime+" KSA");
+    }else value("last-updated","حالة بعض الخدمات غير مؤكدة");
   }catch(e){show(e.message,false)}}
   async function doSource(id,cmd,body){try{var d=await action("source/"+id+"/"+cmd,"source-"+cmd,body||{});
     if(cmd==="probe"){show("وصلت نتيجة فحص الوسائط. راجع التشخيص.",true);
@@ -445,6 +490,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     await refresh();return d;
   }catch(e){show("تعذر تنفيذ الأمر: "+e.message,false);return null;}}
   $("refresh").addEventListener("click",refresh);
+  $("home-refresh").addEventListener("click",function(){void refresh();void loadLive();void loadFailures()});
   $("reload-sources").addEventListener("click",refresh);
   $("toggle-source-form").addEventListener("click",function(){$("source-form-panel").hidden=!$("source-form-panel").hidden});
   $("cancel-source").addEventListener("click",function(){$("source-form-panel").hidden=true});
