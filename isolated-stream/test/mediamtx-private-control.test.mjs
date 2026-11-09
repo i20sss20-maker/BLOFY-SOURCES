@@ -108,3 +108,21 @@ test('per-path HLS viewer counts are aggregated without exposing IDs or tokens',
   assert.equal(JSON.stringify(state).includes('sensitive-session'),false);
   assert.equal(JSON.stringify(state).includes('remoteAddr'),false);
 });
+
+test('unlabeled sessions do not produce misleading per-channel zeroes',async()=>{
+  const fetchImpl=async url=>{
+    if(String(url).endsWith('/v3/info'))return reply(200,{version:'1.19.2'});
+    if(String(url).endsWith('/v3/paths/list'))return reply(200,{
+      items:[{name:'live-abcdef123456',ready:true,readers:[]}],itemCount:1
+    });
+    if(String(url).endsWith('/v3/hls/sessions/list'))return reply(200,{
+      items:[{id:'no-path-data'}],itemCount:1
+    });
+    throw Error('unexpected');
+  };
+  const state=await createMediaControlClient({
+    fetchImpl,username:'blofy-control',password
+  }).overview();
+  assert.equal(state.hlsSessions,1);
+  assert.equal(state.paths[0].hlsViewers,null);
+});
