@@ -174,7 +174,7 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="stat"><small>تم تفعيلها</small><strong id="codes-redeemed">—</strong></div>
 <div class="stat"><small>ملغاة</small><strong id="codes-revoked">—</strong></div></div>
 <div class="panel"><h3>إصدار أكواد جديدة</h3>
-<p class="muted">يمكن إصدار دفعة حتى 20 كودًا. أكواد الاشتراك تظهر كاملة مرة واحدة عند إنشائها فقط؛ لا تخزن بصيغتها الأصلية.</p>
+<p class="muted">الأكواد الجديدة أرقام فقط، تبدأ بـ8 أرقام وتزيد تلقائيًا مع كثرة الإصدار. العدد المبدئي كود واحد، وتقدر تزيده تدريجيًا حتى 20 كودًا في الدفعة. تظهر الأكواد كاملة مرة واحدة عند إنشائها فقط.</p>
 <form id="codes-form"><div class="formgrid">
 <div class="field"><label for="codes-label">الباقة / وصف الاشتراك</label><input id="codes-label" name="label" maxlength="100" value="BLOFY STREAM" required></div>
 <div class="field"><label for="codes-duration">المدة بالأيام</label><select id="codes-duration" name="durationDays" required>
