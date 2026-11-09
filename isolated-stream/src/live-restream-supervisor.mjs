@@ -83,7 +83,11 @@ export function createLiveRestreamSupervisor({
           ...(data?{'content-type':'application/json'}:{})},
         ...(data?{body:JSON.stringify(data)}:{})});
     }catch{throw err('restream_control_unavailable')}
-    const content=await readBoundedJson(reply);
+    // Path listings grow with operator-created channels. Keep individual
+    // mutations tightly bounded, but allow a larger authenticated listing
+    // so orphaned FFmpeg workers can always be recovered after deployment.
+    const content=await readBoundedJson(reply,
+      route==='/v3/config/paths/list'?128*1024:8192);
     if(reply.status===404)return {status:404,body:content};
     if(!reply.ok)throw err('restream_control_unavailable');
     return {status:reply.status,body:content};
