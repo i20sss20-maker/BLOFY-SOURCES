@@ -187,7 +187,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer)$/i);
       const action=path==='/operator/api/library-ai/chat'?'library-ai-chat':
         path==='/operator/api/library-ai/apply'?'library-ai-apply':
-        const action=path==='/operator/api/library-ai/test'?'library-ai-test':
+        path==='/operator/api/library-ai/test'?'library-ai-test':
         path==='/operator/api/library-ai'?'library-ai':
         path==='/operator/api/library-title'?'library-title':
         path==='/operator/api/sources'?'source-add':
