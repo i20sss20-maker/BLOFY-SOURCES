@@ -6,10 +6,11 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
-  firstByteTimeoutMs=12000,idleMs=3000,clock=Date.now
+  firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
-     !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512)
+     !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
+     !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000)
     throw new Error('fanout_capacity_invalid');
   const feeds=new Map();
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
@@ -41,6 +42,19 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
+  function nextChunk(row,reader,limitMs){
+    // A provider that opens a connection but never sends more TS data must
+    // not hold viewers forever. End this feed; the player can re-request it.
+    let timer;
+    const timeout=new Promise((_,reject)=>{
+      timer=setTimeout(()=>{
+        row.controller.abort();
+        reject(new Error('fanout_read_idle_timeout'));
+      },limitMs);
+      timer.unref?.();
+    });
+    return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
+  }
   async function pump(row){
     let reader;
     try{
@@ -56,7 +70,7 @@ export function createLiveFanout({
         if(/^(text\/|application\/(?:json|xml))/.test(contentType))
           throw Error('provider_not_media');
         reader=response.body.getReader();
-        const first=await reader.read();
+        const first=await nextChunk(row,reader,firstByteTimeoutMs);
         if(first.done||!first.value?.length||first.value[0]!==0x47)
           throw Error('provider_not_ts');
         // Permit clients to start only after actual transport bytes arrive.
@@ -70,7 +84,7 @@ export function createLiveFanout({
         deliver(row,row.first);row.first=null;
       }finally{clearTimeout(timer);}
       while(!row.controller.signal.aborted){
-        const part=await reader.read();
+        const part=await nextChunk(row,reader,readIdleTimeoutMs);
         if(part.done)break;
         if(part.value?.length)deliver(row,Buffer.from(part.value));
       }
