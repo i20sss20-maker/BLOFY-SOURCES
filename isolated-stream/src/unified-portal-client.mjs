@@ -56,6 +56,11 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       body:{ok:false,code:'invalid_code_id'}});
     return call(ROOT+'/codes/'+id+'/revoke',{method:'POST',body:{}});
   }
+  function accountCredentials(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/credentials');
+  }
   function resetAccount(id){
     if(!UUID.test(id))return Promise.resolve({status:400,
       body:{ok:false,code:'invalid_account_id'}});
@@ -125,5 +130,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,resetAccount,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,resetAccount,accountCredentials,catalog,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
