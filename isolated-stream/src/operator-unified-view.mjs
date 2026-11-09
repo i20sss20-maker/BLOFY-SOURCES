@@ -706,7 +706,30 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         var review=$("library-ai-chat-preview");review.replaceChildren();
         var beforeAfter=Array.isArray(result.proposedChanges)?result.proposedChanges:[];
         var categories=Array.isArray(result.categoryPreview)?result.categoryPreview:[];
-        if(beforeAfter.length){
+        var complete=Array.isArray(result.fullCatalogPreview)?result.fullCatalogPreview:[];
+        if(complete.length){
+          var head=document.createElement("strong");
+          head.textContent="معاينة ترتيب الأقسام لجميع الأنواع الثلاثة:";
+          review.appendChild(head);
+          complete.forEach(function(section){
+            var mediaName=section.type==="live"?"القنوات":
+              section.type==="movie"?"الأفلام":"المسلسلات";
+            var heading=document.createElement("p");
+            heading.textContent=mediaName+" — "+String(section.coverage?.categories||0)+
+              " قسمًا، "+String(section.coverage?.arabicCategories||0)+
+              " أقسام عربية، "+String(section.coverage?.datedAtLeast2026||0)+
+              " بأسماء تحتوي على سنة 2026 فما فوق.";
+            review.appendChild(heading);
+            (section.categoriesFirst||[]).slice(0,8).forEach(function(name,index){
+              var item=document.createElement("p");
+              item.textContent=(index+1)+" — "+String(name||"");
+              review.appendChild(item);
+            });
+          });
+          var warning=document.createElement("p");
+          warning.textContent="فرز الأقسام الحالية فقط؛ لم يتم نقل كل فيلم أو مسلسل لفئة جديدة، أو التحقق من سنوات الإنتاج للعناوين.";
+          review.appendChild(warning);
+        }else if(beforeAfter.length){
           var title=document.createElement("strong");title.textContent="الأسماء قبل ← بعد:";
           review.appendChild(title);
           beforeAfter.slice(0,12).forEach(function(x){
