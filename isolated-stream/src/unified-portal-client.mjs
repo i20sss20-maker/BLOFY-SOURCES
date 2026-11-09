@@ -48,7 +48,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       label:String(data.label||'BLOFY STREAM').slice(0,100),
       durationDays:Number(data.durationDays),quantity:Number(data.quantity)||1,
       maxConnections:Number(data.maxConnections)||1,
-      sourceId:data.sourceId||null
+      sourceId:data.sourceId||null,
+      channel:data.channel==='app'?'app':'xtream'
     }});
   }
   function revokeCode(id){
