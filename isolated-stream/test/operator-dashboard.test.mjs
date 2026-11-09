@@ -113,3 +113,20 @@ test('newly issued encrypted codes have a persistent authenticated copy control'
     assert.match(html,/لا يستخدم نموذج AI خارجي/);
   });
 });
+
+test('full-library review UI is valid JavaScript with separate deliberate approval actions',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(r.status,200);
+    const page=await r.text();
+    assert.match(page,/id="library-review-run"/);
+    assert.match(page,/id="library-review-export"/);
+    assert.match(page,/id="library-review-summary"/);
+    assert.match(page,/id="library-review-suggestions"/);
+    assert.match(page,/action\("library-title","library-title"/);
+    assert.match(page,/library-review\?/);
+    const script=page.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script,'operator script exists');
+    assert.doesNotThrow(()=>new Function(script[1]),'embedded operator JS parses');
+  });
+});
