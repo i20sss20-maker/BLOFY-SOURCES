@@ -64,13 +64,35 @@ test('operator starts only server-resolved channel and creates secret-free Media
   assert.ok(body.runOnDemand.includes('/internal/live-feed/'));
   assert.equal(start.body.playlist.endsWith('/index.m3u8'),true);
   assert.equal(JSON.stringify(start.body).includes('provider.example'),false);
-  assert.equal((await service.start(row())).status,409);
+  const reused=await service.start(row());
+  assert.equal(reused.status,200);
+  assert.equal(reused.body.reused,true);
+  assert.equal(reused.body.path,start.body.path);
+  assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
   assert.equal(service.list().items.length,1);
   const stopped=await service.stop(start.body.path);
   assert.equal(stopped.status,200);
   assert.equal(service.list().items.length,0);
   assert.ok(calls.some(x=>x.method==='DELETE'&&x.url.includes(start.body.path)));
 });
+test('shared live path permits 256 readers while keeping one upstream path',async()=>{
+  const {service,calls}=createFixture();
+  const first=await service.start(row());
+  assert.equal(first.status,201);
+  const second=await service.start(row());
+  assert.equal(second.body.reused,true);
+  assert.equal(service.list().items.length,1);
+  assert.equal(service.list().maxSharedReaders,256);
+  const config=JSON.parse(calls.find(x=>x.method==='POST'&&mediaName.test(x.url)).body);
+  assert.equal(config.maxReaders,256);
+  assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
+});
+
+test('invalid shared reader capacity is rejected before control-plane changes',()=>{
+  assert.throws(()=>createLiveRestreamSupervisor({maxSharedReaders:2049}),
+    /restream_shared_readers_invalid/);
+});
+
 test('HLS playlist is rewritten to protected operator URL, rejects external references',async()=>{
   const {service,portal}=createFixture();
   const s=(await service.start(row())).body;
