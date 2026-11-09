@@ -12,6 +12,7 @@ import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
 import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {probeOutboundIpv4} from './outbound-ip-proof.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
@@ -54,6 +55,7 @@ export function createStreamServer({
   relayRedirectSourceOrigin='',
   relayFirstByteTimeoutMs=12000,
   sharedLiveEnabled=false,
+  autoHealthProbeEnabled=false,
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -100,9 +102,12 @@ export function createStreamServer({
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
   });
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
+  const autoHealth=createLiveAutoHealth({liveSupervisor,
+    relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,
     sharedRelayStats:()=>relayBroker.stats(),
+    autoHealth:()=>autoHealth.snapshot(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
@@ -205,7 +210,7 @@ export function createStreamServer({
     },9000);
     t.unref?.();
   }
-  return {app,config:cfg,startBootCanary,canary,liveSupervisor};
+  return {app,config:cfg,startBootCanary,canary,liveSupervisor,autoHealth};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -214,6 +219,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
+    autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
     diagnosticAllowedOrigin:process.env.BLOFY_STREAM_DIAGNOSTIC_ALLOW_ORIGIN||'',
     port:process.env.PORT||3000,
@@ -222,6 +228,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    service.autoHealth.start();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
     let recoveryAttempts=0;
@@ -304,5 +311,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       timer.unref?.();
     }
   });
-  process.on('SIGTERM',()=>service.app.close(()=>process.exit(0)));
+  process.on('SIGTERM',()=>{
+    service.autoHealth.stop();service.app.close(()=>process.exit(0));
+  });
 }
