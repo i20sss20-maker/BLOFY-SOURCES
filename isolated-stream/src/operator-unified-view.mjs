@@ -665,7 +665,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
   });
   var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
-  var libraryAIProposedPlan=null,libraryAIChatBusy=false;
+  var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
   function libraryChatLine(who,text){
     var box=$("library-ai-chat-history");
     var line=node("p",(who==="me"?"أنت: ":"BLOFY AI: ")+String(text||"").slice(0,650));
@@ -689,7 +689,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     $("library-ai-chat-status").textContent="Gemini يجهّز خطة للمراجعة، ولا يغيّر شيئًا الآن...";
     libraryChatLine("me",message);
     try{
-      var result=await action("library-ai/chat","library-ai-chat",{sourceId,type,message});
+      var result=await action("library-ai/chat","library-ai-chat",{
+        sourceId,type,message,history:libraryAIUserHistory.slice(-4)});
+      libraryAIUserHistory.push(message);
+      if(libraryAIUserHistory.length>4)libraryAIUserHistory.shift();
       libraryChatLine("ai",result.reply||"تم تحليل الطلب.");
       if(result.requiresApproval&&result.planId){
         libraryAIProposedPlan={id:result.planId,sourceId,type,summary:result.summary};
@@ -745,7 +748,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }finally{libraryAIChatBusy=false;}
   });
   $("library-ai-source").addEventListener("change",function(){
-    libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+    libraryAIProposedPlan=null;libraryAIUserHistory=[];
+    $("library-ai-chat-apply").disabled=true;
     $("library-ai-chat-preview").replaceChildren();
   });
   $("library-type").addEventListener("change",function(){
