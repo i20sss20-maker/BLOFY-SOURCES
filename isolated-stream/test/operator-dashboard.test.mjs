@@ -67,3 +67,21 @@ test('real-source mutations require Basic auth and anti-CSRF header',async()=>{
     assert.equal((await unavailable.json()).code,'unified_bridge_not_configured');
   });
 });
+
+test('code issuance view exposes copy, export and safe masked ledger',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/id="codes-issued"/);
+    assert.match(html,/id="codes-list"/);
+    assert.match(html,/نسخ جميع الأكواد/);
+    assert.match(html,/حفظ الأكواد TXT/);
+    assert.match(html,/لم تصل الأكواد الكاملة/);
+    assert.match(html,/code\.codeHint/);
+    assert.match(html,/recentlyIssuedCodes/);
+    assert.match(html,/نسخ الكود/);
+    assert.match(html,/الرقم الكامل غير محفوظ/);
+    assert.doesNotMatch(html,/localStorage\.setItem\([^)]*code/);
+  });
+});

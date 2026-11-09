@@ -194,9 +194,10 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 <div class="field"><label for="codes-source">المصدر</label><select id="codes-source" name="sourceId"><option value="">جميع المصادر المنشورة</option></select></div>
 <div class="field"><label for="codes-connections">أقصى الاتصالات</label><input id="codes-connections" name="maxConnections" type="number" min="1" max="20" value="1" required></div>
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
-<div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div></div>
+<div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div>
+ <p class="muted" style="margin-top:12px">مهم: الأكواد السابقة تظهر مخفية في السجل لحماية العملاء، ولا يمكن استعادة رقمها الكامل من التخزين القديم. الأكواد التي تُصدرها الآن يمكن نسخها من نتيجة الإصدار ومن السجل خلال بقاء الصفحة مفتوحة.</p></div>
 <div class="panel"><div class="controls"><h3>سجل الأكواد</h3><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود المخفي</th><th>المدة</th><th>الحالة</th><th>المبيعات</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>الوصف / نوع الاشتراك</th><th>الكود / النسخ</th><th>المدة</th><th>الحالة</th><th>المبيعات</th><th>وقت التفعيل</th><th>انتهاء الاشتراك</th><th>التحكم</th></tr></thead>
 <tbody id="codes-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
@@ -515,6 +516,10 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     }catch(err){show("تعذر إنشاء الحساب: "+err.message,false)}
     finally{submit.disabled=false}
   });
+  // Newly issued plaintext is held in memory in this operator tab only.
+  // The database persists irreversible code proofs. Never write plaintext to
+  // localStorage, sessionStorage, URL parameters or the shared code ledger.
+  var recentlyIssuedCodes=new Map();
   async function loadCodes(more){
     try{
       var offset=more?state.codesNext||0:0;
@@ -542,7 +547,18 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
     state.codes.forEach(function(code){
       var tr=node("tr");
       cell(tr,(code.label||"BLOFY")+(code.channel==="app"?" · تطبيق فقط":" · Xtream"));
-      cell(tr,code.codeHint||"مخفي");
+      var visibleCode=recentlyIssuedCodes.get(String(code.id||""));
+      var codeCell=node("div");
+      codeCell.appendChild(node("strong",visibleCode||code.codeHint||"مخفي","num"));
+      if(visibleCode){
+        codeCell.appendChild(button("نسخ الكود",async function(){
+          try{await navigator.clipboard.writeText(visibleCode);show("تم نسخ الكود.",true)}
+          catch{show("حدد الكود وانسخه يدويًا.",false)}
+        },"secondary sm"));
+      }else{
+        codeCell.appendChild(node("small"," الرقم الكامل غير محفوظ","muted"));
+      }
+      cell(tr,codeCell);
       cell(tr,String(code.durationDays)+" يوم");
       var label=code.status==="unused"?"بانتظار التفعيل":
         code.status==="redeemed"?"تم التفعيل":"ملغى";
@@ -619,20 +635,50 @@ footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
   $("codes-next").addEventListener("click",function(){loadCodes(true)});
   $("codes-form").addEventListener("submit",async function(e){
     e.preventDefault();var data=Object.fromEntries(new FormData(this));
+    // Clear stale one-time codes before a new issue, without persisting secrets.
+    $("codes-issued").hidden=true;$("codes-issued").replaceChildren();
     var submit=this.querySelector('button[type="submit"]');submit.disabled=true;
     try{
       var d=await action("codes","code-issue",data);
-      var target=$("codes-issued");target.hidden=false;target.replaceChildren();
-      target.appendChild(node("strong","الأكواد الجديدة — احفظها الآن، لن تظهر كاملة مرة أخرى"));
+      var issued=Array.isArray(d.items)?d.items:[];
+      issued.forEach(function(item){
+        if(item&&item.id&&item.code)recentlyIssuedCodes.set(String(item.id),String(item.code));
+      });
+      var target=$("codes-issued");
+      target.hidden=false;target.replaceChildren();
+      if(!issued.length||issued.some(function(item){return !item||!item.code;})){
+        target.appendChild(node("strong","تمت معالجة الطلب لكن لم تصل الأكواد الكاملة إلى المتصفح."));
+        target.appendChild(node("p","راجع سجل الأكواد بالأسفل قبل محاولة إصدار دفعة أخرى، لتجنب إنشاء أكواد مكررة.","muted"));
+        target.scrollIntoView({behavior:"smooth",block:"center"});
+        await loadCodes(false);return;
+      }
+      target.appendChild(node("strong","تم إصدار "+issued.length+" كود بنجاح — انسخها قبل مغادرة الصفحة"));
+      target.appendChild(node("p","تظهر الأرقام الكاملة الآن فقط. سجل الأكواد أدناه يعرض أرقامًا مخفية حمايةً للاشتراكات.","muted"));
       if(data.channel==="app"){
-        target.appendChild(node("div","هذه الأكواد للتفعيل من تطبيق BLOFY STREAM فقط. لا ترسل رابط صفحة تفعيل Xtream للعميل.","muted"));
-      } else {
+        target.appendChild(node("div","الأكواد لتطبيق BLOFY STREAM فقط؛ الهوست داخلي.","muted"));
+      }else{
         attachCopy(target,"رابط تفعيل Xtream الخارجي","https://blofyplayer.com/stream/activate");
       }
-      (d.items||[]).forEach(function(item,index){
-        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",item.code);
+      var fullCodes=issued.map(function(item){return String(item.code);});
+      var batchActions=node("div",undefined,"actions");
+      batchActions.appendChild(button("نسخ جميع الأكواد",async function(){
+        try{
+          await navigator.clipboard.writeText(fullCodes.join("\n"));
+          show("تم نسخ جميع الأكواد.",true);
+        }catch(e){show("تعذر النسخ التلقائي؛ انسخ الأرقام من الأسفل.",false);}
+      }));
+      batchActions.appendChild(button("حفظ الأكواد TXT",function(){
+        var blob=new Blob([fullCodes.join("\n")+"\n"],{type:"text/plain;charset=utf-8"});
+        var url=URL.createObjectURL(blob),link=document.createElement("a");
+        link.href=url;link.download="blofy-stream-issued-codes.txt";link.click();
+        setTimeout(function(){URL.revokeObjectURL(url)},1000);
+      }));
+      target.appendChild(batchActions);
+      issued.forEach(function(item,index){
+        attachCopy(target,"كود "+(index+1)+" · "+item.durationDays+" يوم",String(item.code));
       });
-      show("تم إصدار "+(d.items||[]).length+" كود. مدتها لم تبدأ بعد.",true);
+      target.scrollIntoView({behavior:"smooth",block:"center"});
+      show("تم إصدار "+issued.length+" كود. مدتها لم تبدأ بعد.",true);
       await loadCodes(false);
     }catch(e){show("تعذر إصدار الأكواد: "+e.message,false)}
     finally{submit.disabled=false}
