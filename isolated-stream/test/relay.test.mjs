@@ -444,7 +444,9 @@ test('signed licensed shared ticket follows one validated public source-issued C
   assert.equal(ticket.sharedLiveGranted,true);
   const media=await fetch(origin+ticket.path);
   assert.equal(media.status,200);
-  assert.deepEqual(Buffer.from(await media.arrayBuffer()),ts);
+  const reader=media.body.getReader();
+  const part=await reader.read();
+  assert.deepEqual(Buffer.from(part.value),ts);
   assert.equal(upstreamCalls,2);
   const health=await fetch(origin+'/internal/relay-health',{
    headers:{authorization:'Bearer '+shared}});
@@ -453,6 +455,7 @@ test('signed licensed shared ticket follows one validated public source-issued C
   assert.equal(h.fanout.upstreamReconnects,0);
   assert.ok(h.fanout.sourceBytesReceived>=ts.length);
   assert.ok(h.fanout.viewerBytesQueued>=ts.length);
+  await reader.cancel();
  },{sharedLiveEnabled:true,fetchImpl:async(url,opts)=>{
   upstreamCalls++;
   if(upstreamCalls===1)return new Response(null,{status:302,
@@ -460,7 +463,11 @@ test('signed licensed shared ticket follows one validated public source-issued C
   assert.equal(url.hostname,'source-cdn.example');
   assert.equal(opts.headers.authorization,undefined);
   assert.equal(opts.headers.cookie,undefined);
-  return new Response(ts,{headers:{'content-type':'video/mp2t'}});
+  // Keep the licensed live feed open until its subscriber cancels.
+  // A finite buffer ends with EOF and correctly causes sequential reconnects.
+  return new Response(new ReadableStream({
+   start(controller){controller.enqueue(new Uint8Array(ts));}
+  }),{headers:{'content-type':'video/mp2t'}});
  }});
 });
 test('shared tickets without licensed CDN scope still deny external redirect',async()=>{
