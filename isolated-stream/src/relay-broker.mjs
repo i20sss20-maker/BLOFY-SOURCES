@@ -64,7 +64,8 @@ function permittedReturnHeaders(response){
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
-  sharedLiveEnabled=false,maxIssuesPerSecond=256,maxIssuesPerMinute=2400
+  sharedLiveEnabled=false,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
+  onSharedLiveEvent=()=>{}
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
@@ -100,7 +101,8 @@ export function createRelayBroker({
   };
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
-    initialTransientRetries:sharedLiveEnabled===true?1:0});
+    initialTransientRetries:sharedLiveEnabled===true?1:0,
+    onEvent:onSharedLiveEvent});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.

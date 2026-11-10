@@ -10,7 +10,7 @@ export function createLiveFanout({
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
-  initialTransientRetries=0,redirectSourceOrigin=''
+  initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{}
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -44,6 +44,9 @@ export function createLiveFanout({
     if(allowedReasons.has(reason))item.reason=reason;
     recentEvents.unshift(item);
     if(recentEvents.length>32)recentEvents.length=32;
+    // Optional structured production log sink. Only the known fixed enums
+    // and an ephemeral ordinal are transmitted; never the actual source URL.
+    try{onEvent({...item})}catch{}
   }
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
@@ -273,7 +276,10 @@ export function createLiveFanout({
       res.writeHead(405,{allow:'GET, HEAD'});res.end();return;
     }
     const url=await assertPublicMediaUrl(sourceUrl,{lookup});
-    const key=keyOf(url.href);
+    // Different signed provider-redirect scopes must NOT merge into the
+    // same feed, even when their upstream URL is identical. Two granted
+    // viewers still share exactly one feed under the same licensed scope.
+    const key=keyOf(url.href+'\\0'+(allowProviderCdn?'licensed':'ordinary'));
     let row=feeds.get(key);
     // Existing healthy readers are never affected by a cool-down
     // recorded for a previous failed feed.

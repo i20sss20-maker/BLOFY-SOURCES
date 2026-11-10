@@ -69,7 +69,15 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled});
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,
+    onSharedLiveEvent:evt=>{
+      // Persist bounded, sanitized connection lifecycle via Railway logs
+      // across restarts while retaining zero URLs or customer identifiers.
+      const payload=JSON.stringify(evt);
+      if(evt.kind==='failed'||evt.kind==='reconnecting')
+        log.warn('BLOFY_STREAM_SHARED_LIVE_EVENT',payload);
+      else log.info('BLOFY_STREAM_SHARED_LIVE_EVENT',payload);
+    }});
   const sourceDiagnostic=createCrossProjectSourceDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });

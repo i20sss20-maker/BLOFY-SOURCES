@@ -503,3 +503,68 @@ test('channel zapping reclaims only zero-viewer idle feed when source slots are 
   await new Promise(ok=>server.close(ok));
  }
 });
+
+test('viewers with different signed CDN scopes do not silently share a feed',async()=>{
+ let upstreamCalls=0;
+ const streamControllers=[];
+ const broker=createLiveFanout({
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{
+   upstreamCalls++;
+   return new Response(new ReadableStream({
+    start(c){streamControllers.push(c)}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }
+ });
+ const srv=http.createServer((req,res)=>void broker.handle(req,res,SOURCE,{
+  allowProviderCdn:req.url==='/licensed'}));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ const base='http://127.0.0.1:'+srv.address().port;
+ try{
+  const r=[fetch(base+'/licensed'),fetch(base+'/ordinary')];
+  for(let n=0;n<80&&broker.stats().viewers<2;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(broker.stats().activeFeeds,2);
+  assert.equal(upstreamCalls,2);
+  for(const c of streamControllers)c.enqueue(new Uint8Array(packet));
+  const responses=await Promise.all(r);
+  assert.ok(responses.every(x=>x.status===200));
+  const readers=responses.map(x=>x.body.getReader());
+  const bytes=await Promise.all(readers.map(x=>x.read()));
+  assert.ok(bytes.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  await Promise.all(readers.map(x=>x.cancel().catch(()=>{})));
+ }finally{
+  broker.close();srv.closeAllConnections();await new Promise(done=>srv.close(done));
+ }
+});
+test('sanitized connection lifecycle emits provider outage and recovery only',async()=>{
+ let calls=0;
+ const events=[];
+ const fanout=createLiveFanout({
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  reconnectOnUpstreamEnd:true,readIdleTimeoutMs:100,
+  onEvent:e=>events.push(e),
+  fetchImpl:async()=>{
+   calls++;
+   return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(packet));
+    if(calls===1)c.close();
+   }}),{headers:{'content-type':'video/mp2t'}});
+  }
+ });
+ const srv=http.createServer((req,res)=>void fanout.handle(req,res,SOURCE));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const res=await fetch('http://127.0.0.1:'+srv.address().port);
+  const reader=res.body.getReader();await reader.read();
+  for(let n=0;n<120&&fanout.stats().reconnectRecovered===0;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(fanout.stats().reconnectRecovered,1);
+  assert.ok(events.some(e=>e.kind==='connected'));
+  assert.ok(events.some(e=>e.kind==='reconnecting'));
+  assert.ok(events.some(e=>e.kind==='recovered'));
+  const serialized=JSON.stringify(events);
+  assert.doesNotMatch(serialized,/licensed.example|channel.ts|\\/live\\/a\\/b|password|sourceUrl|token/);
+  await reader.cancel();
+ }finally{fanout.close();srv.closeAllConnections();await new Promise(done=>srv.close(done))}
+});
