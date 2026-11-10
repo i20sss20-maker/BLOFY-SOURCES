@@ -147,8 +147,17 @@ export function createStreamServer({
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
+      const f=relayBroker.stats().fanout;
       return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
-        role:'media_plane',relayReady:true,customerTrafficEnabled:false});
+        role:'media_plane',relayReady:true,customerTrafficEnabled:false,
+        sharedLiveConfigured:relayBroker.stats().sharedLiveEnabled,
+        // Aggregate counters ONLY. Source URL, ticket, provider identity,
+        // subscriber IP and secrets are not disclosed by this endpoint.
+        fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
+          maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,
+          upstreamReconnects:f.upstreamReconnects,
+          reconnectExhaustions:f.reconnectExhaustions,
+          slowViewerDisconnects:f.slowViewerDisconnects}});
     }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);
