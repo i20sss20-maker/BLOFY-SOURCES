@@ -289,6 +289,16 @@ export function createLiveFanout({
       }
     }
     if(!row){
+      // During rapid channel zapping, old feeds remain alive for idleMs
+      // after their last viewer leaves. Reclaim ONLY those idle feeds if
+      // the pool is full. Never evict a stream serving real viewers.
+      if(feeds.size>=maxFeeds){
+        for(const [oldKey,oldRow] of feeds){
+          if(oldRow.viewers.size===0&&oldRow.idleTimer)
+            closeFeed(oldKey,'idle',oldRow);
+          if(feeds.size<maxFeeds)break;
+        }
+      }
       if(feeds.size>=maxFeeds){
         counters.capacityRejections++;
         res.writeHead(503,{'retry-after':'3'});res.end('fanout_capacity_reached');return;
