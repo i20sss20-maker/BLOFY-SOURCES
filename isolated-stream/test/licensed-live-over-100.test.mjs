@@ -69,18 +69,28 @@ test('a 20-second-equivalent provider EOF reopens one source sequentially while 
   await reader.cancel();
  });
 });
-test('shared mode is refused when disabled and can be proven when enabled',async()=>{
+test('shared grant reports explicit true only when configured at the media plane',async()=>{
  const sharedToken='test-secret-abcdefghijklmnopqrstuvwxyz-123456789';
- const lookup=async()=>[{address:'8.8.8.8',family:4}];
- async function issue(broker,body){
-  const req=new ReadableStream({start(c){c.enqueue(Buffer.from(JSON.stringify(body)));c.close()}});
-  // HTTP request shape against the local broker is easier than bypassing
-  // validation; here we assert source-compatible stats and installed mode.
-  assert.equal(typeof broker.issue,'function');
+ for(const enabled of [false,true]){
+  const broker=createRelayBroker({
+    sharedToken,sharedLiveEnabled:enabled,
+    lookup:async()=>[{address:'8.8.8.8',family:4}]
+  });
+  const server=http.createServer((req,res)=>void broker.issue(req,res));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{
+    const res=await fetch('http://127.0.0.1:'+server.address().port+'/grant',{
+      method:'POST',headers:{authorization:'Bearer '+sharedToken,
+        'content-type':'application/json'},
+      body:JSON.stringify({kind:'live',sharedLive:true,sourceUrl:SOURCE})
+    });
+    assert.equal(res.status,201);
+    const body=await res.json();
+    assert.equal(body.sharedLiveGranted,enabled);
+    assert.match(body.path,/^\\/relay\\/[0-9a-f]{48}$/);
+    assert.ok(!JSON.stringify(body).includes('licensed.example'));
+  }finally{
+    server.closeAllConnections();await new Promise(r=>server.close(r));
+  }
  }
- const off=createRelayBroker({sharedToken,lookup,sharedLiveEnabled:false});
- const on=createRelayBroker({sharedToken,lookup,sharedLiveEnabled:true});
- assert.equal(off.stats().sharedLiveEnabled,false);
- assert.equal(on.stats().sharedLiveEnabled,true);
- off.stats().fanout.maxViewersPerFeed;
 });
