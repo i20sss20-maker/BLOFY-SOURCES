@@ -356,13 +356,11 @@ export function createLiveRestreamSupervisor({
           yield Buffer.from(active.first.value);
         }
       })());
-      // A source reconnect aborts only the OLD upstream attempt, never the
-      // HTTP response to FFmpeg. Output lifetime follows the actual reader.
-      const outputController=new AbortController();
-      const onOutputClose=()=>outputController.abort();
-      res.once('close',onOutputClose);
+      // pipeline owns the downstream socket lifecycle. AbortControllers
+      // control individual upstream source attempts only; aborting the prior
+      // source must not destroy the HLS/FFmpeg consumer's HTTP response.
       try{
-        await pipeline(stream,res,{signal:outputController.signal});
+        await pipeline(stream,res);
         if(!closedByReader&&row.backupConfigured&&sourceIndex===0&&
            clock()-startedAt<10000){
           // Only switch away from a short-lived PRIMARY feed. Once the
@@ -371,8 +369,6 @@ export function createLiveRestreamSupervisor({
           row.lastError='restream_short_primary_disconnect';
         }else row.lastError=null;
       }finally{
-        res.off('close',onOutputClose);
-        outputController.abort();
         try{await active.reader.cancel()}catch{}
         try{active.reader.releaseLock()}catch{}
       }
