@@ -103,7 +103,7 @@ export function createLiveFanout({
             throw Error('provider_unavailable');
           }
           const contentType=String(response.headers.get('content-type')||'').toLowerCase();
-          if(/^(text\\/|application\\/(?:json|xml))/.test(contentType))
+          if(/^(text\/|application\/(?:json|xml))/.test(contentType))
             throw Error('provider_not_media');
           reader=response.body.getReader();
           const first=await nextChunk(row,reader,firstByteTimeoutMs);
