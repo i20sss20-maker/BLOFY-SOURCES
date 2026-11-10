@@ -286,3 +286,87 @@ test('canary viewer barrier cannot exceed per-feed reader capacity',()=>{
  assert.throws(()=>createLiveFanout({maxViewersPerFeed:1,minViewersToStart:2}),
   /fanout_capacity_invalid/);
 });
+
+
+test('one transient initial HTTP 503 recovers for two viewers without client 502',async()=>{
+ let calls=0;
+ await service(async(base,fanout)=>{
+  const joined=[fetch(base+'/live'),fetch(base+'/live')];
+  const results=await Promise.all(joined);
+  assert.ok(results.every(r=>r.status===200));
+  assert.equal(calls,2);
+  assert.equal(fanout.stats().initialRetries,1);
+  assert.equal(fanout.stats().providerFailures,0);
+  assert.equal(fanout.stats().upstreamSessionsOpened,1);
+  const readers=results.map(r=>r.body.getReader());
+  const data=await Promise.all(readers.map(r=>r.read()));
+  assert.ok(data.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+ },{initialTransientRetries:1,fetchImpl:async()=>{
+  calls++;
+  if(calls===1)return new Response('temporary unavailable',{status:503});
+  const media=new ReadableStream({start(c){c.enqueue(new Uint8Array(packet));}});
+  return new Response(media,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('two repeated provider failures stop after one retry and cool down only one feed',async()=>{
+ let calls=0;
+ await service(async(base,fanout)=>{
+  const r=await fetch(base+'/live');
+  assert.equal(r.status,502);
+  assert.equal(calls,2);
+  assert.equal(fanout.stats().initialRetries,1);
+  assert.equal(fanout.stats().providerFailures,1);
+  const cooldown=await fetch(base+'/live');
+  assert.equal(cooldown.status,503);
+  assert.equal(calls,2);
+ },{initialTransientRetries:1,fetchImpl:async()=>{
+  calls++;return new Response('temporary unavailable',{status:503});
+ }});
+});
+test('provider authorization denial never triggers automatic retries',async()=>{
+ let calls=0;
+ await service(async base=>{
+  const r=await fetch(base+'/live');
+  assert.equal(r.status,502);
+  assert.equal(calls,1);
+ },{initialTransientRetries:2,fetchImpl:async()=>{
+  calls++;return new Response('access denied',{status:403});
+ }});
+});
+test('a viewer joining while shared feed reconnects gets headers only after media arrives',async()=>{
+ let calls=0,readyTwo,releaseTwo;
+ const barrier=new Promise(resolve=>{releaseTwo=resolve});
+ const entered=new Promise(resolve=>{readyTwo=resolve});
+ await service(async(base,fanout)=>{
+  const a=await fetch(base+'/live');
+  assert.equal(a.status,200);
+  const readerA=a.body.getReader();
+  assert.deepEqual(Buffer.from((await readerA.read()).value),packet);
+  await entered;
+  assert.equal(fanout.stats().upstreamReconnects,1);
+  const b=fetch(base+'/live');
+  for(let n=0;n<80&&fanout.stats().viewers<2;n++)
+    await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(fanout.stats().viewers,2);
+  releaseTwo();
+  const rb=await b;
+  assert.equal(rb.status,200);
+  assert.equal(rb.headers.get('content-type'),'video/mp2t');
+  const readerB=rb.body.getReader();
+  const [vA,vB]=await Promise.all([readerA.read(),readerB.read()]);
+  assert.ok([vA,vB].every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  assert.equal(calls,2);
+  assert.equal(fanout.stats().reconnectRecovered,1);
+  await Promise.all([readerA.cancel(),readerB.cancel()]);
+ },{reconnectOnUpstreamEnd:true,fetchImpl:async()=>{
+  calls++;
+  if(calls===1)return new Response(new ReadableStream({
+   start(c){c.enqueue(new Uint8Array(packet));c.close();}
+  }),{headers:{'content-type':'video/mp2t'}});
+  readyTwo();await barrier;
+  return new Response(new ReadableStream({
+   start(c){c.enqueue(new Uint8Array(packet));}
+  }),{headers:{'content-type':'video/mp2t'}});
+ }});
+});
