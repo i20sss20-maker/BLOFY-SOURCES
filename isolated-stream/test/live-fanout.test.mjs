@@ -370,3 +370,46 @@ test('a viewer joining while shared feed reconnects gets headers only after medi
   }),{headers:{'content-type':'video/mp2t'}});
  }});
 });
+
+test('source A outage and cooldown do not interrupt source B or its two viewers',async()=>{
+ const a='https://licensed.example/live/a/b/dead.ts';
+ const b='https://licensed.example/live/a/b/healthy.ts';
+ let deadCalls=0,healthyCalls=0;
+ const serverFanout=createLiveFanout({
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  initialTransientRetries:1,
+  fetchImpl:async(url)=>{
+   if(url.pathname.endsWith('dead.ts')){
+    deadCalls++;
+    return new Response('provider unavailable',{status:503});
+   }
+   healthyCalls++;
+   return new Response(new ReadableStream({
+    start(c){c.enqueue(new Uint8Array(packet));}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }
+ });
+ const srv=http.createServer((req,res)=>
+  void serverFanout.handle(req,res,req.url==='/bad'?a:b));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ const base='http://127.0.0.1:'+srv.address().port;
+ try{
+  const good=[fetch(base+'/good'),fetch(base+'/good')];
+  const dead=await fetch(base+'/bad');
+  assert.equal(dead.status,502);
+  const blocked=await fetch(base+'/bad');
+  assert.equal(blocked.status,503);
+  assert.equal(deadCalls,2);
+  const data=await Promise.all(good);
+  assert.equal(healthyCalls,1);
+  assert.ok(data.every(x=>x.status===200));
+  const readers=data.map(x=>x.body.getReader());
+  const chunks=await Promise.all(readers.map(x=>x.read()));
+  assert.ok(chunks.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  assert.equal(serverFanout.stats().activeFeeds,1);
+  await Promise.all(readers.map(x=>x.cancel().catch(()=>{})));
+ }finally{
+  serverFanout.close();srv.closeAllConnections();
+  await new Promise(resolve=>srv.close(resolve));
+ }
+});
