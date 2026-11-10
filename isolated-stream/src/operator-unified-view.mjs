@@ -231,6 +231,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
+<button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
 <div class="inline" style="margin-top:15px">
 <select id="live-backup-source" aria-label="المصدر الاحتياطي">
@@ -240,6 +241,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div>
 <div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
 <option value="">بدون قناة احتياطية</option></select></div>
+<p class="muted">🛡 فحص المشاركة يفتح اتصالًا واحدًا مصرحًا بالمصدر وقارئين داخليين لمدة 26 ثانية، ولا يغيّر أي كود أو قناة للمشتركين. يفحص نقل TS وليس جودة الصوت أو الصورة بعد فك التشفير.</p>
+<pre id="shared-live-probe-result" class="log" style="min-height:55px">اختر قناة من مصدر saleh، وأكد صلاحية إعادة البث، ثم اضغط فحص المشاركة.</pre>
 <p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
 </div>
 <div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
@@ -1840,6 +1843,24 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
   $("live-reload").addEventListener("click",loadLive);
+  $("shared-live-probe").addEventListener("click",async function(){
+    var sourceId=$("live-source").value,channelId=$("live-channel").value;
+    if(!sourceId||!channelId){show("اختر مصدرًا وقناة لفحص المشاركة.",false);return}
+    if(!$("live-rights").checked){show("يلزم تأكيد صلاحية إعادة بث هذه القناة.",false);return}
+    this.disabled=true;
+    value("shared-live-probe-result","جار التحقق من سحب المصدر وتوزيعه على قارئين خلال 26 ثانية...");
+    try{
+      var report=await action("shared-live/probe","shared-live-probe",{
+        sourceId:sourceId,channelId:channelId,rightsConfirmed:true
+      });
+      value("shared-live-probe-result",JSON.stringify(report,null,2));
+      show(report.ok?"نجح فحص النقل المشترك. لا يعني ذلك تشغيل المشتركين تلقائيًا.":
+        "فشل فحص المشاركة. تم إبقاء تشغيل المشتركين على الوضع السابق.",report.ok);
+    }catch(e){
+      value("shared-live-probe-result","تعذر الفحص: "+e.message);
+      show("فشل الفحص بدون تغيير قنوات المشتركين.",false);
+    }finally{this.disabled=false}
+  });
   $("live-start").addEventListener("click",async function(){
     var sourceId=$("live-source").value,channelId=$("live-channel").value;
     if(!sourceId||!channelId){show("اختر مصدرًا وقناة أولًا.",false);return}

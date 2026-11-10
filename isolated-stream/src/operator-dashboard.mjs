@@ -44,7 +44,8 @@ async function readAdminJson(req){
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
-  sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'})}={}){
+  sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
+  runSharedLiveProbe=async()=>({ok:false,code:'pilot_not_configured'})}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -59,6 +60,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     finally{clearTimeout(timeout)}
   }
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
+  let sharedPilotBusy=false,lastSharedPilotAt=0;
   // Basic auth is protected against brute-force without lockout of a valid
   // operator. Only invalid credentials are limited; do not trust spoofable
   // X-Forwarded-For. Keep at most 256 anonymous buckets in memory.
@@ -159,6 +161,37 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           .catch(e=>json(res,503,{ok:false,code:'vod_action_failed'}));
         return true;
       }
+    }
+    // Test the real source with two internal local readers before enabling any
+    // subscriber account. This does NOT redirect or alter customer traffic.
+    if(req.method==='POST'&&path==='/operator/api/shared-live/probe'){
+      if(req.headers['x-blofy-operator-action']!=='shared-live-probe'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      if(sharedPilotBusy||Date.now()-lastSharedPilotAt<60000){
+        json(res,429,{ok:false,code:'pilot_probe_rate_limited'});return true;
+      }
+      sharedPilotBusy=true;lastSharedPilotAt=Date.now();
+      void readAdminJson(req).then(async body=>{
+        if(body.rightsConfirmed!==true)
+          return {status:403,body:{ok:false,code:'stream_rights_confirmation_required'}};
+        const upstream=await portal.liveChannel({
+          sourceId:body.sourceId,channelId:body.channelId,rightsConfirmed:true
+        });
+        if(upstream.status!==200||upstream.body?.ok!==true)
+          return {status:upstream.status,body:{ok:false,
+            code:upstream.body?.code||'pilot_source_unavailable'}};
+        if(upstream.body.kind!=='live'||upstream.body.extension!=='ts'||
+          typeof upstream.body.sourceUrl!=='string')
+          return {status:415,body:{ok:false,code:'pilot_requires_live_ts'}};
+        const proof=await runSharedLiveProbe({sourceUrl:upstream.body.sourceUrl});
+        return {status:200,body:proof};
+      }).then(({status,body})=>json(res,status,body))
+      .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,
+        {ok:false,code:[400,413,415].includes(e?.status)?e.message:
+          'pilot_validation_unavailable'}))
+      .finally(()=>{sharedPilotBusy=false});
+      return true;
     }
     // Live video and HLS segments remain behind the SAME operator Basic auth
     // as the page. There are no public media URLs and no customer cutover.

@@ -13,6 +13,7 @@ import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
+import {probeLicensedSharedLive} from './shared-live-canary.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {probeOutboundIpv4} from './outbound-ip-proof.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
@@ -116,6 +117,10 @@ export function createStreamServer({
       checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
       realSourceVerified:false,audioVideoDecoded:false
+    }),
+    runSharedLiveProbe:({sourceUrl})=>probeLicensedSharedLive({
+      sourceUrl,fetchImpl:relayFetchImpl,lookup:relayLookup,
+      redirectSourceOrigin:relayRedirectSourceOrigin,durationMs:26000
     }),
     runSmoke:async()=>{
       if(checking||(checkedAt&&Date.now()-checkedAt<30_000))

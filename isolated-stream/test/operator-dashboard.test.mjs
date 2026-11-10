@@ -264,3 +264,31 @@ test('invalid operator passwords are rate-limited but correct credentials never 
     assert.ok(!('ipAddresses' in body.operator));
   });
 });
+
+
+test('shared-live 26-second canary endpoint requires operator auth and explicit rights',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const denied=await fetch(base+'/operator/api/shared-live/probe',{method:'POST'});
+  assert.equal(denied.status,401);
+  const noHeader=await fetch(base+'/operator/api/shared-live/probe',{
+   method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+   body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',
+    channelId:'100',rightsConfirmed:true})
+  });
+  assert.equal(noHeader.status,403);
+  const noRights=await fetch(base+'/operator/api/shared-live/probe',{
+   method:'POST',headers:{authorization:auth,
+    'x-blofy-operator-action':'shared-live-probe',
+    'content-type':'application/json'},
+   body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',
+    channelId:'100',rightsConfirmed:false})
+  });
+  assert.equal(noRights.status,403);
+  const body=await noRights.json();
+  assert.equal(body.code,'stream_rights_confirmation_required');
+  assert.doesNotMatch(JSON.stringify(body),/sourceUrl|token|password/);
+  const page=await(await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+  assert.match(page,/id="shared-live-probe"/);
+  assert.match(page,/id="shared-live-probe-result"/);
+ });
+});
