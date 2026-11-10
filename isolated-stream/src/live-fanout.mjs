@@ -33,6 +33,18 @@ export function createLiveFanout({
   }catch{}
   const feeds=new Map();
   const cooldowns=new Map();
+  // Short-lived, credential-free diagnostics for the authenticated operator:
+  // an ordinal per source feed (not source URL, account, token or IP).
+  let feedSequence=0;
+  const recentEvents=[];
+  function event(row,kind,reason=''){
+    const knownKinds=new Set(['connected','reconnecting','recovered','failed','idle']);
+    if(!knownKinds.has(kind))return;
+    const item={channel:row.channelNumber,kind,at:clock()};
+    if(allowedReasons.has(reason))item.reason=reason;
+    recentEvents.unshift(item);
+    if(recentEvents.length>32)recentEvents.length=32;
+  }
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
@@ -68,12 +80,14 @@ export function createLiveFanout({
     if(!row||(expectedRow&&row!==expectedRow))return;
     feeds.delete(key);clearTimeout(row.idleTimer);
     row.controller.abort();
+    if(reason==='idle')event(row,'idle');
     for(const viewer of row.viewers){
       if(!viewer.destroyed&&!viewer.writableEnded)viewer.end();
     }
     row.viewers.clear();row.state=reason;
   }
   function deliver(row,chunk){
+    row.lastMediaAt=clock();
     // Aggregate-only bandwidth accounting: counts upstream bytes once,
     // outbound bytes as queued writes (not verified network delivery).
     counters.sourceBytesReceived+=chunk.length;
@@ -163,7 +177,11 @@ export function createLiveFanout({
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
-          if(reopening){counters.reconnectRecovered++;reopening=false;}
+          row.sourceStarts++;
+          if(reopening){
+            counters.reconnectRecovered++;reopening=false;
+            event(row,'recovered');
+          }else if(row.sourceStarts===1)event(row,'connected');
           // Viewers retain their HTTP response during a permitted sequential
           // upstream reconnect, preventing an automatic full-screen exit.
           row.state='ready';
@@ -211,10 +229,15 @@ export function createLiveFanout({
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
             failedAttempts++;retry=true;reopening=true;
             row.state='reconnecting';
+            row.reconnects++;
+            event(row,'reconnecting',reason);
             counters.upstreamReconnects++;
           }else{
             if(canReconnect)counters.reconnectExhaustions++;
-            if(row.viewers.size){noteProviderFailure(row.key);counters.sourceOutages++;}
+            if(row.viewers.size){
+              noteProviderFailure(row.key);counters.sourceOutages++;
+              event(row,'failed',reason);
+            }
             for(const viewer of row.viewers){
               if(!viewer.headersSent){
                 viewer.writeHead(502,{'content-type':'application/json',
@@ -272,6 +295,9 @@ export function createLiveFanout({
       }
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
         allowProviderCdn:allowProviderCdn===true,
+        // Numbers are temporary and reset on every deployment; the operator
+        // can spot failures without exposing sensitive provider credentials.
+        channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
         state:'starting',idleTimer:null,startedAt:null};
       feeds.set(key,row);
     }
@@ -304,6 +330,15 @@ export function createLiveFanout({
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
     cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
     ...counters,failureReasons:{...failureReasons},
+    // Up to maxFeeds (64) active sources and only 32 recent incidents:
+    // no URLs, credentials, subscriber identifiers or IP addresses.
+    channels:[...feeds.values()].map(row=>({
+      channel:row.channelNumber,state:row.state,viewers:row.viewers.size,
+      sourceStarts:row.sourceStarts,reconnects:row.reconnects,
+      lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
+      activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt)
+    })),
+    events:recentEvents.map(item=>({...item})),
     maxFeeds,maxViewersPerFeed}),
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
