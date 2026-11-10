@@ -49,7 +49,7 @@ test('source label must match saleh exactly, and ambiguous channels never fetch 
  const duplicate=fixture({names:['saleh','saleh']});
  assert.equal((await duplicate.state.auto()).body.code,'pilot_source_ambiguous');
  assert.equal(duplicate.calls.length,0);
- const channels=fixture({titles:['4K: V SPORT UHD 3840p','4K: V SPORT 2 UHD 3840p']});
+ const channels=fixture({titles:['4K: V SPORT UHD 3840p','4K: V SPORT UHD 3840p']});
  assert.equal((await channels.state.auto()).body.code,'pilot_channel_ambiguous');
  assert.equal(channels.calls.filter(x=>x.type==='live').length,0);
 });
@@ -91,4 +91,14 @@ test('unexpected provider error details are never returned or emitted to logs',a
  assert.equal(r.body.upstreamSessions,100);
  assert.deepEqual(r.body.sampleBytes,[0,2000000000]);
  assert.doesNotMatch(JSON.stringify(f.output),/hiddenpassword|provider.example|sourceUrl/);
+});
+
+test('exact primary 4K channel is chosen over distinct numbered variants',async()=>{
+ const f=fixture({titles:['4K: V SPORT 2 UHD 3840p','4K: V SPORT UHD 3840p']});
+ const r=await f.state.auto();
+ assert.equal(r.body.ok,true);
+ assert.equal(f.calls.filter(x=>x.type==='live').length,1);
+ assert.equal(f.calls.find(x=>x.type==='live').args.channelId,String(Number(CID)+1));
+ const smallcaps=fixture({titles:['4K: V SPORT ᴜʜᴅ 3840p']});
+ assert.equal((await smallcaps.state.auto()).body.ok,true);
 });
