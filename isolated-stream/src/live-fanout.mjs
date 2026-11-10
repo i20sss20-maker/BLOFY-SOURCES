@@ -6,12 +6,15 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
+  minViewersToStart=1,
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,redirectSourceOrigin=''
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
+     !Number.isInteger(minViewersToStart)||minViewersToStart<1||
+       minViewersToStart>maxViewersPerFeed||
      !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000||
      !Number.isInteger(providerCooldownMs)||providerCooldownMs<20||providerCooldownMs>60000||
      !Number.isInteger(maxProviderCooldownMs)||maxProviderCooldownMs<providerCooldownMs||
@@ -264,7 +267,8 @@ export function createLiveFanout({
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
         'x-content-type-options':'nosniff'});
     }
-    if(row.state==='starting'&&!row.pumpStarted){
+    if(row.state==='starting'&&!row.pumpStarted&&
+      row.viewers.size>=minViewersToStart){
       row.pumpStarted=true;void pump(row);
     }
   }
