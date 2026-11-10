@@ -200,7 +200,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">أخطاء مصدر الوسائط: <strong id="security-provider-errors">—</strong></span>
 <span class="pill">📺 قنوات مشتركة نشطة: <strong id="security-active-feeds">—</strong></span>
 <span class="pill">👥 مشاهدون متصلون: <strong id="security-viewers">—</strong></span>
-<span class="pill">اتصالات مصدر مفتوحة: <strong id="security-source-sessions">—</strong></span>
+<span class="pill">اتصالات مصدر بدأت (تراكمي): <strong id="security-source-sessions">—</strong></span>
 <span class="pill">محاولات إنقاذ عند البدء: <strong id="security-initial-retries">—</strong></span>
 <span class="pill">استعادات ناجحة: <strong id="security-reconnect-recovered">—</strong></span>
 <span class="pill">انقطاعات نهائية: <strong id="security-source-outages">—</strong></span>
