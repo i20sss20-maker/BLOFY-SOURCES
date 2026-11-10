@@ -374,7 +374,8 @@ test('a viewer joining while shared feed reconnects gets headers only after medi
 test('source A outage and cooldown do not interrupt source B or its two viewers',async()=>{
  const a='https://licensed.example/live/a/b/dead.ts';
  const b='https://licensed.example/live/a/b/healthy.ts';
- let deadCalls=0,healthyCalls=0;
+ let deadCalls=0,healthyCalls=0,healthyController;
+ const healthyStream=new ReadableStream({start(c){healthyController=c;}});
  const serverFanout=createLiveFanout({
   lookup:async()=>[{address:'8.8.8.8',family:4}],
   initialTransientRetries:1,
@@ -384,9 +385,7 @@ test('source A outage and cooldown do not interrupt source B or its two viewers'
     return new Response('provider unavailable',{status:503});
    }
    healthyCalls++;
-   return new Response(new ReadableStream({
-    start(c){c.enqueue(new Uint8Array(packet));}
-   }),{headers:{'content-type':'video/mp2t'}});
+   return new Response(healthyStream,{headers:{'content-type':'video/mp2t'}});
   }
  });
  const srv=http.createServer((req,res)=>
@@ -395,11 +394,15 @@ test('source A outage and cooldown do not interrupt source B or its two viewers'
  const base='http://127.0.0.1:'+srv.address().port;
  try{
   const good=[fetch(base+'/good'),fetch(base+'/good')];
+  for(let n=0;n<100&&serverFanout.stats().viewers<2;n++)
+    await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(serverFanout.stats().viewers,2);
   const dead=await fetch(base+'/bad');
   assert.equal(dead.status,502);
   const blocked=await fetch(base+'/bad');
   assert.equal(blocked.status,503);
   assert.equal(deadCalls,2);
+  healthyController.enqueue(new Uint8Array(packet));
   const data=await Promise.all(good);
   assert.equal(healthyCalls,1);
   assert.ok(data.every(x=>x.status===200));
