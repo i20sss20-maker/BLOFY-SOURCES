@@ -44,6 +44,12 @@ export function createSharedLiveReadiness({
       sampleBytes:Array.isArray(detail.sampleBytes)?
         detail.sampleBytes.slice(0,2).map(x=>safeInt(x,2_000_000_000)):[],
       maxInterChunkGapMs:safeInt(detail.maxInterChunkGapMs,60000),
+      phase:['initializing','connecting','reading'].includes(detail.phase)?
+        detail.phase:null,
+      transportCode:['UND_ERR_SOCKET','ECONNRESET','ETIMEDOUT',
+        'ABORT_ERR','ERR_STREAM_PREMATURE_CLOSE','AbortError',
+        'TypeError','other_transport'].includes(detail.transportCode)?
+        detail.transportCode:null,
       failureCodes:Array.isArray(detail.failureCodes)?
         [...new Set(detail.failureCodes.filter(x=>FAILURE_CODES.has(x)))].slice(0,8):[]};
   }
