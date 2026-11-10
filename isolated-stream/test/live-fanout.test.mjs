@@ -255,3 +255,34 @@ test('an idle provider can reconnect without aborting all shared viewers',async(
    }),{headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('two-reader canary waits for both viewers before ONE authorized provider GET',async()=>{
+ let providerCalls=0,controller;
+ const source=new ReadableStream({start(c){controller=c;}});
+ await service(async(base,fanout)=>{
+  const first=fetch(base+'/live');
+  for(let i=0;i<80&&fanout.stats().viewers!==1;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(fanout.stats().viewers,1);
+  assert.equal(providerCalls,0);
+  const second=fetch(base+'/live');
+  for(let i=0;i<80&&fanout.stats().viewers!==2;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(fanout.stats().viewers,2);
+  assert.equal(providerCalls,1);
+  controller.enqueue(new Uint8Array(packet));
+  const responses=await Promise.all([first,second]);
+  assert.ok(responses.every(r=>r.status===200));
+  const readers=responses.map(r=>r.body.getReader());
+  const chunks=await Promise.all(readers.map(r=>r.read()));
+  assert.ok(chunks.every(c=>Buffer.compare(Buffer.from(c.value),packet)===0));
+  await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+ },{minViewersToStart:2,fetchImpl:async()=>{
+  providerCalls++;
+  return new Response(source,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('canary viewer barrier cannot exceed per-feed reader capacity',()=>{
+ assert.throws(()=>createLiveFanout({maxViewersPerFeed:1,minViewersToStart:2}),
+  /fanout_capacity_invalid/);
+});
