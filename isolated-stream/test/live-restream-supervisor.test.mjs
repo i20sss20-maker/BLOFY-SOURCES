@@ -219,7 +219,7 @@ test('short-lived upstream TS EOF reopens sequentially on one private worker fee
    const stats=service.list().items[0];
    throw Error('reopen_diagnostic '+JSON.stringify({
     calls,connections:stats?.connections,reopens:stats?.upstreamReopens,
-    failover:stats?.failovers,lastError:stats?.lastError,unexpected,
+    failover:stats?.failovers,lastError:stats?.lastError,unexpected,events,
     cause:e?.cause?.code||e?.cause?.message||String(e?.message||'')
    }));
   }
