@@ -264,6 +264,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div></div>
 <p class="muted" id="library-auto-status" role="status" aria-live="polite">اختر مصدرًا ثم افحص المزامنة التلقائية.</p>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
+<p class="muted" id="library-live-capacity-status" role="status" aria-live="polite">سيعرض هذا التقرير قيود حساب Xtream الأصلي وأسباب انقطاع القنوات، دون قراءة بيانات دخول العملاء.</p>
 <div class="actions">
 <button class="btn secondary" id="library-snapshot-create" type="button">حفظ نسخة من تخصيصات الناشر</button>
 <button class="btn secondary" id="library-snapshots-refresh" type="button">عرض النسخ المحفوظة</button>
@@ -1207,7 +1208,29 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           " (مفعّلة سابقًا: "+count(stats.codes?.redeemed||0)+")"+
           " | حسابات نشطة: "+count(stats.accounts?.active||0)+
           " | مشاهدون حاليون: غير مقاس من هذا التقرير.";
-      }else $("library-ops-stats").textContent="⚠ تعذر قراءة إحصائيات الأكواد: "+results[1].reason.message;
+        var upstream=stats.liveSourceCapacity||{},observed=stats.livePlayback||{};
+        var warnings=Array.isArray(upstream.warningCodes)?upstream.warningCodes:[];
+        var notice=warnings.includes("source_single_upstream_connection")?
+          "⚠ مصدر Xtream نفسه يعلن اتصالًا متزامنًا واحدًا؛ إنشاء كودين BLOFY لا يضاعف سعة المصدر. يمكن أن يفصل أحد المشاهدين عند فتح الثاني. راجع حدود وصلاحية البث من صاحب المصدر.":
+          warnings.includes("source_no_upstream_connections")?
+          "⚠ المصدر الأصلي يعلن عدم إتاحة اتصالات مشاهدة.":
+          warnings.includes("source_upstream_limit_unknown")?
+          "حد الاتصالات المسموح من Xtream غير معروف بعد؛ لا يمكن ضمان تشغيل كودين في الوقت نفسه.":
+          "الحد المعلن من Xtream: "+count(upstream.maxConnections)+" اتصالًا متزامنًا لحساب المصدر كله، وليس لكل كود BLOFY.";
+        if(warnings.includes("source_restream_not_authorized"))
+          notice+=" لا يظهر إذن إعادة بث على المصدر؛ لن نفعّل مشاركة القنوات دون تصريح.";
+        $("library-live-capacity-status").textContent=notice+
+          " | الاتصالات في آخر تقرير Xtream: "+
+          (upstream.activeConnections===null||upstream.activeConnections===undefined?
+           "غير متاحة":count(upstream.activeConnections))+
+          " | بث مباشر انتهى من المصدر: "+count(observed.upstreamEnded||0)+
+          " | انقطاعات 5–35 ثانية مرصودة: "+count(observed.shortLiveUpstreamEnds||0)+
+          " | إغلاق من العميل/الوسيط: "+count(observed.clientOrProxyClosed||0)+
+          ". هذه مؤشرات من عملية السيرفر الحالية، وليست عدد المشاهدين الحقيقي.";
+      }else {
+        $("library-ops-stats").textContent="⚠ تعذر قراءة إحصائيات الأكواد: "+results[1].reason.message;
+        $("library-live-capacity-status").textContent="لا يمكن تحديد حد اتصالات Xtream من هذه القراءة.";
+      }
     }catch(e){$("library-auto-status").textContent="خطأ فحص المصدر: "+e.message;}
   }
   async function configureAutoSync(enabled,button){
@@ -1235,6 +1258,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   $("library-source").addEventListener("change",function(){
     $("library-auto-status").textContent="اختر «فحص حالة المصدر والأكواد» لقراءة الحالة.";
     $("library-ops-stats").textContent="اختر مصدرًا للتحقق من الأكواد وإصدار المحتوى.";
+    $("library-live-capacity-status").textContent="اختر مصدرًا واضغط فحص حالة المصدر والأكواد للتحقق من عدد الاتصالات الأصلي.";
     $("library-snapshots-status").replaceChildren();
   });
   $("library-snapshots-refresh").addEventListener("click",async function(){
