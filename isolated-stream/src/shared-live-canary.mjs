@@ -25,7 +25,8 @@ export async function probeLicensedSharedLive({
  }
  const fanout=createLiveFanout({fetchImpl,lookup,
    redirectSourceOrigin:licensedRedirectOrigin,
-   reconnectOnUpstreamEnd:true,maxFeeds:1,maxViewersPerFeed:2,
+   reconnectOnUpstreamEnd:true,initialTransientRetries:1,
+   maxFeeds:1,maxViewersPerFeed:2,
    minViewersToStart:2});
  const srv=http.createServer((req,res)=>{
    void fanout.handle(req,res,sourceUrl).catch(()=>{

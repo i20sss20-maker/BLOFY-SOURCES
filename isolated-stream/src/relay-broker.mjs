@@ -99,7 +99,8 @@ export function createRelayBroker({
     return respond(res,502,{ok:false,code,...extra});
   };
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
-    redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true});
+    redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
+    initialTransientRetries:sharedLiveEnabled===true?1:0});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.

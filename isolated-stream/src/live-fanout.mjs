@@ -10,7 +10,7 @@ export function createLiveFanout({
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
-  initialTransientRetries=1,redirectSourceOrigin=''
+  initialTransientRetries=0,redirectSourceOrigin=''
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
