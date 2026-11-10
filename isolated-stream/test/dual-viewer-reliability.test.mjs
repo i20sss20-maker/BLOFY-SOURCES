@@ -101,3 +101,54 @@ test('two continuous viewers share one TS upstream; one leaving never stops the 
     await new Promise(resolve=>server.close(resolve));
   }
 });
+
+
+test('both continuous viewers survive one ended provider response and share its recovery', {timeout:12000}, async()=>{
+  let providerCalls=0;
+  const fanout=createLiveFanout({
+    lookup:async()=>[{address:'8.8.8.8',family:4}],
+    minViewersToStart:2,
+    reconnectOnUpstreamEnd:true,
+    maxReconnectAttempts:2,
+    readIdleTimeoutMs:1500,
+    fetchImpl:async()=>{
+      providerCalls++;
+      const attempt=providerCalls;
+      const source=new ReadableStream({
+        start(controller){
+          controller.enqueue(new Uint8Array(packet));
+          // End the first response; the second remains available to viewers.
+          if(attempt===1)controller.close();
+        }
+      });
+      return new Response(source,{headers:{'content-type':'video/mp2t'}});
+    }
+  });
+  const server=http.createServer((req,res)=>void fanout.handle(req,res,SOURCE));
+  server.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  const url='http://127.0.0.1:'+server.address().port+'/live';
+  let readerA=null,readerB=null;
+  try{
+    const joined=[fetch(url),fetch(url)];
+    await waitFor(()=>fanout.stats().viewers===2,'two authorized relay viewers');
+    const [responseA,responseB]=await Promise.all(joined);
+    assert.equal(responseA.status,200);
+    assert.equal(responseB.status,200);
+    readerA=responseA.body.getReader();
+    readerB=responseB.body.getReader();
+    await Promise.all([
+      receiveAtLeast(readerA,packet.length*2),
+      receiveAtLeast(readerB,packet.length*2)
+    ]);
+    assert.equal(providerCalls,2);
+    assert.equal(fanout.stats().activeFeeds,1);
+    assert.equal(fanout.stats().viewers,2);
+    assert.equal(fanout.stats().reconnectRecovered,1);
+  }finally{
+    await Promise.allSettled([readerA?.cancel(),readerB?.cancel()]);
+    fanout.close();
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+  }
+});
