@@ -208,6 +208,17 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">بيانات المشاهدين المجدولة: <strong id="security-egress-mb">—</strong></span>
 <span class="pill">طلبات مؤجلة لحماية المصدر: <strong id="security-cooldown-rejections">—</strong></span></div>
 <p class="muted" id="security-note">التصاريح مؤقتة، والإحصاءات تبدأ من آخر تشغيل للسيرفر.</p>
+<div class="grid" style="margin-top:12px">
+<div><h3>📺 صحة كل قناة مشتركة</h3>
+<p class="muted">الأرقام مؤقتة وتتغير بعد إعادة تشغيل السيرفر. لا تُظهر بيانات المصدر أو أكواد العملاء.</p>
+<div class="tablewrap"><table><thead><tr>
+<th>مرجع</th><th>الحالة</th><th>مشاهدون</th><th>آخر بيانات</th><th>إعادة اتصال</th>
+</tr></thead><tbody id="security-channel-health"></tbody></table></div></div>
+<div><h3>🩺 آخر أحداث الاتصال</h3>
+<div class="tablewrap"><table><thead><tr>
+<th>الوقت</th><th>القناة</th><th>الحدث</th>
+</tr></thead><tbody id="security-channel-events"></tbody></table></div></div>
+</div>
 </div>
 <div class="panel" id="auto-health-panel">
 <div class="controls"><div><h3>🛡 BLOFY AUTO HEALTH</h3><p class="muted">مراقبة مسارات إعادة البث التابعة للمشرف فقط. لا يتضمن التشغيل العادي للعملاء.</p></div>
@@ -1848,6 +1859,42 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("security-ingress-mb",toMb(d.media?.sourceBytesReceived));
       value("security-egress-mb",toMb(d.media?.viewerBytesQueued));
       value("security-cooldown-rejections",count(d.media?.cooldownRejections));
+      var channelRows=$("security-channel-health");
+      channelRows.replaceChildren();
+      var channelStates={ready:"✅ يبث",starting:"جاري الاتصال",
+        reconnecting:"🔄 يعيد الاتصال"};
+      (d.media?.channels||[]).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,"#"+count(item.channel));
+        cell(tr,channelStates[item.state]||"غير متاح");
+        cell(tr,count(item.viewers));
+        var age=item.lastMediaAgeMs;
+        cell(tr,age===null||age===undefined?"لم يصل بث":
+          (Math.floor(Number(age)/1000)+" ث"));
+        cell(tr,count(item.reconnects));
+        channelRows.appendChild(tr);
+      });
+      if(!(d.media?.channels||[]).length){
+        var empty=node("tr"),td=cell(empty,"لا توجد قنوات مشتركة قيد المشاهدة.");
+        td.colSpan=5;channelRows.appendChild(empty);
+      }
+      var eventsRows=$("security-channel-events");
+      eventsRows.replaceChildren();
+      var eventLabels={connected:"بدأ البث",reconnecting:"🔄 تعثر وجار الاستعادة",
+        recovered:"✅ عاد البث",failed:"⚠️ انقطع المصدر",idle:"توقف لعدم وجود مشاهدين"};
+      (d.media?.events||[]).slice(0,32).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,Number.isFinite(item.at)?new Date(item.at)
+          .toLocaleTimeString("en-GB",{timeZone:"Asia/Riyadh"}):"—");
+        cell(tr,"#"+count(item.channel));
+        cell(tr,(eventLabels[item.kind]||"تغيير الحالة")+
+          (item.reason?" · "+item.reason:""));
+        eventsRows.appendChild(tr);
+      });
+      if(!(d.media?.events||[]).length){
+        var emptyEvent=node("tr"),tdEvent=cell(emptyEvent,"لا توجد أحداث مسجلة بعد.");
+        tdEvent.colSpan=3;eventsRows.appendChild(emptyEvent);
+      }
       var status=Number(d.media?.activeFeeds||0)>0?
         (Number(d.media?.sourceOutages||0)>0?"مشاركة تعمل مع انقطاعات مسجلة":
           "قنوات مشتركة نشطة"):

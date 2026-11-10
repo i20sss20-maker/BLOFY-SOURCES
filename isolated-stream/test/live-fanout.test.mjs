@@ -416,3 +416,47 @@ test('source A outage and cooldown do not interrupt source B or its two viewers'
   await new Promise(resolve=>srv.close(resolve));
  }
 });
+
+test('operator channel health is bounded, anonymous and records recovery without source credentials',async()=>{
+ let upstreamCalls=0,controller,secondController;
+ const input='https://licensed.example/live/password/secret/channel.ts';
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  reconnectOnUpstreamEnd:true,readIdleTimeoutMs:140,
+  fetchImpl:async()=>{
+   upstreamCalls++;
+   const body=new ReadableStream({start(c){
+    if(upstreamCalls===1){controller=c;c.enqueue(new Uint8Array(packet))}
+    else {secondController=c;c.enqueue(new Uint8Array(packet))}
+   }});
+   return new Response(body,{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>void fanout.handle(req,res,input));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ try{
+  const base='http://127.0.0.1:'+server.address().port+'/live';
+  const media=await fetch(base);
+  const reader=media.body.getReader();
+  await reader.read();
+  const before=fanout.stats();
+  assert.equal(before.channels.length,1);
+  assert.equal(before.channels[0].state,'ready');
+  assert.equal(before.channels[0].viewers,1);
+  assert.ok(Number.isSafeInteger(before.channels[0].channel));
+  assert.equal(before.channels[0].sourceStarts,1);
+  assert.equal(before.events[0].kind,'connected');
+  assert.ok(before.channels[0].lastMediaAgeMs>=0);
+  controller.close();
+  for(let n=0;n<100&&fanout.stats().reconnectRecovered===0;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(fanout.stats().reconnectRecovered,1);
+  assert.equal(fanout.stats().channels[0].sourceStarts,2);
+  assert.ok(fanout.stats().events.some(e=>e.kind==='reconnecting'));
+  assert.ok(fanout.stats().events.some(e=>e.kind==='recovered'));
+  const json=JSON.stringify(fanout.stats());
+  assert.doesNotMatch(json,/licensed.example|password|secret|channel.ts|sourceUrl|cookie|token/);
+  await reader.cancel();
+ }finally{
+  fanout.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});

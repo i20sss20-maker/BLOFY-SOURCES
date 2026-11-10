@@ -340,3 +340,18 @@ test('security dashboard describes active fanout feeds, bounded retry and recove
   assert.match(page,/المقاييس إجمالية منذ آخر تشغيل/);
  });
 });
+
+test('authenticated security dashboard has anonymous per-channel stream diagnostics',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const res=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(res.status,200);
+  const html=await res.text();
+  for(const id of ['security-channel-health','security-channel-events'])
+   assert.match(html,new RegExp('id="'+id+'"'));
+  assert.match(html,/لا توجد قنوات مشتركة قيد المشاهدة/);
+  assert.match(html,/توقف لعدم وجود مشاهدين/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);
+  assert.doesNotThrow(()=>new Function(script[1]));
+ });
+});

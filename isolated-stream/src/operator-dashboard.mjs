@@ -136,6 +136,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           sourceBytesReceived:Number(relay.fanout?.sourceBytesReceived||0),
           viewerBytesQueued:Number(relay.fanout?.viewerBytesQueued||0),
           viewersAccepted:Number(relay.fanout?.viewersAccepted||0),
+          // Operator-only ephemeral channel IDs: no source URL,
+          // source name, device, account, IP, ticket, or credentials.
+          channels:Array.isArray(relay.fanout?.channels)?
+            relay.fanout.channels.slice(0,64):[],
+          events:Array.isArray(relay.fanout?.events)?
+            relay.fanout.events.slice(0,32):[],
           failureReasons:relay.fanout?.failureReasons||{}}
       });return true;
     }
