@@ -1723,8 +1723,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var tr=node("tr");cell(tr,item.title||item.channelId);
       cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
       var mt=byPath.get(item.path);
-      cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?String(mt.hlsViewers):"غير متاح");
-      var status=String(item.connections||0)+" سحب مباشر"+(item.failovers?" · تبديلات: "+item.failovers:"");
+      cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?
+        String(mt.hlsViewers):"لم يبدأ HLS");
+      var status=item.connections>0?String(item.connections)+" اتصال بالمصدر":
+        "جاهز عند الطلب · لا يوجد سحب حالي";
+      if(item.failovers)status+=" · تبديلات: "+item.failovers;
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe){
         var reason=String(item.lastProbe.code||"");
@@ -1877,11 +1880,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
         rightsConfirmed:true
       });
-      $("live-result").textContent=JSON.stringify({
-        ok:result.ok,title:result.title,path:result.path,
-        playlist:result.playlist,onDemand:result.onDemand
-      },null,2);
-      show("تم إنشاء مسار القناة على المحرك. اضغط فحص HLS أو معاينة للتحقق من الفيديو.",true);
+      $("live-result").textContent=
+        "✅ تم تجهيز مسار القناة: "+String(result.title||"")+
+        "\nالحالة: جاهز عند الطلب (On-Demand)."+
+        "\nتنبيه: لم يبدأ سحب المصدر بعد، ولا يعني إنشاء المسار أن الصورة والصوت يعملان."+
+        "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
+        "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
+        "\nالمسار: "+String(result.path||"");
+      show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);
       await loadLive();
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}

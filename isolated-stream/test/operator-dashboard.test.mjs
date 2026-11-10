@@ -292,3 +292,16 @@ test('shared-live 26-second canary endpoint requires operator auth and explicit 
   assert.match(page,/id="shared-live-probe-result"/);
  });
 });
+
+test('new live paths tell the operator On-Demand is not verified playback',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(r.status,200);
+  const page=await r.text();
+  assert.match(page,/جاهز عند الطلب · لا يوجد سحب حالي/);
+  assert.match(page,/لم يبدأ HLS/);
+  assert.match(page,/لم يبدأ سحب المصدر بعد/);
+  assert.match(page,/اضغط فحص HLS في صف القناة/);
+  assert.doesNotMatch(page,/\b0 سحب مباشر\b/);
+ });
+});
