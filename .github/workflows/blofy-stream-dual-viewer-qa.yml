@@ -1,0 +1,41 @@
+name: BLOFY STREAM two-viewer reliability QA (isolated)
+
+on:
+  push:
+    branches:
+      - qa/stream-two-viewer-reliability-20261111
+  pull_request:
+    branches:
+      - feature/stream-auto-health-center-20261109
+    paths:
+      - 'isolated-stream/**'
+      - '.github/workflows/blofy-stream-dual-viewer-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-fanout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check test module syntax
+        run: node --check isolated-stream/test/dual-viewer-reliability.test.mjs
+      - name: Run all licensed TS fanout and synthetic viewer regression tests
+        working-directory: isolated-stream
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          npm test
+      - name: Confirm isolated two-viewer test remains in the tested tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s isolated-stream/test/dual-viewer-reliability.test.mjs
+          node --check isolated-stream/test/dual-viewer-reliability.test.mjs
