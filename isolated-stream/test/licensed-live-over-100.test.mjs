@@ -87,7 +87,7 @@ test('shared grant reports explicit true only when configured at the media plane
     assert.equal(res.status,201);
     const body=await res.json();
     assert.equal(body.sharedLiveGranted,enabled);
-    assert.match(body.path,/^\\/relay\\/[0-9a-f]{48}$/);
+    assert.match(body.path,/^\/relay\/[0-9a-f]{48}$/);
     assert.ok(!JSON.stringify(body).includes('licensed.example'));
   }finally{
     server.closeAllConnections();await new Promise(r=>server.close(r));
