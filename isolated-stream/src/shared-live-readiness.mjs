@@ -108,9 +108,14 @@ export function createSharedLiveReadiness({
         return notReady('pilot_catalog_unavailable');
       // Never guess a different broadcast: only one uniquely matching 4K
       // sport title is accepted. Ambiguity requires operator selection.
+      const normalizeTitle=title=>String(title||'').normalize('NFKC')
+        .replaceAll('ᴜ','u').replaceAll('ʜ','h').replaceAll('ᴅ','d')
+        .replace(/\s+/g,' ').trim().toUpperCase();
       const candidates=(Array.isArray(catalog.body.items)?catalog.body.items:[])
         .filter(x=>x.enabled===true&&CHANNEL.test(String(x.id||''))&&
-          String(x.name||'').trim().toUpperCase().startsWith('4K: V SPORT'));
+          // Match the exact displayed 4K V SPORT UHD 3840p broadcast,
+          // not V SPORT 2 or a lower-resolution variant.
+          normalizeTitle(x.name)==='4K: V SPORT UHD 3840P');
       if(!candidates.length)return notReady('pilot_channel_not_found');
       if(candidates.length!==1)return notReady('pilot_channel_ambiguous');
       return scopedProbe(src.id,String(candidates[0].id));
