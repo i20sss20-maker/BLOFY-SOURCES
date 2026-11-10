@@ -33,12 +33,18 @@ export async function probeLicensedSharedLive({
   const base='http://127.0.0.1:'+srv.address().port+'/probe';
   const responses=await Promise.all(controllers.map(c=>
    fetch(base,{signal:c.signal,redirect:'manual'})));
-  if(!responses.every(r=>r.status===200)&&
-    !responses.every(r=>r.headers.get('content-type')?.startsWith('video/mp2t')))
-    return fail('pilot_source_not_ts',{upstreamSessions:fanout.stats().upstreamSessionsOpened});
-  if(!responses.every(r=>r.status===200&&r.body&&
+  const diagnostics=()=>({
+    upstreamSessions:fanout.stats().upstreamSessionsOpened,
+    reconnects:fanout.stats().upstreamReconnects,
+    // Fixed internal categories only, never raw provider URL or response body.
+    failureCodes:Object.keys(fanout.stats().failureReasons||{})
+      .filter(code=>/^[a-z_]{3,45}$/.test(code)).slice(0,8)
+  });
+  if(!responses.every(r=>r.status===200&&r.body))
+    return fail('pilot_media_http_failure',diagnostics());
+  if(!responses.every(r=>
     String(r.headers.get('content-type')||'').startsWith('video/mp2t')))
-    return fail('pilot_media_http_failure',{upstreamSessions:fanout.stats().upstreamSessionsOpened});
+    return fail('pilot_source_not_ts',diagnostics());
   for(const response of responses)readers.push(response.body.getReader());
   const endAt=now()+durationMs;
   async function sample(reader){
