@@ -7,19 +7,22 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
-  providerCooldownMs=2000,maxProviderCooldownMs=30000
+  providerCooldownMs=2000,maxProviderCooldownMs=30000,
+  reconnectOnUpstreamEnd=false,maxReconnectAttempts=3
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
      !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000||
      !Number.isInteger(providerCooldownMs)||providerCooldownMs<20||providerCooldownMs>60000||
      !Number.isInteger(maxProviderCooldownMs)||maxProviderCooldownMs<providerCooldownMs||
-       maxProviderCooldownMs>180000)
+       maxProviderCooldownMs>180000||
+     !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5)
     throw new Error('fanout_capacity_invalid');
   const feeds=new Map();
   const cooldowns=new Map();
   const counters={providerFailures:0,slowViewerDisconnects:0,
-    capacityRejections:0,cooldownRejections:0};
+    capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
+    reconnectExhaustions:0,upstreamSessionsOpened:0};
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   // Per-source failures are stored as non-reversible hashes only.
   // Limit both memory and upstream retries during source outages.
@@ -81,52 +84,86 @@ export function createLiveFanout({
     return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
   }
   async function pump(row){
-    let reader;
+    let everDelivered=false,failedAttempts=0;
     try{
-      const target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
-      const timer=setTimeout(()=>row.controller.abort(),firstByteTimeoutMs);
-      let response;
-      try{
-        response=await fetchImpl(target,{redirect:'manual',signal:row.controller.signal,
-          headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
-            'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
-        if(!response.ok||!response.body)throw Error('provider_unavailable');
-        const contentType=String(response.headers.get('content-type')||'').toLowerCase();
-        if(/^(text\/|application\/(?:json|xml))/.test(contentType))
-          throw Error('provider_not_media');
-        reader=response.body.getReader();
-        const first=await nextChunk(row,reader,firstByteTimeoutMs);
-        if(first.done||!first.value?.length||first.value[0]!==0x47)
-          throw Error('provider_not_ts');
-        // Permit clients to start only after actual transport bytes arrive.
-        row.state='ready';row.startedAt=clock();
-        cooldowns.delete(row.key);
-        row.first=Buffer.from(first.value);
-        for(const viewer of row.viewers){
-          if(!viewer.headersSent)viewer.writeHead(200,{
-            'content-type':'video/mp2t','cache-control':'no-store',
-            'x-content-type-options':'nosniff'});
+      while(!row.controller.signal.aborted&&row.viewers.size){
+        let reader=null,response=null,retry=false,connectedAt=clock();
+        try{
+          // Revalidate origin on every reconnect, including DNS resolution.
+          const target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
+          const headerTimer=setTimeout(()=>row.controller.abort(),firstByteTimeoutMs);
+          try{
+            response=await fetchImpl(target,{redirect:'manual',signal:row.controller.signal,
+              headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
+                'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
+          }finally{clearTimeout(headerTimer)}
+          if(!response.ok||!response.body){
+            if([401,403,404,429,456].includes(response.status))
+              throw Error('provider_denied');
+            throw Error('provider_unavailable');
+          }
+          const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+          if(/^(text\\/|application\\/(?:json|xml))/.test(contentType))
+            throw Error('provider_not_media');
+          reader=response.body.getReader();
+          const first=await nextChunk(row,reader,firstByteTimeoutMs);
+          if(first.done||!first.value?.length||first.value[0]!==0x47)
+            throw Error('provider_not_ts');
+          counters.upstreamSessionsOpened++;
+          // Viewers retain their HTTP response during a permitted sequential
+          // upstream reconnect, preventing an automatic full-screen exit.
+          row.state='ready';
+          if(!row.startedAt)row.startedAt=clock();
+          cooldowns.delete(row.key);
+          for(const viewer of row.viewers){
+            if(!viewer.headersSent)viewer.writeHead(200,{
+              'content-type':'video/mp2t','cache-control':'no-store',
+              'x-content-type-options':'nosniff'});
+          }
+          deliver(row,Buffer.from(first.value));
+          everDelivered=true;
+          while(!row.controller.signal.aborted){
+            const part=await nextChunk(row,reader,readIdleTimeoutMs);
+            if(part.done){
+              if(row.viewers.size)throw Error('fanout_upstream_ended');
+              break;
+            }
+            if(part.value?.length)deliver(row,Buffer.from(part.value));
+          }
+          if(!row.viewers.size||row.controller.signal.aborted)break;
+        }catch(error){
+          if(row.controller.signal.aborted||!row.viewers.size)break;
+          const message=String(error?.message||'');
+          const forbidden=['provider_denied','provider_not_media','provider_not_ts'];
+          const canReconnect=reconnectOnUpstreamEnd===true&&
+            everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
+          // A healthy 8s+ upstream session resets short-failure budget;
+          // a series of fast failures stops after three attempts.
+          if(clock()-connectedAt>=8000)failedAttempts=0;
+          if(canReconnect&&failedAttempts<maxReconnectAttempts){
+            failedAttempts++;retry=true;counters.upstreamReconnects++;
+          }else{
+            if(canReconnect)counters.reconnectExhaustions++;
+            if(row.viewers.size)noteProviderFailure(row.key);
+            for(const viewer of row.viewers){
+              if(!viewer.headersSent){
+                viewer.writeHead(502,{'content-type':'application/json',
+                  'cache-control':'no-store'});
+                viewer.end('{"ok":false,"code":"fanout_source_unavailable"}');
+              }else if(!viewer.destroyed)viewer.end();
+            }
+          }
+        }finally{
+          // Source reader is released BEFORE a replacement source GET.
+          try{await reader?.cancel()}catch{}
+          try{reader?.releaseLock()}catch{}
+          if(!reader)await response?.body?.cancel().catch(()=>{});
         }
-        deliver(row,row.first);row.first=null;
-      }finally{clearTimeout(timer);}
-      while(!row.controller.signal.aborted){
-        const part=await nextChunk(row,reader,readIdleTimeoutMs);
-        if(part.done){
-          if(row.viewers.size)throw new Error('fanout_upstream_ended');
-          break;
-        }
-        if(part.value?.length)deliver(row,Buffer.from(part.value));
-      }
-    }catch{
-      if(row.viewers.size)noteProviderFailure(row.key);
-      for(const viewer of row.viewers){
-        if(!viewer.headersSent){viewer.writeHead(502,{'content-type':'application/json',
-          'cache-control':'no-store'});viewer.end('{"ok":false,"code":"fanout_source_unavailable"}');}
-        else if(!viewer.destroyed)viewer.end();
+        if(!retry)break;
+        const delay=Math.min(2000,250*Math.pow(2,failedAttempts-1));
+        await new Promise(resolve=>setTimeout(resolve,delay));
       }
     }finally{
-      try{await reader?.cancel()}catch{}
-      try{reader?.releaseLock()}catch{}
       closeFeed(row.key,'closed',row);
     }
   }
