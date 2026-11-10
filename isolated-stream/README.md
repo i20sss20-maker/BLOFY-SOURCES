@@ -108,3 +108,38 @@ URLs shown to customers, logs or client JavaScript.
 
 Tests: `cd isolated-stream && npm test`. The Docker build runs tests,
 and GitHub Actions tests should be green before any deployment.
+
+ 
+## 2026-11-10 research: safe TS EOF recovery canary (operator only)
+
+The on-demand MediaMTX process logs showed FFmpeg starting and repeatedly
+exiting with status 0. This alone is not a codec or source diagnosis. FFmpeg's
+official HTTP protocol docs distinguish ordinary `reconnect` from
+`reconnect_at_eof`, which treats normal HTTP EOF like a recoverable live
+stream discontinuity. In an isolated local experiment (valid H264/AAC TS,
+HTTP responses containing an exact Content-Length), the old FFmpeg flags
+made ONE upstream GET and stopped at four seconds. Adding
+`-reconnect_at_eof 1` made THREE sequential GETs and continued past nine
+seconds. This is *synthetic transport proof*, not real Xtream A/V verification.
+
+The operator-only flag `BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT=1`
+enables additional FFmpeg options when a new operator HLS path is created:
+
+- `-reconnect_at_eof 1` (recover clean EOF);
+- `-reconnect_on_network_error 1`, selective `500,502,503,504` retries;
+- `-reconnect_max_retries 3`, total reconnect delay 12s;
+- never automatically retry 401/403/404/456 or bypass source rights.
+
+The flag defaults OFF. It affects ONLY operator-managed new MediaMTX
+`runOnDemand` HLS paths; it neither enables shared-live customer cutover nor
+changes any BLOFY PLAYER subscriber route. Set it in Railway only after
+testing in an isolated preview. Verify codec compatibility, TS packet
+continuity, real HLS segments, and decoded audio/video on a real authorized
+channel before canary approval. Never set this feature across all subscribers.
+
+Official references:
+- https://ffmpeg.org/ffmpeg-protocols.html
+- https://mediamtx.org/docs/features/on-demand-publishing
+- https://mediamtx.org/docs/features/control-api
+- https://github.com/datarhei/core (process watchdog, telemetry and quotas)
+- https://github.com/AlexxIT/go2rtc (multi-reader architecture and security)

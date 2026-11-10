@@ -158,3 +158,35 @@ test('explicit backup live channel takes over when primary returns provider 404'
   assert.ok(calls.some(x=>x.url.startsWith('https://backup.example/')));
   assert.equal(JSON.stringify(live).includes('secret-password'),false);
 });
+
+test('operator-only HTTP EOF recovery is opt-in and bounded without forwarding provider credentials',async()=>{
+ const {calls,portal}=createFixture();
+ const sourceSettings=[];
+ const fetchImpl=async(url,options={})=>{
+  if(String(url).includes(':9997/')&&options.method==='POST'){
+   sourceSettings.push(JSON.parse(options.body));
+  }
+  if(String(url).includes(':9997/'))
+   return new Response('{}',{status:200,headers:{'content-type':'application/json'}});
+  throw Error('network not expected');
+ };
+ const experimental=createLiveRestreamSupervisor({portal,fetchImpl,
+  httpEofReconnect:true,mediaPassword:password});
+ const response=await experimental.start(row());
+ assert.equal(response.status,201);
+ assert.equal(sourceSettings.length,1);
+ const command=sourceSettings[0].runOnDemand;
+ assert.match(command,/ -reconnect_at_eof 1 /);
+ assert.match(command,/ -reconnect_on_network_error 1 /);
+ assert.match(command,/ -reconnect_on_http_error 500,502,503,504 /);
+ assert.match(command,/ -reconnect_max_retries 3 /);
+ assert.match(command,/ -reconnect_delay_total_max 12 /);
+ assert.doesNotMatch(command,/401|403|404|456/);
+ assert.doesNotMatch(command,/provider.example|secret-password|sourceUrl/);
+ assert.ok(command.includes('/internal/live-feed/'));
+ const standard=createLiveRestreamSupervisor({portal,fetchImpl,mediaPassword:password});
+ const other=await standard.start(row());
+ assert.equal(other.status,201);
+ assert.doesNotMatch(sourceSettings[1].runOnDemand,/reconnect_at_eof/);
+ assert.equal(response.body.customerTrafficChanged,false);
+});

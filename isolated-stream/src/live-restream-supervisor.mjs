@@ -52,19 +52,29 @@ function safeFile(p){
   return typeof p==='string'&&p.length<=175&&/^[a-zA-Z0-9_.-]+$/.test(p)&&
     !p.includes('..')&&/\.(?:m3u8|ts|mp4|m4s|aac|vtt)$/.test(p);
 }
-function buildCommand(name,ticket){
+function buildCommand(name,ticket,{httpEofReconnect=false}={}){
   if(!safePath(name)||!TICKET.test(ticket))throw err('restream_invalid_path');
   // ALL interpolated values are strictly hex. No provider URL is added to
   // the FFmpeg shell command or to MediaMTX's public HLS path.
+  // The single private HTTP feed may return clean EOF after a finite
+  // provider TS session. FFmpeg does not treat that as reconnect-worthy
+  // without reconnect_at_eof. The experimental mode never reconnects
+  // on a provider-side permission denial (HTTP 401/403/404/456).
+  const localFeedReconnect=httpEofReconnect?
+    '-reconnect_at_eof 1 -reconnect_on_network_error 1 '+
+    '-reconnect_on_http_error 500,502,503,504 '+
+    '-reconnect_max_retries 3 -reconnect_delay_total_max 12 ':'';
   return 'ffmpeg -nostdin -hide_banner -loglevel error '+
     '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 3 '+
+    localFeedReconnect+
     '-rw_timeout 14000000 -i '+INTERNAL+'/internal/live-feed/'+ticket+
     ' -map 0:v:0? -map 0:a:0? -c copy -f rtsp '+
     '-rtsp_transport tcp rtsp://127.0.0.1:8554/'+name;
 }
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
-  maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,onUnexpectedError=()=>{}
+  maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,
+  httpEofReconnect=false,onUnexpectedError=()=>{}
 }={}){
   if(!Number.isInteger(maxSharedReaders)||maxSharedReaders<1||maxSharedReaders>2048)
     throw new Error('restream_shared_readers_invalid');
@@ -151,7 +161,8 @@ export function createLiveRestreamSupervisor({
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1};
-      const config={source:'publisher',runOnDemand:buildCommand(name,ticket),
+      const config={source:'publisher',
+        runOnDemand:buildCommand(name,ticket,{httpEofReconnect}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
       await mediamtx('POST','/v3/config/paths/add/'+name,config);

@@ -100,6 +100,7 @@ export function createStreamServer({
   });
   const liveSupervisor=createLiveRestreamSupervisor({
     portal:unifiedPortal,fetchImpl,
+    httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
   });
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
