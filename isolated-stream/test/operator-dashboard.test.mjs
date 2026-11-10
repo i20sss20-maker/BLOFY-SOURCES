@@ -305,3 +305,24 @@ test('new live paths tell the operator On-Demand is not verified playback',async
   assert.doesNotMatch(page,/\b0 سحب مباشر\b/);
  });
 });
+
+test('read-only shared-source readiness is authenticated and never leaks source secrets',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const bad=await fetch(base+'/operator/api/shared-live/status');
+  assert.equal(bad.status,401);
+  const ok=await fetch(base+'/operator/api/shared-live/status',{headers:{authorization:auth}});
+  assert.equal(ok.status,200);
+  const body=await ok.json();
+  assert.equal(body.ok,true);
+  assert.equal(body.state,'not_tested');
+  assert.equal(body.last,null);
+  assert.equal(body.customerTrafficChanged,false);
+  assert.doesNotMatch(JSON.stringify(body),/sourceUrl|password|username|ticket|credential/);
+  const html=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+  assert.match(html,/id="shared-live-readiness-state"/);
+  assert.match(html,/id="shared-live-readiness-upstreams"/);
+  assert.match(html,/loadSharedReadiness\(\)/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
+ });
+});

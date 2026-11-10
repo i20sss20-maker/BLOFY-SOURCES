@@ -242,6 +242,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
 <option value="">بدون قناة احتياطية</option></select></div>
 <p class="muted">🛡 فحص المشاركة يفتح اتصالًا واحدًا مصرحًا بالمصدر وقارئين داخليين لمدة 26 ثانية، ولا يغيّر أي كود أو قناة للمشتركين. يفحص نقل TS وليس جودة الصوت أو الصورة بعد فك التشفير.</p>
+<div class="inline" style="margin-top:9px">
+<span class="pill" id="shared-live-readiness-state">لم يُفحص البث المشترك بعد</span>
+<span class="pill">اتصالات المصدر: <strong id="shared-live-readiness-upstreams">—</strong></span>
+<span class="pill">عينات المشاهدة: <strong id="shared-live-readiness-viewers">—</strong></span>
+<button type="button" class="btn secondary sm" id="shared-live-readiness-refresh">تحديث نتيجة الفحص</button>
+</div>
+<p id="shared-live-readiness-note" class="muted">الاختبار لا ينقل المشتركين، ولا يثبت جودة الصورة والصوت بعد فك التشفير.</p>
 <pre id="shared-live-probe-result" class="log" style="min-height:55px">اختر قناة من مصدر saleh، وأكد صلاحية إعادة البث، ثم اضغط فحص المشاركة.</pre>
 <p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
 </div>
@@ -1846,6 +1853,56 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
   $("live-reload").addEventListener("click",loadLive);
+  function sharedFailureText(code){
+    var labels={
+      pilot_source_not_found:"لم يوجد مصدر مرخّص باسم saleh",
+      pilot_source_ambiguous:"تكرر اسم المصدر؛ يلزم اختيار مصدر واحد",
+      pilot_source_not_enabled:"المصدر غير مفعل أو غير منشور",
+      pilot_channel_not_found:"لم يتم العثور على قناة 4K V SPORT المطابقة",
+      pilot_channel_ambiguous:"وجدت عدة قنوات متشابهة؛ يلزم الاختيار اليدوي",
+      pilot_media_http_failure:"المصدر لم يعطِ استجابة TS ناجحة",
+      pilot_source_unavailable:"المصدر لم يستجب لمسار القناة",
+      pilot_source_auth_denied:"المصدر رفض طلب الوسائط أو صلاحية الحساب",
+      pilot_media_stalled:"البث توقف عن إرسال بيانات الفيديو",
+      pilot_stream_ended:"توقف تدفق القناة قبل اكتمال الفحص",
+      pilot_source_not_ts:"البيانات ليست MPEG-TS صالحًا للتوزيع",
+      pilot_transport_unavailable:"تعذر النقل أو الاتصال الآمن بالمصدر",
+      pilot_bridge_unavailable:"بوابة الاتصال بالمصدر غير متاحة",
+      pilot_catalog_unavailable:"تعذر تحميل فهرس القنوات",
+      pilot_requires_live_ts:"القناة أو صيغتها غير ملائمة لفحص TS",
+      pilot_rate_limited:"الفحص مقيد لمدة دقيقة لحماية المصدر",
+      pilot_in_progress:"هناك فحص مشاركة جار الآن",
+      shared_with_sequential_reconnect:"وصلت البيانات للمشاهدين مع إعادة اتصال متسلسلة",
+      shared_single_upstream_verified:"نجح وصول TS إلى مشاهدين من اتصال مصدر واحد"
+    };
+    return labels[String(code||"")]||String(code||"لم يتم الاختبار");
+  }
+  async function loadSharedReadiness(){
+    try{
+      var d=await api("shared-live/status"),last=d.last;
+      if(d.state==="running"){
+        value("shared-live-readiness-state","الفحص جار الآن");
+        value("shared-live-readiness-note","الفحص محدد بمصدر واحد ومشاهدين تجريبيين؛ لا يؤثر على أكواد العملاء.");
+        return;
+      }
+      if(!last){
+        value("shared-live-readiness-state","لم يُفحص البث المشترك بعد");
+        value("shared-live-readiness-note","البث المشترك للعملاء غير مفعل. استخدم الاختبار لتأكيد النقل.");
+        return;
+      }
+      value("shared-live-readiness-state",last.ok?"✅ نجح فحص النقل":"⚠️ "+sharedFailureText(last.code));
+      value("shared-live-readiness-upstreams",count(last.upstreamSessions));
+      value("shared-live-readiness-viewers",count(last.viewerSamples));
+      var detail=last.checkedAt?new Date(last.checkedAt).toLocaleString("ar-SA",{timeZone:"Asia/Riyadh"}):"—";
+      value("shared-live-readiness-note","آخر فحص: "+detail+" · "+
+        (last.mode==="boot"?"تلقائي محدود":"يدوي")+
+        " · إعادة اتصال: "+count(last.reconnects)+
+        (last.failureCodes&&last.failureCodes.length?
+          " · رموز التشخيص: "+last.failureCodes.join("، "):"")+
+        " · فحص نقل فقط، لم يتم التحقق من فك الصوت والصورة.");
+    }catch(e){value("shared-live-readiness-state","تعذر قراءة حالة المشاركة")}
+  }
+  $("shared-live-readiness-refresh").addEventListener("click",loadSharedReadiness);
   $("shared-live-probe").addEventListener("click",async function(){
     var sourceId=$("live-source").value,channelId=$("live-channel").value;
     if(!sourceId||!channelId){show("اختر مصدرًا وقناة لفحص المشاركة.",false);return}
@@ -1853,16 +1910,28 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     this.disabled=true;
     value("shared-live-probe-result","جار التحقق من سحب المصدر وتوزيعه على قارئين خلال 26 ثانية...");
     try{
-      var report=await action("shared-live/probe","shared-live-probe",{
-        sourceId:sourceId,channelId:channelId,rightsConfirmed:true
+      // This diagnostic intentionally renders a sanitized JSON body even
+      // when ok:false; the general action() helper throws that evidence away.
+      var response=await fetch("/operator/api/shared-live/probe",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"application/json",
+          "x-blofy-operator-action":"shared-live-probe"},
+        body:JSON.stringify({sourceId:sourceId,channelId:channelId,
+          rightsConfirmed:true})
       });
+      var report=await response.json();
       value("shared-live-probe-result",JSON.stringify(report,null,2));
-      show(report.ok?"نجح فحص النقل المشترك. لا يعني ذلك تشغيل المشتركين تلقائيًا.":
-        "فشل فحص المشاركة. تم إبقاء تشغيل المشتركين على الوضع السابق.",report.ok);
+      if(!response.ok||!report.ok){
+        show("فشل فحص المشاركة: "+sharedFailureText(report.code)+
+          ". قنوات المشتركين بقيت على المسار السابق.",false);
+      }else{
+        show("نجح النقل المشترك التجريبي، لكن جودة الصورة والصوت تحتاج تأكيدًا.",true);
+      }
+      await loadSharedReadiness();
     }catch(e){
       value("shared-live-probe-result","تعذر الفحص: "+e.message);
       show("فشل الفحص بدون تغيير قنوات المشتركين.",false);
-    }finally{this.disabled=false}
+    }finally{this.disabled=false;await loadSharedReadiness()}
   });
   $("live-start").addEventListener("click",async function(){
     var sourceId=$("live-source").value,channelId=$("live-channel").value;
@@ -1913,8 +1982,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness()}},60000);
 })();
 </script>
 </body></html>`;

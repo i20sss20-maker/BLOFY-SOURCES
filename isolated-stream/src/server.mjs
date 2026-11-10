@@ -14,6 +14,7 @@ import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {probeLicensedSharedLive} from './shared-live-canary.mjs';
+import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {probeOutboundIpv4} from './outbound-ip-proof.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
@@ -57,6 +58,7 @@ export function createStreamServer({
   relayFirstByteTimeoutMs=12000,
   sharedLiveEnabled=false,
   autoHealthProbeEnabled=false,
+  realSourceReadinessOnBoot=false,
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -98,6 +100,26 @@ export function createStreamServer({
   const unifiedPortal=createUnifiedPortalClient({
     secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
   });
+  const sharedReadiness=createSharedLiveReadiness({
+    portal:unifiedPortal,sourceName:'saleh',search:'V SPORT',
+    probe:({sourceUrl})=>probeLicensedSharedLive({
+      sourceUrl,fetchImpl:relayFetchImpl,lookup:relayLookup,
+      redirectSourceOrigin:relayRedirectSourceOrigin,durationMs:26000
+    }),
+    onResult:report=>{
+      // Aggregate only. Do not include source names, URLs, account details,
+      // provider response bodies, customer IDs or auth tickets in logs.
+      log.info('BLOFY_STREAM_SHARED_SOURCE_READINESS',JSON.stringify({
+        ok:report.ok,code:report.code,mode:report.mode,
+        durationMs:report.durationMs,
+        upstreamSessions:report.upstreamSessions,
+        viewerSamples:report.viewerSamples,
+        reconnects:report.reconnects,
+        failureCodes:report.failureCodes,
+        customerTrafficChanged:false
+      }));
+    }
+  });
   const liveSupervisor=createLiveRestreamSupervisor({
     portal:unifiedPortal,fetchImpl,
     httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
@@ -107,7 +129,7 @@ export function createStreamServer({
   const autoHealth=createLiveAutoHealth({liveSupervisor,
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const operatorDashboard=createOperatorDashboard({
-    liveSupervisor,vodBroker,
+    liveSupervisor,vodBroker,sharedReadiness,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
@@ -119,11 +141,7 @@ export function createStreamServer({
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
       realSourceVerified:false,audioVideoDecoded:false
     }),
-    runSharedLiveProbe:({sourceUrl})=>probeLicensedSharedLive({
-      sourceUrl,fetchImpl:relayFetchImpl,lookup:relayLookup,
-      redirectSourceOrigin:relayRedirectSourceOrigin,durationMs:26000
-    }),
-    runSmoke:async()=>{
+     runSmoke:async()=>{
       if(checking||(checkedAt&&Date.now()-checkedAt<30_000))
         return {status:429,body:{ok:false,code:'canary_rate_limited'}};
       const report=await canary();
@@ -225,7 +243,22 @@ export function createStreamServer({
     },9000);
     t.unref?.();
   }
-  return {app,config:cfg,startBootCanary,canary,liveSupervisor,autoHealth,
+  function startBootSourceReadiness(){
+    if(!realSourceReadinessOnBoot)return;
+    // Only the uniquely named licensed 'saleh' source and a uniquely matching
+    // 4K V SPORT channel are eligible for this single two-reader, 26s probe.
+    // It does NOT publish a MediaMTX path or redirect any paying customer.
+    const timer=setTimeout(()=>{
+      void sharedReadiness.auto().catch(()=>{
+        log.warn('BLOFY_STREAM_SHARED_SOURCE_READINESS',JSON.stringify({
+          ok:false,code:'pilot_internal_error',customerTrafficChanged:false
+        }));
+      });
+    },20000);
+    timer.unref?.();
+  }
+  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
+    liveSupervisor,autoHealth,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
 
@@ -236,6 +269,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
     autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
+    realSourceReadinessOnBoot:process.env.BLOFY_STREAM_SHARED_REAL_SOURCE_PROBE_ON_BOOT==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
     diagnosticAllowedOrigin:process.env.BLOFY_STREAM_DIAGNOSTIC_ALLOW_ORIGIN||'',
     port:process.env.PORT||3000,
@@ -244,6 +278,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    service.startBootSourceReadiness();
     service.autoHealth.start();
     // Coarse on-instance media failure diagnosis; log aggregate-only reason
     // buckets when counts change. Never emit token paths, provider hosts,
