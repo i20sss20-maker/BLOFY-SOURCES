@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {createStreamServer} from '../src/server.mjs';
 import {assertPublicMediaUrl} from '../src/relay-guard.mjs';
+import {createRelayBroker} from '../src/relay-broker.mjs';
 
 const shared='isolated-relay-test-secret-abcdefghijklmnopqrstuvwxyz123456789';
 const ts=Buffer.alloc(188*3,0x11);
@@ -366,4 +367,67 @@ test('ten independent authorized relay grants share a single TS source and toler
     clearInterval(ticker);
     try{await controller?.close()}catch{}
   }
+});
+
+test('bridge issuance throttles authenticated floods without revealing any secret',async()=>{
+  const {createServer}=await import('node:http');
+  const broker=createRelayBroker({
+    sharedToken:shared,maxTickets:8,maxIssuesPerSecond:2,maxIssuesPerMinute:3,
+    lookup:async()=>[{address:'93.184.216.34',family:4}]
+  });
+  const server=createServer((req,res)=>void broker.issue(req,res));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const origin='http://127.0.0.1:'+server.address().port;
+  try{
+    for(let i=0;i<2;i++)assert.equal((await issue(origin)).status,201);
+    const flood=await issue(origin);
+    assert.equal(flood.status,429);
+    assert.equal(flood.headers.get('retry-after'),'1');
+    assert.equal((await flood.json()).code,'relay_issuer_rate_limited');
+    const stats=broker.stats();
+    assert.equal(stats.security.grantsIssued,2);
+    assert.equal(stats.security.issuanceThrottled,1);
+    assert.doesNotMatch(JSON.stringify(stats),/allowed.example|password|account/);
+  }finally{server.closeAllConnections();await new Promise(r=>server.close(r))}
+});
+test('invalid bearer flood never spends the valid bridge issuance quota',async()=>{
+  const {createServer}=await import('node:http');
+  const broker=createRelayBroker({
+    sharedToken:shared,maxIssuesPerSecond:1,maxIssuesPerMinute:2,
+    lookup:async()=>[{address:'93.184.216.34',family:4}]
+  });
+  const server=createServer((req,res)=>void broker.issue(req,res));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const origin='http://127.0.0.1:'+server.address().port;
+  try{
+    for(let i=0;i<15;i++)assert.equal((await issue(origin,undefined,'wrong')).status,401);
+    assert.equal((await issue(origin)).status,201);
+    assert.equal(broker.stats().security.issuerAuthDenied,15);
+  }finally{server.closeAllConnections();await new Promise(r=>server.close(r))}
+});
+test('full ticket capacity rejects new grants without revoking existing viewer token',async()=>{
+  const {createServer}=await import('node:http');
+  const broker=createRelayBroker({
+    sharedToken:shared,maxTickets:1,
+    lookup:async()=>[{address:'93.184.216.34',family:4}],
+    fetchImpl:async()=>new Response(ts,{headers:{'content-type':'video/mp2t'}})
+  });
+  const server=createServer((req,res)=>{
+    if(req.url?.startsWith('/internal/relay-grants'))void broker.issue(req,res);
+    else void broker.relay(req,res);
+  });
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const origin='http://127.0.0.1:'+server.address().port;
+  try{
+    const first=await issue(origin);
+    assert.equal(first.status,201);
+    const token=await first.json();
+    const second=await issue(origin);
+    assert.equal(second.status,429);
+    assert.equal((await second.json()).code,'relay_grant_capacity_reached');
+    const media=await fetch(origin+token.path);
+    assert.equal(media.status,200);
+    assert.deepEqual(Buffer.from(await media.arrayBuffer()),ts);
+    assert.equal(broker.stats().security.capacityRejected,1);
+  }finally{server.closeAllConnections();await new Promise(r=>server.close(r))}
 });

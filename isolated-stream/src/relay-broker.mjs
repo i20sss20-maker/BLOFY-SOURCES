@@ -17,11 +17,13 @@ function sameBearer(header,secret){
   const target=Buffer.from(secret);
   return input.length===target.length&&timingSafeEqual(input,target);
 }
-function respond(res,status,payload){
+function respond(res,status,payload,extraHeaders={}){
   const bytes=Buffer.from(JSON.stringify(payload));
   res.writeHead(status,{'content-type':'application/json; charset=utf-8',
     'cache-control':'no-store','x-content-type-options':'nosniff',
-    'referrer-policy':'no-referrer','content-length':bytes.length});
+    'referrer-policy':'no-referrer','x-frame-options':'DENY',
+    'content-security-policy':"default-src 'none'",
+    'content-length':bytes.length,...extraHeaders});
   res.end(bytes);
 }
 async function readSmallJson(req){
@@ -62,11 +64,33 @@ function permittedReturnHeaders(response){
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
-  sharedLiveEnabled=false
+  sharedLiveEnabled=false,maxIssuesPerSecond=256,maxIssuesPerMinute=2400
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
+  if(!Number.isInteger(maxTickets)||maxTickets<1||maxTickets>8192||
+    !Number.isInteger(maxIssuesPerSecond)||maxIssuesPerSecond<1||maxIssuesPerSecond>2048||
+    !Number.isInteger(maxIssuesPerMinute)||maxIssuesPerMinute<1||maxIssuesPerMinute>30000)
+    throw new Error('relay_security_limits_invalid');
   const tickets=new Map();
+  // Rate-limit only correctly authenticated bridge requests. Bad bearer
+  // attempts cannot exhaust legitimate subscribers' issuance budget.
+  const quota={secondStartedAt:clock(),minuteStartedAt:clock(),
+    second:0,minute:0,grantsIssued:0,issuanceThrottled:0,
+    capacityRejected:0,issuerAuthDenied:0};
+  function issueAllowed(){
+    const now=clock();
+    if(now-quota.secondStartedAt>=1000){
+      quota.secondStartedAt=now;quota.second=0;
+    }
+    if(now-quota.minuteStartedAt>=60000){
+      quota.minuteStartedAt=now;quota.minute=0;
+    }
+    if(quota.second>=maxIssuesPerSecond||quota.minute>=maxIssuesPerMinute){
+      quota.issuanceThrottled++;return false;
+    }
+    quota.second++;quota.minute++;return true;
+  }
   // Aggregate sanitized failure reasons only: no ticket IDs, provider
   // hostnames, source credentials or customer IPs appear in the counters.
   const failureCounts=Object.create(null);
@@ -91,13 +115,18 @@ export function createRelayBroker({
     for(const [id,row] of tickets){
       if(row.expiresAt<=clock()||row.uses>=5)tickets.delete(id);
     }
-    while(tickets.size>=maxTickets)tickets.delete(tickets.keys().next().value);
+    // Never silently evict a valid active capability when capacity is full.
+    // An attacker must not force other subscribers to lose valid tickets.
   }
   async function issue(req,res){
     if(!enabled)return respond(res,503,{ok:false,code:'relay_disabled'});
-    if(!sameBearer(req.headers.authorization,sharedToken))
+    if(!sameBearer(req.headers.authorization,sharedToken)){
+      quota.issuerAuthDenied++;
       return respond(res,401,{ok:false,code:'relay_issuer_unauthorized'});
+    }
     if(req.method!=='POST')return respond(res,405,{ok:false,code:'relay_bad_method'});
+    if(!issueAllowed())return respond(res,429,
+      {ok:false,code:'relay_issuer_rate_limited'},{'retry-after':'1'});
     let input,url;
     try{
       if(!String(req.headers['content-type']||'').includes('application/json'))
@@ -114,6 +143,11 @@ export function createRelayBroker({
       return respond(res,400,{ok:false,code});
     }
     prune();
+    if(tickets.size>=maxTickets){
+      quota.capacityRejected++;
+      return respond(res,429,{ok:false,code:'relay_grant_capacity_reached'},
+        {'retry-after':'3'});
+    }
     const id=issueToken();
     if(!/^[0-9a-f]{48}$/.test(id)||tickets.has(id))
       return respond(res,503,{ok:false,code:'relay_issue_unavailable'});
@@ -122,6 +156,7 @@ export function createRelayBroker({
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
       sharedLive:sharedLiveGranted,
       expiresAt:clock()+TTL,uses:0});
+    quota.grantsIssued++;
     return respond(res,201,{ok:true,path:'/relay/'+id,expiresInSeconds:45,
       // This is a private, authenticated capability response, not an
       // assertion of upstream rights. The publisher must verify rights.
@@ -262,6 +297,11 @@ export function createRelayBroker({
   }
   return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size,
     sharedLiveEnabled,fanout:fanout.stats(),
+    security:{grantsIssued:quota.grantsIssued,
+      issuerAuthDenied:quota.issuerAuthDenied,
+      issuanceThrottled:quota.issuanceThrottled,
+      capacityRejected:quota.capacityRejected,
+      maxTickets,maxIssuesPerSecond,maxIssuesPerMinute},
     relayFailureTotal:Object.values(failureCounts).reduce((a,b)=>a+b,0),
     relayFailureCounts:{...failureCounts}})};
 }

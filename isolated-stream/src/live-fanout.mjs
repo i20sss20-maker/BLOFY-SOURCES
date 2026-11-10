@@ -118,6 +118,7 @@ export function createLiveFanout({
           for(const viewer of row.viewers){
             if(!viewer.headersSent)viewer.writeHead(200,{
               'content-type':'video/mp2t','cache-control':'no-store',
+              'referrer-policy':'no-referrer','x-frame-options':'DENY',
               'x-content-type-options':'nosniff'});
           }
           deliver(row,Buffer.from(first.value));
@@ -170,6 +171,7 @@ export function createLiveFanout({
   async function handle(req,res,sourceUrl){
     if(req.method==='HEAD'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
+        'referrer-policy':'no-referrer','x-frame-options':'DENY',
         'x-content-type-options':'nosniff'});res.end();return;
     }
     if(req.method!=='GET'){
@@ -216,6 +218,7 @@ export function createLiveFanout({
     res.once('close',onClose);
     if(row.state==='ready'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
+        'referrer-policy':'no-referrer','x-frame-options':'DENY',
         'x-content-type-options':'nosniff'});
     }
     if(row.state==='starting'&&!row.pumpStarted){
