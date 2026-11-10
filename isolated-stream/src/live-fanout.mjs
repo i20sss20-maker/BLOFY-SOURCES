@@ -126,6 +126,22 @@ export function createLiveFanout({
     });
     return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
   }
+  async function releaseUpstream(reader,response){
+    // Some sources never settle ReadableStream.cancel() after a stalled read.
+    // The fetch AbortController is already aborted by the caller; cleanup
+    // must not indefinitely block the next single-source retry.
+    let timer;
+    try{
+      await Promise.race([
+        Promise.resolve().then(()=>reader?
+          reader.cancel():response?.body?.cancel()).catch(()=>{}),
+        new Promise(resolve=>{timer=setTimeout(resolve,250);})
+      ]);
+    }finally{
+      if(timer)clearTimeout(timer);
+      if(reader)try{reader.releaseLock()}catch{}
+    }
+  }
   async function pump(row){
     let everDelivered=false,failedAttempts=0,initialFailures=0;
     let reopening=false;
@@ -251,10 +267,8 @@ export function createLiveFanout({
           }
         }finally{
           // Source reader is released BEFORE a replacement source GET.
-          try{await reader?.cancel()}catch{}
-          try{reader?.releaseLock()}catch{}
-          if(!reader)await response?.body?.cancel().catch(()=>{});
           attemptController.abort();
+          await releaseUpstream(reader,response);
           row.controller.signal.removeEventListener('abort',stopAttempt);
         }
         if(!retry)break;
