@@ -25,7 +25,8 @@ export async function probeLicensedSharedLive({
  }
  const fanout=createLiveFanout({fetchImpl,lookup,
    redirectSourceOrigin:licensedRedirectOrigin,
-   reconnectOnUpstreamEnd:true,maxFeeds:1,maxViewersPerFeed:2});
+   reconnectOnUpstreamEnd:true,maxFeeds:1,maxViewersPerFeed:2,
+   minViewersToStart:2});
  const srv=http.createServer((req,res)=>{
    void fanout.handle(req,res,sourceUrl).catch(()=>{
      if(!res.headersSent)res.writeHead(502,{'cache-control':'no-store'});
@@ -35,10 +36,11 @@ export async function probeLicensedSharedLive({
  const controllers=[new AbortController(),new AbortController()];
  const readers=[];
  const started=now();
- let result=fail('pilot_not_started');
+ let result=fail('pilot_not_started'),phase='initializing';
  try{
   srv.listen(0,'127.0.0.1');await once(srv,'listening');
   const base='http://127.0.0.1:'+srv.address().port+'/probe';
+  phase='connecting';
   const responses=await Promise.all(controllers.map(c=>
    fetch(base,{signal:c.signal,redirect:'manual'})));
   const diagnostics=()=>({
@@ -54,6 +56,7 @@ export async function probeLicensedSharedLive({
     String(r.headers.get('content-type')||'').startsWith('video/mp2t')))
     return fail('pilot_source_not_ts',diagnostics());
   for(const response of responses)readers.push(response.body.getReader());
+  phase='reading';
   const endAt=now()+durationMs;
   async function sample(reader){
     let bytes=0,packets=0,last=now(),largestGapMs=0;
@@ -89,8 +92,20 @@ export async function probeLicensedSharedLive({
     maxInterChunkGapMs:Math.max(...samples.map(x=>x.largestGapMs)),
     customerTrafficChanged:false,realVideoDecoded:false,realAudioDecoded:false};
   return result;
- }catch{
-  return fail('pilot_transport_unavailable',{durationMs:now()-started});
+ }catch(error){
+  const stats=fanout.stats();
+  // These labels are predefined diagnostics, not arbitrary exception text.
+  // Do NOT copy error.message, source URL, remote address or credentials.
+  const type=String(error?.cause?.code||error?.code||error?.name||'');
+  const safeTypes=new Set(['UND_ERR_SOCKET','ECONNRESET','ETIMEDOUT',
+    'ABORT_ERR','ERR_STREAM_PREMATURE_CLOSE','AbortError','TypeError']);
+  return fail('pilot_transport_unavailable',{
+    durationMs:now()-started,phase,
+    transportCode:safeTypes.has(type)?type:'other_transport',
+    upstreamSessions:stats.upstreamSessionsOpened,
+    reconnects:stats.upstreamReconnects,
+    failureCodes:Object.keys(stats.failureReasons||{}).slice(0,8)
+  });
  }finally{
   for(const c of controllers)c.abort();
   fanout.close();
