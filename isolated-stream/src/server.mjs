@@ -219,7 +219,8 @@ export function createStreamServer({
     },9000);
     t.unref?.();
   }
-  return {app,config:cfg,startBootCanary,canary,liveSupervisor,autoHealth};
+  return {app,config:cfg,startBootCanary,canary,liveSupervisor,autoHealth,
+    relayStats:()=>relayBroker.stats()};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -238,6 +239,24 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
     service.autoHealth.start();
+    // Coarse on-instance media failure diagnosis; log aggregate-only reason
+    // buckets when counts change. Never emit token paths, provider hosts,
+    // subscriber IPs or upstream credentials.
+    let lastRelayFailureReport='';
+    const mediaAudit=setInterval(()=>{
+      const f=service.relayStats().fanout;
+      if(!f?.providerFailures&&!f?.cooldownRejections)return;
+      const audit={providerFailures:f.providerFailures,
+        cooldownRejections:f.cooldownRejections,
+        reconnectExhaustions:f.reconnectExhaustions,
+        failureReasons:f.failureReasons};
+      const key=JSON.stringify(audit);
+      if(key!==lastRelayFailureReport){
+        lastRelayFailureReport=key;
+        console.warn('BLOFY_STREAM_MEDIA_FAILURE_AGGREGATE',key);
+      }
+    },60000);
+    mediaAudit.unref?.();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
     let recoveryAttempts=0;

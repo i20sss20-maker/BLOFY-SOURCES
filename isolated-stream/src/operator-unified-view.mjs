@@ -196,7 +196,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">طلبات دخول محدودة: <strong id="security-auth-throttled">—</strong></span>
 <span class="pill">تصاريح بث صادرة: <strong id="security-grants-issued">—</strong></span>
 <span class="pill">طلبات بث محدودة: <strong id="security-grants-throttled">—</strong></span>
-<span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span></div>
+<span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span>
+<span class="pill">أخطاء مصدر الوسائط: <strong id="security-provider-errors">—</strong></span>
+<span class="pill">طلبات مؤجلة لحماية المصدر: <strong id="security-cooldown-rejections">—</strong></span></div>
 <p class="muted" id="security-note">التصاريح مؤقتة، والإحصاءات تبدأ من آخر تشغيل للسيرفر.</p>
 </div>
 <div class="panel" id="auto-health-panel">
@@ -1814,6 +1816,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("security-grants-issued",count(d.relay?.grantsIssued));
       value("security-grants-throttled",count(d.relay?.issuanceThrottled));
       value("security-active-tickets",count(d.relay?.activeTickets));
+      value("security-provider-errors",count(d.media?.providerFailures));
+      value("security-cooldown-rejections",count(d.media?.cooldownRejections));
       value("security-note","حماية الدخول والطلبات تعمل. عدد التصاريح الأقصى: "+
         count(d.relay?.maxTickets)+". الإحصاءات في ذاكرة الخدمة منذ آخر تشغيل.");
     }catch(e){value("security-status","غير متاح");

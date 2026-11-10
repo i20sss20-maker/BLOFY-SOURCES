@@ -121,7 +121,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           issuerAuthDenied:Number(metrics.issuerAuthDenied||0),
           issuanceThrottled:Number(metrics.issuanceThrottled||0),
           capacityRejected:Number(metrics.capacityRejected||0),
-          maxTickets:Number(metrics.maxTickets||0)}
+          maxTickets:Number(metrics.maxTickets||0)},
+        media:{providerFailures:Number(relay.fanout?.providerFailures||0),
+          cooldownRejections:Number(relay.fanout?.cooldownRejections||0),
+          failureReasons:relay.fanout?.failureReasons||{}}
       });return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){

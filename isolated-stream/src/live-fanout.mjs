@@ -23,6 +23,12 @@ export function createLiveFanout({
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0};
+  // Fixed allowlist of diagnostic categories. Never report upstream URL,
+  // username/password, IP, ticket or exception message in public metrics.
+  const failureReasons=Object.create(null);
+  const allowedReasons=new Set(['provider_denied','provider_not_media',
+    'provider_not_ts','provider_unavailable','fanout_upstream_ended',
+    'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   // Per-source failures are stored as non-reversible hashes only.
   // Limit both memory and upstream retries during source outages.
@@ -135,6 +141,8 @@ export function createLiveFanout({
         }catch(error){
           if(row.controller.signal.aborted||!row.viewers.size)break;
           const message=String(error?.message||'');
+          const reason=allowedReasons.has(message)?message:'other_transport';
+          failureReasons[reason]=(failureReasons[reason]||0)+1;
           const forbidden=['provider_denied','provider_not_media','provider_not_ts'];
           const canReconnect=reconnectOnUpstreamEnd===true&&
             everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
@@ -228,6 +236,7 @@ export function createLiveFanout({
   return {handle,stats:()=>({activeFeeds:feeds.size,
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
     cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
-    ...counters,maxFeeds,maxViewersPerFeed}),
+    ...counters,failureReasons:{...failureReasons},
+    maxFeeds,maxViewersPerFeed}),
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }

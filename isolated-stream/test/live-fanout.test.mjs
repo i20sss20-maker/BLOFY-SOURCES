@@ -150,3 +150,23 @@ test('provider cool-down settings are strictly bounded',()=>{
   assert.throws(()=>createLiveFanout({
     providerCooldownMs:3000,maxProviderCooldownMs:1000}),/fanout_capacity_invalid/);
 });
+
+test('fanout failure report classifies provider denials without leaking source details',async()=>{
+ const {createServer}=await import('node:http');
+ const fanout=createLiveFanout({
+   fetchImpl:async()=>new Response('denied',{status:403}),
+   lookup:async()=>[{address:'8.8.8.8',family:4}]
+ });
+ const server=createServer((req,res)=>void fanout.handle(req,res,
+   'https://provider.example/live/account/private/12.ts'));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ try{
+   const res=await fetch('http://127.0.0.1:'+server.address().port+'/live');
+   assert.equal(res.status,502);
+   const stats=fanout.stats();
+   assert.equal(stats.failureReasons.provider_denied,1);
+   assert.doesNotMatch(JSON.stringify(stats),/provider.example|account|private|12.ts/);
+ }finally{
+   fanout.close();server.closeAllConnections();await new Promise(r=>server.close(r));
+ }
+});
