@@ -431,3 +431,50 @@ test('full ticket capacity rejects new grants without revoking existing viewer t
     assert.equal(broker.stats().security.capacityRejected,1);
   }finally{server.closeAllConnections();await new Promise(r=>server.close(r))}
 });
+
+
+test('signed licensed shared ticket follows one validated public source-issued CDN redirect',async()=>{
+ let upstreamCalls=0;
+ await host(async origin=>{
+  const response=await issue(origin,{kind:'live',
+   sourceUrl:'https://allowed.example/live/u/p/3.ts',
+   sharedLive:true,licensedCdnRedirect:true});
+  assert.equal(response.status,201);
+  const ticket=await response.json();
+  assert.equal(ticket.sharedLiveGranted,true);
+  const media=await fetch(origin+ticket.path);
+  assert.equal(media.status,200);
+  assert.deepEqual(Buffer.from(await media.arrayBuffer()),ts);
+  assert.equal(upstreamCalls,2);
+  const health=await fetch(origin+'/internal/relay-health',{
+   headers:{authorization:'Bearer '+shared}});
+  assert.equal(health.status,200);
+  const h=await health.json();
+  assert.equal(h.fanout.upstreamReconnects,0);
+  assert.ok(h.fanout.sourceBytesReceived>=ts.length);
+  assert.ok(h.fanout.viewerBytesQueued>=ts.length);
+ },{sharedLiveEnabled:true,fetchImpl:async(url,opts)=>{
+  upstreamCalls++;
+  if(upstreamCalls===1)return new Response(null,{status:302,
+   headers:{location:'https://source-cdn.example/broadcast.ts'}});
+  assert.equal(url.hostname,'source-cdn.example');
+  assert.equal(opts.headers.authorization,undefined);
+  assert.equal(opts.headers.cookie,undefined);
+  return new Response(ts,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('shared tickets without licensed CDN scope still deny external redirect',async()=>{
+ let calls=0;
+ await host(async origin=>{
+  const response=await issue(origin,{kind:'live',
+   sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true});
+  const ticket=await response.json();
+  assert.equal(ticket.sharedLiveGranted,true);
+  const media=await fetch(origin+ticket.path);
+  assert.equal(media.status,502);
+  assert.equal(calls,1);
+ },{sharedLiveEnabled:true,fetchImpl:async()=>{
+  calls++;return new Response(null,{status:302,
+   headers:{location:'https://unapproved-cdn.example/live.ts'}});
+ }});
+});

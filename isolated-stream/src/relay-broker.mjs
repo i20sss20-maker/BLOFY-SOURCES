@@ -155,6 +155,9 @@ export function createRelayBroker({
       input.sharedLive===true;
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
       sharedLive:sharedLiveGranted,
+      // Only an already licensed, explicitly shared, signed bridge grant
+      // may follow one provider-issued public CDN redirect.
+      approvedProviderRedirect:sharedLiveGranted&&input.licensedCdnRedirect===true,
       expiresAt:clock()+TTL,uses:0});
     quota.grantsIssued++;
     return respond(res,201,{ok:true,path:'/relay/'+id,expiresInSeconds:45,
@@ -177,8 +180,13 @@ export function createRelayBroker({
     row.uses++;
     if(row.uses>=5)tickets.delete(match[1]);
     if(row.sharedLive){
-      try{return await fanout.handle(req,res,row.sourceUrl)}
-      catch{return failRelay(res,'relay_provider_unavailable')}
+      try{return await fanout.handle(req,res,row.sourceUrl,{
+        allowProviderCdn:row.approvedProviderRedirect===true
+      })}
+      catch{
+        if(res.headersSent||res.destroyed)return;
+        return failRelay(res,'relay_provider_unavailable');
+      }
     }
     const controller=new AbortController();
     const onClose=()=>{if(!res.writableEnded)controller.abort()};

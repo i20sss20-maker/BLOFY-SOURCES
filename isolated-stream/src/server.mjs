@@ -183,7 +183,10 @@ export function createStreamServer({
           maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,
           upstreamReconnects:f.upstreamReconnects,
           reconnectExhaustions:f.reconnectExhaustions,
-          slowViewerDisconnects:f.slowViewerDisconnects}});
+          slowViewerDisconnects:f.slowViewerDisconnects,
+          sourceBytesReceived:f.sourceBytesReceived,
+          viewerBytesQueued:f.viewerBytesQueued,
+          viewersAccepted:f.viewersAccepted}});
     }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);

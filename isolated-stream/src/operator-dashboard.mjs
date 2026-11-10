@@ -126,6 +126,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           maxTickets:Number(metrics.maxTickets||0)},
         media:{providerFailures:Number(relay.fanout?.providerFailures||0),
           cooldownRejections:Number(relay.fanout?.cooldownRejections||0),
+          sourceBytesReceived:Number(relay.fanout?.sourceBytesReceived||0),
+          viewerBytesQueued:Number(relay.fanout?.viewerBytesQueued||0),
+          viewersAccepted:Number(relay.fanout?.viewersAccepted||0),
           failureReasons:relay.fanout?.failureReasons||{}}
       });return true;
     }

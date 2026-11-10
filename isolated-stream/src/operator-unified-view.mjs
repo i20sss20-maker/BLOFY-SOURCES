@@ -198,6 +198,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">طلبات بث محدودة: <strong id="security-grants-throttled">—</strong></span>
 <span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span>
 <span class="pill">أخطاء مصدر الوسائط: <strong id="security-provider-errors">—</strong></span>
+<span class="pill">بيانات المصدر: <strong id="security-ingress-mb">—</strong></span>
+<span class="pill">بيانات المشاهدين المجدولة: <strong id="security-egress-mb">—</strong></span>
 <span class="pill">طلبات مؤجلة لحماية المصدر: <strong id="security-cooldown-rejections">—</strong></span></div>
 <p class="muted" id="security-note">التصاريح مؤقتة، والإحصاءات تبدأ من آخر تشغيل للسيرفر.</p>
 </div>
@@ -1830,6 +1832,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("security-grants-throttled",count(d.relay?.issuanceThrottled));
       value("security-active-tickets",count(d.relay?.activeTickets));
       value("security-provider-errors",count(d.media?.providerFailures));
+      var toMb=function(v){return (Math.max(0,Number(v)||0)/1048576).toFixed(1)+" MiB";};
+      value("security-ingress-mb",toMb(d.media?.sourceBytesReceived));
+      value("security-egress-mb",toMb(d.media?.viewerBytesQueued));
       value("security-cooldown-rejections",count(d.media?.cooldownRejections));
       value("security-note","حماية الدخول والطلبات تعمل. عدد التصاريح الأقصى: "+
         count(d.relay?.maxTickets)+". الإحصاءات في ذاكرة الخدمة منذ آخر تشغيل.");
