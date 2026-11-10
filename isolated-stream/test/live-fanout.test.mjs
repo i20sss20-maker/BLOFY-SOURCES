@@ -568,3 +568,32 @@ test('sanitized connection lifecycle emits provider outage and recovery only',as
   await reader.cancel();
  }finally{fanout.close();srv.closeAllConnections();await new Promise(done=>srv.close(done))}
 });
+
+test('a source whose cancel promise hangs cannot block the next shared TS connection',async()=>{
+ let attempts=0;
+ const holdingCancel=new Promise(()=>{});
+ await service(async(base,fanout)=>{
+  const response=await fetch(base+'/live');
+  assert.equal(response.status,200);
+  const reader=response.body.getReader();
+  const first=await reader.read();
+  assert.equal(first.value[0],0x47);
+  for(let n=0;n<180&&fanout.stats().reconnectRecovered===0;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(attempts,2,'source cancellation must not block source recovery');
+  assert.equal(fanout.stats().reconnectRecovered,1);
+  assert.equal(fanout.stats().activeFeeds,1);
+  const second=await Promise.race([reader.read(),
+   new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),900))]);
+  assert.equal(second.timeout,undefined);
+  assert.equal(second.value[0],0x47);
+  await reader.cancel();
+ },{readIdleTimeoutMs:90,reconnectOnUpstreamEnd:true,
+  fetchImpl:async()=>{
+   attempts++;
+   return new Response(new ReadableStream({
+    start(ctrl){ctrl.enqueue(new Uint8Array(packet));},
+    cancel:attempts===1?()=>holdingCancel:()=>{}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }});
+});
