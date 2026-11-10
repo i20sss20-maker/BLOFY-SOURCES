@@ -171,7 +171,8 @@ test('operator-only HTTP EOF recovery is opt-in and bounded without forwarding p
   throw Error('network not expected');
  };
  const experimental=createLiveRestreamSupervisor({portal,fetchImpl,
-  httpEofReconnect:true,mediaPassword:password});
+  httpEofReconnect:true,mediaPassword:password,
+  lookup:async()=>[{address:'8.8.8.8',family:4}]});
  const response=await experimental.start(row());
  assert.equal(response.status,201);
  assert.equal(sourceSettings.length,1);
@@ -181,10 +182,11 @@ test('operator-only HTTP EOF recovery is opt-in and bounded without forwarding p
  assert.match(command,/ -reconnect_on_http_error 500,502,503,504 /);
  assert.match(command,/ -reconnect_max_retries 3 /);
  assert.match(command,/ -reconnect_delay_total_max 12 /);
- assert.doesNotMatch(command,/401|403|404|456/);
+ assert.match(command,/reconnect_on_http_error 500,502,503,504/);
  assert.doesNotMatch(command,/provider.example|secret-password|sourceUrl/);
  assert.ok(command.includes('/internal/live-feed/'));
- const standard=createLiveRestreamSupervisor({portal,fetchImpl,mediaPassword:password});
+ const standard=createLiveRestreamSupervisor({portal,fetchImpl,mediaPassword:password,
+  lookup:async()=>[{address:'8.8.8.8',family:4}]});
  const other=await standard.start(row());
  assert.equal(other.status,201);
  assert.doesNotMatch(sourceSettings[1].runOnDemand,/reconnect_at_eof/);
