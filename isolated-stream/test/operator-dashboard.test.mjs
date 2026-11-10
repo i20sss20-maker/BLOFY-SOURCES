@@ -326,3 +326,17 @@ test('read-only shared-source readiness is authenticated and never leaks source 
   assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
  });
 });
+
+test('security dashboard describes active fanout feeds, bounded retry and recovered streams',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(r.status,200);
+  const page=await r.text();
+  for(const id of ['security-active-feeds','security-viewers',
+    'security-source-sessions','security-initial-retries',
+    'security-reconnect-recovered','security-source-outages'])
+   assert.ok(page.includes('id="'+id+'"'),id);
+  assert.match(page,/لا توجد قناة مشتركة نشطة الآن/);
+  assert.match(page,/المقاييس إجمالية منذ آخر تشغيل/);
+ });
+});

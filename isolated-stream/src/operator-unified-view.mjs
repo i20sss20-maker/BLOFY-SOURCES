@@ -198,6 +198,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">طلبات بث محدودة: <strong id="security-grants-throttled">—</strong></span>
 <span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span>
 <span class="pill">أخطاء مصدر الوسائط: <strong id="security-provider-errors">—</strong></span>
+<span class="pill">📺 قنوات مشتركة نشطة: <strong id="security-active-feeds">—</strong></span>
+<span class="pill">👥 مشاهدون متصلون: <strong id="security-viewers">—</strong></span>
+<span class="pill">اتصالات مصدر مفتوحة: <strong id="security-source-sessions">—</strong></span>
+<span class="pill">محاولات إنقاذ عند البدء: <strong id="security-initial-retries">—</strong></span>
+<span class="pill">استعادات ناجحة: <strong id="security-reconnect-recovered">—</strong></span>
+<span class="pill">انقطاعات نهائية: <strong id="security-source-outages">—</strong></span>
 <span class="pill">بيانات المصدر: <strong id="security-ingress-mb">—</strong></span>
 <span class="pill">بيانات المشاهدين المجدولة: <strong id="security-egress-mb">—</strong></span>
 <span class="pill">طلبات مؤجلة لحماية المصدر: <strong id="security-cooldown-rejections">—</strong></span></div>
@@ -1832,12 +1838,22 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("security-grants-throttled",count(d.relay?.issuanceThrottled));
       value("security-active-tickets",count(d.relay?.activeTickets));
       value("security-provider-errors",count(d.media?.providerFailures));
+      value("security-active-feeds",count(d.media?.activeFeeds));
+      value("security-viewers",count(d.media?.viewers));
+      value("security-source-sessions",count(d.media?.upstreamSessionsOpened));
+      value("security-initial-retries",count(d.media?.initialRetries));
+      value("security-reconnect-recovered",count(d.media?.reconnectRecovered));
+      value("security-source-outages",count(d.media?.sourceOutages));
       var toMb=function(v){return (Math.max(0,Number(v)||0)/1048576).toFixed(1)+" MiB";};
       value("security-ingress-mb",toMb(d.media?.sourceBytesReceived));
       value("security-egress-mb",toMb(d.media?.viewerBytesQueued));
       value("security-cooldown-rejections",count(d.media?.cooldownRejections));
-      value("security-note","حماية الدخول والطلبات تعمل. عدد التصاريح الأقصى: "+
-        count(d.relay?.maxTickets)+". الإحصاءات في ذاكرة الخدمة منذ آخر تشغيل.");
+      var status=Number(d.media?.activeFeeds||0)>0?
+        (Number(d.media?.sourceOutages||0)>0?"مشاركة تعمل مع انقطاعات مسجلة":
+          "قنوات مشتركة نشطة"):
+        "لا توجد قناة مشتركة نشطة الآن (ليس خطأ)";
+      value("security-note",status+". الحماية تعمل، والتصاريح القصيرة مفعلة. "+
+        "المقاييس إجمالية منذ آخر تشغيل؛ ليست ضمانًا لجودة الصوت والصورة.");
     }catch(e){value("security-status","غير متاح");
       value("security-note","تعذر قراءة حالة الأمان: "+e.message);}
   }

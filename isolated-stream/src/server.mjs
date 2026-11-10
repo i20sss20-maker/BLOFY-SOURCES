@@ -182,6 +182,9 @@ export function createStreamServer({
         fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
           maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,
           upstreamReconnects:f.upstreamReconnects,
+          initialRetries:f.initialRetries,
+          reconnectRecovered:f.reconnectRecovered,
+          sourceOutages:f.sourceOutages,
           reconnectExhaustions:f.reconnectExhaustions,
           slowViewerDisconnects:f.slowViewerDisconnects,
           sourceBytesReceived:f.sourceBytesReceived,
@@ -294,6 +297,9 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       if(!f?.providerFailures&&!f?.cooldownRejections)return;
       const audit={providerFailures:f.providerFailures,
         cooldownRejections:f.cooldownRejections,
+        initialRetries:f.initialRetries,
+        reconnectRecovered:f.reconnectRecovered,
+        sourceOutages:f.sourceOutages,
         reconnectExhaustions:f.reconnectExhaustions,
         failureReasons:f.failureReasons};
       const key=JSON.stringify(audit);
