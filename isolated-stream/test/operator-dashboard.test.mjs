@@ -228,3 +228,39 @@ test('AUTO HEALTH read endpoint requires operator credentials and never exposes 
     assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
   });
 });
+
+test('BLOFY SECURITY is private, aggregated, and visible in the operator console',async()=>{
+  await withServer({adminToken:secret,relaySharedToken:'test-stream-relay-secret-abcdefghijklmnopqrstuvwxyz'},async base=>{
+    const anonymous=await fetch(base+'/operator/api/security');
+    assert.equal(anonymous.status,401);
+    const report=await fetch(base+'/operator/api/security',{headers:{authorization:auth}});
+    assert.equal(report.status,200);
+    const body=await report.json();
+    assert.equal(body.protection.operatorBruteForce,true);
+    assert.equal(body.protection.relayIssuanceThrottle,true);
+    assert.equal(body.relay.activeTickets,0);
+    assert.equal(body.operator.failedAuthAttempts,1);
+    assert.doesNotMatch(JSON.stringify(body),/password|token|sourceUrl|customerIp/);
+    const page=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+    assert.match(page,/id="security-center"/);
+    assert.match(page,/loadSecurity\(\)/);
+  });
+});
+test('invalid operator passwords are rate-limited but correct credentials never lock out',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const bad='Basic '+Buffer.from('operator:wrong-password').toString('base64');
+    let capped=0;
+    for(let i=0;i<16;i++){
+      const resp=await fetch(base+'/operator/api/security',{headers:{authorization:bad}});
+      if(resp.status===429)capped++;
+      else assert.equal(resp.status,401);
+    }
+    assert.ok(capped>=4);
+    const valid=await fetch(base+'/operator/api/security',{headers:{authorization:auth}});
+    assert.equal(valid.status,200);
+    const body=await valid.json();
+    assert.equal(body.operator.failedAuthAttempts,16);
+    assert.equal(body.operator.throttledAuthAttempts,capped);
+    assert.ok(!('ipAddresses' in body.operator));
+  });
+});

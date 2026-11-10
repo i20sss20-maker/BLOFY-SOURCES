@@ -59,15 +59,40 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     finally{clearTimeout(timeout)}
   }
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
+  // Basic auth is protected against brute-force without lockout of a valid
+  // operator. Only invalid credentials are limited; do not trust spoofable
+  // X-Forwarded-For. Keep at most 256 anonymous buckets in memory.
+  const rejectedByPeer=new Map();
+  const security={failedAuthAttempts:0,throttledAuthAttempts:0};
+  const MAX_BAD_AUTH=12,AUTH_WINDOW_MS=60000;
+  function rejectInvalidOperator(req,res){
+    security.failedAuthAttempts++;
+    const now=Date.now();
+    const peer=String(req.socket?.remoteAddress||'unknown').slice(0,64);
+    let bucket=rejectedByPeer.get(peer);
+    if(!bucket||now-bucket.startedAt>=AUTH_WINDOW_MS)
+      bucket={startedAt:now,attempts:0};
+    bucket.attempts++;
+    rejectedByPeer.delete(peer);rejectedByPeer.set(peer,bucket);
+    while(rejectedByPeer.size>256)
+      rejectedByPeer.delete(rejectedByPeer.keys().next().value);
+    if(bucket.attempts>MAX_BAD_AUTH){
+      security.throttledAuthAttempts++;
+      json(res,429,{ok:false,code:'operator_auth_rate_limited'});
+      return;
+    }
+    res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY STREAM Operator", charset="UTF-8"',
+      'cache-control':'no-store','x-frame-options':'DENY',
+      'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
+    res.end('Authorization required');
+  }
   const handle=(req,res)=>{
     const uri=new URL(req.url||'/', 'http://localhost');
     const path=uri.pathname;
     if(!(path==='/operator'||path==='/operator/'||path.startsWith('/operator/api/')))return false;
     if(!enabled){json(res,404,{ok:false,code:'operator_console_not_configured'});return true;}
     if(!authorized(req,adminToken)){
-      res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY STREAM Operator", charset="UTF-8"',
-        'cache-control':'no-store','x-frame-options':'DENY'});
-      res.end('Authorization required');return true;
+      rejectInvalidOperator(req,res);return true;
     }
     if(req.method==='GET'&&(path==='/operator'||path==='/operator/')){
       const nonce=randomBytes(16).toString('base64');
@@ -80,6 +105,24 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/security'){
+      const relay=sharedRelayStats()||{};
+      const metrics=relay.security||{};
+      // Aggregate-only dashboard: never expose source URLs, client IPs,
+      // token bytes, media tickets or subscriber account identities.
+      json(res,200,{ok:true,service:'BLOFY-STREAM',
+        protection:{operatorBruteForce:true,relayIssuanceThrottle:true,
+          shortLivedTickets:true,authenticatedOperatorOnly:true},
+        operator:{failedAuthAttempts:security.failedAuthAttempts,
+          throttledAuthAttempts:security.throttledAuthAttempts},
+        relay:{activeTickets:Number(relay.activeTickets||0),
+          grantsIssued:Number(metrics.grantsIssued||0),
+          issuerAuthDenied:Number(metrics.issuerAuthDenied||0),
+          issuanceThrottled:Number(metrics.issuanceThrottled||0),
+          capacityRejected:Number(metrics.capacityRejected||0),
+          maxTickets:Number(metrics.maxTickets||0)}
+      });return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){
       void Promise.all([engineStatus(),control.overview()])

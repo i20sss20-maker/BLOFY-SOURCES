@@ -187,6 +187,18 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
+<div class="panel" id="security-center">
+<div class="controls"><div><h3>🔐 BLOFY SECURITY</h3>
+<p class="muted">حماية لوحة المشرف وأذونات المشاهدة المؤقتة، ومراقبة محاولات الدخول والحدود الأمنية دون كشف بيانات المشتركين.</p></div>
+<button class="btn secondary" id="security-refresh" type="button">↻ تحديث الأمان</button></div>
+<div class="inline"><span class="pill" id="security-status">جار الفحص</span>
+<span class="pill">محاولات دخول غير صحيحة: <strong id="security-auth-failures">—</strong></span>
+<span class="pill">طلبات دخول محدودة: <strong id="security-auth-throttled">—</strong></span>
+<span class="pill">تصاريح بث صادرة: <strong id="security-grants-issued">—</strong></span>
+<span class="pill">طلبات بث محدودة: <strong id="security-grants-throttled">—</strong></span>
+<span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span></div>
+<p class="muted" id="security-note">التصاريح مؤقتة، والإحصاءات تبدأ من آخر تشغيل للسيرفر.</p>
+</div>
 <div class="panel" id="auto-health-panel">
 <div class="controls"><div><h3>🛡 BLOFY AUTO HEALTH</h3><p class="muted">مراقبة مسارات إعادة البث التابعة للمشرف فقط. لا يتضمن التشغيل العادي للعملاء.</p></div>
 <button class="btn secondary" id="auto-health-refresh" type="button">↻ تحديث الحالة</button></div>
@@ -1793,6 +1805,21 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(!(d.events||[]).length){var tr=node("tr"),td=cell(tr,"لا توجد أحداث خلال عمر هذه النسخة.");td.colSpan=3;log.appendChild(tr);}
     }catch(e){value("auto-health-status","غير متاح");value("auto-health-mode","تعذر قراءة التقرير: "+e.message)}
   }
+  async function loadSecurity(){
+    try{
+      var d=await api("security");
+      value("security-status",d.ok&&d.protection?.operatorBruteForce?"الحماية تعمل":"الحالة غير متاحة");
+      value("security-auth-failures",count(d.operator?.failedAuthAttempts));
+      value("security-auth-throttled",count(d.operator?.throttledAuthAttempts));
+      value("security-grants-issued",count(d.relay?.grantsIssued));
+      value("security-grants-throttled",count(d.relay?.issuanceThrottled));
+      value("security-active-tickets",count(d.relay?.activeTickets));
+      value("security-note","حماية الدخول والطلبات تعمل. عدد التصاريح الأقصى: "+
+        count(d.relay?.maxTickets)+". الإحصاءات في ذاكرة الخدمة منذ آخر تشغيل.");
+    }catch(e){value("security-status","غير متاح");
+      value("security-note","تعذر قراءة حالة الأمان: "+e.message);}
+  }
+  $("security-refresh").addEventListener("click",loadSecurity);
   $("auto-health-refresh").addEventListener("click",loadAutoHealth);
   async function loadLive(){
     if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
@@ -1855,8 +1882,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity()}},60000);
 })();
 </script>
 </body></html>`;
