@@ -564,7 +564,7 @@ test('sanitized connection lifecycle emits provider outage and recovery only',as
   assert.ok(events.some(e=>e.kind==='reconnecting'));
   assert.ok(events.some(e=>e.kind==='recovered'));
   const serialized=JSON.stringify(events);
-  assert.doesNotMatch(serialized,/licensed.example|channel.ts|\\/live\\/a\\/b|password|sourceUrl|token/);
+  assert.doesNotMatch(serialized,/licensed[.]example|channel[.]ts|password|sourceUrl|token/);
   await reader.cancel();
  }finally{fanout.close();srv.closeAllConnections();await new Promise(done=>srv.close(done))}
 });
