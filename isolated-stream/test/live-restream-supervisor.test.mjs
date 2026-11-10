@@ -158,3 +158,48 @@ test('explicit backup live channel takes over when primary returns provider 404'
   assert.ok(calls.some(x=>x.url.startsWith('https://backup.example/')));
   assert.equal(JSON.stringify(live).includes('secret-password'),false);
 });
+
+test('short-lived upstream TS EOF reopens sequentially on one private worker feed',async()=>{
+ const ts=Buffer.alloc(188*3);
+ for(let i=0;i<ts.length;i+=188)ts[i]=0x47;
+ let calls=0,peak=0,active=0,ticket='';
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',
+   sourceUrl,sourceId:UUID,channelId:'88',name:'News'}
+ })};
+ const fakeFetch=async(url,opts={})=>{
+  const dest=String(url);
+  if(dest.includes(':9997/')){
+   if(opts.method==='POST'){
+    const config=JSON.parse(opts.body);
+    ticket=config.runOnDemand.match(/\/internal\/live-feed\/([0-9a-f]{48})/)[1];
+   }
+   return new Response('{}',{status:200,headers:{'content-type':'application/json'}});
+  }
+  if(dest===sourceUrl){
+   calls++;active++;peak=Math.max(peak,active);
+   return new Response(new ReadableStream({
+    start(controller){controller.enqueue(new Uint8Array(ts));controller.close();}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }
+  throw Error('unexpected URL');
+ };
+ const service=createLiveRestreamSupervisor({portal,fetchImpl:fakeFetch,
+  reconnectInterruptedFeed:true,mediaPassword:password,
+  lookup:async()=>[{address:'8.8.8.8',family:4}]});
+ const started=await service.start(row());
+ assert.equal(started.status,201);
+ assert.equal(ticket.length,48);
+ const srv=http.createServer((req,res)=>void service.streamFeed(req,res,ticket));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const response=await fetch('http://127.0.0.1:'+srv.address().port+'/feed');
+  assert.equal(response.status,200);
+  const bytes=Buffer.from(await response.arrayBuffer());
+  // 1 initial + 3 controlled source reopens then fail safe:
+  assert.equal(calls,4);
+  assert.equal(bytes.byteLength,ts.length*4);
+  assert.equal(service.list().items[0].upstreamReopens,3);
+  assert.equal(service.list().items[0].connections,0);
+ }finally{srv.closeAllConnections();await new Promise(ok=>srv.close(ok))}
+});

@@ -64,7 +64,8 @@ function buildCommand(name,ticket){
 }
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
-  maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,onUnexpectedError=()=>{}
+  maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,
+  reconnectInterruptedFeed=false,onUnexpectedError=()=>{}
 }={}){
   if(!Number.isInteger(maxSharedReaders)||maxSharedReaders<1||maxSharedReaders>2048)
     throw new Error('restream_shared_readers_invalid');
@@ -150,7 +151,8 @@ export function createLiveRestreamSupervisor({
         sourceId:upstream.body.sourceId,channelId:upstream.body.channelId,
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
-        candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1};
+        candidateUrls:candidates,preferredIndex:0,failovers:0,
+        upstreamReopens:0,backupConfigured:candidates.length>1};
       const config={source:'publisher',runOnDemand:buildCommand(name,ticket),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
@@ -207,6 +209,7 @@ export function createLiveRestreamSupervisor({
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,
       onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
+      upstreamReopens:row.upstreamReopens||0,
       preferredSource:row.preferredIndex===0?'primary':'backup',
       playlist:'/operator/api/live/'+row.name+'/index.m3u8'
     })),customerTrafficChanged:false};
@@ -298,12 +301,59 @@ export function createLiveRestreamSupervisor({
       }
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'x-content-type-options':'nosniff'});
+      // Media sources frequently end a TS HTTP response unexpectedly. In
+      // on-demand HLS this used to make FFmpeg exit cleanly and start a new
+      // worker every few seconds. Reopen SEQUENTIALLY on the same HTTP feed
+      // while the MediaMTX reader stays attached. Never parallelize upstream.
       const stream=Readable.from((async function*(){
         yield Buffer.from(active.first.value);
+        let quickReopens=0,connectedAt=clock();
         while(true){
           const next=await active.reader.read();
-          if(next.done)return;
-          if(next.value?.byteLength)yield Buffer.from(next.value);
+          if(!next.done){
+            if(next.value?.byteLength)yield Buffer.from(next.value);
+            continue;
+          }
+          if(!reconnectInterruptedFeed||closedByReader||res.destroyed||
+             active.controller.signal.aborted)return;
+          // Healthy long sessions can recover repeatedly; short rapid EOF
+          // bursts stop after three controlled attempts to avoid source floods.
+          if(clock()-connectedAt>=15000)quickReopens=0;
+          if(quickReopens>=3){
+            row.lastError='restream_short_primary_disconnect';
+            return;
+          }
+          quickReopens++;
+          const previous=active;
+          try{await previous.reader.cancel()}catch{}
+          try{previous.reader.releaseLock()}catch{}
+          controllers.delete(previous.controller);
+          previous.controller.abort();
+          await new Promise(resolve=>setTimeout(resolve,
+            Math.min(1500,350*Math.pow(2,quickReopens-1))));
+          if(closedByReader||res.destroyed)return;
+          const order=row.backupConfigured&&quickReopens>=2&&sourceIndex===0
+            ?[1,0]:[sourceIndex,...row.candidateUrls.map((_,i)).filter(i=>i!==sourceIndex)];
+          let replacement=null,reason=null,nextSource=sourceIndex;
+          for(const index of order){
+            try{
+              replacement=await acquire(row.candidateUrls[index]);
+              nextSource=index;break;
+            }catch(e){
+              reason=e;
+              // Provider denials (403/456) never trigger repeated retries to
+              // the same origin. Only an explicitly configured backup is tried.
+            }
+          }
+          if(!replacement)throw reason||err('restream_provider_unavailable');
+          active=replacement;connectedAt=clock();
+          if(nextSource!==sourceIndex){
+            sourceIndex=nextSource;
+            row.preferredIndex=sourceIndex;row.failovers++;
+          }
+          row.upstreamReopens=(row.upstreamReopens||0)+1;
+          row.lastError=null;
+          yield Buffer.from(active.first.value);
         }
       })());
       try{
