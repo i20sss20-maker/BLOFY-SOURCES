@@ -74,7 +74,8 @@ export function createRelayBroker({
     failureCounts[code]=(failureCounts[code]||0)+1;
     return respond(res,502,{ok:false,code,...extra});
   };
-  const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs});
+  const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
+    reconnectOnUpstreamEnd:sharedLiveEnabled===true});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.
@@ -116,10 +117,15 @@ export function createRelayBroker({
     const id=issueToken();
     if(!/^[0-9a-f]{48}$/.test(id)||tickets.has(id))
       return respond(res,503,{ok:false,code:'relay_issue_unavailable'});
+    const sharedLiveGranted=sharedLiveEnabled===true&&input.kind==='live'&&
+      input.sharedLive===true;
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
-      sharedLive:sharedLiveEnabled===true&&input.kind==='live'&&input.sharedLive===true,
+      sharedLive:sharedLiveGranted,
       expiresAt:clock()+TTL,uses:0});
-    return respond(res,201,{ok:true,path:'/relay/'+id,expiresInSeconds:45});
+    return respond(res,201,{ok:true,path:'/relay/'+id,expiresInSeconds:45,
+      // This is a private, authenticated capability response, not an
+      // assertion of upstream rights. The publisher must verify rights.
+      ...(input.sharedLive===true?{sharedLiveGranted}:{})});
   }
   async function relay(req,res){
     if(!enabled)return respond(res,503,{ok:false,code:'relay_disabled'});
