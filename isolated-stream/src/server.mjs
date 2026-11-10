@@ -104,7 +104,8 @@ export function createStreamServer({
     portal:unifiedPortal,sourceName:'saleh',search:'V SPORT',
     probe:({sourceUrl})=>probeLicensedSharedLive({
       sourceUrl,fetchImpl:relayFetchImpl,lookup:relayLookup,
-      redirectSourceOrigin:relayRedirectSourceOrigin,durationMs:26000
+      redirectSourceOrigin:relayRedirectSourceOrigin,
+      approvedProviderRedirect:true,durationMs:26000
     }),
     onResult:report=>{
       // Aggregate only. Do not include source names, URLs, account details,
