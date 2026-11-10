@@ -1728,7 +1728,6 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var status=item.connections>0?String(item.connections)+" اتصال بالمصدر":
         "جاهز عند الطلب · لا يوجد سحب حالي";
       if(item.failovers)status+=" · تبديلات: "+item.failovers;
-      if(item.upstreamReopens)status+=" · إعادة اتصال تلقائية: "+item.upstreamReopens;
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe){
         var reason=String(item.lastProbe.code||"");

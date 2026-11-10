@@ -99,7 +99,7 @@ export function createStreamServer({
     secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
   });
   const liveSupervisor=createLiveRestreamSupervisor({
-    portal:unifiedPortal,fetchImpl,reconnectInterruptedFeed:true,
+    portal:unifiedPortal,fetchImpl,
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
   });
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
