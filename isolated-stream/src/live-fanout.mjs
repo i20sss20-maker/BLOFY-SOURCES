@@ -32,7 +32,8 @@ export function createLiveFanout({
   const cooldowns=new Map();
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
-    reconnectExhaustions:0,upstreamSessionsOpened:0};
+    reconnectExhaustions:0,upstreamSessionsOpened:0,
+    sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
   // username/password, IP, ticket or exception message in public metrics.
   const failureReasons=Object.create(null);
@@ -69,6 +70,9 @@ export function createLiveFanout({
     row.viewers.clear();row.state=reason;
   }
   function deliver(row,chunk){
+    // Aggregate-only bandwidth accounting: counts upstream bytes once,
+    // outbound bytes as queued writes (not verified network delivery).
+    counters.sourceBytesReceived+=chunk.length;
     for(const viewer of [...row.viewers]){
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
@@ -81,6 +85,7 @@ export function createLiveFanout({
       // write() returning false only signals backpressure, not a dropped
       // client. Retain the connection while its bounded queue drains.
       viewer.write(chunk);
+      counters.viewerBytesQueued+=chunk.length;
     }
     if(!row.viewers.size&&!row.idleTimer){
       row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
@@ -131,7 +136,9 @@ export function createLiveFanout({
             if(target.protocol==='https:'&&next.protocol!=='https:')
               throw Error('provider_redirect_denied');
             if(next.origin!==target.origin){
-              if(originalOrigin!==approvedRedirectOrigin||crossOriginHops>=1)
+              const allowedOrigin=row.allowProviderCdn===true?
+                originalOrigin:approvedRedirectOrigin;
+              if(originalOrigin!==allowedOrigin||crossOriginHops>=1)
                 throw Error('provider_redirect_denied');
               crossOriginHops++;
             }
@@ -155,7 +162,8 @@ export function createLiveFanout({
           // upstream reconnect, preventing an automatic full-screen exit.
           row.state='ready';
           if(!row.startedAt)row.startedAt=clock();
-          cooldowns.delete(row.key);
+          // A single initial packet does not prove the provider is healthy.
+          // Preserve exponential cool-down across short 1-2s flap loops.
           for(const viewer of row.viewers){
             if(!viewer.headersSent)viewer.writeHead(200,{
               'content-type':'video/mp2t','cache-control':'no-store',
@@ -171,6 +179,7 @@ export function createLiveFanout({
               break;
             }
             if(part.value?.length)deliver(row,Buffer.from(part.value));
+            if(clock()-connectedAt>=8000)cooldowns.delete(row.key);
           }
           if(!row.viewers.size||row.controller.signal.aborted)break;
         }catch(error){
@@ -214,7 +223,7 @@ export function createLiveFanout({
       closeFeed(row.key,'closed',row);
     }
   }
-  async function handle(req,res,sourceUrl){
+  async function handle(req,res,sourceUrl,{allowProviderCdn=false}={}){
     if(req.method==='HEAD'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
@@ -245,6 +254,7 @@ export function createLiveFanout({
         res.writeHead(503,{'retry-after':'3'});res.end('fanout_capacity_reached');return;
       }
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
+        allowProviderCdn:allowProviderCdn===true,
         state:'starting',idleTimer:null,startedAt:null};
       feeds.set(key,row);
     }
@@ -254,6 +264,7 @@ export function createLiveFanout({
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
+    counters.viewersAccepted++;
     const onClose=()=>{
       row.viewers.delete(res);
       if(!row.viewers.size&&!row.idleTimer){
