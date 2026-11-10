@@ -1219,6 +1219,22 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           "الحد المعلن من Xtream: "+count(upstream.maxConnections)+" اتصالًا متزامنًا لحساب المصدر كله، وليس لكل كود BLOFY.";
         if(warnings.includes("source_restream_not_authorized"))
           notice+=" لا يظهر إذن إعادة بث على المصدر؛ لن نفعّل مشاركة القنوات دون تصريح.";
+        var licensed=stats.licensedLiveFanout||{},shared=stats.sharedMediaHealth||{};
+        if(licensed.enabledForSource===true){
+          notice+=" ✅ التوزيع المرخّص مهيأ للقناة نفسها: اتصال مصدر واحد ومشاركة بيانات TS لغاية "+
+            count(licensed.maxSharedViewersPerChannelDesign||128)+
+            " مشاهدًا في التصميم، وليس ضمانًا فعليًا قبل اختبار الضغط.";
+          if(shared.ok===true)
+            notice+=" | مشتركون متصلون بمنفذ المشاركة الآن (جميع مصادر هذه العملية): "+
+              count(shared.activeSharedViewers||0)+
+              " | قنوات مشتركة: "+count(shared.activeSharedChannels||0)+
+              " | إعادة وصل المصدر: "+count(shared.upstreamReconnects||0);
+          else notice+=" | قياسات المشاركة المباشرة غير متاحة.";
+        }else if(licensed.upstreamRestreamerPermitted!==true){
+          notice+=" مشاركة بث القناة لأكثر من 100 جهاز تحتاج إذنًا صريحًا من مزود Xtream (إعادة بث). التفعيل غير متاح لهذا المصدر حتى تثبت الصلاحية.";
+        }else{
+          notice+=" المصدر يعلن صلاحية إعادة البث؛ ميزة مشاركة أكثر من 100 مشاهد أُعدت لكنها غير مفعلة حتى يتم التأكد من الإذن المكتوب والتشغيل التجريبي.";
+        }
         $("library-live-capacity-status").textContent=notice+
           " | الاتصالات في آخر تقرير Xtream: "+
           (upstream.activeConnections===null||upstream.activeConnections===undefined?
