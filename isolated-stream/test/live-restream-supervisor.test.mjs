@@ -192,7 +192,14 @@ test('short-lived upstream TS EOF reopens sequentially on one private worker fee
  const started=await service.start(row());
  assert.equal(started.status,201);
  assert.equal(ticket.length,48);
- const srv=http.createServer((req,res)=>void service.streamFeed(req,res,ticket));
+ const events=[];
+ const srv=http.createServer((req,res)=>{
+  res.on('finish',()=>events.push('response_finished'));
+  res.on('close',()=>events.push('response_closed_'+res.writableFinished));
+  void service.streamFeed(req,res,ticket)
+   .then(()=>events.push('feed_resolved'))
+   .catch(e=>events.push('feed_rejected_'+String(e?.code||e?.name||'unknown')));
+ });
  srv.listen(0,'127.0.0.1');await once(srv,'listening');
  try{
   let response;
@@ -201,7 +208,7 @@ test('short-lived upstream TS EOF reopens sequentially on one private worker fee
    const stats=service.list().items[0];
    throw Error('reopen_initial_http_diagnostic '+JSON.stringify({
     calls,connections:stats?.connections,reopens:stats?.upstreamReopens,
-    lastError:stats?.lastError,unexpected,
+    lastError:stats?.lastError,unexpected,events,
     cause:e?.cause?.code||e?.cause?.message||String(e?.message||'')
    }));
   }
