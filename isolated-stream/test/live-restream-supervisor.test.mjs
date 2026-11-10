@@ -184,8 +184,10 @@ test('short-lived upstream TS EOF reopens sequentially on one private worker fee
   }
   throw Error('unexpected URL');
  };
+ const unexpected=[];
  const service=createLiveRestreamSupervisor({portal,fetchImpl:fakeFetch,
   reconnectInterruptedFeed:true,mediaPassword:password,
+  onUnexpectedError:e=>unexpected.push({code:e.code,name:e.name}),
   lookup:async()=>[{address:'8.8.8.8',family:4}]});
  const started=await service.start(row());
  assert.equal(started.status,201);
@@ -195,7 +197,16 @@ test('short-lived upstream TS EOF reopens sequentially on one private worker fee
  try{
   const response=await fetch('http://127.0.0.1:'+srv.address().port+'/feed');
   assert.equal(response.status,200);
-  const bytes=Buffer.from(await response.arrayBuffer());
+  let bytes;
+  try{bytes=Buffer.from(await response.arrayBuffer());}
+  catch(e){
+   const stats=service.list().items[0];
+   throw Error('reopen_diagnostic '+JSON.stringify({
+    calls,connections:stats?.connections,reopens:stats?.upstreamReopens,
+    failover:stats?.failovers,lastError:stats?.lastError,unexpected,
+    cause:e?.cause?.code||e?.cause?.message||String(e?.message||'')
+   }));
+  }
   // 1 initial + 3 controlled source reopens then fail safe:
   assert.equal(calls,4);
   assert.equal(bytes.byteLength,ts.length*4);
