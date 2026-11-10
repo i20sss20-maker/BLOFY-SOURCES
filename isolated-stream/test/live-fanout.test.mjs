@@ -460,3 +460,46 @@ test('operator channel health is bounded, anonymous and records recovery without
   await new Promise(resolve=>server.close(resolve));
  }
 });
+
+test('channel zapping reclaims only zero-viewer idle feed when source slots are full',async()=>{
+ const A='https://licensed.example/live/authorized/one.ts';
+ const B='https://licensed.example/live/authorized/two.ts';
+ const sources=[];
+ const fanout=createLiveFanout({maxFeeds:1,idleMs:3000,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   sources.push(url.pathname.endsWith('one.ts')?'A':'B');
+   return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(packet));
+   }}),{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>
+  void fanout.handle(req,res,req.url==='/one'?A:B));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const a=await fetch(base+'/one');
+  const readerA=a.body.getReader();await readerA.read();
+  assert.equal(fanout.stats().activeFeeds,1);
+  // With one ACTIVE viewer, the other channel MUST remain capped.
+  const full=await fetch(base+'/two');
+  assert.equal(full.status,503);
+  assert.deepEqual(sources,['A']);
+  await readerA.cancel();
+  for(let n=0;n<70&&fanout.stats().viewers!==0;n++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(fanout.stats().viewers,0);
+  assert.equal(fanout.stats().activeFeeds,1,'feed is still within idle grace');
+  const next=await fetch(base+'/two');
+  assert.equal(next.status,200);
+  const readerB=next.body.getReader();await readerB.read();
+  assert.deepEqual(sources,['A','B']);
+  assert.equal(fanout.stats().activeFeeds,1);
+  assert.equal(fanout.stats().viewers,1);
+  assert.ok(fanout.stats().events.some(e=>e.kind==='idle'));
+  await readerB.cancel();
+ }finally{
+  fanout.close();server.closeAllConnections();
+  await new Promise(ok=>server.close(ok));
+ }
+});
