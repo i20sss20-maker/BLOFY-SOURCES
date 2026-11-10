@@ -123,6 +123,10 @@ export function createLiveFanout({
             const location=response.headers.get('location');
             if(!location||redirectCount>=3)throw Error('provider_redirect_denied');
             const next=await assertPublicMediaUrl(new URL(location,target).href,{lookup});
+            // A licensed CDN redirect must never reduce HTTPS transport
+            // security or point back into Railway/private address space.
+            if(target.protocol==='https:'&&next.protocol!=='https:')
+              throw Error('provider_redirect_denied');
             if(next.origin!==target.origin){
               if(originalOrigin!==approvedRedirectOrigin||crossOriginHops>=1)
                 throw Error('provider_redirect_denied');
