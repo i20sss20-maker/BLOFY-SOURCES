@@ -116,7 +116,8 @@ export function createStreamServer({
         upstreamSessions:report.upstreamSessions,
         viewerSamples:report.viewerSamples,
         reconnects:report.reconnects,
-        failureCodes:report.failureCodes,
+        failureCodes:report.failureCodes,phase:report.phase,
+        transportCode:report.transportCode,
         customerTrafficChanged:false
       }));
     }
