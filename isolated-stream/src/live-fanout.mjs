@@ -8,7 +8,7 @@ export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
-  reconnectOnUpstreamEnd=false,maxReconnectAttempts=3
+  reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,redirectSourceOrigin=''
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -18,6 +18,13 @@ export function createLiveFanout({
        maxProviderCooldownMs>180000||
      !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5)
     throw new Error('fanout_capacity_invalid');
+  let approvedRedirectOrigin='';
+  try{
+    const base=new URL(String(redirectSourceOrigin||''));
+    if(['http:','https:'].includes(base.protocol)&&base.href===base.origin+'/'&&
+      !base.username&&!base.password&&!base.hash)
+      approvedRedirectOrigin=base.origin;
+  }catch{}
   const feeds=new Map();
   const cooldowns=new Map();
   const counters={providerFailures:0,slowViewerDisconnects:0,
@@ -28,7 +35,8 @@ export function createLiveFanout({
   const failureReasons=Object.create(null);
   const allowedReasons=new Set(['provider_denied','provider_not_media',
     'provider_not_ts','provider_unavailable','fanout_upstream_ended',
-    'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved']);
+    'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
+    'provider_redirect_denied']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   // Per-source failures are stored as non-reversible hashes only.
   // Limit both memory and upstream retries during source outages.
@@ -76,13 +84,13 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
-  function nextChunk(row,reader,limitMs){
+  function nextChunk(reader,limitMs,attemptController){
     // A provider that opens a connection but never sends more TS data must
     // not hold viewers forever. End this feed; the player can re-request it.
     let timer;
     const timeout=new Promise((_,reject)=>{
       timer=setTimeout(()=>{
-        row.controller.abort();
+        attemptController.abort();
         reject(new Error('fanout_read_idle_timeout'));
       },limitMs);
       timer.unref?.();
@@ -94,15 +102,35 @@ export function createLiveFanout({
     try{
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,connectedAt=clock();
+        const attemptController=new AbortController();
+        const stopAttempt=()=>attemptController.abort();
+        row.controller.signal.addEventListener('abort',stopAttempt,{once:true});
         try{
-          // Revalidate origin on every reconnect, including DNS resolution.
-          const target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
-          const headerTimer=setTimeout(()=>row.controller.abort(),firstByteTimeoutMs);
-          try{
-            response=await fetchImpl(target,{redirect:'manual',signal:row.controller.signal,
-              headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
-                'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
-          }finally{clearTimeout(headerTimer)}
+          // Provider-issued TS redirects are validated at every hop; no
+          // arbitrary origin hops and no source credential headers.
+          let target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
+          const originalOrigin=target.origin;
+          let crossOriginHops=0,redirectCount=0;
+          while(true){
+            const headerTimer=setTimeout(()=>attemptController.abort(),firstByteTimeoutMs);
+            headerTimer.unref?.();
+            try{
+              response=await fetchImpl(target,{redirect:'manual',signal:attemptController.signal,
+                headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
+                  'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
+            }finally{clearTimeout(headerTimer)}
+            if(![301,302,303,307,308].includes(response.status))break;
+            const location=response.headers.get('location');
+            if(!location||redirectCount>=3)throw Error('provider_redirect_denied');
+            const next=await assertPublicMediaUrl(new URL(location,target).href,{lookup});
+            if(next.origin!==target.origin){
+              if(originalOrigin!==approvedRedirectOrigin||crossOriginHops>=1)
+                throw Error('provider_redirect_denied');
+              crossOriginHops++;
+            }
+            await response.body?.cancel().catch(()=>{});
+            response=null;target=next;redirectCount++;
+          }
           if(!response.ok||!response.body){
             if([401,403,404,429,456].includes(response.status))
               throw Error('provider_denied');
@@ -112,7 +140,7 @@ export function createLiveFanout({
           if(/^(text\/|application\/(?:json|xml))/.test(contentType))
             throw Error('provider_not_media');
           reader=response.body.getReader();
-          const first=await nextChunk(row,reader,firstByteTimeoutMs);
+          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController);
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
@@ -130,7 +158,7 @@ export function createLiveFanout({
           deliver(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
-            const part=await nextChunk(row,reader,readIdleTimeoutMs);
+            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController);
             if(part.done){
               if(row.viewers.size)throw Error('fanout_upstream_ended');
               break;
@@ -143,7 +171,8 @@ export function createLiveFanout({
           const message=String(error?.message||'');
           const reason=allowedReasons.has(message)?message:'other_transport';
           failureReasons[reason]=(failureReasons[reason]||0)+1;
-          const forbidden=['provider_denied','provider_not_media','provider_not_ts'];
+          const forbidden=['provider_denied','provider_not_media','provider_not_ts',
+            'provider_redirect_denied'];
           const canReconnect=reconnectOnUpstreamEnd===true&&
             everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
           // A healthy 8s+ upstream session resets short-failure budget;
@@ -167,6 +196,8 @@ export function createLiveFanout({
           try{await reader?.cancel()}catch{}
           try{reader?.releaseLock()}catch{}
           if(!reader)await response?.body?.cancel().catch(()=>{});
+          attemptController.abort();
+          row.controller.signal.removeEventListener('abort',stopAttempt);
         }
         if(!retry)break;
         const delay=Math.min(2000,250*Math.pow(2,failedAttempts-1));

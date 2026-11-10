@@ -170,3 +170,88 @@ test('fanout failure report classifies provider denials without leaking source d
    fanout.close();server.closeAllConnections();await new Promise(r=>server.close(r));
  }
 });
+
+
+test('provider same-origin redirect preserves one shared live TS feed',async()=>{
+ const visited=[];let feed;
+ const upstream=new ReadableStream({start(c){feed=c;}});
+ await service(async(base,fanout)=>{
+  const promises=[fetch(base+'/live'),fetch(base+'/live')];
+  for(let n=0;n<100&&fanout.stats().viewers<2;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(fanout.stats().viewers,2);
+  feed.enqueue(new Uint8Array(packet));
+  const responses=await Promise.all(promises);
+  assert.ok(responses.every(r=>r.status===200));
+  assert.equal(visited.length,2);
+  assert.ok(visited[1].endsWith('/index.ts'));
+  const readers=responses.map(r=>r.body.getReader());
+  const parts=await Promise.all(readers.map(r=>r.read()));
+  assert.ok(parts.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+ },{fetchImpl:async(url)=>{
+  visited.push(url.href);
+  if(visited.length===1)return new Response(null,{status:302,
+   headers:{location:'/live/a/b/index.ts'}});
+  return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('licensed TS sharing follows one approved provider-issued public CDN hop',async()=>{
+ const visited=[];
+ await service(async(base,fanout)=>{
+  const r=await fetch(base+'/live');
+  assert.equal(r.status,200);
+  assert.deepEqual(Buffer.from(await r.arrayBuffer()),packet);
+  assert.equal(visited.length,2);
+  assert.equal(visited[1].host,'approved-cdn.example');
+  assert.equal(fanout.stats().upstreamSessionsOpened,1);
+ },{redirectSourceOrigin:'https://licensed.example',
+  fetchImpl:async(url,opts)=>{
+   visited.push({host:url.hostname,headers:opts.headers});
+   if(visited.length===1)return new Response(null,{status:302,
+    headers:{location:'https://approved-cdn.example/media/abc.ts'}});
+   assert.equal(opts.headers.authorization,undefined);
+   assert.equal(opts.headers.cookie,undefined);
+   return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('unapproved CDN and private host redirects never fetch a second origin',async()=>{
+ for(const redirect of ['https://unknown.example/media.ts',
+  'http://169.254.169.254/metadata']){
+  let calls=0;
+  await service(async(base,fanout)=>{
+   const res=await fetch(base+'/live');
+   assert.equal(res.status,502);
+   assert.equal(calls,1);
+   assert.equal(fanout.stats().upstreamSessionsOpened,0);
+  },{fetchImpl:async()=>{
+   calls++;return new Response(null,{status:302,headers:{location:redirect}});
+  }});
+ }
+});
+test('an idle provider can reconnect without aborting all shared viewers',async()=>{
+ let calls=0;
+ await service(async(base,fanout)=>{
+  const r=await fetch(base+'/live');
+  assert.equal(r.status,200);
+  const reader=r.body.getReader();
+  assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+  for(let n=0;n<120&&calls<2;n++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(calls,2);
+  const next=await Promise.race([
+   reader.read(),new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),1500))
+  ]);
+  assert.equal(next.timeout,undefined);
+  assert.equal(next.done,false);
+  assert.deepEqual(Buffer.from(next.value),packet);
+  assert.equal(fanout.stats().upstreamReconnects,1);
+  await reader.cancel();
+ },{readIdleTimeoutMs:100,reconnectOnUpstreamEnd:true,
+  fetchImpl:async()=>{
+   calls++;
+   return new Response(new ReadableStream({
+    start(ctrl){ctrl.enqueue(new Uint8Array(packet))}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }});
+});
