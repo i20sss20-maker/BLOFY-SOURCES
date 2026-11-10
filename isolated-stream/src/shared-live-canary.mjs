@@ -11,12 +11,20 @@ function fail(code,details={}){
 }
 export async function probeLicensedSharedLive({
  sourceUrl,fetchImpl=fetch,lookup,redirectSourceOrigin='',
- durationMs=26000,now=Date.now
+ approvedProviderRedirect=false,durationMs=26000,now=Date.now
 }={}){
  if(typeof sourceUrl!=='string'||sourceUrl.length<12||
    !Number.isInteger(durationMs)||durationMs<120||durationMs>30000)
   return fail('pilot_invalid_configuration');
- const fanout=createLiveFanout({fetchImpl,lookup,redirectSourceOrigin,
+ // The source URL is resolved inside the authenticated portal after
+ // explicit operator redistribution consent. Only this controlled canary may
+ // follow one source-issued public CDN hop; no arbitrary user-supplied URL.
+ let licensedRedirectOrigin=redirectSourceOrigin;
+ if(approvedProviderRedirect===true){
+   try{licensedRedirectOrigin=new URL(sourceUrl).origin}catch{}
+ }
+ const fanout=createLiveFanout({fetchImpl,lookup,
+   redirectSourceOrigin:licensedRedirectOrigin,
    reconnectOnUpstreamEnd:true,maxFeeds:1,maxViewersPerFeed:2});
  const srv=http.createServer((req,res)=>{
    void fanout.handle(req,res,sourceUrl).catch(()=>{
