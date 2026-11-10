@@ -9,7 +9,8 @@ export function createLiveFanout({
   minViewersToStart=1,
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
-  reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,redirectSourceOrigin=''
+  reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
+  initialTransientRetries=1,redirectSourceOrigin=''
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -19,7 +20,9 @@ export function createLiveFanout({
      !Number.isInteger(providerCooldownMs)||providerCooldownMs<20||providerCooldownMs>60000||
      !Number.isInteger(maxProviderCooldownMs)||maxProviderCooldownMs<providerCooldownMs||
        maxProviderCooldownMs>180000||
-     !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5)
+     !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5||
+     !Number.isInteger(initialTransientRetries)||initialTransientRetries<0||
+       initialTransientRetries>2)
     throw new Error('fanout_capacity_invalid');
   let approvedRedirectOrigin='';
   try{
@@ -33,7 +36,8 @@ export function createLiveFanout({
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
-    sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0};
+    sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
+    initialRetries:0,reconnectRecovered:0,sourceOutages:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
   // username/password, IP, ticket or exception message in public metrics.
   const failureReasons=Object.create(null);
@@ -106,7 +110,8 @@ export function createLiveFanout({
     return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
   }
   async function pump(row){
-    let everDelivered=false,failedAttempts=0;
+    let everDelivered=false,failedAttempts=0,initialFailures=0;
+    let reopening=false;
     try{
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,connectedAt=clock();
@@ -158,6 +163,7 @@ export function createLiveFanout({
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
+          if(reopening){counters.reconnectRecovered++;reopening=false;}
           // Viewers retain their HTTP response during a permitted sequential
           // upstream reconnect, preventing an automatic full-screen exit.
           row.state='ready';
@@ -189,16 +195,26 @@ export function createLiveFanout({
           failureReasons[reason]=(failureReasons[reason]||0)+1;
           const forbidden=['provider_denied','provider_not_media','provider_not_ts',
             'provider_redirect_denied'];
+          // A transient initial upstream 5xx or transport reset may succeed
+          // on ONE bounded sequential retry. Never retry source access denial,
+          // malformed media, private addresses or redirect violations.
+          const transientInitial=!everDelivered&&
+            ['provider_unavailable','other_transport','fanout_read_idle_timeout']
+              .includes(reason)&&initialFailures<initialTransientRetries;
           const canReconnect=reconnectOnUpstreamEnd===true&&
             everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
           // A healthy 8s+ upstream session resets short-failure budget;
           // a series of fast failures stops after three attempts.
           if(clock()-connectedAt>=8000)failedAttempts=0;
-          if(canReconnect&&failedAttempts<maxReconnectAttempts){
-            failedAttempts++;retry=true;counters.upstreamReconnects++;
+          if(transientInitial){
+            initialFailures++;retry=true;counters.initialRetries++;
+          }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
+            failedAttempts++;retry=true;reopening=true;
+            row.state='reconnecting';
+            counters.upstreamReconnects++;
           }else{
             if(canReconnect)counters.reconnectExhaustions++;
-            if(row.viewers.size)noteProviderFailure(row.key);
+            if(row.viewers.size){noteProviderFailure(row.key);counters.sourceOutages++;}
             for(const viewer of row.viewers){
               if(!viewer.headersSent){
                 viewer.writeHead(502,{'content-type':'application/json',
@@ -216,7 +232,8 @@ export function createLiveFanout({
           row.controller.signal.removeEventListener('abort',stopAttempt);
         }
         if(!retry)break;
-        const delay=Math.min(2000,250*Math.pow(2,failedAttempts-1));
+        const retryNumber=everDelivered?failedAttempts:initialFailures;
+        const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
         await new Promise(resolve=>setTimeout(resolve,delay));
       }
     }finally{
