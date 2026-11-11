@@ -1451,10 +1451,36 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
             account_disabled:"الحساب موقوف.",
             account_expired:"الحساب منتهي.",
             edge_unreachable_or_timeout:"تعذر الوصول للهوست الجديد أو انتهت مهلة الاتصال.",
-            edge_not_configured:"هوست Xtream الجديد غير مضبوط على الخدمة."
+            edge_not_configured:"هوست Xtream الجديد غير مضبوط على الخدمة.",
+            xtream_catalog_empty:"تسجيل الدخول ناجح لكن تصنيفات القنوات والأفلام والمسلسلات فارغة.",
+            xtream_flow_failure:"تسجيل الدخول الأساسي ناجح، لكن أحد اختبارات توافق التطبيقات فشل."
           };
-          show((d.ok?"✅ ":"⚠ ") + (reasons[d.code]||("نتيجة الفحص: "+String(d.code||"غير معروفة")))+
-            (d.httpStatus?" — HTTP "+d.httpStatus:""),!!d.ok);
+          var names={postLogin:"تسجيل الدخول POST",panelLogin:"Panel API",
+            live:"تصنيفات القنوات",movie:"تصنيفات الأفلام",series:"تصنيفات المسلسلات"};
+          var status=(reasons[d.code]||("نتيجة الفحص: "+String(d.code||"غير معروفة")));
+          if(d.failedStep)status+=" — المشكلة في "+(names[d.failedStep]||d.failedStep)+
+            " ("+String(d.reason||"غير معروف")+")";
+          show((d.ok?"✅ ":"⚠ ")+status,!!d.ok);
+          var detail=$("account-detail");
+          detail.replaceChildren();
+          detail.appendChild(node("strong","فحص حساب "+a.username,"name"));
+          detail.appendChild(node("div",status,"meta"));
+          if(d.auth===1){
+            detail.appendChild(node("div","المصادقة: ناجحة · عنوان الهوست: "+
+              (d.advertisedHostMatches?"متطابق":"غير متطابق"),"meta"));
+          }
+          if(d.checks){
+            ["postLogin","panelLogin","live","movie","series"].forEach(function(key){
+              var check=d.checks[key];
+              if(!check)return;
+              var txt=(names[key]||key)+": "+(check.ok?"ناجح":"فشل")+
+                (Number.isInteger(check.count)?" — "+count(check.count)+" تصنيفًا":"")+
+                (!check.ok&&check.code?" ("+check.code+")":"");
+              detail.appendChild(node("div",txt,"meta"));
+            });
+          }
+          detail.hidden=false;
+          detail.scrollIntoView({behavior:"smooth",block:"center"});
         }catch(e){show("تعذر فحص Xtream: "+e.message,false)}
       },"secondary"));
       ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
