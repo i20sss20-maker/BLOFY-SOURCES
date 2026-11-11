@@ -267,6 +267,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
       return true;
     }
+    const compatibility=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/compatibility$/i);
+    if(req.method==='GET'&&compatibility){
+      void portal.accountCompatibility(compatibility[1]).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&readable[path]){
       void readable[path]().then(({status,body})=>json(res,status,body))
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
