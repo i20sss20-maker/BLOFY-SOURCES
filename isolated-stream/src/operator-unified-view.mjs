@@ -384,7 +384,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
 <option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
 <button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
-<p class="muted">الهوست: <strong class="num">https://blofyplayer.com</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<p class="muted">الهوست: <strong class="num">https://bfy.up.railway.app</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
 <div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
@@ -1378,7 +1378,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   function showCredentials(target,creds,label){
     target.hidden=false;target.replaceChildren();
     target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
-    var host=creds.serverUrl||"https://blofyplayer.com";
+    var host=creds.serverUrl||"https://bfy.up.railway.app";
     var m3u=creds.m3uUrl||(
       host+"/get.php?"+new URLSearchParams({username:creds.username||"",
       password:creds.password||"",type:"m3u_plus",output:"ts"}).toString());
@@ -1413,10 +1413,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
       cell(tr,dates);
       var urls=node("div");
-      urls.appendChild(node("div","https://blofyplayer.com","meta num"));
+      urls.appendChild(node("div",state.accountHost||"https://bfy.up.railway.app","meta num"));
       urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
       urls.appendChild(button("نسخ الهوست",function(){
-        navigator.clipboard.writeText("https://blofyplayer.com")
+        navigator.clipboard.writeText(state.accountHost||"https://bfy.up.railway.app")
           .then(function(){show("تم نسخ الهوست.",true)})
           .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
       }));
@@ -1440,6 +1440,23 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           "تعذر عرض البيانات: "+e.message:
           "هذا الحساب قديم ولم تُحفظ كلمة مروره. استخدم إعادة تعيين الباسورد إذا رغبت في بيانات جديدة.",false)}
       }));
+      ctl.appendChild(button("فحص Xtream",async function(){
+        try{
+          var d=await api("account/"+a.id+"/compatibility");
+          var reasons={
+            xtream_login_compatible:"تم قبول الحساب وعنوان الخادم الجديد متطابق.",
+            account_auth_denied:"الخادم رفض اسم المستخدم أو كلمة المرور.",
+            server_info_origin_mismatch:"عنوان السيرفر الذي يعلن عنه Xtream لا يطابق الهوست الجديد.",
+            account_password_not_recoverable:"هذا حساب قديم لا يمكن فحصه بدون إعادة إصدار بيانات الدخول.",
+            account_disabled:"الحساب موقوف.",
+            account_expired:"الحساب منتهي.",
+            edge_unreachable_or_timeout:"تعذر الوصول للهوست الجديد أو انتهت مهلة الاتصال.",
+            edge_not_configured:"هوست Xtream الجديد غير مضبوط على الخدمة."
+          };
+          show((d.ok?"✅ ":"⚠ ") + (reasons[d.code]||("نتيجة الفحص: "+String(d.code||"غير معروفة")))+
+            (d.httpStatus?" — HTTP "+d.httpStatus:""),!!d.ok);
+        }catch(e){show("تعذر فحص Xtream: "+e.message,false)}
+      },"secondary"));
       ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
         if(!confirm("سيتم إلغاء كلمة المرور القديمة فورًا! هل أنت متأكد؟"))return;
         try{var d=await action("account/"+a.id+"/reset","account-reset",{});
@@ -1462,6 +1479,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       state.accounts=more?state.accounts.concat(d.items||[]):d.items||[];
       state.accountsNext=d.nextOffset===undefined?null:d.nextOffset;
       state.accountsTotal=d.total;
+      state.accountHost=d.serverUrl||state.accountHost||"https://bfy.up.railway.app";
       renderAccounts();
     }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}
   }
