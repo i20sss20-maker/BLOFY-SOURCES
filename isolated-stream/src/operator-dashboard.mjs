@@ -7,6 +7,7 @@ import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
 import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
+import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -52,6 +53,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
+  const crossService=createStreamCrossServiceDiagnosis({portal,
+    relayStats:sharedRelayStats,
+    restreamPaths:()=>liveSupervisor?.list?.()||null,
+    streamOps});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -140,6 +145,13 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       // snapshot never triggers real media probes or changes subscriptions.
       try{json(res,200,streamOps())}
       catch{json(res,503,{ok:false,code:'smart_ops_unavailable'})}
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/cross-service'){
+      // Auth already verified: only cached service counters, no new media
+      // requests, no source/edge probes and no subscriber information.
+      void crossService.snapshot().then(report=>json(res,report.ok?200:503,report))
+        .catch(()=>json(res,503,{ok:false,code:'cross_service_telemetry_unavailable'}));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/security'){
