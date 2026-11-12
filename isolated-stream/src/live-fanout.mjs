@@ -62,6 +62,20 @@ export function createLiveFanout({
     'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
     'provider_redirect_denied']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
+  function admittedRetryAfterMs(header){
+    // RFC 9110 Retry-After is delta seconds or an HTTP-date. Provider
+    // throttling gets a bounded local cooldown; no response text is exposed.
+    if(typeof header!=='string'||header.length>96)return 0;
+    const value=header.trim();
+    let wait=0;
+    if(/^\d{1,8}$/.test(value))wait=Number(value)*1000;
+    else if(/^[A-Za-z]{3},\s/.test(value)){
+      const stamp=Date.parse(value);
+      if(Number.isFinite(stamp))wait=stamp-clock();
+    }
+    return Number.isFinite(wait)&&wait>0?
+      Math.min(120000,Math.ceil(wait)):0;
+  }
   // Per-source failures are stored as non-reversible hashes only.
   // Limit both memory and upstream retries during source outages.
   function activeCooldown(key){
@@ -69,11 +83,15 @@ export function createLiveFanout({
     if(!state||state.retryAt<=clock())return null;
     return state;
   }
-  function noteProviderFailure(key){
+  function noteProviderFailure(key,providerRetryAfterMs=0){
     const last=cooldowns.get(key);
     const failures=Math.min(8,(last?.failures||0)+1);
-    const delay=Math.min(maxProviderCooldownMs,
+    const exponential=Math.min(maxProviderCooldownMs,
       providerCooldownMs*Math.pow(2,failures-1));
+    // Do not poll a rate-limited licensed source before its bounded
+    // Retry-After, even if new viewers repeatedly reconnect.
+    const delay=Math.max(exponential,
+      Math.min(120000,Math.max(0,providerRetryAfterMs)));
     cooldowns.delete(key);
     cooldowns.set(key,{failures,retryAt:clock()+delay});
     while(cooldowns.size>64)cooldowns.delete(cooldowns.keys().next().value);
@@ -190,8 +208,12 @@ export function createLiveFanout({
             response=null;target=next;redirectCount++;
           }
           if(!response.ok||!response.body){
-            if([401,403,404,429,456].includes(response.status))
+            if([401,403,404,429,456].includes(response.status)){
+              if(response.status===429)
+                row.providerRetryAfterMs=admittedRetryAfterMs(
+                  response.headers.get('retry-after'));
               throw Error('provider_denied');
+            }
             throw Error('provider_unavailable');
           }
           const contentType=String(response.headers.get('content-type')||'').toLowerCase();
@@ -260,7 +282,7 @@ export function createLiveFanout({
           }else{
             if(canReconnect)counters.reconnectExhaustions++;
             if(row.viewers.size){
-              noteProviderFailure(row.key);counters.sourceOutages++;
+              noteProviderFailure(row.key,row.providerRetryAfterMs);counters.sourceOutages++;
               event(row,'failed',reason);
             }
             for(const viewer of row.viewers){
@@ -334,7 +356,7 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
-        state:'starting',idleTimer:null,startedAt:null,
+        state:'starting',idleTimer:null,startedAt:null,providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector()};
       feeds.set(key,row);
     }

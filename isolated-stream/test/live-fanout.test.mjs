@@ -698,3 +698,56 @@ test('250 simulated viewers over two licensed feeds keep exactly two upstream so
   fanout.close();srv.closeAllConnections();await new Promise(ok=>srv.close(ok));
  }
 });
+
+test('licensed source HTTP 429 Retry-After shields provider against rapid subscriber rejoining',async()=>{
+  let calls=0,now=1000;
+  await service(async(base,fanout)=>{
+    const first=await fetch(base+'/live');
+    assert.equal(first.status,502);
+    assert.equal((await first.json()).code,'fanout_source_unavailable');
+    assert.equal(calls,1);
+    const blocked=await fetch(base+'/live');
+    assert.equal(blocked.status,503);
+    assert.equal(blocked.headers.get('retry-after'),'75');
+    assert.equal((await blocked.json()).code,'fanout_source_cooling_down');
+    assert.equal(calls,1,'new join must not bypass a source 429 Retry-After');
+    assert.ok(fanout.stats().cooldownRejections>=1);
+    now+=74000;
+    const stillBlocked=await fetch(base+'/live');
+    assert.equal(stillBlocked.status,503);
+    assert.equal(stillBlocked.headers.get('retry-after'),'1');
+    assert.equal(calls,1);
+    now+=1001;
+    const next=await fetch(base+'/live');
+    assert.equal(next.status,502);
+    assert.equal(calls,2,'after timeout a fresh viewer can attempt its single source GET');
+  },{clock:()=>now,initialTransientRetries:1,
+    fetchImpl:async()=>{
+      calls++;
+      return new Response('rate limited',{status:429,
+        headers:{'retry-after':'75'}});
+    }});
+});
+
+test('Retry-After is bounded and source denial never triggers a second initial upstream call',async()=>{
+  for(const hint of ['99999999','-100','garbage']){
+    let calls=0;
+    await service(async(base,fanout)=>{
+      const first=await fetch(base+'/live');
+      assert.equal(first.status,502);
+      const blocked=await fetch(base+'/live');
+      assert.equal(blocked.status,503);
+      const seconds=Number(blocked.headers.get('retry-after'));
+      assert.ok(seconds>=1&&seconds<=120);
+      assert.equal(calls,1);
+      assert.equal(fanout.stats().initialRetries,0,
+        '429 is never a transient initial retry');
+    },{initialTransientRetries:2,
+      fetchImpl:async()=>{
+        calls++;
+        return new Response('too many requests',{status:429,
+          headers:{'retry-after':hint}});
+      }});
+  }
+});
+
