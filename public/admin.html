@@ -212,6 +212,7 @@
         </div>
         <div class="form-grid">
           <label>اسم العميل / الملاحظة<input id="newLabel" class="input" placeholder="مثال: محمد - واتساب"></label>
+          <label>رقم جوال العميل (اختياري)<input id="newPhone" class="input ltr" type="tel" inputmode="tel" maxlength="22" placeholder="05xxxxxxxx أو +9665xxxxxxxx" autocomplete="off"></label>
           <label>Username<input id="newUsername" class="input ltr" placeholder="تلقائي"></label>
           <label>Password<input id="newPassword" class="input ltr" placeholder="تلقائي" type="text"></label>
           <label>مدة الاشتراك
@@ -248,7 +249,7 @@
 
       <article class="panel table-panel">
         <div class="table-toolbar">
-          <div class="search-box"><span>⌕</span><input id="subscriberSearch" class="input" placeholder="ابحث باسم العميل أو Username"></div>
+          <div class="search-box"><span>⌕</span><input id="subscriberSearch" class="input" type="search" aria-label="البحث عن المشترك باسم العميل أو اليوزر أو رقم الجوال" placeholder="الاسم، Username أو رقم الجوال"></div>
           <select id="subscriberStatus"><option value="">كل الحالات</option><option value="active">نشط</option><option value="expired">منتهي</option><option value="soon">قريب الانتهاء</option><option value="disabled">معطل</option></select>
           <select id="subscriberSort">
             <option value="attention">الأهم أولًا</option>
@@ -265,7 +266,8 @@
             <tbody id="subscriberRows"><tr><td colspan="5">جارٍ التحميل…</td></tr></tbody>
           </table>
         </div>
-        <div id="subscriberCount" class="table-footer"></div>
+        <div id="subscriberCount" class="table-footer" aria-live="polite"></div>
+        <div class="pager subscriber-pager"><button id="subscriberPrev" class="btn ghost" type="button">السابق</button><span id="subscriberPage">—</span><button id="subscriberNext" class="btn ghost" type="button">التالي</button></div>
       </article>
     </section>
 
@@ -348,6 +350,21 @@
     </label>
     <button id="saveSubscriberPassword" class="btn primary full">حفظ كلمة السر</button>
     <div id="passwordResult" class="created-box" hidden></div>
+  </div>
+</div>
+
+<div id="phoneModal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="phoneTitle">
+    <button id="closePhoneModal" class="icon-btn modal-close" type="button" aria-label="إغلاق">×</button>
+    <span class="kicker">بيانات التواصل</span>
+    <h3 id="phoneTitle">رقم جوال المشترك</h3>
+    <p class="muted">الرقم للوحة الإدارة فقط ولا يظهر في روابط Xtream أو الواجهة العامة. اترك الحقل فارغًا لإزالته.</p>
+    <form id="phoneForm">
+      <label class="modal-field">رقم الجوال
+        <input id="subscriberPhone" class="input ltr" type="tel" dir="ltr" inputmode="tel" maxlength="22" autocomplete="off" placeholder="05xxxxxxxx أو +9665xxxxxxxx">
+      </label>
+      <button id="saveSubscriberPhone" class="btn primary full" type="submit">حفظ رقم الجوال</button>
+    </form>
   </div>
 </div>
 
