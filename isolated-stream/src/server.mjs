@@ -150,6 +150,7 @@ export function createStreamServer({
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     unifiedSecret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',
+    edgeObservabilityKey:process.env.BLOFY_STREAM_EDGE_OBSERVABILITY_KEY||'',
     getSmokeState:()=>({
       checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
