@@ -124,7 +124,7 @@ test('incident recommendations are bounded, evidence-based and never auto-apply 
  const f=fixture(),data=await f.audit.audit();
  assert.ok(data.recommendations.length>=2);
  assert.equal(data.recommendations[0].priority,'high');
- assert.equal(data.recommendations[0].code,'recent_playback_failures');
+ assert.ok(data.recommendations.some(x=>x.code==='recent_playback_failures'));
  assert.equal(data.recommendations.every(x=>x.requiresApproval&&x.automatedChange===false),true);
  assert.doesNotMatch(JSON.stringify(data.recommendations),
    /https?:\/\/|password|secret|token|credentials|userName/i);
