@@ -158,7 +158,9 @@ test('distributor all-in-one management is compact, accessible and scoped',async
    'manage-relogin','manage-customer','renew-dialog','customer-dialog',
    'activity-rows','activity-more','stat-today','stat-month','stat-trials',
    'stat-renewals','stat-converted','stat-quota','balance-alert','theme-toggle',
-   'export-csv','issue-search','clients-search'
+   'export-csv','issue-search','clients-search','stat-top-plan',
+   'library-dialog','library-edit-form','library-edit-group','library-edit-name',
+   'library-edit-sort','library-edit-hidden','library-edit-save'
   ])assert.ok(html.includes('id="'+id+'"'),'missing '+id);
   assert.match(html,/rowButton\(actions,'إدارة'/);
   assert.match(html,/item\.days===1&&!item\.converted\?'تحويل إلى مدفوع'/);
