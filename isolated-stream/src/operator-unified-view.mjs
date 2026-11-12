@@ -250,7 +250,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   <button class="btn secondary" id="source-capacity-refresh" type="button">↻ قراءة السعة المحفوظة</button></div>
   <p class="muted" id="source-capacity-status" role="status" aria-live="polite">لم تُقرأ البيانات بعد.</p>
   <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>الحالة</th><th>حد المصدر المعلن</th>
-  <th>اتصالات المزود المعلنة</th><th>اشتراكات مرتبطة وفعالة</th><th>آخر اختبار</th><th>التقييم</th>
+  <th>اتصالات المزود المعلنة</th><th>اشتراكات مرتبطة وفعالة</th><th>HTTP مباشر الآن</th><th>بث مباشر HTTP الآن</th><th>آخر اختبار</th><th>التقييم</th>
   </tr></thead><tbody id="source-capacity-rows"></tbody></table></div>
   <p class="muted" id="source-capacity-warning">الاشتراكات الفعالة ليست عدد اتصالات البث؛ اتصال المصدر وحق إعادة التوزيع يتطلبان التحقق من المزود. لا يتم زيادة السعة أو إعادة تشغيل العملاء تلقائيًا.</p>
 </div>
@@ -2614,7 +2614,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         " · تحذيرات: "+count(totals.warning)+
         " · بيانات قديمة/مجهولة: "+count(totals.unknown)+
         (data.accountCountsAvailable?"":" · تعذر قراءة عدد الاشتراكات المرتبطة")+
-        (data.truncated?" · القائمة غير مكتملة":""));
+        (data.truncated?" · القائمة غير مكتملة":"")+
+        (data.directHttpTransferMeasurementAvailable?
+          " · نقل HTTP مباشر نشط: "+count(data.activeDirectHttpMediaTransfers)+
+          " · قنوات مباشرة: "+count(data.activeDirectLiveHttpTransfers)+
+          (data.directHttpTransferCountsReliable?"":" (القياس تجاوز السعة، الأرقام ناقصة)"):
+          " · قياس النقل المباشر غير متاح"));
       var statuses={online:"متصل حسب آخر حالة",offline:"غير متصل",syncing:"جار التحديث",
         error:"خطأ سابق",unknown:"غير معروف"};
       var levels={
@@ -2632,6 +2637,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         cell(tr,count(row.sourceReportedMaxConnections));
         cell(tr,count(row.sourceReportedActiveConnections));
         cell(tr,count(row.activeGatewayAccounts));
+        cell(tr,data.directHttpTransferMeasurementAvailable?
+          count(row.activeDirectHttpMediaTransfers):"غير معروف");
+        cell(tr,data.directHttpTransferMeasurementAvailable?
+          count(row.activeDirectLiveHttpTransfers):"غير معروف");
         cell(tr,row.lastTestAt?
           new Date(row.lastTestAt).toLocaleString("ar-SA-u-nu-latn",
             {timeZone:"Asia/Riyadh"}):"لم يتم تأكيده");
@@ -2640,12 +2649,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       });
       if(!tbody.children.length){
         var tr=node("tr"),td=cell(tr,"لا توجد مصادر صالحة في البيانات المخزنة.");
-        td.colSpan=7;tbody.appendChild(tr);
+        td.colSpan=9;tbody.appendChild(tr);
       }
       value("source-capacity-warning",
         "آخر البيانات ليست اتصالًا مباشرًا بالمزود، ولا يُثبت عدد اشتراكات الأكواد عدد المشاهدين الفعليين. "+
         "الاشتراكات غير المرتبطة بمصدر محدد: "+count(data.unboundActiveGatewayAccounts)+
-        ". لا يتم إنشاء اتصالات أو تغيير كود أو نقل مشترك.");
+        ". قياس HTTP المباشر يشمل جلسات الوكيل المباشرة بهذه العملية فقط؛ لا يشمل التحويل 307 أو المشاركة أو HLS أو خدمات Edge أو نسخ Railway الأخرى، ولا يمثل عدد المشاهدين المميزين. لا يتم إنشاء اتصالات أو تغيير كود أو نقل مشترك.");
     }catch(error){
       value("source-capacity-status","تعذر قراءة حدود المصدر؛ الحالة غير معروفة، ولا يجوز افتراض سلامتها.");
       value("source-capacity-warning","هذا التقرير يتطلب بوابة BLOFY واتصال الإدارة المحمي. لا يوجد فحص بث إضافي. "+String(error.message||"").slice(0,90));
