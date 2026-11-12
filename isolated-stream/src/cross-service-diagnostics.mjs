@@ -1,3 +1,5 @@
+import {summarizeOperatorRestreamPaths} from './restream-operator-health.mjs';
+
 // Read-only cross-service STREAM diagnosis. Each input is an existing internal
 // snapshot. Never opens media/source URLs, never assumes unique human viewers,
 // and never sums incompatible gateway/relay/MediaMTX connection counters.
@@ -81,6 +83,8 @@ export function createStreamCrossServiceDiagnosis({
     const list=hlsMeasured?restream.items.slice(0,32):[];
     const hlsConnections=hlsMeasured?list.reduce((n,item)=>
       n+limitCount(item?.connections,64),0):null;
+    // This is exactly the existing operator supervisor snapshot, not a probe.
+    const operatorRestream=summarizeOperatorRestreamPaths(restream,{now:clock()});
     const faults=[
       {code:'provider_admission_refused',scope:'gateway_last_hour',
         count:measured(codes['403'])+measured(codes['429'])+measured(codes['456']),
@@ -105,12 +109,15 @@ export function createStreamCrossServiceDiagnosis({
         severity:'warning'},
       {code:'edge_gateway_denied_last5m',scope:'edge_last_5m',
         count:edgeMeasured?measured(edge.lastFiveMinutes?.admissionRefusals):0,
-        severity:'notice'}
+        severity:'notice'},
+      {code:'operator_restream_recent_probe_failure',scope:'operator_restream_recent',
+        count:operatorRestream.failedRecentPaths??0,severity:'warning'}
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
        (row.scope==='relay_since_boot'&&sharedMeasured)||
        (row.scope==='mediamtx_current'&&mtxConfigured)||
-       (row.scope==='edge_last_5m'&&edgeMeasured)));
+       (row.scope==='edge_last_5m'&&edgeMeasured)||
+       (row.scope==='operator_restream_recent'&&operatorRestream.dataAvailable)));
     // Unknown must never be rendered as green or turned into zero.
     const unknown=!qualityMeasured||!gatewayMeasured||!sharedMeasured||
       !hlsMeasured||!mtxOnline||mtxReady===null||mtxHls===null||!edgeMeasured;
@@ -155,6 +162,7 @@ export function createStreamCrossServiceDiagnosis({
         activePathReaders:hlsConnections,
         pathsCountMayBeTruncated:hlsMeasured&&restream.items.length>32
       },
+      operatorRestream,
       edge:{
         dataAvailable:edgeMeasured,
         scope:'one_edge_bun_instance_origin_header_responses_only',
@@ -196,7 +204,7 @@ export function createStreamCrossServiceDiagnosis({
       decodedAudioVideoVerified:false,
       freshness:'cached_15_seconds_or_less',observations,
       problems:faults,
-      note:'Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. Edge counts only request attempts and response headers at one Railway Function instance, NOT active video sessions or media body completion. MediaMTX covers only isolated STREAM media, not independent restream engine, WebRTC/RTSP clients or unique people. Portal media logs retain max 400 events per process.'
+      note:'Operator restream path reader totals duplicate the existing operator HLS path counts; they are NOT new independent viewers. Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. Edge counts only request attempts and response headers at one Railway Function instance, NOT active video sessions or media body completion. MediaMTX covers only isolated STREAM media, not independent restream engine, WebRTC/RTSP clients or unique people. Portal media logs retain max 400 events per process.'
     };
   }
   async function snapshot(){

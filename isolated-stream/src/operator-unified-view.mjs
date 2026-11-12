@@ -269,6 +269,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     <tbody id="cross-service-issues"></tbody></table></div>
   <p class="muted" id="cross-service-check">ملخص سجل البوابة محدود بآخر 400 حدث محفوظ في هذه العملية. لا يثبت تشغيل الصوت والصورة بعد فكهما ولا قدرة مزود المحتوى على عدد مشاهدين محدد.</p>
 </div>
+<div class="panel" id="restream-path-diagnostics">
+  <h3>🎛️ تحليل مسارات إعادة البث الخاصة بالمشرف</h3>
+  <p class="muted">يشخص آخر نتيجة نقل وسائط أولية لمسارات المشرف المحفوظة في STREAM فقط. لا يجري فحص فيديو جديدًا ولا يشمل محرك إعادة بث منفصل أو جميع المشتركين.</p>
+  <p class="muted" id="restream-health-summary" role="status" aria-live="polite">لم تصل بيانات المسارات بعد.</p>
+  <div class="tablewrap"><table><thead><tr><th>المسار</th><th>آخر فحص</th><th>القراء لدى المشرف</th><th>مصدر احتياطي</th><th>تحويلات المصدر منذ التشغيل</th><th>الملاحظة</th></tr></thead>
+  <tbody id="restream-health-rows"></tbody></table></div>
+  <p class="muted">نجاح أول بايت لا يعني نجاح الصوت والصورة بعد فك الترميز. المسارات هنا أسماء مرقمة فقط دون بيانات المصادر أو الحسابات، وأعداد القراء مكررة من قسم Operator HLS وليست مشاهدين إضافيين.</p>
+</div>
 <div class="panel" id="source-capacity-panel">
   <div class="controls"><div><h3>📡 حدود مصادر Xtream — بيانات الحساب المحفوظة</h3>
   <p class="muted">هذا التقرير يقرأ آخر معلومات الاتصال التي أعلنها مزود المصدر وعدد الاشتراكات المرتبطة من قاعدة BLOFY. لا ينشئ اتصال بث ولا يُمثل عدد المشاهدين المتصلين الآن.</p></div>
@@ -2624,7 +2632,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     media_engine_control_unavailable:"تعذر الاتصال بواجهة MediaMTX الداخلية. لا نجزم بتوقف بث العملاء من هذا وحده.",
     media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا.",
     edge_gateway_5xx_last5m:"أبلغت بوابة Edge عن أخطاء HTTP 5xx من بوابة BLOFY خلال خمس دقائق؛ راجع النقل والخادم.",
-    edge_gateway_denied_last5m:"سجل Edge رفض قبول HTTP عبر بوابة BLOFY؛ تحقق من صلاحية الكود وحدود المصدر دون إعادة المحاولة المستمرة."
+    edge_gateway_denied_last5m:"سجل Edge رفض قبول HTTP عبر بوابة BLOFY؛ تحقق من صلاحية الكود وحدود المصدر دون إعادة المحاولة المستمرة.",
+    operator_restream_recent_probe_failure:"فشل فحص النقل الأولي مؤخرًا لمسار مشرف، دون إثبات تعطل بقية القنوات."
   };
   function crossReading(measured,value){
     return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
@@ -2662,15 +2671,60 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         "نطاق البوابة: جلسات HTTP مباشرة بهذه العملية فقط؛ نطاق المشاركة: قراء المشاركة في STREAM API فقط؛ نطاق HLS: مسارات المشرف فقط. "+
         "لا تجمع هذه الأعداد لأنها قد تتداخل؛ جلسة MediaMTX HLS ليست مشاهدًا فريدًا. مؤشرات Edge تقيس طلبات HTTP وزمن انتظار رأس استجابة البوابة فقط، وليست جلسات فيديو نشطة. MediaMTX مقاس في STREAM فقط؛ محرك إعادة البث المنفصل وجلسات WebRTC/RTSP ليست ضمن القياس. "+
         (d.status==="partial"?"بعض البيانات غير متوفرة، فلا نعتبر كل الخدمات سليمة.":""));
+
+      var rest=m.operatorRestream||{};
+      var restStates={checking:"الفحص جار",unverified:"لم يفحص",
+        first_bytes_verified:"نجح أول بايت",probe_failed:"فشل نقل الوسائط",
+        probe_stale:"نتيجة قديمة"};
+      var restErrors={
+        restream_provider_denied:"رفض المصدر الاتصال",
+        restream_provider_unavailable:"تعذر اتصال المصدر",
+        restream_provider_not_found:"القناة غير موجودة بالمصدر",
+        restream_invalid_media:"استجابة غير صالحة للفيديو",
+        restream_first_byte_timeout:"تأخر أول بايت",
+        restream_hls_unavailable:"تعذر فتح HLS",
+        restream_control_unavailable:"فشل اتصال MediaMTX",
+        restream_short_primary_disconnect:"انقطاع قصير من المصدر الأساسي",
+        restream_switched_source:"انتقل للمصدر الاحتياطي",
+        restream_hls_invalid:"ملف HLS غير صالح"
+      };
+      value("restream-health-summary",rest.dataAvailable?
+        "مسارات المشرف: "+crossReading(true,rest.monitoredPaths)+
+        " · فحص فاشل حديث: "+crossReading(true,rest.failedRecentPaths)+
+        " · فحوص قديمة: "+crossReading(true,rest.staleProbePaths)+
+        " · لم تفحص: "+crossReading(true,rest.unverifiedPaths)+
+        " · مصدر احتياطي: "+crossReading(true,rest.backupConfiguredPaths)+
+        (rest.pathsTruncated?" · جزء من القائمة فقط":""):
+        "مؤشرات إعادة البث الخاصة بالمشرف غير متاحة.");
+      var restRows=$("restream-health-rows");restRows.replaceChildren();
+      (Array.isArray(rest.paths)?rest.paths:[]).slice(0,32).forEach(function(p){
+        var tr=node("tr");
+        cell(tr,"مسار "+count(p.slot));
+        cell(tr,restStates[p.state]||"غير معروف");
+        cell(tr,crossReading(rest.dataAvailable,p.activeOperatorReaders));
+        cell(tr,p.backupConfigured?"نعم":"لا");
+        cell(tr,crossReading(rest.dataAvailable,p.failoversSinceBoot));
+        cell(tr,(restErrors[p.lastErrorCode]||"—")+
+          (Number.isSafeInteger(p.latestProbeAgeSeconds)?
+            " · قبل "+count(p.latestProbeAgeSeconds)+" ثانية":""));
+        restRows.appendChild(tr);
+      });
+      if(!restRows.children.length){
+        var emptyRest=node("tr"),emptyCell=cell(emptyRest,
+          rest.dataAvailable?"لا توجد مسارات مشرف مهيأة.":"لا تتوفر بيانات المسارات.");
+        emptyCell.colSpan=6;restRows.appendChild(emptyRest);
+      }
       var rows=$("cross-service-issues");rows.replaceChildren();
       (Array.isArray(d.problems)?d.problems:[]).slice(0,15).forEach(function(item){
         var tr=node("tr");
         cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":
           item.scope==="mediamtx_current"?"محرك MediaMTX":
-          item.scope==="edge_last_5m"?"بوابة Edge":"بوابة Xtream");
+          item.scope==="edge_last_5m"?"بوابة Edge":
+          item.scope==="operator_restream_recent"?"مسارات المشرف":"بوابة Xtream");
         cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":
           item.scope==="mediamtx_current"?"الحالة الحالية":
-          item.scope==="edge_last_5m"?"آخر 5 دقائق":"آخر ساعة");
+          item.scope==="edge_last_5m"?"آخر 5 دقائق":
+          item.scope==="operator_restream_recent"?"آخر 5 دقائق":"آخر ساعة");
         cell(tr,crossReading(true,item.count));
         cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
         rows.appendChild(tr);
@@ -2691,6 +2745,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("cross-service-status","التشخيص غير متاح · لا توجد نتيجة موثوقة");
       value("cross-service-coverage",
         "تعذر جمع مؤشرات الخدمات. لن نعرض صفر مشاهدين أو نعتبر المصادر تعمل دون دليل.");
+      value("restream-health-summary","تعذر قراءة مؤشرات المشرف؛ لا توجد نتيجة موثوقة.");
+      $("restream-health-rows").replaceChildren();
       value("cross-service-check","تحقق من اتصال البوابة بالواجهة المحمية وسجلات السيرفر، دون زيادة طلبات البث.");
     }
   }
