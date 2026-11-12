@@ -36,20 +36,19 @@ const cookie=(value,age)=>COOKIE+'='+value+
 function renderPage(nonce){
  const template=String.raw`<!doctype html><html lang="ar" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0c1426">
-<title>BLOFY STREAM · لوحة التوزيع</title>
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0f1420">
+<title>لوحة توزيع</title>
 <style>
-:root{--bg:#080d1c;--card:#151f35;--stroke:#35425f;--white:#f3f3ff;--muted:#a6b4ce;--purple:#b995ff;--mint:#64e7b6;--red:#ff9aa6}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:radial-gradient(ellipse at 15% 0%,#362351 0%,transparent 38%),linear-gradient(160deg,#10162a,#090d1b)}
+:root{--bg:#0f1420;--card:#171e2c;--stroke:#343e51;--white:#f2f5fb;--muted:#a8b4c6;--purple:#c2cbdc;--mint:#68dab0;--red:#ff9aa6}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:#0f1420}
 main{max-width:1120px;margin:auto;padding:28px 19px 60px}
-header{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:26px}
-.brand{display:flex;align-items:center;gap:13px}.mark{width:52px;height:52px;border-radius:15px;background:linear-gradient(130deg,#e2c3ff,#6753b9);display:grid;place-items:center;color:#16132c;font-size:25px;font-weight:900}
-.brand strong{display:block;font-size:19px}.brand small{color:var(--purple)}
-.card{border-radius:18px;border:1px solid var(--stroke);background:linear-gradient(150deg,#1b2540,#111a2d);padding:clamp(16px,2vw,24px);margin-bottom:14px;box-shadow:0 10px 35px #02061233}
+header{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--stroke);padding-bottom:16px}
+.page-title{margin:0;font-size:24px;font-weight:750;letter-spacing:0}
+.card{border-radius:18px;border:1px solid var(--stroke);background:var(--card);padding:clamp(16px,2vw,24px);margin-bottom:14px;box-shadow:0 10px 35px #02061233}
 h1,h2{margin:0 0 12px;line-height:1.3}h1{font-size:27px}h2{font-size:19px}.muted{color:var(--muted)}
 .row{display:flex;align-items:center;gap:11px;justify-content:space-between;flex-wrap:wrap}
-.btn{border:1px solid #a48ad3;background:linear-gradient(130deg,#a17dd7,#7152bd);border-radius:11px;padding:10px 17px;color:white;font:inherit;font-weight:700;cursor:pointer}
-.btn.secondary{background:#273450;border-color:#516284}.btn:hover{filter:brightness(1.12)}.btn:disabled{opacity:.5;cursor:wait}
+.btn{border:1px solid #7084a8;background:#40577b;border-radius:10px;padding:10px 17px;color:white;font:inherit;font-weight:700;cursor:pointer}
+.btn.secondary{background:#263246;border-color:#465572}.btn:hover{filter:brightness(1.12)}.btn:disabled{opacity:.5;cursor:wait}
 input,select{font:inherit;border:1px solid #465879;color:white;background:#101a2e;border-radius:10px;padding:10px 13px;min-width:0;width:100%}
 label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5px}
 .formgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
@@ -57,21 +56,21 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 .notice{border:1px solid #a16a68;border-radius:11px;background:#39262d;padding:12px 14px;color:#ffd7d3;margin:13px 0}
 .notice.ok{border-color:#42745f;background:#17372f;color:#a8f4d3}.notice[hidden],[hidden]{display:none!important}
 .badge{border:1px solid #485d7b;border-radius:30px;padding:5px 12px;color:#e5dcff}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .stat{padding:14px;border:1px solid #3c4a66;background:#141e34;border-radius:14px}.stat small{display:block;color:var(--muted)}.stat strong{font-size:25px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}.chip{border:1px solid #536384;color:#e6dfff;background:#24324c;border-radius:10px;padding:8px 17px;cursor:pointer}
-.chip.active{border-color:#a88ce7;background:#463668;color:white}
-.secret{border:1px solid #47766c;background:#15392f;padding:18px;border-radius:13px;overflow-wrap:anywhere;margin-top:12px}
+.chip.active{border-color:#8c9fbc;background:#354862;color:white}
+.secret{border:1px solid #47766c;background:#173327;padding:18px;border-radius:13px;overflow-wrap:anywhere;margin-top:12px}
 .secret strong{display:block;direction:ltr;text-align:right;font:700 19px/1.5 Consolas,monospace}
 .secret .fieldline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:11px;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff19}
 .tablewrap{overflow:auto;border-radius:13px;border:1px solid #354966}table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:13px 11px;border-bottom:1px solid #354966;white-space:nowrap}th{color:#c8d3f0;background:#202d46}td{color:#edf1fd}
 .mini{font-size:12px;padding:5px 10px}.num{direction:ltr;unicode-bidi:isolate;display:inline-block}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
 </style></head><body><main>
-<header><div class="brand"><span class="mark">B</span><div><strong>BLOFY STREAM</strong><small>لوحة التوزيع</small></div></div>
+<header><h1 class="page-title">لوحة توزيع</h1>
 <button class="btn secondary" id="logout" type="button" hidden>خروج</button></header>
 <p class="notice" id="notice" role="status" hidden></p>
-<section class="card" id="login-panel"><h1>دخول الموزّع</h1>
+<section class="card" id="login-panel"><h2>تسجيل الدخول</h2>
 
 <form id="login-form" class="formgrid">
 <div class="field"><label for="username">اسم المستخدم</label><input id="username" autocomplete="username" required maxlength="32"></div>
@@ -79,17 +78,15 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 <div class="field"><label>&nbsp;</label><button class="btn" type="submit">تسجيل الدخول</button></div>
 </form></section>
 <section id="workspace" hidden>
-<div class="card"><div class="row"><div><h1>توزيع BLOFY STREAM</h1>
-<p class="muted" id="who">—</p></div></div>
-<div class="stats"><div class="stat"><small>رصيد الأشهر</small><strong id="credits">—</strong></div>
-<div class="stat"><small>الإصدارات المسجلة</small><strong id="used">—</strong></div>
-<div class="stat"><small>حالة اللوحة</small><strong id="enabled">—</strong></div></div></div>
-<div class="card"><h2>استخراج اشتراك جديد</h2>
+<div class="card"><span id="who" hidden></span><span id="enabled" hidden></span>
+<div class="stats"><div class="stat"><small>الرصيد</small><strong id="credits">—</strong></div>
+<div class="stat"><small>الإصدارات</small><strong id="used">—</strong></div></div></div>
+<div class="card"><h2>استخراج اشتراك</h2>
 
-<div class="chips"><button class="chip active" data-kind="app" type="button">كود BLOFY STREAM</button>
-<button class="chip" data-kind="xtream" type="button">حساب Xtream</button></div>
+<div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
+<button class="chip" data-kind="xtream" type="button">Xtream</button></div>
 <form id="issue-form"><div class="formgrid">
-<div class="field"><label for="label">اسم الاشتراك</label><input id="label" maxlength="80" value="BLOFY STREAM" required></div>
+<div class="field"><label for="label">اسم الاشتراك</label><input id="label" maxlength="80" value="اشتراك" required></div>
 <div class="field"><label for="days">المدة</label><select id="days">
 <option value="1">تجريبي · مجاني</option><option value="30" selected>شهر · 1</option><option value="90">3 أشهر · 3</option><option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option><option value="730">سنتان · 24</option></select></div>
 <div class="field" id="trial-field" hidden><label for="trial-phone">جوال العميل</label><input id="trial-phone" type="tel" autocomplete="tel" placeholder="05xxxxxxxx" maxlength="19"></div><div class="field"><label for="connections">الاتصالات</label><select id="connections">
@@ -98,7 +95,7 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
-<div class="card"><div class="row"><h2>سجل إصداراتك</h2><button class="btn secondary" id="refresh" type="button">تحديث</button></div>
+<div class="card"><div class="row"><h2>الإصدارات</h2><button class="btn secondary" id="refresh" type="button">تحديث</button></div>
 <div class="tablewrap"><table><thead><tr><th>النوع</th><th>الوصف</th><th>المدة</th><th>خصم الأشهر</th><th>الوقت</th><th>الحالة</th><th>التحكم</th></tr></thead>
 <tbody id="items"></tbody></table></div></div>
 <div class="card" id="library-panel"><div class="row"><h2>المكتبة</h2></div>
@@ -150,8 +147,8 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
  }
  function showIssue(d){
   const box=$("issued-result");box.replaceChildren();box.hidden=false;
-  const head=document.createElement('h2');head.textContent="تم الاستخراج بنجاح";box.appendChild(head);
-  if(d.code)line(box,"كود BLOFY STREAM",d.code);
+  const head=document.createElement('h2');head.textContent="تم الاستخراج";box.appendChild(head);
+  if(d.code)line(box,"الكود",d.code);
   if(d.credentials){
     line(box,"الهوست",d.credentials.serverUrl);
     line(box,"اسم المستخدم",d.credentials.username);
@@ -166,7 +163,7 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
     td.colSpan=7;td.textContent="لم يتم إصدار أي اشتراكات بعد";tr.appendChild(td);body.appendChild(tr);return}
   for(const it of d.items){
    const tr=document.createElement('tr');
-   const fields=[it.type==='app'?'كود التطبيق':'Xtream',it.label,it.days+' يوم',String(it.chargedCredits??1),
+   const fields=[it.type==='app'?'كود':'Xtream',it.label,it.days+' يوم',String(it.chargedCredits??1),
      new Date(it.createdAt).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'}),
      it.status==='done'?'تم':it.status==='review'?'يحتاج مراجعة':it.status==='pending'?'جارٍ':'لم يتم'];
    for(const v of fields){const td=document.createElement('td');td.textContent=v;tr.appendChild(td)}
