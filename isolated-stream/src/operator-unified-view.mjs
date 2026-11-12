@@ -256,6 +256,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     <span class="pill">جلسات MediaMTX HLS: <strong id="cross-mediamtx-hls">—</strong></span>
     <span class="pill">مسارات MediaMTX الجاهزة: <strong id="cross-mediamtx-paths">—</strong></span>
     <span class="pill">ربط MediaMTX: <strong id="cross-mediamtx-status">—</strong></span>
+    <span class="pill">طلبات Edge خلال 5 دقائق: <strong id="cross-edge-requests">—</strong></span>
+    <span class="pill">أخطاء Edge 5xx خلال 5 دقائق: <strong id="cross-edge-errors">—</strong></span>
+    <span class="pill">Edge P95 زمن رد البوابة: <strong id="cross-edge-p95">—</strong></span>
+    <span class="pill">حالة قياس Edge: <strong id="cross-edge-status">—</strong></span>
     <span class="pill">بدايات إرسال الوسائط خلال ساعة: <strong id="cross-started">—</strong></span>
     <span class="pill">أخطاء البوابة خلال ساعة: <strong id="cross-failed">—</strong></span>
     <span class="pill">تأخر بدء البث P95: <strong id="cross-p95">—</strong></span>
@@ -2618,7 +2622,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     gateway_auth_rejected:"فُشلت محاولة دخول محلية. لا تُنسب إلى تعطل مزود المحتوى.",
     relay_provider_failures:"محرك المشاركة سجّل فشل مصدر منذ تشغيل السيرفر؛ ليس بالضرورة عطلًا جاريًا.",
     media_engine_control_unavailable:"تعذر الاتصال بواجهة MediaMTX الداخلية. لا نجزم بتوقف بث العملاء من هذا وحده.",
-    media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا."
+    media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا.",
+    edge_gateway_5xx_last5m:"أبلغت بوابة Edge عن أخطاء HTTP 5xx من بوابة BLOFY خلال خمس دقائق؛ راجع النقل والخادم.",
+    edge_gateway_denied_last5m:"سجل Edge رفض قبول HTTP عبر بوابة BLOFY؛ تحقق من صلاحية الكود وحدود المصدر دون إعادة المحاولة المستمرة."
   };
   function crossReading(measured,value){
     return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
@@ -2628,7 +2634,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var d=await api("cross-service");
       if(d?.ok!==true)throw Error("cross_service_unavailable");
       var m=d.observations||{},g=m.gateway||{},direct=m.direct||{},
-        relay=m.relay||{},hls=m.operatorHls||{},mtx=m.mediaMtx||{};
+        relay=m.relay||{},hls=m.operatorHls||{},mtx=m.mediaMtx||{},edge=m.edge||{};
       var states={
         partial:"القياس جزئي · بعض الأنظمة غير معروفة",
         attention:"توجد ملاحظات تحتاج مراجعة",
@@ -2643,21 +2649,28 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("cross-mediamtx-paths",crossReading(mtx.online===true,mtx.readyPaths));
       value("cross-mediamtx-status",mtx.controlConfigured===false?"لم تُهيأ المصادقة":
         mtx.online===false?"تعذر الاتصال":mtx.dataAvailable?"متصل":"القراءات غير مكتملة");
+      value("cross-edge-requests",crossReading(edge.dataAvailable,edge.requestsLastFiveMinutes));
+      value("cross-edge-errors",crossReading(edge.dataAvailable,edge.errors5xxLastFiveMinutes));
+      value("cross-edge-p95",edge.dataAvailable&&Number.isSafeInteger(edge.p95GatewayHeaderMs)?
+        count(edge.p95GatewayHeaderMs)+" ms":"غير متاح");
+      value("cross-edge-status",edge.dataAvailable?"متصل / طلبات فقط":"بيانات Edge غير متوفرة");
       value("cross-started",crossReading(g.dataAvailable,g.attemptedMediaStarts));
       value("cross-failed",crossReading(g.dataAvailable,g.failed));
       value("cross-p95",g.dataAvailable&&Number.isFinite(g.p95StartupMs)?
         count(g.p95StartupMs)+" ms":"غير متاح");
       value("cross-service-coverage",
         "نطاق البوابة: جلسات HTTP مباشرة بهذه العملية فقط؛ نطاق المشاركة: قراء المشاركة في STREAM API فقط؛ نطاق HLS: مسارات المشرف فقط. "+
-        "لا تجمع هذه الأعداد لأنها قد تتداخل؛ جلسة MediaMTX HLS ليست مشاهدًا فريدًا. تم فحص محرك MediaMTX داخل STREAM فقط؛ خدمة Xtream Edge ومحرك إعادة البث المنفصل وجلسات WebRTC/RTSP ليست ضمن القياس. "+
+        "لا تجمع هذه الأعداد لأنها قد تتداخل؛ جلسة MediaMTX HLS ليست مشاهدًا فريدًا. مؤشرات Edge تقيس طلبات HTTP وزمن انتظار رأس استجابة البوابة فقط، وليست جلسات فيديو نشطة. MediaMTX مقاس في STREAM فقط؛ محرك إعادة البث المنفصل وجلسات WebRTC/RTSP ليست ضمن القياس. "+
         (d.status==="partial"?"بعض البيانات غير متوفرة، فلا نعتبر كل الخدمات سليمة.":""));
       var rows=$("cross-service-issues");rows.replaceChildren();
       (Array.isArray(d.problems)?d.problems:[]).slice(0,15).forEach(function(item){
         var tr=node("tr");
         cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":
-          item.scope==="mediamtx_current"?"محرك MediaMTX":"بوابة Xtream");
+          item.scope==="mediamtx_current"?"محرك MediaMTX":
+          item.scope==="edge_last_5m"?"بوابة Edge":"بوابة Xtream");
         cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":
-          item.scope==="mediamtx_current"?"الحالة الحالية":"آخر ساعة");
+          item.scope==="mediamtx_current"?"الحالة الحالية":
+          item.scope==="edge_last_5m"?"آخر 5 دقائق":"آخر ساعة");
         cell(tr,crossReading(true,item.count));
         cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
         rows.appendChild(tr);

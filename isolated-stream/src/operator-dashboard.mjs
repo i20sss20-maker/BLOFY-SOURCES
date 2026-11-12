@@ -8,6 +8,7 @@ import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
 import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
 import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs';
+import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -47,16 +48,18 @@ async function readAdminJson(req){
 }
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
-  controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
+  controlUsername='',controlPassword='',unifiedSecret='',edgeObservabilityKey='',
+  liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
+  const edgeClient=createEdgeMetricsClient({fetchImpl,key:edgeObservabilityKey});
   const crossService=createStreamCrossServiceDiagnosis({portal,
     relayStats:sharedRelayStats,
     restreamPaths:()=>liveSupervisor?.list?.()||null,
-    mediaControl:control,streamOps});
+    mediaControl:control,edgeMetrics:()=>edgeClient.snapshot(),streamOps});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{

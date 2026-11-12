@@ -30,7 +30,7 @@ test('MediaMTX HLS sessions measured using the private controller are not unique
   });
   const out=await observer.snapshot();
   assert.equal(probes,1);
-  assert.equal(out.status,'observed_no_recent_faults');
+  assert.equal(out.status,'partial'); // EDGE metrics remain unknown unless private key is configured
   assert.equal(out.observations.mediaMtx.dataAvailable,true);
   assert.equal(out.observations.mediaMtx.online,true);
   assert.equal(out.observations.mediaMtx.hlsSessions,5);
