@@ -187,7 +187,7 @@ test('Arabic operator panel gives distinct scope and valid CSP nonce JavaScript'
     'cross-service-issues','cross-service-check'])
     assert.ok(html.includes('id="'+id+'"'),id+' absent');
   assert.match(html,/لا تجمع هذه الأعداد/);
-  assert.match(html,/خدمة Xtream Edge ومحرك إعادة البث المنفصل/);
+  assert.match(html,/مؤشرات Edge تقيس طلبات HTTP/);
   for(const id of ['cross-mediamtx-hls','cross-mediamtx-paths','cross-mediamtx-status'])
     assert.ok(html.includes('id="'+id+'"'),id+' absent');
   assert.match(html,/mtx\.hlsSessions/);
