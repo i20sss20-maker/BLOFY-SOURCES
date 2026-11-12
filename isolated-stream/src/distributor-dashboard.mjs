@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -74,11 +74,29 @@ dialog{width:min(95vw,480px);max-height:90vh;overflow-y:auto;color:var(--white);
 dialog::backdrop{background:#030612b8}
 dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.mini{font-size:12px;padding:5px 10px}.num{direction:ltr;unicode-bidi:isolate;display:inline-block}
+.mini{font-size:12px;padding:5px 10px}
+.compact-kpis{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.compact-kpis span{padding:9px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--card);color:var(--muted)}
+.compact-kpis strong{color:var(--white);margin-inline-start:6px;font-variant-numeric:tabular-nums}
+.minor-alert{border:1px solid #85612a;background:#312515;color:#f4ca70;border-radius:11px;padding:9px 14px;margin-bottom:14px}
+.details-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:15px 0}
+.details-grid>div{padding:10px;border:1px solid var(--stroke);border-radius:10px;overflow-wrap:anywhere}
+.details-grid small{display:block;color:var(--muted)}
+body[data-theme="light"]{--bg:#f3f6fa;--card:#fff;--stroke:#d4dce8;--white:#18243b;--muted:#5c6c83;background:var(--bg)}
+body[data-theme="light"] .card,body[data-theme="light"] .stat,body[data-theme="light"] .compact-kpis span{background:var(--card)}
+body[data-theme="light"] input,body[data-theme="light"] select{background:#f7f9fc;color:#18243b;border-color:#c0ccdb}
+body[data-theme="light"] th{background:#eaf0f7;color:#20314e}
+body[data-theme="light"] td{color:#283a55}
+body[data-theme="light"] .chip{background:#eff3fa;color:#2e4063}
+body[data-theme="light"] .chip.active{background:#d7e3f2;color:#172b50}
+body[data-theme="light"] dialog{background:#fff}
+body[data-theme="light"] .secret{background:#e1f7eb}
+.num{direction:ltr;unicode-bidi:isolate;display:inline-block}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
 </style></head><body><main>
 <header><h1 class="page-title">لوحة توزيع</h1>
-<button class="btn secondary" id="logout" type="button" hidden>خروج</button></header>
+<div class="issue-actions"><button class="btn secondary mini" id="theme-toggle" type="button" aria-label="تغيير المظهر">المظهر</button>
+<button class="btn secondary mini" id="logout" type="button" hidden>خروج</button></div></header>
 <p class="notice" id="notice" role="status" hidden></p>
 <section class="card" id="login-panel"><h2>تسجيل الدخول</h2>
 
@@ -95,7 +113,16 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <div class="stat"><small>النشطة</small><strong id="stat-active">—</strong></div>
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
-</div></div><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
+</div></div>
+<div class="compact-kpis" aria-label="ملخص التوزيع">
+<span>اليوم <strong id="stat-today">—</strong></span>
+<span>الشهر <strong id="stat-month">—</strong></span>
+<span>التجارب <strong id="stat-trials">—</strong></span>
+<span>التجديدات <strong id="stat-renewals">—</strong></span>
+<span>التحويلات <strong id="stat-converted">—</strong></span>
+<span>الحد اليومي <strong id="stat-quota">—</strong></span></div>
+<div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
+<div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card"><h2>استخراج اشتراك</h2>
 
@@ -111,7 +138,9 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
-<div class="card"><div class="row"><h2>الاشتراكات</h2><button class="btn secondary mini" id="refresh" type="button">تحديث</button></div>
+<div class="card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
+<button class="btn secondary mini" id="export-csv" type="button">Excel</button>
+<button class="btn secondary mini" id="refresh" type="button">تحديث</button></div></div>
 <div class="searchbar"><input id="issue-search" type="search" maxlength="80" placeholder="بحث بالكود أو العميل أو الجوال" aria-label="بحث الاشتراكات">
 <select id="issue-status" aria-label="حالة الاشتراك"><option value="all">جميع الحالات</option>
 <option value="active">نشطة</option><option value="expiring">قريبة الانتهاء</option>
@@ -121,10 +150,23 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
+<div class="card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
+<tbody id="activity-rows"></tbody></table></div>
+<div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
+<button id="activity-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
 <div class="card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
 <div class="searchbar"><input type="search" id="clients-search" maxlength="80" placeholder="بحث بالاسم أو الجوال" aria-label="بحث العملاء"></div>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
 <tbody id="clients-rows"></tbody></table></div></div>
+<dialog id="manage-dialog" aria-labelledby="manage-title"><h2 id="manage-title">إدارة الاشتراك</h2>
+<div id="manage-info" class="details-grid"></div>
+<div class="dialog-buttons" style="justify-content:flex-start;flex-wrap:wrap">
+<button class="btn secondary mini" id="manage-copy" type="button">نسخ</button>
+<button class="btn secondary mini" id="manage-renew" type="button">تجديد</button>
+<button class="btn secondary mini" id="manage-relogin" type="button">إعادة دخول</button>
+<button class="btn secondary mini" id="manage-customer" type="button">العميل</button>
+<button class="btn secondary mini" data-close-dialog="manage-dialog" type="button">إغلاق</button></div></dialog>
 <dialog id="renew-dialog" aria-labelledby="renew-title"><h2 id="renew-title">تجديد الاشتراك</h2>
 <form id="renew-form"><div class="formgrid"><div class="field"><label for="renew-days">المدة</label>
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
