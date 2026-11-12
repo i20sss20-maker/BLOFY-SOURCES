@@ -1,0 +1,58 @@
+name: BLOFY STREAM - synthetic audio/video HTTP decode QA
+on:
+  pull_request:
+    paths:
+      - 'isolated-stream/qa/synthetic-media-smoke.mjs'
+      - '.github/workflows/stream-synthetic-media-decode.yml'
+  push:
+    branches:
+      - qa/stream-real-decoded-synthetic-media-20261112
+    paths:
+      - 'isolated-stream/qa/synthetic-media-smoke.mjs'
+      - '.github/workflows/stream-synthetic-media-decode.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-media-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install local FFmpeg decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+      - name: Generate and decode TS, HLS, movie and series audio/video over localhost
+        shell: bash
+        run: |
+          set -euo pipefail
+          node isolated-stream/qa/synthetic-media-smoke.mjs | tee "$RUNNER_TEMP/synthetic-media-results.txt"
+      - name: Publish precise evidence and test limitation
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '### BLOFY local synthetic media QA'
+            echo '- Real FFmpeg decoding of generated video + AAC audio over localhost passed.'
+            echo '- Routes: MPEG-TS live, HLS playlist, MP4 movie and MP4 series episode.'
+            echo '- HTTP 206 range/resume and invalid 416 range verified.'
+            echo '- No third-party IPTV requests, customer streams or credentials.'
+            echo '- **Not** Android 9 device playback or authorized production source verification.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blofy-synthetic-media-decode-qa-${{ github.sha }}
+          path: ${{ runner.temp }}/synthetic-media-results.txt
+          retention-days: 7
+          if-no-files-found: ignore
