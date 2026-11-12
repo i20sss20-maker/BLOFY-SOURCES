@@ -27,6 +27,12 @@ export function diagnoseOperatorTsTracks({
   const audioPayloadPackets=safeInteger(info?.audioPayloadPackets,1500);
   const videoPayloadPackets=safeInteger(info?.videoPayloadPackets,1500);
   const complete=info?.samplingComplete===true&&inspectedBytes!==null;
+  const audioContinuityGaps=safeInteger(info?.audioContinuityGaps,1500);
+  const videoContinuityGaps=safeInteger(info?.videoContinuityGaps,1500);
+  const audioTransportErrorPackets=safeInteger(info?.audioTransportErrorPackets,1500);
+  const videoTransportErrorPackets=safeInteger(info?.videoTransportErrorPackets,1500);
+  const audioDuplicateCounters=safeInteger(info?.audioDuplicateCounters,1500);
+  const videoDuplicateCounters=safeInteger(info?.videoDuplicateCounters,1500);
   // A PMT followed only by a few transport packets is NOT meaningful
   // absence evidence. Require at least 100 packets and an active other track
   // before even flagging "not seen in this sample".
@@ -38,6 +44,22 @@ export function diagnoseOperatorTsTracks({
     'unknown':audioPayloadPackets>0?'observed_payload':
     sufficientlySampled&&videoPayloadPackets!==null&&
       videoPayloadPackets>=3?'not_seen_in_bounded_sample':'insufficient_sample';
+  // Transport-level CC jumps and TEI are *risk signals only*, not proof
+  // of mute, corruption at the player, a black screen, or provider downtime.
+  // Do not claim a result when a full, fresh bounded sample is unavailable.
+  const transportState=(declared,payload,gaps,tei)=>
+    !sufficientlySampled||!declared||payload===null||
+      gaps===null||tei===null?'unknown':
+      payload===0?'no_payload_observed':
+      tei>0||gaps>=2?'transport_anomaly_observed':
+      gaps===1?'single_continuity_jump':
+      'no_anomaly_in_bounded_sample';
+  const audioTransportState=transportState(
+    trustedAudio,audioPayloadPackets,audioContinuityGaps,
+    audioTransportErrorPackets);
+  const videoTransportState=transportState(
+    video.length>0,videoPayloadPackets,videoContinuityGaps,
+    videoTransportErrorPackets);
   const videoPacketEvidence=!current||video.length===0||
       videoPayloadPackets===null?'unknown':
     videoPayloadPackets>0?'observed_payload':
@@ -67,6 +89,15 @@ export function diagnoseOperatorTsTracks({
     videoPayloadPackets:current?videoPayloadPackets:null,
     boundedSampleCompleted:current?complete:null,
     audioPacketEvidence,videoPacketEvidence,
+    audioContinuityGaps:current?audioContinuityGaps:null,
+    videoContinuityGaps:current?videoContinuityGaps:null,
+    audioTransportErrorPackets:current?audioTransportErrorPackets:null,
+    videoTransportErrorPackets:current?videoTransportErrorPackets:null,
+    audioDuplicateCounters:current?audioDuplicateCounters:null,
+    videoDuplicateCounters:current?videoDuplicateCounters:null,
+    audioTransportState,videoTransportState,
+    continuityGapsArePacketLossProof:false,
+    transportStatusProvesDecoderOutput:false,
     packetsProveAudibleSound:false,
     packetsProveDecodedVideo:false,
     selectedOutputMode:audioMode==='aac'?'aac_transcode_configured':'copy_configured',

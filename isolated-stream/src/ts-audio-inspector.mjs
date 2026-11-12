@@ -28,9 +28,12 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
   if(!Number.isSafeInteger(maxBytes)||maxBytes<PACKET||maxBytes>PACKET*1500)
     throw Error('ts_audio_probe_budget_invalid');
   let used=0,buffer=Buffer.alloc(0),pmtPid=null,patSeen=false,pmtSeen=false,
-    detected=false,packets=0,audioPayloadPackets=0,videoPayloadPackets=0;
+    detected=false,packets=0,audioPayloadPackets=0,videoPayloadPackets=0,
+    audioContinuityGaps=0,videoContinuityGaps=0,
+    audioTransportErrorPackets=0,videoTransportErrorPackets=0,
+    audioDuplicateCounters=0,videoDuplicateCounters=0;
   const sections=new Map(),audio=new Set(),video=new Set(),
-    audioPids=new Set(),videoPids=new Set();
+    audioPids=new Set(),videoPids=new Set(),continuity=new Map();
   function pat(section){
     if(section[0]!==0)return;
     patSeen=true;
@@ -62,6 +65,10 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
       pos=next;
     }
     pmtSeen=true;
+    // Preserve continuity on periodic repeated PMT sections; clear only
+    // retired elementary PID state (e.g. a licensed source changes tracks).
+    for(const pid of continuity.keys())
+      if(!aPids.has(pid)&&!vPids.has(pid))continuity.delete(pid);
     // Latest PMT replaces prior program declarations. Never return raw PIDs.
     audio.clear();video.clear();audioPids.clear();videoPids.clear();
     for(const x of a)audio.add(x);
@@ -92,20 +99,49 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
   }
   function packet(bytes){
     if(bytes.length!==PACKET||bytes[0]!==0x47)return;
-    if(bytes[1]&0x80)return; // Transport-error indicator.
     const pid=((bytes[1]&31)<<8)|bytes[2];
-    const control=(bytes[3]>>4)&3;
-    if(!(control&1))return; // No payload.
-    let offset=4;
-    if(control&2){
-      offset+=1+bytes[4];
-      if(offset>=PACKET)return;
+    const isAudio=audioPids.has(pid),isVideo=videoPids.has(pid);
+    const tracked=isAudio||isVideo;
+    // TEI marks this packet as untrustworthy: count it, do not parse its
+    // media payload or treat a later CC jump as a second confirmed error.
+    if(bytes[1]&0x80){
+      if(isAudio)audioTransportErrorPackets++;
+      if(isVideo)videoTransportErrorPackets++;
+      if(tracked)continuity.delete(pid);
+      return;
     }
-    // Count transport payload packets for the PMT-declared ES PIDs only.
-    // This proves input packet activity, NOT decoded audio, audible sound or
-    // continuous playback. No payload/media samples are retained.
-    if(audioPids.has(pid))audioPayloadPackets++;
-    if(videoPids.has(pid))videoPayloadPackets++;
+    const control=(bytes[3]>>4)&3;
+    if(!control)return; // Reserved adaptation_field_control=00.
+    let offset=4,discontinuity=false;
+    if(control&2){
+      const adaptationLength=bytes[4];
+      if(5+adaptationLength>PACKET)return;
+      discontinuity=adaptationLength>0&&(bytes[5]&0x80)!==0;
+      offset=5+adaptationLength;
+      if(discontinuity&&tracked)continuity.delete(pid);
+    }
+    if(!(control&1)||offset>=PACKET)return; // No usable payload.
+    // PMT-declared audio/video PID Continuity Counters increment *only*
+    // for payload packets and wrap 15->0. Adaptation-only packets do not
+    // increment; a signalled discontinuity resets the expected sequence.
+    // A repeated same counter can be an allowed retransmission: report
+    // separately and NEVER claim it proves loss or decoder malfunction.
+    if(tracked){
+      const cc=bytes[3]&0x0f,previous=continuity.get(pid);
+      if(previous!==undefined){
+        if(cc===previous){
+          if(isAudio)audioDuplicateCounters++;
+          if(isVideo)videoDuplicateCounters++;
+        }else if(cc!==((previous+1)&0x0f)){
+          if(isAudio)audioContinuityGaps++;
+          if(isVideo)videoContinuityGaps++;
+        }
+      }
+      continuity.set(pid,cc);
+    }
+    // Actual transport payload availability, not decoded sound/image.
+    if(isAudio)audioPayloadPackets++;
+    if(isVideo)videoPayloadPackets++;
     if(pid!==0&&pid!==pmtPid)return;
     psi(pid,bytes.subarray(offset),(bytes[1]&0x40)!==0);
   }
@@ -137,6 +173,10 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
       videoCodecs:[...video].slice(0,5),
       inspectedBytes:used,checkedPackets:packets,
       audioPayloadPackets,videoPayloadPackets,
+      audioContinuityGaps,videoContinuityGaps,
+      audioTransportErrorPackets,videoTransportErrorPackets,
+      audioDuplicateCounters,videoDuplicateCounters,
+      continuityIndicatesPlaybackFailure:false,
       samplingComplete:used>=maxBytes,
       hasAudioStream:audio.size>0,
       decodedAudio:false,sourceChanged:false};
