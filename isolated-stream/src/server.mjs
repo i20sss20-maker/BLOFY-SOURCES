@@ -151,6 +151,7 @@ export function createStreamServer({
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     unifiedSecret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',
     edgeObservabilityKey:process.env.BLOFY_STREAM_EDGE_OBSERVABILITY_KEY||'',
+    playbackGroqApiKey:process.env.BLOFY_STREAM_GROQ_API_KEY||'',
     getSmokeState:()=>({
       checked:Boolean(lastCanary),checking,mediaVerified:Boolean(lastCanary?.mediaVerified),
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
@@ -281,7 +282,7 @@ export function createStreamServer({
     timer.unref?.();
   }
   return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
-    liveSupervisor,autoHealth,streamOps,sharedReadiness,
+    liveSupervisor,autoHealth,streamOps,operatorDashboard,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
 
@@ -306,6 +307,9 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // Passive in-memory snapshots continue while the admin page is closed.
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
+    // Read-only Smart Playback Health runs while admin UI is closed.
+    // Samples only fixed internal monitoring APIs once per minute.
+    service.operatorDashboard.start();
     // Coarse on-instance media failure diagnosis; log aggregate-only reason
     // buckets when counts change. Never emit token paths, provider hosts,
     // subscriber IPs or upstream credentials.
@@ -410,6 +414,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     }
   });
   process.on('SIGTERM',()=>{
+    service.operatorDashboard.stop();
     service.streamOps.stop();service.autoHealth.stop();
     service.app.close(()=>process.exit(0));
   });
