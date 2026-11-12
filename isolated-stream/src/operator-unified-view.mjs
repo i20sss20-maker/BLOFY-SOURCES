@@ -275,7 +275,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   <p class="muted" id="restream-health-summary" role="status" aria-live="polite">لم تصل بيانات المسارات بعد.</p>
   <div class="tablewrap"><table><thead><tr><th>المسار</th><th>آخر فحص</th><th>القراء لدى المشرف</th><th>الصوت/ترميزات العينة</th><th>مصدر احتياطي</th><th>تحويلات المصدر منذ التشغيل</th><th>الملاحظة</th></tr></thead>
   <tbody id="restream-health-rows"></tbody></table></div>
-  <p class="muted">تحليل الصوت هنا من جدول MPEG-TS PAT/PMT في بيانات دخلت فعلًا للسيرفر. ظهور مسار صوت لا يثبت سماعه، وغيابه من PMT المرصود لا يثبت صمت القناة. دعم AC3/EAC3/DTS ونحوها يختلف حسب الجهاز، ولا يتم تحويل الترميز تلقائيًا.</p>
+  <p class="muted">تحليل الصوت هنا من جدول MPEG-TS PAT/PMT والحزم المصنفة ضمن عينة محدودة من البث الموجود أصلًا. وجود حزم صوت أو صورة لا يثبت سماع الصوت أو ظهور الصورة على جهاز العميل، وعدم رصدها في العينة ليس إثباتًا نهائيًا للصمت أو السواد. دعم AC3/EAC3/DTS ونحوها يختلف حسب الجهاز؛ لا يتم تغيير الترميز أو فتح بث إضافي تلقائيًا.</p>
   <p class="muted">نجاح أول بايت لا يعني نجاح الصوت والصورة بعد فك الترميز. المسارات هنا أسماء مرقمة فقط دون بيانات المصادر أو الحسابات، وأعداد القراء مكررة من قسم Operator HLS وليست مشاهدين إضافيين.</p>
 </div>
 <div class="panel" id="source-capacity-panel">
@@ -2636,7 +2636,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     edge_gateway_denied_last5m:"سجل Edge رفض قبول HTTP عبر بوابة BLOFY؛ تحقق من صلاحية الكود وحدود المصدر دون إعادة المحاولة المستمرة.",
     operator_restream_recent_probe_failure:"فشل فحص النقل الأولي مؤخرًا لمسار مشرف، دون إثبات تعطل بقية القنوات.",
     operator_input_pmt_no_audio:"جدول PMT لعينة دخلت للسيرفر لم يعلن مسار صوت. هذا ليس اختبار سماع أو دليلًا على صمت البث بالكامل.",
-    operator_audio_codec_support_review:"وجد مسار صوت بترميز قد يختلف دعمه بين الأجهزة (مثل AC3/EAC3). لا يغير النظام الترميز دون موافقة."
+    operator_audio_codec_support_review:"وجد مسار صوت بترميز قد يختلف دعمه بين الأجهزة (مثل AC3/EAC3). لا يغير النظام الترميز دون موافقة.",
+    operator_audio_packets_not_seen_in_sample:"لم تُشاهد حزم صوت على PID المعلن خلال عينة MPEG-TS مكتملة وبها حزم فيديو. لا يثبت ذلك صمت البث كاملًا.",
+    operator_video_packets_not_seen_in_sample:"لم تُشاهد حزم فيديو على PID المعلن خلال عينة MPEG-TS مكتملة وبها حزم صوت. لا يثبت ذلك سواد الصورة على الجهاز."
   };
   function crossReading(measured,value){
     return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
@@ -2700,6 +2702,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         " · عينة PMT بلا مسار صوت: "+crossReading(true,rest.audioNoTrackPaths)+
         " · مراجعة دعم ترميز الصوت: "+crossReading(true,rest.audioCodecReviewPaths)+
         " · بيانات صوت غير كافية: "+crossReading(true,rest.audioEvidenceUnavailablePaths)+
+        " · عينات لا تظهر حزم صوت: "+crossReading(true,rest.audioPayloadNotObservedPaths)+
+        " · عينات لا تظهر حزم صورة: "+crossReading(true,rest.videoPayloadNotObservedPaths)+
         (rest.pathsTruncated?" · جزء من القائمة فقط":""):
         "مؤشرات إعادة البث الخاصة بالمشرف غير متاحة.");
       var trackStates={
@@ -2710,6 +2714,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         track_metadata_incomplete:"بيانات PAT/PMT غير كافية",
         not_measured:"لا توجد عينة صوت"
       };
+      var packetReadings={observed_payload:"حزم مرصودة",
+        not_seen_in_bounded_sample:"لم تظهر في العينة",
+        insufficient_sample:"عينة غير كافية",unknown:"غير معروف"};
       var restRows=$("restream-health-rows");restRows.replaceChildren();
       (Array.isArray(rest.paths)?rest.paths:[]).slice(0,32).forEach(function(p){
         var tr=node("tr");
@@ -2719,7 +2726,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         var audio=p.audioTrackDiagnosis||{};
         var codecs=Array.isArray(audio.audioCodecs)?audio.audioCodecs.slice(0,5).join(", "):"";
         cell(tr,(trackStates[audio.finding]||"غير معروف")+(codecs?" · "+codecs:"")+
-          (audio.selectedOutputMode==="aac_transcode_configured"?" · AAC مُهيأ، الناتج غير مفحوص":""));
+          (audio.selectedOutputMode==="aac_transcode_configured"?" · AAC مُهيأ، الناتج غير مفحوص":"")+
+          " · الصوت: "+(packetReadings[audio.audioPacketEvidence]||"غير معروف")+
+          " · الصورة: "+(packetReadings[audio.videoPacketEvidence]||"غير معروف"));
         cell(tr,p.backupConfigured?"نعم":"لا");
         cell(tr,crossReading(rest.dataAvailable,p.failoversSinceBoot));
         cell(tr,(restErrors[p.lastErrorCode]||"—")+
