@@ -49,3 +49,21 @@ test('arbitrary account or source actions cannot be sent to authoritative backen
   assert.equal((await client.sourceAction('550e8400-e29b-41d4-a716-446655440000','delete',{})).status,400);
   assert.equal((await client.accountAction('550e8400-e29b-41d4-a716-446655440000','reset')).status,400);
 });
+
+test('distributor customer directory route reaches the protected backend (regression: route_denied)',async()=>{
+ const calls=[];
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+  calls.push({path:new URL(input).pathname,method:init.method,body:JSON.parse(init.body)});
+  return new Response(JSON.stringify({ok:true,items:[{name:'Store client',phone:'966555555555',subscriptions:2}]}),{
+   status:200,headers:{'content-type':'application/json'}
+  });
+ }});
+ const result=await client.distributorRequest('clients',{sessionToken:'session',q:'555'});
+ assert.equal(result.status,200);
+ assert.equal(result.body.items[0].subscriptions,2);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].path,'/internal/blofy-stream/distributor/clients');
+ assert.equal(calls[0].method,'POST');
+ assert.equal(calls[0].body.q,'555');
+ assert.equal((await client.distributorRequest('sources',{sessionToken:'session'})).status,400);
+});
