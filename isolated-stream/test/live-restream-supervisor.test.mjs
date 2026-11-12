@@ -133,6 +133,13 @@ test('real transport feed is private-token scoped and carries TS bytes only',asy
     const body=Buffer.from(await reply.arrayBuffer());
     assert.equal(reply.status,200,body.toString('utf8').slice(0,240)+' '+JSON.stringify(unexpected));
     assert.equal(body.byteLength,ts.byteLength);
+    const meta=service.list().items[0].mediaTracks;
+    assert.ok(meta.inspectedBytes>=ts.byteLength);
+    assert.equal(meta.decodedAudio,false);
+    assert.equal(meta.hasAudioStream,false);
+    assert.equal(meta.status,'waiting-for-pat',
+      'without PAT/PMT, do not mistake missing metadata for confirmed silent audio');
+    assert.doesNotMatch(JSON.stringify(meta),/provider.example|password|secret/i);
   }finally{await new Promise(resolve=>server.close(resolve))}
   assert.equal((await service.stop(s.path)).status,200);
 });
