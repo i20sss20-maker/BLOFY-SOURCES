@@ -1,7 +1,7 @@
 // Privacy-safe operator support bundle. Whitelist enum codes and numeric
 // counters only; no provider URL, credentials, source IDs, phone numbers,
 // device IDs, media titles, customer counts by identity or IP addresses.
-const SAFE_CHECK=/^[a-z][a-z0-9_]{1,50}$/;
+const SAFE_CHECK=/^[A-Za-z][A-Za-z0-9_]{1,50}$/;
 const SAFE_STATUS=new Set(['ok','warning','unknown']);
 const KEYS=new Set([
  'total','enabled','online','items','missing','due','recovered',
