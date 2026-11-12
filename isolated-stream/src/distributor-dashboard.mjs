@@ -193,7 +193,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  const $=id=>document.getElementById(id),kindButtons=[...document.querySelectorAll('[data-kind]')];
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null;
- const retryActions=new Map();let searchTimer=null;
+ const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
  function updateCost(){
@@ -275,6 +275,79 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    finally{btn.disabled=false}
   });host.appendChild(btn);return btn;
  }
+
+ function openRenew(item){
+  if(item.status!=='done'||['unused','disabled'].includes(item.subscriptionStatus))
+   return msg('التجديد غير متاح لهذا الاشتراك',false);
+  activeIssue=item;
+  if($('manage-dialog').open)$('manage-dialog').close();
+  $('renew-days').value='30';
+  text('renew-title',item.days===1?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
+  $('renew-dialog').showModal();
+ }
+ function openCustomer(item){
+  activeIssue=item;
+  if($('manage-dialog').open)$('manage-dialog').close();
+  $('edit-customer-name').value=item.customerName||'';
+  $('edit-customer-phone').value=item.customerPhone||'';
+  $('customer-dialog').showModal();
+ }
+ async function reloginFor(item){
+  if(!item.canRelogin)return msg('إعادة الدخول غير متاحة',false);
+  if(!confirm('السماح بالدخول بنفس الكود إلى جهاز واحد خلال 10 دقائق؟ سيتوقف الجهاز السابق بعد دخول الجديد.'))return;
+  const id=actionId('relogin',item.id);
+  const result=await request('relogin',{issueId:item.id,requestId:id.id});
+  retryActions.delete(id.key);
+  msg('تم السماح بإعادة الدخول حتى '+dateOnly(result.allowedUntil),true);
+  if($('manage-dialog').open)$('manage-dialog').close();
+  await refreshViews();
+ }
+ function showManage(item){
+  activeIssue=item;const box=$('manage-info');box.replaceChildren();
+  const fields=[
+    ['النوع',item.type==='app'?'كود':'Xtream'],
+    ['العميل',item.customerName||'—'],
+    ['الجوال',item.customerPhone||'—'],
+    ['الحالة',outcomeStatus(item)],
+    ['الصلاحية',dateOnly(item.expiresAt)],
+    ['تاريخ الإصدار',dateOnly(item.createdAt)],
+    ['المدة الأساسية',item.days===1?'تجريبي':item.days+' يوم'],
+    ['الخصم',Number(item.chargedCredits||0)+' شهر'],
+    ['إعادة الدخول',item.reloginCount||0],
+    ['الجهاز',item.type==='app'?(item.canRelogin?'مرتبط':'—'):'—']
+  ];
+  for(const [label,value] of fields){
+   const tile=document.createElement('div'),small=document.createElement('small');
+   small.textContent=label;tile.appendChild(small);
+   const detail=document.createElement('strong');
+   detail.textContent=String(value);
+   tile.appendChild(detail);box.appendChild(tile);
+  }
+  const canEdit=item.status==='done';
+  $('manage-copy').hidden=!canEdit;
+  $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
+  $('manage-relogin').hidden=!item.canRelogin;
+  $('manage-customer').hidden=false;
+  text('manage-renew',item.days===1?'تحويل إلى مدفوع':'تجديد');
+  $('manage-dialog').showModal();
+ }
+ $('manage-copy').addEventListener('click',async()=>{
+  if(!activeIssue)return;
+  const btn=$('manage-copy');btn.disabled=true;
+  try{const result=await request('reveal',{issueId:activeIssue.id});
+   if($('manage-dialog').open)$('manage-dialog').close();
+   showIssue(result);
+  }catch(e){msg('تعذر نسخ الاشتراك: '+e.message,false)}
+  finally{btn.disabled=false}
+ });
+ $('manage-renew').addEventListener('click',()=>activeIssue&&openRenew(activeIssue));
+ $('manage-relogin').addEventListener('click',async()=>{
+  if(!activeIssue)return;
+  const btn=$('manage-relogin');btn.disabled=true;
+  try{await reloginFor(activeIssue)}catch(e){msg('تعذر إعادة الدخول: '+e.message,false)}
+  finally{btn.disabled=false}
+ });
+ $('manage-customer').addEventListener('click',()=>activeIssue&&openCustomer(activeIssue));
  function renderIssueRows(){
   const target=$('items');target.replaceChildren();
   if(!issueRows.length){const tr=document.createElement('tr');
@@ -286,29 +359,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
    tableCell(row,dateOnly(item.expiresAt));
    tableCell(row,outcomeStatus(item));
-   const td=document.createElement('td'),actions=document.createElement('div');
-   actions.className='issue-actions';
-   if(item.status==='done'){
-    rowButton(actions,'نسخ',async()=>showIssue(await request('reveal',{issueId:item.id})));
-    if(!['unused','disabled'].includes(item.subscriptionStatus)){
-     rowButton(actions,'تجديد',async()=>{
-      activeIssue=item;$('renew-days').value='30';$('renew-dialog').showModal();
-     });
-    }
-    if(item.canRelogin)rowButton(actions,'إعادة دخول',async()=>{
-      const id=actionId('relogin',item.id);
-      const result=await request('relogin',{issueId:item.id,requestId:id.id});
-      retryActions.delete(id.key);
-      msg('إعادة الدخول متاحة لنفس الكود لمدة 10 دقائق',true);
-      await refreshViews();
-    });
-   }
-   rowButton(actions,'العميل',async()=>{
-     activeIssue=item;$('edit-customer-name').value=item.customerName||'';
-     $('edit-customer-phone').value=item.customerPhone||'';
-     $('customer-dialog').showModal();
-   });
-   td.appendChild(actions);row.appendChild(td);target.appendChild(row);
+   const actions=tableCell(row,'');
+   rowButton(actions,'إدارة',()=>showManage(item));
+   target.appendChild(row);
   }
   text('issues-count','المعروض: '+issueRows.length);
   $('issues-more').hidden=listNext==null;
