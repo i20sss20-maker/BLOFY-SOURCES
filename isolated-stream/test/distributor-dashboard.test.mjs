@@ -148,3 +148,39 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   assert.ok(sc);assert.doesNotThrow(()=>new vm.Script(sc[1]));
  });
 });
+
+test('distributor all-in-one management is compact, accessible and scoped',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');assert.equal(response.status,200);
+  const html=await response.text();
+  for(const id of [
+   'manage-dialog','manage-info','manage-copy','manage-renew',
+   'manage-relogin','manage-customer','renew-dialog','customer-dialog',
+   'activity-rows','activity-more','stat-today','stat-month','stat-trials',
+   'stat-renewals','stat-converted','stat-quota','balance-alert','theme-toggle',
+   'export-csv','issue-search','clients-search'
+  ])assert.ok(html.includes('id="'+id+'"'),'missing '+id);
+  assert.match(html,/rowButton\(actions,'إدارة'/);
+  assert.match(html,/item\.days===1\?'تحويل إلى مدفوع'/);
+  assert.match(html,/localStorage\.getItem\('distributor_theme'\)/);
+  assert.match(html,/function csvField/);
+  assert.match(html,/^\s*if\(\/\^\\s\*\[=\+\\-@\]/m);
+  assert.doesNotMatch(html,/<th>الاشتراك<\/th>|id="label"|id="connections"|value="730"/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+ });
+});
+test('no privileged reseller route or source controls leak into distributor UI',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');
+  const html=await response.text();
+  assert.doesNotMatch(html,/data-tab="sources"|data-tab="restream"/);
+  assert.doesNotMatch(html,/\/operator\/api\/sources|\/internal\/blofy-stream\/sources/);
+  const forbidden=await fetch(base+'/distributor/api/delete-source',{
+    method:'POST',headers:{origin:'https://'+new URL(base).host,
+      'x-blofy-distributor-action':'delete-source','content-type':'application/json'},
+    body:'{}'
+  });
+  assert.equal(forbidden.status,404);
+ });
+});
