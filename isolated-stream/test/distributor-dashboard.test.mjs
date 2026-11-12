@@ -161,7 +161,7 @@ test('distributor all-in-one management is compact, accessible and scoped',async
    'export-csv','issue-search','clients-search'
   ])assert.ok(html.includes('id="'+id+'"'),'missing '+id);
   assert.match(html,/rowButton\(actions,'إدارة'/);
-  assert.match(html,/item\.days===1\?'تحويل إلى مدفوع'/);
+  assert.match(html,/item\.days===1&&!item\.converted\?'تحويل إلى مدفوع'/);
   assert.match(html,/localStorage\.getItem\('distributor_theme'\)/);
   assert.match(html,/function csvField/);
   assert.match(html,/^\s*if\(\/\^\\s\*\[=\+\\-@\]/m);
