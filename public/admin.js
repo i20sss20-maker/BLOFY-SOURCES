@@ -327,6 +327,41 @@ async function savePassword(){
   }finally{$('saveSubscriberPassword').disabled=false}
 }
 
+function openPhone(user){
+  const account=allSubscribers.find(a=>a.username===user);
+  if(!account)return toast('المشترك غير موجود','error');
+  phoneUser=account.username;
+  $('phoneTitle').textContent='جوال '+(account.label||account.username);
+  $('subscriberPhone').value=account.phone||'';
+  $('phoneModal').hidden=false;
+  $('subscriberPhone').focus();
+}
+function closePhone(){
+  $('phoneModal').hidden=true;
+  phoneUser='';
+  $('subscriberPhone').value='';
+}
+async function savePhone(event){
+  event?.preventDefault();
+  if(!phoneUser)return;
+  const phone=$('subscriberPhone').value.trim();
+  const compact=phone.replace(/[\s().-]/g,'');
+  if(compact&&!/^\+?[0-9]{7,15}$/.test(compact)){
+    toast('أدخل رقم جوال صحيح (7 إلى 15 رقمًا)','error');
+    return;
+  }
+  const save=$('saveSubscriberPhone');save.disabled=true;
+  try{
+    await api('accounts/update',{method:'POST',
+      body:JSON.stringify({username:phoneUser,phone})});
+    closePhone();
+    await loadSubscribers();
+    toast(phone?'تم حفظ رقم الجوال':'تم إزالة رقم الجوال','success');
+  }catch(error){
+    toast(error.message==='invalid_customer_phone'?'رقم الجوال غير صالح':error.message,'error');
+  }finally{save.disabled=false}
+}
+
 function renderSubscribers(){
   const rows=filteredSubscribers();
   const maxPage=Math.max(0,Math.ceil(rows.length/SUBSCRIBER_PAGE_SIZE)-1);
@@ -547,6 +582,9 @@ document.querySelectorAll('.renew-options button').forEach(b=>b.onclick=()=>rene
 $('passwordModal').addEventListener('click',e=>{if(e.target===$('passwordModal'))closePassword()});
 $('closePasswordModal').onclick=closePassword;
 $('saveSubscriberPassword').onclick=savePassword;
+$('phoneForm').addEventListener('submit',savePhone);
+$('closePhoneModal').onclick=closePhone;
+$('phoneModal').addEventListener('click',e=>{if(e.target===$('phoneModal'))closePhone()});
 $('newSubscriberPassword').addEventListener('keydown',e=>{if(e.key==='Enter')savePassword()});
 $('passwordResult').addEventListener('click',e=>{
   if(e.target.id!=='copyPasswordResult')return;
