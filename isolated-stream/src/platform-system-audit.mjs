@@ -1,3 +1,4 @@
+import {triagePlatformChecks} from './platform-audit-triage.mjs';
 // BLOFY STREAM NextGen: a single, read-only operator audit.
 // It never probes a new media stream, reindexes catalogs, rotates a code,
 // retries an upstream connection, or exposes provider/customer credentials.
@@ -153,7 +154,7 @@ export function createPlatformSystemAudit({
         ok:true,readOnly:true,customerTrafficChanged:false,
         mediaBytesFetched:false,checkedAt:clock(),cacheHit:false,
         source:selected?{id:selected.id,name:String(selected.name||'').slice(0,80)}:null,
-        checks,summary,
+        checks,summary,recommendations:triagePlatformChecks(checks),
         note:'Status reflects available signals, not guaranteed successful device playback.'
       };
       cached.set(key,{created:clock(),data});
