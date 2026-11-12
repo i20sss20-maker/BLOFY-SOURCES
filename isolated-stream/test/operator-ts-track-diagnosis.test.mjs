@@ -151,7 +151,7 @@ test('cross-layer operator warnings distinguish PMT missing audio from device co
 test('Arabic operator dashboard never presents PMT classification as audible sound',()=>{
   const html=renderOperatorDashboard('audio-triage-csp-nonce');
   for(const label of ['audioTrackDiagnosis','audioNoTrackPaths','audioCodecReviewPaths',
-    'لا يثبت سماعه','دعم AC3/EAC3/DTS','codec','operator_input_pmt_no_audio'])
+    'لا يثبت سماع الصوت','دعم AC3/EAC3/DTS','codec','operator_input_pmt_no_audio'])
     assert.ok(html.includes(label),'missing audio triage text '+label);
   const script=html.match(/<script nonce="audio-triage-csp-nonce">([\s\S]*?)<\/script>/);
   assert.ok(script);
