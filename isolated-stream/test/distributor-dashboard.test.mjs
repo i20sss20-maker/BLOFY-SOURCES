@@ -128,7 +128,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   assert.match(html,/library-go/);
   assert.match(html,/organize/);
   for(const id of ['issue-search','issue-status','stat-active','stat-expiring',
-    'stat-expired','expiry-alert','clients-rows','renew-dialog','customer-dialog',
+    'stat-expired','expiry-alert','clients-rows','clients-search','renew-dialog','customer-dialog',
     'customer-name','customer-phone','issues-more'])
     assert.match(html,new RegExp('id="'+id+'"'));
   for(const action of ['relogin','renew','customer','clients'])
