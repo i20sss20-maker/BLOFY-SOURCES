@@ -16,7 +16,7 @@ test('distributor portal is a separate page with code and Xtream issuance, not o
  await withServer(async base=>{
   const result=await fetch(base+'/distributor');assert.equal(result.status,200);
   const html=await result.text();
-  assert.match(html,/لوحة التوزيع المحدودة/);
+  assert.match(html,/لوحة التوزيع/);
   assert.match(html,/كود BLOFY STREAM/);
   assert.match(html,/حساب Xtream/);
   assert.match(html,/رصيد الأشهر/);
@@ -112,11 +112,14 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   const response=await fetch(base+'/distributor');assert.equal(response.status,200);
   const html=await response.text();
   assert.match(html,/رصيد الأشهر/);
-  assert.match(html,/value="365">سنة — 12/);
-  assert.match(html,/value="1">تجريبي يوم واحد/);
+  assert.match(html,/value="365">سنة · 12/);
+  assert.match(html,/value="1">تجريبي · مجاني/);
   assert.match(html,/id="trial-phone"/);
   assert.match(html,/trialPhone:cost===0/);
-  assert.match(html,/saleh فقط/);
+  assert.doesNotMatch(html,/saleh فقط|XTREAM 2|خصم الرصيد بالأشهر:/);
+  assert.doesNotMatch(html,/id="kind-help"|id="credit-cost"/);
+  assert.doesNotMatch(html,/إصدار اشتراك من saleh وخصم/);
+  assert.match(html,/id="issue-button"/);
   assert.match(html,/id="library-panel"/);
   assert.match(html,/id="library-type"/);
   assert.match(html,/library-go/);
