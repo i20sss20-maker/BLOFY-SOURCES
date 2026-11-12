@@ -141,21 +141,140 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
 
+
+/* BLOFY STREAM — refined unified control-center UI, fully local and CSP-safe */
+:root{--bg:#060d1c;--aside:#0b1629;--panel:#0e1c32;--panel2:#14263d;--border:#293d59;--font:#eff7ff;--muted:#a0b2cc;--purple:#8eafff;--green:#59ddb8;--red:#ff98a7;--amber:#ffd394;--edge:#4cc9f0;--radius:18px}
+html{scroll-padding-top:92px}
+body{font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:radial-gradient(ellipse 62% 54% at 62% -20%,#233e6f44,transparent 70%),radial-gradient(ellipse 48% 36% at 4% 85%,#13546a24,transparent 72%),var(--bg);font-size:14px}
+.layout{grid-template-columns:260px minmax(0,1fr)}
+.content{min-width:0}
+.app-sidebar{display:flex;flex-direction:column;gap:0;position:sticky;top:0;height:100dvh;overflow:hidden;padding:21px 13px 14px;background:linear-gradient(165deg,#111f34 0%,#0b1528 49%,#081222 100%);border-left:1px solid #2b425d;box-shadow:-12px 0 48px #02071280;z-index:12}
+.sidebar-top{display:flex;align-items:center;gap:6px;justify-content:space-between;padding:0 5px 21px;border-bottom:1px solid #263956}
+.logo{margin:0;min-width:0;gap:10px}.logo-icon{width:43px;height:43px;flex:0 0 auto;border-radius:14px;background:linear-gradient(145deg,#c9dcff,#779cfa 54%,#6960d9);box-shadow:0 8px 27px #4965c744;color:#08162b;font-size:24px}
+.logo-copy{min-width:0;overflow:hidden}.logo strong{font-size:16px;white-space:nowrap;letter-spacing:.45px}.logo strong b{color:#94b8ff}.logo small{font-size:10px;color:#90a8c8;white-space:nowrap}
+.sidebar-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:19px 4px 24px;scrollbar-width:thin;scrollbar-color:#385579 transparent}
+#primary-nav{display:flex;flex-direction:column;gap:5px;min-height:0}
+#primary-nav .navtitle{font-size:10px;letter-spacing:.5px;font-weight:800;margin:16px 10px 5px;color:#728cac;text-transform:none}
+#primary-nav .navtitle:first-child{margin-top:0}
+#primary-nav .navlink{position:relative;width:100%;display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 12px;border-radius:12px;border:1px solid transparent;color:#b4c6dd;background:transparent;text-align:right;box-shadow:none;transform:none;transition:background .2s,border-color .2s,color .2s,box-shadow .2s}
+#primary-nav .navlink .nav-icon{width:23px;height:23px;display:grid;place-items:center;flex:0 0 23px;color:#8ea8c8}
+#primary-nav .navlink .nav-icon svg{width:21px;height:21px;display:block}
+#primary-nav .navlink .nav-label{font-weight:650;font-size:13px;line-height:1.5;white-space:nowrap}
+#primary-nav .navlink:hover{transform:none;color:#fff;background:#1e3451;border-color:#365476}
+#primary-nav .navlink:hover .nav-icon{color:#99dafa}
+#primary-nav .navlink:focus-visible{outline:2px solid #79d4f8;outline-offset:1px}
+#primary-nav .navlink.active{background:linear-gradient(100deg,#1d4c69a8,#2c366780);border-color:#5477a780;box-shadow:inset -3px 0 #67d8f4,0 7px 20px #05162c45;color:#fff}
+#primary-nav .navlink.active .nav-icon{color:#79dbf2}
+#primary-nav .navlink.active:after{content:"";width:5px;height:5px;background:#6de4cf;border-radius:50%;margin-inline-start:auto;box-shadow:0 0 12px #6de4cfa9}
+.sidebar-collapse{width:31px;height:31px;flex:0 0 31px;border:1px solid #37526d;background:#13243b;color:#adc5df;border-radius:9px;display:grid;place-items:center;font-size:17px;cursor:pointer;transition:background .15s}
+.sidebar-collapse:hover{background:#254460;color:#fff}
+.sidebar-bottom{padding:15px 10px 4px;border-top:1px solid #263956;display:grid;gap:4px}
+.sidebar-version{font-size:11px;font-weight:750;color:#aac9e5}.sidebar-version-detail{font-size:10px;direction:ltr;text-align:right;color:#7990ad}
+.sidebar-scrim{display:none}
+.top{z-index:5;min-height:82px;background:#0a1627e8;border-bottom:1px solid #263a55;box-shadow:0 6px 32px #02071150;padding:15px clamp(20px,2.5vw,38px)}
+.top-title-wrap{display:flex;align-items:center;gap:14px;min-width:0}
+.top-crumb{font-size:10px;letter-spacing:.85px;font-weight:800;color:#82accb;direction:ltr;text-align:right}
+.top-crumb span{color:#bdd0e3}
+.top h1{font-size:22px;letter-spacing:-.3px;margin-top:3px}
+.top p{font-size:11px}
+.top .tools{gap:7px}
+.sidebar-open{display:none;width:42px;height:42px;border-radius:12px;background:#172d46;border:1px solid #3a5878;color:#dceaff;font-size:20px}
+main{max-width:1720px;padding:30px clamp(19px,3vw,46px) 68px}
+.heading h2{color:#f2f8ff;font-weight:850;letter-spacing:-.6px}
+.heading p{color:#a5b9d1}
+.quick-hero{border-radius:22px;border:1px solid #47658c9c;background:radial-gradient(ellipse at 14% 0%,#4a4cb447,transparent 55%),radial-gradient(ellipse at 97% 110%,#126d7350,transparent 65%),linear-gradient(120deg,#142c46,#10203a);box-shadow:0 18px 42px #020d2073;padding:clamp(22px,3vw,36px)}
+.quick-eyebrow{color:#9de1f3}
+.quick-hero h3{color:#fff;letter-spacing:-.5px}
+.quick-hero p{color:#c2d3e4}
+.stat,.panel{border:1px solid #334b67;background:linear-gradient(142deg,#12253d,#101d31);box-shadow:0 12px 36px #020a193d}
+.stat{border-radius:18px;transition:border-color .2s,transform .2s;isolation:isolate}
+.stat:hover{transform:translateY(-2px);border-color:#577ca3}
+.stat:before{background:linear-gradient(#83d8f6,#4a7fd3)}
+.stat:nth-child(2):before{background:linear-gradient(#84f7d0,#309b91)}
+.stat:nth-child(3):before{background:linear-gradient(#d3c3ff,#7e87f2)}
+.stat:nth-child(4):before{background:linear-gradient(#ffe0a7,#dba46e)}
+.stat strong{color:#f5fbff;font-weight:830}
+.panel{border-radius:var(--radius)}
+.panel h3{color:#f2f7ff}
+.btn{border-color:#5d89cf;background:linear-gradient(135deg,#446ec0,#6859bf);box-shadow:0 5px 18px #284d9560}
+.btn:hover{box-shadow:0 9px 23px #3568ae55}
+.btn.secondary{background:#1b324e;border-color:#3c5b7b;color:#e6f2ff}
+.btn.secondary:hover{background:#294460}
+.btn.danger{background:#522f40;border-color:#a46177}
+.pill{background:#1b3049a8;border-color:#3c5878;color:#d1e4f4}
+.pill.good{background:#153c38;color:#88ebc8}
+input,select{background:#0b1b2f;border:1px solid #3d5774;color:#f3f8ff}
+input:focus,select:focus{border-color:#73b7ee;box-shadow:0 0 0 3px #6ca8eb2f}
+.tablewrap{border-color:#34516b;background:#0b1b2d50}
+th{background:#1a304b;color:#cfdfef}
+td{border-bottom-color:#32465c80}
+tbody tr:hover{background:#31577740}
+.view.active{animation:blofyPageEnter .24s cubic-bezier(.2,.8,.2,1) both}
+@keyframes blofyPageEnter{from{opacity:.65;transform:translateY(7px)}to{opacity:1;transform:none}}
+body.sidebar-compact .layout{grid-template-columns:82px minmax(0,1fr)}
+body.sidebar-compact .app-sidebar{padding-inline:10px}
+body.sidebar-compact .sidebar-top{flex-direction:column;align-items:center;padding-inline:0}
+body.sidebar-compact .logo{margin:0}
+body.sidebar-compact .logo-copy,body.sidebar-compact .sidebar-bottom,body.sidebar-compact #primary-nav .navtitle,body.sidebar-compact #primary-nav .nav-label,body.sidebar-compact #primary-nav .navlink.active:after{display:none}
+body.sidebar-compact #primary-nav .navlink{justify-content:center;padding:12px 5px}
+body.sidebar-compact .sidebar-collapse{transform:rotate(180deg)}
+body.sidebar-compact .sidebar-body{padding-inline:0}
+@media(max-width:1150px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.top{gap:10px;flex-wrap:wrap}}
+@media(max-width:980px){
+ .layout,body.sidebar-compact .layout{display:block}
+ .app-sidebar,body.sidebar-compact .app-sidebar{position:fixed;z-index:30;top:0;right:0;left:auto;width:min(86vw,312px);height:100dvh;transform:translateX(105%);transition:transform .25s ease,visibility .25s ease;visibility:hidden;padding:20px 13px;box-shadow:-20px 0 70px #0008}
+ body.menu-open .app-sidebar{transform:translateX(0);visibility:visible}
+ body.sidebar-compact .logo-copy,body.sidebar-compact .sidebar-bottom,body.sidebar-compact #primary-nav .navtitle,body.sidebar-compact #primary-nav .nav-label{display:block}
+ body.sidebar-compact .sidebar-top{flex-direction:row}
+ body.sidebar-compact #primary-nav .navlink{justify-content:flex-start;padding:10px 12px}
+ .sidebar-collapse{display:none}
+ .sidebar-scrim:not([hidden]){display:block;position:fixed;inset:0;z-index:29;background:#010915bd;backdrop-filter:blur(3px);border:0;cursor:pointer}
+ .sidebar-open{display:grid;place-items:center;flex:0 0 42px}
+ body.menu-open{overflow:hidden}
+ .top{position:sticky;top:0;padding:13px 16px;flex-wrap:wrap;gap:9px}
+ .top-title-wrap{flex:1}
+ .top h1{font-size:19px}
+ main{padding:20px 15px 55px}
+}
+@media(max-width:630px){
+ .top{align-items:flex-start}
+ .top .tools{width:100%;justify-content:flex-start;gap:6px}
+ .top .tools .btn{font-size:11px;min-height:36px}
+ .top .tools #density-toggle{display:none}
+ .top p{display:none}
+ .quick-hero:after{opacity:.5}
+ .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .stat{padding:13px}
+ .stat strong{font-size:22px}
+ .grid{grid-template-columns:1fr}
+ .heading h2{font-size:24px}
+ .heading{align-items:flex-start;gap:8px}
+ .sidebar-open{width:39px;height:39px;flex-basis:39px}
+}
+@media(max-width:370px){.cards{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.view.active{animation:none}.app-sidebar{transition:none}}
+
 </style>
-</head><body><div class="layout"><aside>
-<div class="logo"><div class="logo-icon">B</div><div><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
-<div class="navtitle">الإدارة</div><nav aria-label="الأقسام">
-<button class="navlink active" data-tab="home"><span>▦</span>الرئيسية</button>
-<button class="navlink" data-tab="sources"><span>◫</span>المصادر</button>
-<button class="navlink" data-tab="restream"><span>◉</span>إعادة البث</button>
-<button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
-<button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
-<button class="navlink" data-tab="codes"><span>▤</span>أكواد الاشتراك</button>
-<button class="navlink" data-tab="distributors"><span>♧</span>لوحات التوزيع</button>
-<button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
-</nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
-</aside><div class="content">
-<header class="top"><div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div>
+</head><body><div class="layout"><aside id="app-sidebar" class="app-sidebar" aria-label="القائمة الجانبية">
+<div class="sidebar-top"><div class="logo"><div class="logo-icon">B</div><div class="logo-copy"><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
+<button type="button" id="sidebar-collapse" class="sidebar-collapse" aria-label="طي القائمة الجانبية" aria-pressed="false" title="طي القائمة">⟨</button></div>
+<div class="sidebar-body"><nav aria-label="الأقسام" id="primary-nav">
+<div class="navtitle">نظرة عامة</div>
+<button type="button" class="navlink active" data-tab="home" aria-label="الرئيسية" title="الرئيسية" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="nav-label">الرئيسية</span></button>
+<div class="navtitle">الوسائط والتشغيل</div>
+<button type="button" class="navlink" data-tab="sources" aria-label="المصادر" title="المصادر"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><span class="nav-label">المصادر</span></button>
+<button type="button" class="navlink" data-tab="restream" aria-label="إعادة البث" title="إعادة البث"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 0-7-7M2.5 8a11 11 0 0 1 19 0"/><circle cx="12" cy="14" r="3"/><path d="M12 17v5"/></svg></span><span class="nav-label">إعادة البث</span></button>
+<button type="button" class="navlink" data-tab="library" aria-label="المكتبة" title="المكتبة"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg></span><span class="nav-label">المكتبة</span></button>
+<div class="navtitle">المشتركون والمبيعات</div>
+<button type="button" class="navlink" data-tab="accounts" aria-label="المشتركون" title="المشتركون"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M17 3.1a4 4 0 0 1 0 7.8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg></span><span class="nav-label">المشتركون</span></button>
+<button type="button" class="navlink" data-tab="codes" aria-label="أكواد الاشتراك" title="أكواد الاشتراك"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h3m-3 4h6m4-4v6"/></svg></span><span class="nav-label">أكواد الاشتراك</span></button>
+<button type="button" class="navlink" data-tab="distributors" aria-label="لوحات التوزيع" title="لوحات التوزيع"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4M5 16v-4h14v4"/></svg></span><span class="nav-label">لوحات التوزيع</span></button>
+<div class="navtitle">مراقبة النظام</div>
+<button type="button" class="navlink" data-tab="diagnostics" aria-label="الفحص والصيانة" title="الفحص والصيانة"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V7l8-4z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="nav-label">الفحص والصيانة</span></button>
+</nav></div>
+<div class="sidebar-bottom"><span class="sidebar-version">واجهة الإدارة الموحدة</span><span class="sidebar-version-detail">BLOFY STREAM • 2026</span></div>
+</aside><button type="button" id="sidebar-scrim" class="sidebar-scrim" aria-label="إغلاق القائمة" hidden></button><div class="content">
+<header class="top"><div class="top-title-wrap"><button type="button" id="sidebar-open" class="sidebar-open" aria-label="فتح قائمة الأقسام" aria-controls="app-sidebar" aria-expanded="false">☰</button><div><div class="top-crumb">BLOFY STREAM <span> / </span><span id="top-section">الرئيسية</span></div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div></div>
 <div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
 <main><div id="notice" class="status" role="status" hidden></div>
 <section class="view active" id="page-home">
@@ -680,8 +799,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     if(Array.from(el.options).some(function(o){return o.value===old}))el.value=old;
   }
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
-    document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
-    $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
+    document.querySelectorAll(".navlink").forEach(function(x){var selected=x.dataset.tab===id;x.classList.toggle("active",selected);if(selected)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current")});
+    $("title").textContent=tabs[id];$("top-section").textContent=tabs[id];
+    if(location.hash!=="#"+id&&window.history&&history.replaceState)history.replaceState(null,"","#"+id);
+    closeSidebar();
+    if(id==="library"&&!state.libParams)loadCatalog(false);
     if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);
     if(id==="distributors")void loadDistributors();if(id==="library")void updateLibraryAIStatus();window.scrollTo({top:0,behavior:"instant"});
   }
@@ -691,6 +813,17 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     var target=e.dataset.focus;
     if(target)requestAnimationFrame(function(){var field=$(target);if(field)field.focus()});
   })});
+  // Mobile drawer and desktop mini-sidebar affect presentation only.
+  var sidebar=$("app-sidebar"),scrim=$("sidebar-scrim"),menuToggle=$("sidebar-open"),collapseToggle=$("sidebar-collapse");
+  function closeSidebar(){document.body.classList.remove("menu-open");scrim.hidden=true;menuToggle.setAttribute("aria-expanded","false")}
+  function openSidebar(){document.body.classList.add("menu-open");scrim.hidden=false;menuToggle.setAttribute("aria-expanded","true");var selected=sidebar.querySelector(".navlink.active");if(selected)selected.focus({preventScroll:true})}
+  menuToggle.addEventListener("click",function(){if(document.body.classList.contains("menu-open"))closeSidebar();else openSidebar()});
+  scrim.addEventListener("click",function(){closeSidebar();menuToggle.focus()});
+  collapseToggle.addEventListener("click",function(){var compact=document.body.classList.toggle("sidebar-compact");this.setAttribute("aria-pressed",String(compact));this.setAttribute("aria-label",compact?"توسيع القائمة الجانبية":"طي القائمة الجانبية");this.title=compact?"توسيع القائمة":"طي القائمة"});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&document.body.classList.contains("menu-open")){closeSidebar();menuToggle.focus()}});
+  window.addEventListener("resize",function(){if(window.innerWidth>980)closeSidebar()});
+  $("primary-nav").addEventListener("keydown",function(e){if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;var links=Array.from(this.querySelectorAll(".navlink"));var index=links.indexOf(document.activeElement);if(index<0)return;e.preventDefault();links[(index+(e.key==="ArrowDown"?1:-1)+links.length)%links.length].focus()});
+  window.addEventListener("hashchange",function(){var requested=location.hash.slice(1);if(tabs[requested])tab(requested)});
   // Keyboard-friendly command palette: navigation only, never mutates data.
   var commandPalette=$("command-palette"),commandSearch=$("command-search");
   Object.keys(tabs).forEach(function(id){
@@ -3383,6 +3516,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
+  if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
   setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);
 })();
