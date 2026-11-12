@@ -106,9 +106,8 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
 <div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
-<option value="1">تجريبي · مجاني</option><option value="30" selected>شهر · 1</option><option value="90">3 أشهر · 3</option><option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option><option value="730">سنتان · 24</option></select></div>
-<div class="field"><label for="connections">الاتصالات</label><select id="connections">
-<option value="1">اتصال واحد</option><option value="2">اتصالان</option><option value="3">3 اتصالات</option></select></div>
+<option value="1">تجريبي · مجاني</option><option value="30" selected>شهر · 1</option><option value="90">3 أشهر · 3</option><option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option></select></div>
+
 </div><div class="row" style="margin-top:17px">
 
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
@@ -131,8 +130,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <dialog id="renew-dialog" aria-labelledby="renew-title"><h2 id="renew-title">تجديد الاشتراك</h2>
 <form id="renew-form"><div class="formgrid"><div class="field"><label for="renew-days">المدة</label>
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
-<option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option>
-<option value="730">سنتان · 24</option></select></div></div>
+<option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option></select></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="renew-dialog" class="btn secondary">إلغاء</button>
 <button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
 <dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
@@ -156,7 +154,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null;
  const retryActions=new Map();let searchTimer=null;
- const COST={1:0,30:1,90:3,180:6,365:12,730:24};
+ const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
@@ -392,7 +390,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
    const d=await request('issue',{kind:currentKind,label:$('label').value,
-    durationDays:Number($('days').value),maxConnections:Number($('connections').value),
+    durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
    inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
@@ -523,7 +521,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
    if(!sessionToken)return okJson(res,401,{ok:false,code:'distributor_unauthorized'});
    const allowed=action==='issue'?{
       kind:data.kind,label:data.label,durationDays:data.durationDays,
-      maxConnections:data.maxConnections,trialPhone:data.trialPhone,
+      trialPhone:data.trialPhone,
       customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
      action==='reveal'?{issueId:data.issueId}:
      action==='list'?{q:data.q,offset:data.offset,status:data.status}:
