@@ -24,9 +24,9 @@ Date: 2026-11-12 (Asia/Riyadh). This tracker describes **verified code and remai
 | 08 | Incremental library | Revisioned catalog, sync queue, snapshot and guard modules | Reconcile before/after counts across full catalog without data loss |
 | 09 | AI library | Human-approved title/category suggestions and rollback journal | Review sample accuracy and explicit rollback in staging |
 | 10 | Restream engine | MediaMTX, licensed TS fanout and HLS operator monitor | Verify independent stream sessions, audio tracks and end-client decoding |
-| 11 | Multi-user scaling | 10/50 and now 100 synthetic fanout viewer tests | 250/500 staged load profile, real upstream limits, bandwidth and resource headroom |
+| 11 | Multi-user scaling | 10/50 and now 100 synthetic fanout viewer tests | 250/500 production staged load profile, real upstream limits, bandwidth and resource headroom |
 | 12 | Control Center | Existing operator UI, source/code/account workflows | Verify all admin actions end-to-end with an owner test account |
-| 13 | Full diagnostics | 23 read-only metrics, ordered safe suggestions, selected series map | Test against real, explicitly permitted content and compare with client logs |
+| 13 | Full diagnostics | 24 read-only metrics, ordered safe suggestions, selected series map | Test against real, explicitly permitted content and compare with client logs |
 | 14 | Speed Boost | Start P95 and per-kind failure telemetry exposed | Baseline and optimize startup, catalog sync and UI latency, then compare |
 | 15 | Subscriptions | Renewal, same-code relogin and protected device-binding systems | Live controlled test of renewal/no-double-charge and one-time transfer |
 | 16 | Security and recovery | Authentication throttles, source secrecy, activity history | Document production backups and perform isolated restore exercise |
@@ -51,9 +51,22 @@ Date: 2026-11-12 (Asia/Riyadh). This tracker describes **verified code and remai
 
 - **Audio transport observations:** `ts-audio-inspector.mjs` now reads bounded MPEG-TS PAT/PMT metadata from an **existing** licensed TS feed. It differentiates no audio PID observed, a declared AAC/AC3/etc. audio track, and a stream whose PSI was not observed. It **does not** decode audio or alter stream bytes. Both operator HLS publisher and licensed shared-fanout expose temporary safe track signals.
 - **Audio conversion QA:** New operator-only `audioMode='aac'` option transforms existing audio to stereo AAC with FFmpeg while copying video unchanged. It requires explicit confirmation, allows a single transcode path, and refuses conflicting extra licensed source connections. Default remains `copy`, and **subscriber routes are not changed**. This is not proof of audibility on Android TV.
-- **Capacity:** The isolated TS harness now covers **250 simultaneous synthetic viewers across two separate feeds with exactly two provider GETs**. This verifies sharing behavior, not production-provider capacity nor 250 independent Xtream accounts.
+- **Capacity:** The isolated TS harness now covers **250 simultaneous synthetic viewers across two separate feeds with exactly two provider GETs**, plus **500 viewers across four separate feeds using exactly four provider GETs**. This verifies sharing behavior, not production-provider capacity nor 250 independent Xtream accounts.
 - **Update metadata:** Fixed, authenticated STREAM release manifest inspection verifies version, package, SHA-format and URL consistency but explicitly reports that APK bytes, signature and installed version remain unverified.
 - **Android QA only:** An independent branch `feature/stream-nextgen-supported-audio-recovery-qa-20261112` based on STREAM 55.8.13 owner QA contains a single-track auto-selection recovery when Media3 declares a supported track but has not selected any. It does not override an explicit mute, restart the player, or bypass authentication. **No production APK was signed, uploaded or published from this change**. Its unit-test/compile workflow was added but full device acceptance is not demonstrated here.
 - **Quality gate:** Real devices must confirm playback and audio on Android 9, Android TV, and Windows; FFmpeg stereo AAC must be evaluated for source authorization, CPU overhead and actual MediaMTX behavior before any subscriber-facing use.
 
 **Status:** The admin/backend improvements have passed automated build gates and health checks. Audio codec observability and synthetic concurrency are implemented; client audio success, real-provider scalability, backup restore and signed device updates remain open acceptance criteria.
+
+## Comprehensive same-turn continuation — current status
+
+**New safe operational features**
+- `GET /operator/api/support-bundle` exports a redacted, allowlisted diagnostic report (24 checks), avoiding provider URLs, device IDs, customer phones, media titles and auth tokens. The operator UI offers **تصدير تقرير الدعم**.
+- Full audit now includes `sourceCapacity`, showing the SOURCE Xtream account's actual reported max/active connections and permission state when available. This is independent of the BLOFY code's advertised connection setting and is **not** proof of high-capacity service.
+- 500 simulated TS viewers successfully fan out over four distinct synthetic channels in an isolated build test without 500 provider GETs. Do not interpret this as 500 licensed real-user streams on production.
+- Android guarded audio-track recovery lives in draft pull request #571 from a private 55.8.13 QA branch; **not merged, signed or published**. It must compile and pass real Android 9/TV device QA first.
+- A new script `ops/nextgen-restore-smoke.sh` and isolated PostgreSQL 16 GitHub Actions job test dump/restore/FK integrity using **fake records only**. This is tooling preparation, not evidence of a production backup or Railway volume restore.
+- The live download manifest still points at **55.8.12**. GitHub release asset metadata for the published owner QA APK reports the expected **135509813-byte** size and SHA-256 digest matching the manifest; this is provenance corroboration, **not** verification of bytes installed on a TV or a replacement for APK signing verification.
+- The operator diagnostic remains read-only by default. Optional FFmpeg AAC conversion is explicitly restricted to an operator QA path. Normal customer playback and their codes are preserved.
+
+**Still NOT complete:** Real-world audio success on affected Android 9 devices, Windows app parity/build tests, a validated Railway Postgres restore of customer data, source-provider-signed capacity entitlement for multiple simultaneous channel streams, independently measured production QoE and installation of a verified 55.8.13+ signed APK.
