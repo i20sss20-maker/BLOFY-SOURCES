@@ -520,7 +520,23 @@ function gotoView(name){
 }
 
 async function copyText(text,msg='تم النسخ'){
-  try{await navigator.clipboard.writeText(text);toast(msg,'success')}catch{toast('تعذر النسخ','error')}
+  // Clipboard API can be missing on older Android TV browsers or insecure
+  // local admin origins. Only copy following an explicit operator click.
+  try{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(String(text));toast(msg,'success');return;
+    }
+    const field=document.createElement('textarea');
+    field.value=String(text);field.readOnly=true;
+    field.setAttribute('aria-hidden','true');
+    field.style.cssText='position:fixed;top:-9999px;opacity:0';
+    document.body.appendChild(field);
+    try{
+      field.focus();field.select();
+      if(!document.execCommand('copy'))throw new Error('clipboard_unavailable');
+    }finally{field.remove()}
+    toast(msg,'success');
+  }catch{toast('تعذر النسخ. تأكد من صلاحية الحافظة أو اتصال HTTPS','error')}
 }
 
 $('loginForm').addEventListener('submit',async e=>{
