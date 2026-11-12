@@ -22,12 +22,13 @@ const pure=(value)=>Number.isFinite(value)&&value>=0?Math.round(value):null;
 
 export function createStreamCrossServiceDiagnosis({
   portal,relayStats=()=>null,restreamPaths=()=>null,
-  streamOps=()=>null,mediaControl=null,clock=Date.now,cacheMs=15000
+  streamOps=()=>null,mediaControl=null,
+  edgeMetrics=async()=>null,clock=Date.now,cacheMs=15000
 }={}){
   if(!portal||typeof portal.mediaQuality!=='function'||
     typeof portal.sourceCapacity!=='function'||
     typeof relayStats!=='function'||typeof restreamPaths!=='function'||
-    typeof streamOps!=='function'||
+    typeof streamOps!=='function'||typeof edgeMetrics!=='function'||
     (mediaControl!==null&&typeof mediaControl?.overview!=='function')||
     typeof clock!=='function'||
     !Number.isInteger(cacheMs)||cacheMs<5000||cacheMs>60000)
@@ -36,14 +37,20 @@ export function createStreamCrossServiceDiagnosis({
   async function collect(){
     // Both requests go through the existing fixed-origin authenticated bridge.
     // Media health is in-memory; capacity is a single read-only DB aggregate.
-    const [qualityResult,capacityResult,mediaMtxResult]=await Promise.allSettled([
+    const [qualityResult,capacityResult,mediaMtxResult,edgeResult]=await Promise.allSettled([
       portal.mediaQuality(),portal.sourceCapacity(),
-      mediaControl?mediaControl.overview():Promise.resolve(null)
+      mediaControl?mediaControl.overview():Promise.resolve(null),
+      edgeMetrics()
     ]);
     const media=qualityResult.status==='fulfilled'?good(qualityResult.value):null;
     const capacity=capacityResult.status==='fulfilled'?good(capacityResult.value):null;
     // MediaMTX overview comes only from the fixed internal private Control
     // peer. Never forward path names, source URLs, session IDs or client IPs.
+    const edgeReply=edgeResult.status==='fulfilled'?edgeResult.value:null;
+    const edge=edgeReply?.ok===true&&edgeReply.body?.ok===true&&
+      edgeReply.body?.scope==='one_xtream_edge_bun_instance_origin_headers_only'?
+        edgeReply.body:null;
+    const edgeMeasured=!!edge;
     const mtx=mediaMtxResult.status==='fulfilled'?mediaMtxResult.value:null;
     const mtxConfigured=mtx?.configured===true;
     const mtxOnline=mtxConfigured&&mtx?.online===true;
@@ -92,14 +99,21 @@ export function createStreamCrossServiceDiagnosis({
         count:measured(fanout?.providerFailures),severity:'warning'},
       {code:mtxDiagnostic||'media_engine_control_unavailable',
         scope:'mediamtx_current',
-        count:mtxDiagnostic?1:0,severity:'warning'}
+        count:mtxDiagnostic?1:0,severity:'warning'},
+      {code:'edge_gateway_5xx_last5m',scope:'edge_last_5m',
+        count:edgeMeasured?measured(edge.lastFiveMinutes?.errors5xx):0,
+        severity:'warning'},
+      {code:'edge_gateway_denied_last5m',scope:'edge_last_5m',
+        count:edgeMeasured?measured(edge.lastFiveMinutes?.admissionRefusals):0,
+        severity:'notice'}
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
        (row.scope==='relay_since_boot'&&sharedMeasured)||
-       (row.scope==='mediamtx_current'&&mtxConfigured)));
+       (row.scope==='mediamtx_current'&&mtxConfigured)||
+       (row.scope==='edge_last_5m'&&edgeMeasured)));
     // Unknown must never be rendered as green or turned into zero.
     const unknown=!qualityMeasured||!gatewayMeasured||!sharedMeasured||
-      !hlsMeasured||!mtxOnline||mtxReady===null||mtxHls===null;
+      !hlsMeasured||!mtxOnline||mtxReady===null||mtxHls===null||!edgeMeasured;
     const observations={
       gateway:{
         dataAvailable:qualityMeasured,scope:'portal_process_bounded_last_hour',
@@ -141,7 +155,24 @@ export function createStreamCrossServiceDiagnosis({
         activePathReaders:hlsConnections,
         pathsCountMayBeTruncated:hlsMeasured&&restream.items.length>32
       },
-      edge:{dataAvailable:false,scope:'independent_xtream_edge_not_instrumented'},
+      edge:{
+        dataAvailable:edgeMeasured,
+        scope:'one_edge_bun_instance_origin_header_responses_only',
+        // These counts are requests to the authoritative gateway, never
+        // media-body consumption or real simultaneous customers.
+        activeOriginHeaderRequests:edgeMeasured?
+          safeCount(edge.activeOriginHeaderRequests):null,
+        requestsLastFiveMinutes:edgeMeasured?
+          safeCount(edge.lastFiveMinutes?.requests):null,
+        errors5xxLastFiveMinutes:edgeMeasured?
+          safeCount(edge.lastFiveMinutes?.errors5xx):null,
+        sourceAdmissionRefusalsLastFiveMinutes:edgeMeasured?
+          safeCount(edge.lastFiveMinutes?.admissionRefusals):null,
+        p95GatewayHeaderMs:edgeMeasured?pure(edge.p95OriginHeadersMs):null,
+        headerSamples:edgeMeasured?safeCount(edge.headerSamples):null,
+        measuredMediaViewers:false,measuredMediaBodyLifetime:false,
+        otherRailwayReplicasIncluded:false
+      },
       mediaMtx:{
         dataAvailable:mtxOnline&&mtxReady!==null&&mtxHls!==null,
         scope:'isolated_stream_mediamtx_control_api_hls_sessions_only',
@@ -165,7 +196,7 @@ export function createStreamCrossServiceDiagnosis({
       decodedAudioVideoVerified:false,
       freshness:'cached_15_seconds_or_less',observations,
       problems:faults,
-      note:'Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. MediaMTX Control API covers the isolated STREAM media engine only, not the independent restream engine, WebRTC/RTSP clients or unique people. Edge viewer telemetry remains unmeasured; portal media logs retain max 400 events per process.'
+      note:'Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. Edge counts only request attempts and response headers at one Railway Function instance, NOT active video sessions or media body completion. MediaMTX covers only isolated STREAM media, not independent restream engine, WebRTC/RTSP clients or unique people. Portal media logs retain max 400 events per process.'
     };
   }
   async function snapshot(){
