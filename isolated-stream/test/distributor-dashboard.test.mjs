@@ -126,6 +126,12 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   assert.doesNotMatch(html,/id="kind-help"|id="credit-cost"/);
   assert.doesNotMatch(html,/إصدار اشتراك من saleh وخصم/);
   assert.match(html,/id="issue-button"/);
+  // Name/description is not a customer-facing field; historical records remain.
+  assert.doesNotMatch(html,/id="label"|<label for="label">اسم الاشتراك<\/label>|<th>الاشتراك<\/th>/);
+  assert.doesNotMatch(html,/tableCell\(row,item\.label\)/);
+  assert.match(html,/td\.colSpan=5;target\.appendChild\(tr\)/);
+  assert.match(html,/label:'BLOFY STREAM'/);
+  assert.match(html,/id="customer-name"/);
   assert.match(html,/id="library-panel"/);
   assert.match(html,/id="library-type"/);
   assert.match(html,/library-go/);
