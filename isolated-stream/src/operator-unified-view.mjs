@@ -771,7 +771,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     startup_telemetry_available:"تم تسجيل أزمنة بداية التشغيل",
     source_not_selected:"لم يتحدد مصدر صالح للفحص",
     episode_playback_not_sampled:"لم تُختبر ملفات الحلقات على جهاز حقيقي",
-    audio_track_not_decoded:"لم يُفك ترميز الصوت على جهاز حقيقي",
+    audio_track_not_decoded:"لم تُفك ملفات الصوت على جهاز حقيقي",
+    pmt_audio_missing:"مسار TS المشاهد لم يعلن عن صوت داخل جدول PMT",
+    audio_track_metadata_detected:"تم رصد ترميز صوت معلن، لكن الصوت على الجهاز لم يُختبر",
     subtitle_render_not_tested:"لم تُختبر الترجمة على جهاز حقيقي",
     release_channel_not_examined:"لم يُفحص توافق آخر إصدار للتطبيقات",
     restore_test_not_observed:"لا يوجد دليل على اختبار استعادة نسخة احتياطية"
@@ -785,6 +787,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       hlsSessions:"جلسات HLS",readyPaths:"مسارات جاهزة",
       viewers:"مشاهدون",sourceOutages:"انقطاعات المصدر",sourceBytesReceived:"بايتات",
       errorPercent:"نسبة الأخطاء",p95StartMs:"زمن بدء التشغيل P95",
+      observed:"مسارات مرصودة",declaredAudio:"بمسار صوت",missingAudio:"بلا مسار صوت معلن",
       active:"نشطة",paths:"مسارات",count:"عدد",checked:"مفحوص"
     };
     var values=Object.entries(value).filter(function(pair){
