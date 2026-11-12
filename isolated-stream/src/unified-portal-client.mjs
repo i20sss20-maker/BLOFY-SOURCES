@@ -49,7 +49,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     ?call(ROOT+'/codes/'+id+'/reveal')
     :Promise.resolve({status:400,body:{ok:false,code:'invalid_code_id'}});
   function codeAction(id,action,data={}){
-    if(!UUID.test(id)||!['sell','extend','transfer'].includes(action))
+    if(!UUID.test(id)||!['sell','extend','transfer','relogin'].includes(action))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_code_action'}});
     return call(ROOT+'/codes/'+id+'/'+action,{method:'POST',body:data});
   }
