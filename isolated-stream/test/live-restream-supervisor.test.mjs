@@ -199,3 +199,48 @@ test('operator-only HTTP EOF recovery is opt-in and bounded without forwarding p
  assert.doesNotMatch(sourceSettings[1].runOnDemand,/reconnect_at_eof/);
  assert.equal(response.body.customerTrafficChanged,false);
 });
+
+test('AAC audio compatibility is never enabled without explicit operator consent',async()=>{
+ const {service,calls}=createFixture();
+ const missing=await service.start({...row(),audioMode:'aac'});
+ assert.equal(missing.status,403);
+ assert.equal(missing.body.code,'restream_audio_transcode_confirmation_required');
+ assert.equal(calls.length,0);
+ const bad=await service.start({...row(),audioMode:'shell;secret',audioTranscodeConfirmed:true});
+ assert.equal(bad.status,400);
+ assert.equal(calls.length,0);
+});
+test('AAC compat path converts audio only and never changes customer streams',async()=>{
+ const {service,calls}=createFixture();
+ const started=await service.start({...row(),audioMode:'aac',audioTranscodeConfirmed:true});
+ assert.equal(started.status,201);
+ assert.equal(started.body.audioMode,'aac');
+ assert.equal(started.body.customerTrafficChanged,false);
+ const settings=JSON.parse(calls.find(x=>x.method==='POST'&&mediaName.test(x.url)).body);
+ const cmd=settings.runOnDemand;
+ assert.match(cmd,/ -map 0:v:0\? -map 0:a:0\? -c:v copy -c:a aac -b:a 128k -ac 2 -ar 48000 /);
+ assert.doesNotMatch(cmd,/provider\.example|secret-password|sourceUrl|bash -c/);
+ assert.equal(service.list().items[0].audioMode,'aac');
+ const same=await service.start({...row(),audioMode:'aac',audioTranscodeConfirmed:true});
+ assert.equal(same.status,200);
+ assert.equal(same.body.reused,true);
+ assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
+ const conflict=await service.start({...row(),audioMode:'copy'});
+ assert.equal(conflict.status,409,'a second source connection is never created');
+ assert.equal(conflict.body.code,'restream_duplicate_source_options');
+ assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
+ const another=await service.start({...row(),channelId:'999',audioMode:'aac',
+  audioTranscodeConfirmed:true});
+ assert.equal(another.status,429);
+ assert.equal(another.body.code,'restream_audio_transcode_capacity_reached');
+});
+test('standard operator mode remains a bitwise pass-through without AAC encoding',async()=>{
+ const {service,calls}=createFixture();
+ const started=await service.start(row());
+ assert.equal(started.status,201);
+ assert.equal(started.body.audioMode,'copy');
+ const cmd=JSON.parse(calls.find(x=>x.method==='POST'&&mediaName.test(x.url)).body).runOnDemand;
+ assert.match(cmd,/ -map 0:v:0\? -map 0:a:0\? -c copy -f rtsp /);
+ assert.doesNotMatch(cmd,/-c:a aac|-ac 2/);
+ assert.equal(service.list().items[0].audioMode,'copy');
+});
