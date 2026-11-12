@@ -233,6 +233,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
+      '/operator/api/distributors':()=>portal.distributorAdmins(),
       '/operator/api/sales-summary':()=>portal.salesSummary(),
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
@@ -282,6 +283,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
+      const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset)$/i);
       const action=path==='/operator/api/ops/schedule'?'ops-schedule':
         path==='/operator/api/ops/snapshot'?'ops-snapshot':
         path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
@@ -293,6 +295,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         path==='/operator/api/sources'?'source-add':
         path==='/operator/api/accounts'?'account-add':
         path==='/operator/api/codes'?'code-issue':
+        path==='/operator/api/distributors'?'distributor-create':
+        distributor?'distributor-'+distributor[2]:
         src?'source-'+src[2]:acc?'account-'+acc[2]:code?'code-'+code[2]:null;
       if(!action)return json(res,404,{ok:false,code:'route_not_found'}),true;
       if(req.headers['x-blofy-operator-action']!==action)
@@ -309,6 +313,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         if(action==='source-add')return portal.addSource(data);
         if(action==='account-add')return portal.addAccount(data);
         if(action==='code-issue')return portal.issueCodes(data);
+        if(action==='distributor-create')return portal.createDistributor(data);
+        if(distributor)return portal.distributorAdminAction(distributor[1],distributor[2],data);
         if(code)return code[2]==='revoke'?portal.revokeCode(code[1]):
           portal.codeAction(code[1],code[2],data);
         if(src)return portal.sourceAction(src[1],src[2],data);
