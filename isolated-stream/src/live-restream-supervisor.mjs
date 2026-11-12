@@ -53,8 +53,9 @@ function safeFile(p){
   return typeof p==='string'&&p.length<=175&&/^[a-zA-Z0-9_.-]+$/.test(p)&&
     !p.includes('..')&&/\.(?:m3u8|ts|mp4|m4s|aac|vtt)$/.test(p);
 }
-function buildCommand(name,ticket,{httpEofReconnect=false}={}){
+function buildCommand(name,ticket,{httpEofReconnect=false,audioMode='copy'}={}){
   if(!safePath(name)||!TICKET.test(ticket))throw err('restream_invalid_path');
+  if(!['copy','aac'].includes(audioMode))throw err('restream_audio_mode_invalid');
   // ALL interpolated values are strictly hex. No provider URL is added to
   // the FFmpeg shell command or to MediaMTX's public HLS path.
   // The single private HTTP feed may return clean EOF after a finite
@@ -69,8 +70,13 @@ function buildCommand(name,ticket,{httpEofReconnect=false}={}){
     '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 3 '+
     localFeedReconnect+
     '-rw_timeout 14000000 -i '+INTERNAL+'/internal/live-feed/'+ticket+
-    ' -map 0:v:0? -map 0:a:0? -c copy -f rtsp '+
-    '-rtsp_transport tcp rtsp://127.0.0.1:8554/'+name;
+    ' -map 0:v:0? -map 0:a:0? '+
+    // Video is always copied. Only a newly created, operator-approved path
+    // may transcode its existing audio to stereo AAC for compatibility.
+    (audioMode==='aac'?
+      '-c:v copy -c:a aac -b:a 128k -ac 2 -ar 48000 ':
+      '-c copy ')+
+    '-f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/'+name;
 }
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
@@ -113,22 +119,39 @@ export function createLiveRestreamSupervisor({
   }
   const idleTimer=setInterval(()=>{void prune().catch(()=>{})},60_000);
   idleTimer.unref?.();
-  async function start({sourceId,channelId,backupSourceId,backupChannelId,rightsConfirmed}={}){
+  async function start({sourceId,channelId,backupSourceId,backupChannelId,
+    rightsConfirmed,audioMode='copy',audioTranscodeConfirmed=false}={}){
     if(!auth||!portal?.configured)return safe({ok:false,code:'restream_not_configured'},503);
     if(rightsConfirmed!==true)return safe({ok:false,code:'stream_rights_confirmation_required'},403);
+    if(!['copy','aac'].includes(audioMode))
+      return safe({ok:false,code:'restream_audio_mode_invalid'},400);
+    if(audioMode==='aac'&&audioTranscodeConfirmed!==true)
+      return safe({ok:false,code:'restream_audio_transcode_confirmation_required'},403);
     if(operation)return safe({ok:false,code:'restream_busy'},429);
     operation=true;
     try{
       // Reuse one FFmpeg/MediaMTX path when the same licensed channel is opened
       // again. Otherwise each start would consume a separate upstream stream.
       const existing=[...paths.values()].find(row=>
-        row.sourceId===sourceId&&String(row.channelId)===String(channelId)&&
-        (!backupSourceId||row.candidateUrls.length>1));
-      if(existing)return safe({ok:true,path:existing.name,title:existing.title,
-        sourceId:existing.sourceId,channelId:existing.channelId,
-        onDemand:true,backupConfigured:existing.backupConfigured,
-        playbackVerified:false,customerTrafficChanged:false,
-        reused:true,playlist:'/operator/api/live/'+existing.name+'/index.m3u8'});
+        row.sourceId===sourceId&&String(row.channelId)===String(channelId));
+      if(existing){
+        // Prevent a different audio profile or backup configuration from
+        // silently using a *second* licensed upstream connection.
+        if((existing.audioMode||'copy')!==audioMode||
+          (backupSourceId&&!existing.backupConfigured))
+          return safe({ok:false,code:'restream_duplicate_source_options',
+            customerTrafficChanged:false},409);
+        return safe({ok:true,path:existing.name,title:existing.title,
+          sourceId:existing.sourceId,channelId:existing.channelId,
+          audioMode:existing.audioMode||'copy',
+          onDemand:true,backupConfigured:existing.backupConfigured,
+          playbackVerified:false,customerTrafficChanged:false,
+          reused:true,playlist:'/operator/api/live/'+existing.name+'/index.m3u8'});
+      }
+      // One optional transcoder per isolated operator control service;
+      // do not reconfigure any customer route or existing healthy channel.
+      if(audioMode==='aac'&&[...paths.values()].some(row=>row.audioMode==='aac'))
+        return safe({ok:false,code:'restream_audio_transcode_capacity_reached'},429);
       if(paths.size>=maxPaths)return safe({ok:false,code:'restream_capacity_reached'},409);
       const upstream=await portal.liveChannel({sourceId,channelId,rightsConfirmed:true});
       if(upstream.status!==200||upstream.body?.ok!==true)
@@ -162,16 +185,16 @@ export function createLiveRestreamSupervisor({
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1,
-        trackInspector:createTsAudioInspector()};
+        audioMode,trackInspector:createTsAudioInspector()};
       const config={source:'publisher',
-        runOnDemand:buildCommand(name,ticket,{httpEofReconnect}),
+        runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
       await mediamtx('POST','/v3/config/paths/add/'+name,config);
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
         channelId:row.channelId,onDemand:true,backupConfigured:row.backupConfigured,
-        playbackVerified:false,customerTrafficChanged:false,
+        audioMode,playbackVerified:false,customerTrafficChanged:false,
         playlist:'/operator/api/live/'+name+'/index.m3u8'},201);
     }catch(e){return safe({ok:false,code:classify(e)},503)}
     finally{operation=false}
@@ -220,6 +243,7 @@ export function createLiveRestreamSupervisor({
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,
       mediaTracks:row.trackInspector?.summary()||null,
+      audioMode:row.audioMode||'copy',
       onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
       preferredSource:row.preferredIndex===0?'primary':'backup',
       playlist:'/operator/api/live/'+row.name+'/index.m3u8'
