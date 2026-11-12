@@ -244,6 +244,16 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="smart-ops-history"></tbody></table></div>
 <p class="muted" id="smart-ops-last-check" aria-live="polite">هذه النتائج مؤشرات تشغيل مؤقتة. الصوت والصورة وحدود المصدر الحقيقي لم يتم التحقق منها هنا.</p>
 </div>
+<div class="panel" id="source-capacity-panel">
+  <div class="controls"><div><h3>📡 حدود مصادر Xtream — بيانات الحساب المحفوظة</h3>
+  <p class="muted">هذا التقرير يقرأ آخر معلومات الاتصال التي أعلنها مزود المصدر وعدد الاشتراكات المرتبطة من قاعدة BLOFY. لا ينشئ اتصال بث ولا يُمثل عدد المشاهدين المتصلين الآن.</p></div>
+  <button class="btn secondary" id="source-capacity-refresh" type="button">↻ قراءة السعة المحفوظة</button></div>
+  <p class="muted" id="source-capacity-status" role="status" aria-live="polite">لم تُقرأ البيانات بعد.</p>
+  <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>الحالة</th><th>حد المصدر المعلن</th>
+  <th>اتصالات المزود المعلنة</th><th>اشتراكات مرتبطة وفعالة</th><th>آخر اختبار</th><th>التقييم</th>
+  </tr></thead><tbody id="source-capacity-rows"></tbody></table></div>
+  <p class="muted" id="source-capacity-warning">الاشتراكات الفعالة ليست عدد اتصالات البث؛ اتصال المصدر وحق إعادة التوزيع يتطلبان التحقق من المزود. لا يتم زيادة السعة أو إعادة تشغيل العملاء تلقائيًا.</p>
+</div>
 <div class="panel" id="security-center">
 <div class="controls"><div><h3>🔐 BLOFY SECURITY</h3>
 <p class="muted">حماية لوحة المشرف وأذونات المشاهدة المؤقتة، ومراقبة محاولات الدخول والحدود الأمنية دون كشف بيانات المشتركين.</p></div>
@@ -2589,6 +2599,59 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     slow_viewer_disconnects_increased:"فُصلت جلسات قراءة بطيئة لحماية موارد الاتصال والمشاهدين.",
     operator_hls_probe_failed:"فشلت عينة HLS لمسار المشرف. لا يدل وحده على تعطل كل قنوات العملاء."
   };
+
+  // Real cached provider snapshot, not synthetic viewers or a source probe.
+  // The browser never receives the source provider URL or bridge secret.
+  async function loadSourceCapacity(){
+    try{
+      var data=await api("source-capacity");
+      if(!data.ok||!Array.isArray(data.sources))
+        throw Error("source_capacity_unavailable");
+      var totals=data.summary||{};
+      value("source-capacity-status",
+        "مصادر مدرجة: "+count(data.sourceCount)+
+        " · تحتاج مراجعة حد المصدر: "+count(totals.restricted)+
+        " · تحذيرات: "+count(totals.warning)+
+        " · بيانات قديمة/مجهولة: "+count(totals.unknown)+
+        (data.accountCountsAvailable?"":" · تعذر قراءة عدد الاشتراكات المرتبطة")+
+        (data.truncated?" · القائمة غير مكتملة":""));
+      var statuses={online:"متصل حسب آخر حالة",offline:"غير متصل",syncing:"جار التحديث",
+        error:"خطأ سابق",unknown:"غير معروف"};
+      var levels={
+        restricted:"وصل الحد المعلن أو لا توجد سعة",
+        warning:"تحتاج مراجعة",
+        unknown:"المعلومات غير كافية",
+        paused:"مصدر موقوف",
+        snapshot_only:"لا يظهر خطر من آخر بيانات محفوظة"
+      };
+      var tbody=$("source-capacity-rows");tbody.replaceChildren();
+      data.sources.slice(0,60).forEach(function(row){
+        var tr=node("tr");
+        cell(tr,String(row.name||"مصدر غير مسمى"));
+        cell(tr,row.enabled===false?"متوقف":(statuses[row.status]||"غير معروف"));
+        cell(tr,count(row.sourceReportedMaxConnections));
+        cell(tr,count(row.sourceReportedActiveConnections));
+        cell(tr,count(row.activeGatewayAccounts));
+        cell(tr,row.lastTestAt?
+          new Date(row.lastTestAt).toLocaleString("ar-SA-u-nu-latn",
+            {timeZone:"Asia/Riyadh"}):"لم يتم تأكيده");
+        cell(tr,levels[row.level]||"غير معروف");
+        tbody.appendChild(tr);
+      });
+      if(!tbody.children.length){
+        var tr=node("tr"),td=cell(tr,"لا توجد مصادر صالحة في البيانات المخزنة.");
+        td.colSpan=7;tbody.appendChild(tr);
+      }
+      value("source-capacity-warning",
+        "آخر البيانات ليست اتصالًا مباشرًا بالمزود، ولا يُثبت عدد اشتراكات الأكواد عدد المشاهدين الفعليين. "+
+        "الاشتراكات غير المرتبطة بمصدر محدد: "+count(data.unboundActiveGatewayAccounts)+
+        ". لا يتم إنشاء اتصالات أو تغيير كود أو نقل مشترك.");
+    }catch(error){
+      value("source-capacity-status","تعذر قراءة حدود المصدر؛ الحالة غير معروفة، ولا يجوز افتراض سلامتها.");
+      value("source-capacity-warning","هذا التقرير يتطلب بوابة BLOFY واتصال الإدارة المحمي. لا يوجد فحص بث إضافي. "+String(error.message||"").slice(0,90));
+    }
+  }
+  $("source-capacity-refresh").addEventListener("click",loadSourceCapacity);
   async function loadSmartOps(){
     try{
       var d=await api("smart-ops");
@@ -2914,8 +2977,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity()}},60000);
 })();
 </script>
 </body></html>`;
