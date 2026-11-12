@@ -299,7 +299,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   activeIssue=item;
   if($('manage-dialog').open)$('manage-dialog').close();
   $('renew-days').value='30';
-  text('renew-title',item.days===1?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
+  text('renew-title',item.days===1&&!item.converted?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
   $('renew-dialog').showModal();
  }
  function openCustomer(item){
@@ -315,7 +315,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const id=actionId('relogin',item.id);
   const result=await request('relogin',{issueId:item.id,requestId:id.id});
   retryActions.delete(id.key);
-  msg('تم السماح بإعادة الدخول حتى '+dateOnly(result.allowedUntil),true);
+  msg('تم السماح بإعادة الدخول بنفس الكود لمدة 10 دقائق',true);
   if($('manage-dialog').open)$('manage-dialog').close();
   await refreshViews();
  }
@@ -328,7 +328,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     ['الحالة',outcomeStatus(item)],
     ['الصلاحية',dateOnly(item.expiresAt)],
     ['تاريخ الإصدار',dateOnly(item.createdAt)],
-    ['المدة الأساسية',item.days===1?'تجريبي':item.days+' يوم'],
+    ['المدة الأساسية',item.days===1?(item.converted?'تجريبي محوّل':'تجريبي'):item.days+' يوم'],
     ['الخصم',Number(item.chargedCredits||0)+' شهر'],
     ['إعادة الدخول',item.reloginCount||0],
     ['الجهاز',item.type==='app'?(item.canRelogin?'مرتبط':'—'):'—']
@@ -345,7 +345,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
   $('manage-relogin').hidden=!item.canRelogin;
   $('manage-customer').hidden=false;
-  text('manage-renew',item.days===1?'تحويل إلى مدفوع':'تجديد');
+  text('manage-renew',item.days===1&&!item.converted?'تحويل إلى مدفوع':'تجديد');
   $('manage-dialog').showModal();
  }
  $('manage-copy').addEventListener('click',async()=>{
