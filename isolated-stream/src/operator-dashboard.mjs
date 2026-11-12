@@ -264,6 +264,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
+      // Operator Basic auth enforced above; portal Bearer key never returned
+      // to the client. No player source details or credentials are serialized.
+      '/operator/api/source-capacity':()=>portal.sourceCapacity(),
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),

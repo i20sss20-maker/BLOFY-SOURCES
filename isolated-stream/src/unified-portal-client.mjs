@@ -58,6 +58,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
   const overview=()=>call(ROOT+'/overview');
+  // Cached, provider-reported connection metadata. This endpoint makes NO
+  // source requests and cannot return subscriber identities or source URLs.
+  const sourceCapacity=()=>call(ROOT+'/source-capacity');
   const sources=()=>call(ROOT+'/overview');
   const accounts=({offset=0}={})=>call(ROOT+'/accounts?'+
     new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
@@ -242,6 +245,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
