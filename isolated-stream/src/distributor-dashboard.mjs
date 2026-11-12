@@ -511,9 +511,16 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  async function exportCsv(){
   const button=$('export-csv');button.disabled=true;
   try{
-   const result=await request('export');
+   const collected=[];let cursor=0,capped=false;
+   for(let page=0;page<20;page++){
+    const batch=await request('export',{offset:cursor});
+    collected.push(...(batch.items||[]));
+    if(batch.capped)capped=true;
+    if(batch.nextOffset==null)break;
+    cursor=batch.nextOffset;
+   }
    const head=['النوع','العميل','الجوال','الحالة','الإصدار','الانتهاء','المدة','الخصم','إعادة الدخول'];
-   const rows=[head,...(result.items||[]).map(x=>[
+   const rows=[head,...collected.map(x=>[
      x.type==='app'?'كود':'Xtream',x.customerName,x.customerPhone,
      outcomeStatus(x),dateOnly(x.createdAt),dateOnly(x.expiresAt),
      x.days,x.chargedCredits,x.reloginCount
@@ -524,7 +531,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    a.href=url;a.download='distribution-'+new Date().toISOString().slice(0,10)+'.csv';
    document.body.appendChild(a);a.click();a.remove();
    setTimeout(()=>URL.revokeObjectURL(url),60000);
-   msg('تم تصدير '+(rows.length-1)+' اشتراك',true);
+   msg('تم تصدير '+(rows.length-1)+' اشتراك'+(capped?' (آخر 2000 فقط)':''),true);
   }catch(e){msg('تعذر التصدير: '+e.message,false)}
   finally{button.disabled=false}
  }
@@ -717,6 +724,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
      action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
      action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
      action==='activity'?{offset:data.offset}:
+     action==='export'?{offset:data.offset}:
      action==='library'?{type:data.type,q:data.q,offset:data.offset}:
      action==='organize'?{type:data.type,itemId:data.itemId,group:data.group,
        title:data.title,sortOrder:data.sortOrder,hidden:data.hidden}:{};
