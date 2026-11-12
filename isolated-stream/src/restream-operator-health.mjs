@@ -1,3 +1,5 @@
+import {diagnoseOperatorTsTracks} from './operator-ts-track-diagnosis.mjs';
+
 // BLOFY STREAM read-only operator path diagnostics.
 // Uses only already-materialized supervisor.list() state; never probes a
 // provider, creates FFmpeg workers, discloses source/channel/customer IDs,
@@ -32,12 +34,16 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
     return {dataAvailable:false,scope:'operator_supervisor_paths_only',
       monitoredPaths:null,activeOperatorReaders:null,failedRecentPaths:null,
       pendingProbes:null,unverifiedPaths:null,staleProbePaths:null,
+      audioDeclaredPaths:null,audioNoTrackPaths:null,
+      audioCodecReviewPaths:null,audioEvidenceUnavailablePaths:null,
       backupConfiguredPaths:null,failoversSinceBoot:null,paths:[],
       readOnly:true,decodedAudioVideoVerified:false,
       independentEngineMonitored:false};
   const paths=[];
   const counts={activeOperatorReaders:0,failedRecentPaths:0,pendingProbes:0,
     unverifiedPaths:0,staleProbePaths:0,backupConfiguredPaths:0,
+    audioDeclaredPaths:0,audioNoTrackPaths:0,
+    audioCodecReviewPaths:0,audioEvidenceUnavailablePaths:0,
     failoversSinceBoot:0};
   const listed=report.items.slice(0,MAX_PATHS);
   for(let i=0;i<listed.length;i++){
@@ -56,6 +62,7 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
     const error=ERRORS.has(original.lastProbe?.code)?original.lastProbe.code:
       ERRORS.has(original.lastError)?original.lastError:null;
     const failovers=bounded(original.failovers,1000000);
+    const track=diagnoseOperatorTsTracks(original,{now});
     counts.activeOperatorReaders+=(active??0);
     counts.failoversSinceBoot+=(failovers??0);
     if(original.backupConfigured===true)counts.backupConfiguredPaths++;
@@ -63,6 +70,13 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
     if(state==='probe_failed')counts.failedRecentPaths++;
     if(state==='unverified')counts.unverifiedPaths++;
     if(state==='probe_stale')counts.staleProbePaths++;
+    if(track.finding==='no_audio_declared_in_observed_pmt')
+      counts.audioNoTrackPaths++;
+    else if(track.finding==='audio_decoder_compatibility_review'){
+      counts.audioCodecReviewPaths++;counts.audioDeclaredPaths++;
+    }else if(track.finding==='audio_track_declared')
+      counts.audioDeclaredPaths++;
+    else counts.audioEvidenceUnavailablePaths++;
     // Index only, not a media path, title, sourceId, URL, token or channelId.
     paths.push({slot:i+1,state,activeOperatorReaders:active,
       latestProbeAgeSeconds:ageMs===null?null:Math.round(ageMs/1000),
@@ -70,6 +84,7 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
       failoversSinceBoot:failovers,
       lastErrorCode:error,
       mediaFirstBytesVerified:state==='first_bytes_verified',
+      audioTrackDiagnosis:track,
       decodedAudioVideoVerified:false,
       sourceTransportIndependentlyVerified:false});
   }

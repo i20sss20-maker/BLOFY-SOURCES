@@ -273,8 +273,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   <h3>🎛️ تحليل مسارات إعادة البث الخاصة بالمشرف</h3>
   <p class="muted">يشخص آخر نتيجة نقل وسائط أولية لمسارات المشرف المحفوظة في STREAM فقط. لا يجري فحص فيديو جديدًا ولا يشمل محرك إعادة بث منفصل أو جميع المشتركين.</p>
   <p class="muted" id="restream-health-summary" role="status" aria-live="polite">لم تصل بيانات المسارات بعد.</p>
-  <div class="tablewrap"><table><thead><tr><th>المسار</th><th>آخر فحص</th><th>القراء لدى المشرف</th><th>مصدر احتياطي</th><th>تحويلات المصدر منذ التشغيل</th><th>الملاحظة</th></tr></thead>
+  <div class="tablewrap"><table><thead><tr><th>المسار</th><th>آخر فحص</th><th>القراء لدى المشرف</th><th>الصوت/ترميزات العينة</th><th>مصدر احتياطي</th><th>تحويلات المصدر منذ التشغيل</th><th>الملاحظة</th></tr></thead>
   <tbody id="restream-health-rows"></tbody></table></div>
+  <p class="muted">تحليل الصوت هنا من جدول MPEG-TS PAT/PMT في بيانات دخلت فعلًا للسيرفر. ظهور مسار صوت لا يثبت سماعه، وغيابه من PMT المرصود لا يثبت صمت القناة. دعم AC3/EAC3/DTS ونحوها يختلف حسب الجهاز، ولا يتم تحويل الترميز تلقائيًا.</p>
   <p class="muted">نجاح أول بايت لا يعني نجاح الصوت والصورة بعد فك الترميز. المسارات هنا أسماء مرقمة فقط دون بيانات المصادر أو الحسابات، وأعداد القراء مكررة من قسم Operator HLS وليست مشاهدين إضافيين.</p>
 </div>
 <div class="panel" id="source-capacity-panel">
@@ -2633,7 +2634,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا.",
     edge_gateway_5xx_last5m:"أبلغت بوابة Edge عن أخطاء HTTP 5xx من بوابة BLOFY خلال خمس دقائق؛ راجع النقل والخادم.",
     edge_gateway_denied_last5m:"سجل Edge رفض قبول HTTP عبر بوابة BLOFY؛ تحقق من صلاحية الكود وحدود المصدر دون إعادة المحاولة المستمرة.",
-    operator_restream_recent_probe_failure:"فشل فحص النقل الأولي مؤخرًا لمسار مشرف، دون إثبات تعطل بقية القنوات."
+    operator_restream_recent_probe_failure:"فشل فحص النقل الأولي مؤخرًا لمسار مشرف، دون إثبات تعطل بقية القنوات.",
+    operator_input_pmt_no_audio:"جدول PMT لعينة دخلت للسيرفر لم يعلن مسار صوت. هذا ليس اختبار سماع أو دليلًا على صمت البث بالكامل.",
+    operator_audio_codec_support_review:"وجد مسار صوت بترميز قد يختلف دعمه بين الأجهزة (مثل AC3/EAC3). لا يغير النظام الترميز دون موافقة."
   };
   function crossReading(measured,value){
     return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
@@ -2694,14 +2697,29 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         " · فحوص قديمة: "+crossReading(true,rest.staleProbePaths)+
         " · لم تفحص: "+crossReading(true,rest.unverifiedPaths)+
         " · مصدر احتياطي: "+crossReading(true,rest.backupConfiguredPaths)+
+        " · عينة PMT بلا مسار صوت: "+crossReading(true,rest.audioNoTrackPaths)+
+        " · مراجعة دعم ترميز الصوت: "+crossReading(true,rest.audioCodecReviewPaths)+
+        " · بيانات صوت غير كافية: "+crossReading(true,rest.audioEvidenceUnavailablePaths)+
         (rest.pathsTruncated?" · جزء من القائمة فقط":""):
         "مؤشرات إعادة البث الخاصة بالمشرف غير متاحة.");
+      var trackStates={
+        no_audio_declared_in_observed_pmt:"لم تعلن PMT صوتًا في العينة",
+        audio_decoder_compatibility_review:"مسار صوت؛ راجع دعم الترميز في الجهاز",
+        audio_track_declared:"مسار صوت معلن؛ سماعه غير مفحوص",
+        stale:"تحليل ترميزات قديم",
+        track_metadata_incomplete:"بيانات PAT/PMT غير كافية",
+        not_measured:"لا توجد عينة صوت"
+      };
       var restRows=$("restream-health-rows");restRows.replaceChildren();
       (Array.isArray(rest.paths)?rest.paths:[]).slice(0,32).forEach(function(p){
         var tr=node("tr");
         cell(tr,"مسار "+count(p.slot));
         cell(tr,restStates[p.state]||"غير معروف");
         cell(tr,crossReading(rest.dataAvailable,p.activeOperatorReaders));
+        var audio=p.audioTrackDiagnosis||{};
+        var codecs=Array.isArray(audio.audioCodecs)?audio.audioCodecs.slice(0,5).join(", "):"";
+        cell(tr,(trackStates[audio.finding]||"غير معروف")+(codecs?" · "+codecs:"")+
+          (audio.selectedOutputMode==="aac_transcode_configured"?" · AAC مُهيأ، الناتج غير مفحوص":""));
         cell(tr,p.backupConfigured?"نعم":"لا");
         cell(tr,crossReading(rest.dataAvailable,p.failoversSinceBoot));
         cell(tr,(restErrors[p.lastErrorCode]||"—")+
@@ -2712,7 +2730,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(!restRows.children.length){
         var emptyRest=node("tr"),emptyCell=cell(emptyRest,
           rest.dataAvailable?"لا توجد مسارات مشرف مهيأة.":"لا تتوفر بيانات المسارات.");
-        emptyCell.colSpan=6;restRows.appendChild(emptyRest);
+        emptyCell.colSpan=7;restRows.appendChild(emptyRest);
       }
       var rows=$("cross-service-issues");rows.replaceChildren();
       (Array.isArray(d.problems)?d.problems:[]).slice(0,15).forEach(function(item){
@@ -2720,11 +2738,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":
           item.scope==="mediamtx_current"?"محرك MediaMTX":
           item.scope==="edge_last_5m"?"بوابة Edge":
-          item.scope==="operator_restream_recent"?"مسارات المشرف":"بوابة Xtream");
+          item.scope==="operator_restream_recent"?"مسارات المشرف":
+          item.scope==="operator_restream_tracks"?"ترميزات المشرف":"بوابة Xtream");
         cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":
           item.scope==="mediamtx_current"?"الحالة الحالية":
           item.scope==="edge_last_5m"?"آخر 5 دقائق":
-          item.scope==="operator_restream_recent"?"آخر 5 دقائق":"آخر ساعة");
+          item.scope==="operator_restream_recent"?"آخر 5 دقائق":
+          item.scope==="operator_restream_tracks"?"آخر دقيقتين":"آخر ساعة");
         cell(tr,crossReading(true,item.count));
         cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
         rows.appendChild(tr);

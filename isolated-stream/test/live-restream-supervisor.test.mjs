@@ -133,7 +133,10 @@ test('real transport feed is private-token scoped and carries TS bytes only',asy
     const body=Buffer.from(await reply.arrayBuffer());
     assert.equal(reply.status,200,body.toString('utf8').slice(0,240)+' '+JSON.stringify(unexpected));
     assert.equal(body.byteLength,ts.byteLength);
-    const meta=service.list().items[0].mediaTracks;
+    const observed=service.list().items[0];
+    const meta=observed.mediaTracks;
+    assert.ok(Number.isSafeInteger(observed.trackInspectedAt)&&
+      observed.trackInspectedAt>0,'track sample must have an actual transfer timestamp');
     assert.ok(meta.inspectedBytes>=ts.byteLength);
     assert.equal(meta.decodedAudio,false);
     assert.equal(meta.hasAudioStream,false);
