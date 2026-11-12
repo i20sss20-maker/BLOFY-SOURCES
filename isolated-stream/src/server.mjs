@@ -6,6 +6,7 @@ import {timingSafeEqual} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
+import {createDistributorDashboard} from './distributor-dashboard.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
@@ -163,10 +164,12 @@ export function createStreamServer({
         customerTrafficChanged:false,realSourceVerified:false}};
     }
   });
+  const distributorDashboard=createDistributorDashboard({bridge:unifiedPortal,log});
   const app=http.createServer((req,res)=>{
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
+    if(distributorDashboard.handle(req,res))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);
