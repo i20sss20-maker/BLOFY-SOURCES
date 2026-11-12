@@ -342,20 +342,34 @@ export function createLiveRestreamSupervisor({
       row.trackInspectedAt=null;
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'x-content-type-options':'nosniff'});
+      // Track timestamps correspond to bytes ACTUALLY inspected, not to
+      // an endlessly running feed after the bounded TS sample has finished.
+      // No additional packets or connections are requested.
+      let trackBudgetComplete=false;
+      function observeTrackBytes(chunk){
+        if(trackBudgetComplete||!row.trackInspector)return;
+        try{
+          const previous=row.trackInspector.summary().inspectedBytes;
+          const summary=row.trackInspector.push(chunk);
+          if(summary.inspectedBytes>previous)row.trackInspectedAt=clock();
+          if(summary.samplingComplete)trackBudgetComplete=true;
+        }catch{
+          row.trackInspector=null;row.trackInspectedAt=null;
+          trackBudgetComplete=true;
+        }
+      }
       const stream=Readable.from((async function*(){
         // Observe the existing MediaMTX publisher input stream. Packet bytes
         // are passed through unchanged, with no new connection to the source.
         let chunk=Buffer.from(active.first.value);
-        try{row.trackInspector?.push(chunk);row.trackInspectedAt=clock()}
-            catch{row.trackInspector=null;row.trackInspectedAt=null}
+        observeTrackBytes(chunk);
         yield chunk;
         while(true){
           const next=await active.reader.read();
           if(next.done)return;
           if(next.value?.byteLength){
             chunk=Buffer.from(next.value);
-            try{row.trackInspector?.push(chunk);row.trackInspectedAt=clock()}
-            catch{row.trackInspector=null;row.trackInspectedAt=null}
+            observeTrackBytes(chunk);
             yield chunk;
           }
         }

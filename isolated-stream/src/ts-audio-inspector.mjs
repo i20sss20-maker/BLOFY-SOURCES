@@ -28,8 +28,9 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
   if(!Number.isSafeInteger(maxBytes)||maxBytes<PACKET||maxBytes>PACKET*1500)
     throw Error('ts_audio_probe_budget_invalid');
   let used=0,buffer=Buffer.alloc(0),pmtPid=null,patSeen=false,pmtSeen=false,
-    detected=false,packets=0;
-  const sections=new Map(),audio=new Set(),video=new Set();
+    detected=false,packets=0,audioPayloadPackets=0,videoPayloadPackets=0;
+  const sections=new Map(),audio=new Set(),video=new Set(),
+    audioPids=new Set(),videoPids=new Set();
   function pat(section){
     if(section[0]!==0)return;
     patSeen=true;
@@ -45,21 +46,28 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
     const programInfo=((section[10]&15)<<8)|section[11];
     let pos=12+programInfo,end=section.length-4;
     if(pos>end)return;
-    const a=new Set(),v=new Set();
+    const a=new Set(),v=new Set(),aPids=new Set(),vPids=new Set();
     while(pos+5<=end){
       const kind=section[pos];
+      const streamPid=((section[pos+1]&31)<<8)|section[pos+2];
       const info=((section[pos+3]&15)<<8)|section[pos+4];
       const next=pos+5+info;
       if(next>end)return;
       const codec=AUDIO.get(kind)||(kind===0x06?
         descriptors(section.subarray(pos+5,next)):'');
-      if(codec)a.add(codec);
-      if(VIDEO.has(kind))v.add(VIDEO.get(kind));
+      if(codec){a.add(codec);if(streamPid>0&&streamPid<8191)aPids.add(streamPid)}
+      if(VIDEO.has(kind)){
+        v.add(VIDEO.get(kind));if(streamPid>0&&streamPid<8191)vPids.add(streamPid)
+      }
       pos=next;
     }
     pmtSeen=true;
+    // Latest PMT replaces prior program declarations. Never return raw PIDs.
+    audio.clear();video.clear();audioPids.clear();videoPids.clear();
     for(const x of a)audio.add(x);
     for(const x of v)video.add(x);
+    for(const pid of aPids)audioPids.add(pid);
+    for(const pid of vPids)videoPids.add(pid);
     detected=audio.size>0&&video.size>0;
   }
   function psi(pid,data,pusi){
@@ -93,11 +101,16 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
       offset+=1+bytes[4];
       if(offset>=PACKET)return;
     }
+    // Count transport payload packets for the PMT-declared ES PIDs only.
+    // This proves input packet activity, NOT decoded audio, audible sound or
+    // continuous playback. No payload/media samples are retained.
+    if(audioPids.has(pid))audioPayloadPackets++;
+    if(videoPids.has(pid))videoPayloadPackets++;
     if(pid!==0&&pid!==pmtPid)return;
     psi(pid,bytes.subarray(offset),(bytes[1]&0x40)!==0);
   }
   function push(chunk){
-    if(used>=maxBytes||detected)return summary();
+    if(used>=maxBytes)return summary();
     if(!Buffer.isBuffer(chunk)&&!(chunk instanceof Uint8Array))return summary();
     const safe=Buffer.from(chunk);
     const take=Math.min(maxBytes-used,safe.length);
@@ -106,7 +119,7 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
     // Carry at most 187 trailing bytes; reject garbage while re-syncing.
     const incoming=Buffer.concat([buffer,safe.subarray(0,take)]);
     let pos=0;
-    while(pos+PACKET<=incoming.length&&!detected){
+    while(pos+PACKET<=incoming.length){
       if(incoming[pos]!==0x47 ||
         (pos+PACKET*2<=incoming.length&&incoming[pos+PACKET]!==0x47)){
         pos++;continue;
@@ -123,6 +136,8 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
     return {status,audioCodecs:[...audio].slice(0,5),
       videoCodecs:[...video].slice(0,5),
       inspectedBytes:used,checkedPackets:packets,
+      audioPayloadPackets,videoPayloadPackets,
+      samplingComplete:used>=maxBytes,
       hasAudioStream:audio.size>0,
       decodedAudio:false,sourceChanged:false};
   }
