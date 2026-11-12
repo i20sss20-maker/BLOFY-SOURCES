@@ -1,4 +1,5 @@
 import {summarizeOperatorRestreamPaths} from './restream-operator-health.mjs';
+import {summarizeSharedRelayTracks} from './shared-relay-track-health.mjs';
 
 // Read-only cross-service STREAM diagnosis. Each input is an existing internal
 // snapshot. Never opens media/source URLs, never assumes unique human viewers,
@@ -70,6 +71,8 @@ export function createStreamCrossServiceDiagnosis({
     const gatewayMeasured=capacity?.directHttpTransferMeasurementAvailable===true;
     const qualityMeasured=!!media;
     const sharedMeasured=!!relayed;
+    const sharedTracks=summarizeSharedRelayTracks(
+      sharedMeasured?fanout:null,{now:clock()});
     const hlsMeasured=restream?.ok===true&&Array.isArray(restream?.items);
     const sourceCounts=capacity?.summary||null;
     const codes={};
@@ -101,6 +104,14 @@ export function createStreamCrossServiceDiagnosis({
         count:measured(media?.byReason?.gateway_auth_denied),severity:'notice'},
       {code:'relay_provider_failures',scope:'relay_since_boot',
         count:measured(fanout?.providerFailures),severity:'warning'},
+      {code:'relay_audio_ts_transport_anomaly',scope:'relay_input_sample',
+        count:sharedTracks.audioTransportAnomalyFeeds??0,severity:'warning'},
+      {code:'relay_video_ts_transport_anomaly',scope:'relay_input_sample',
+        count:sharedTracks.videoTransportAnomalyFeeds??0,severity:'warning'},
+      {code:'relay_pmt_audio_missing',scope:'relay_input_sample',
+        count:sharedTracks.audioNoTrackFeeds??0,severity:'warning'},
+      {code:'relay_audio_codec_support_review',scope:'relay_input_sample',
+        count:sharedTracks.audioCodecReviewFeeds??0,severity:'notice'},
       {code:mtxDiagnostic||'media_engine_control_unavailable',
         scope:'mediamtx_current',
         count:mtxDiagnostic?1:0,severity:'warning'},
@@ -128,6 +139,7 @@ export function createStreamCrossServiceDiagnosis({
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
        (row.scope==='relay_since_boot'&&sharedMeasured)||
+       (row.scope==='relay_input_sample'&&sharedTracks.dataAvailable)||
        (row.scope==='mediamtx_current'&&mtxConfigured)||
        (row.scope==='edge_last_5m'&&edgeMeasured)||
        (row.scope==='operator_restream_recent'&&operatorRestream.dataAvailable)||
@@ -170,6 +182,7 @@ export function createStreamCrossServiceDiagnosis({
           measured(fanout.providerFailures):null,
         activeTickets:relay?limitCount(relay.activeTickets,65536):null
       },
+      sharedRelayTracks:sharedTracks,
       operatorHls:{
         dataAvailable:hlsMeasured,scope:'operator_only_hls_paths_not_public_subscribers',
         configuredPaths:hlsMeasured?list.length:null,
@@ -218,7 +231,7 @@ export function createStreamCrossServiceDiagnosis({
       decodedAudioVideoVerified:false,
       freshness:'cached_15_seconds_or_less',observations,
       problems:faults,
-      note:'Operator restream path reader totals duplicate the existing operator HLS path counts; they are NOT new independent viewers. Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. Edge counts only request attempts and response headers at one Railway Function instance, NOT active video sessions or media body completion. MediaMTX covers only isolated STREAM media, not independent restream engine, WebRTC/RTSP clients or unique people. Portal media logs retain max 400 events per process.'
+      note:'Shared relay anonymous audio quality shows only a bounded MPEG-TS input sample, not an audible client or distinct subscriber. Operator restream path reader totals duplicate the existing operator HLS path counts; they are NOT new independent viewers. Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. Edge counts only request attempts and response headers at one Railway Function instance, NOT active video sessions or media body completion. MediaMTX covers only isolated STREAM media, not independent restream engine, WebRTC/RTSP clients or unique people. Portal media logs retain max 400 events per process.'
     };
   }
   async function snapshot(){

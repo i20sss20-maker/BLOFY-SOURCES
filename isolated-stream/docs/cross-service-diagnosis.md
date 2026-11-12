@@ -10,7 +10,7 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 | --- | --- | --- |
 | Xtream gateway HTTP transfers | Active *direct* authenticated HTTP response transfers in the portal process | Unique human viewers, 307 redirects, licensed fanout, independent edge, HLS segments, other Railway replicas |
 | Xtream gateway media quality | First valid media bytes sent, failed and interrupted transfer attempts, p95 startup latency, HTTP reasons | Decoded picture/audio; all customer playback sessions; full historical coverage |
-| STREAM fanout | Current shared-relay readers and feed count in the isolated STREAM API process | Ordinary direct streams and customers outside that process |
+| STREAM fanout | Current shared-relay readers and feed count, plus an anonymous per-feed passive MPEG-TS audio codec/transport-quality snapshot (CC, TEI, PAT/PMT, stale sample) from the same authorized live stream | Unique viewers, direct customers outside this process, proof that Android 9/Windows decodes or plays sound, source licensing |
 | Operator HLS | Operator supervisor path reader counters; per-path cached first-media-byte probe age/outcome, backup enabled and failovers since boot | Other MediaMTX/HLS viewers; decoding success, any independent restream service, licensed provider capacity |
 | Source capacity | Cached provider-reported limits and pinned gateway subscriptions | Live true upstream socket sessions or source redistribution authorization |
 | STREAM MediaMTX (private Control API) | Real **ready path** total and **HLS session count** on the isolated STREAM media service, read-only fixed internal peer | WebRTC/RTSP peers, independent `blofy-restream-engine`, unique viewers, decoded A/V. Engine sessions may overlap other counters | 
@@ -46,3 +46,9 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 ## Before any additional rollout
 
 Run full isolated-stream and core GitHub tests, then check Railway deployment status and 5xx. Physical Android 9/Windows playback, independent Edge viewer instrumentation, MediaMTX WebRTC/RTSP sessions, full Edge body-lifetime metrics and independent engine sessions, unique viewer correlation and licensed large-scale provider capacity remain separate verification tasks.
+
+## Synthetic capacity and reconnect QA (no customer/provider load)
+
+A local integration regression test opens **128 simultaneous localhost HTTP readers** on a **mocked upstream** with exactly one fake source GET. It checks bounded sharing, byte-for-byte media delivery, and that a **129th request is rejected with 503** without dropping the existing readers. It is a CI safety check, not a real-world performance/SLA test or provider capacity verification. A separate test confirms that a permitted sequential upstream reconnect resets old codec evidence: a replacement channel's AC3 input must not inherit previous AAC metadata. The fanout never opens an extra provider request just to diagnose audio and the observer stops when its limited packet budget is spent. Neither test touches actual customers or source-provider infrastructure.
+
+Synthetic capacity results **do not imply 500 simultaneous licensed customers**, stable internet connections, or real decoded audio/video on Android 9. Production connection limits and provider rights remain unchanged.

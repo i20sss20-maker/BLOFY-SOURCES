@@ -279,6 +279,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   <p class="muted">تحليل الصوت هنا من جدول MPEG-TS PAT/PMT والحزم المصنفة ضمن عينة محدودة من البث الموجود أصلًا. وجود حزم صوت أو صورة لا يثبت سماع الصوت أو ظهور الصورة على جهاز العميل، وعدم رصدها في العينة ليس إثباتًا نهائيًا للصمت أو السواد. دعم AC3/EAC3/DTS ونحوها يختلف حسب الجهاز؛ لا يتم تغيير الترميز أو فتح بث إضافي تلقائيًا.</p>
   <p class="muted">نجاح أول بايت لا يعني نجاح الصوت والصورة بعد فك الترميز. المسارات هنا أسماء مرقمة فقط دون بيانات المصادر أو الحسابات، وأعداد القراء مكررة من قسم Operator HLS وليست مشاهدين إضافيين.</p>
 </div>
+<div class="panel" id="shared-relay-audio-diagnostics">
+ <h3>🔊 تشخيص الصوت في البث المشترك — Relay</h3>
+ <p class="muted">المعلومات من عينة MPEG-TS وصلت بالفعل إلى محرك المشاركة. كل صف قناة مؤقتة مجهولة الهوية، وليس اسم قناة أو حساب أو مصدر. لا يفتح التشخيص بثًا جديدًا.</p>
+ <p class="muted" id="shared-relay-audio-summary" role="status" aria-live="polite">لم تصل بيانات البث المشترك بعد.</p>
+ <div class="tablewrap"><table><thead><tr><th>قناة مؤقتة</th><th>قراء Relay</th><th>عينة الصوت/الترميز</th><th>اضطراب الصوت TS</th><th>اضطراب الصورة TS</th><th>عمر آخر العينة</th></tr></thead><tbody id="shared-relay-audio-rows"></tbody></table></div>
+ <p class="muted">القياس يشمل هذه العملية من STREAM API فقط. وجود حزم صوت لا يثبت سماعها في Android 9 أو Windows، ويعاد ضبط الفحص عند تبديل اتصال المصدر. الأعداد لا تمثل إجمالي المشاهدين.</p>
+</div>
 <div class="panel" id="source-capacity-panel">
   <div class="controls"><div><h3>📡 حدود مصادر Xtream — بيانات الحساب المحفوظة</h3>
   <p class="muted">هذا التقرير يقرأ آخر معلومات الاتصال التي أعلنها مزود المصدر وعدد الاشتراكات المرتبطة من قاعدة BLOFY. لا ينشئ اتصال بث ولا يُمثل عدد المشاهدين المتصلين الآن.</p></div>
@@ -2631,6 +2638,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     gateway_catalog_missing:"المحتوى غير موجود في فهرس البوابة. راجع المزامنة ولا تحذف محتوى العملاء.",
     gateway_auth_rejected:"فُشلت محاولة دخول محلية. لا تُنسب إلى تعطل مزود المحتوى.",
     relay_provider_failures:"محرك المشاركة سجّل فشل مصدر منذ تشغيل السيرفر؛ ليس بالضرورة عطلًا جاريًا.",
+    relay_audio_ts_transport_anomaly:"مؤشرات نقل صوت غير طبيعي داخل عينة Relay المشترك فقط، وليست إثبات فقدان صوت لدى العميل.",
+    relay_video_ts_transport_anomaly:"مؤشرات نقل صورة غير طبيعي في عينة Relay المشترك فقط.",
+    relay_pmt_audio_missing:"آخر PMT للتغذية المشتركة لم تعلن مسارًا صوتيًا، وليس دليل صمت نهائيًا.",
+    relay_audio_codec_support_review:"ترميز صوت في تغذية Relay قد يحتاج فحص توافق جهاز Android أو Windows.",
     media_engine_control_unavailable:"تعذر الاتصال بواجهة MediaMTX الداخلية. لا نجزم بتوقف بث العملاء من هذا وحده.",
     media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا.",
     edge_gateway_5xx_last5m:"أبلغت بوابة Edge عن أخطاء HTTP 5xx من بوابة BLOFY خلال خمس دقائق؛ راجع النقل والخادم.",
@@ -2680,6 +2691,44 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         "لا تجمع هذه الأعداد لأنها قد تتداخل؛ جلسة MediaMTX HLS ليست مشاهدًا فريدًا. مؤشرات Edge تقيس طلبات HTTP وزمن انتظار رأس استجابة البوابة فقط، وليست جلسات فيديو نشطة. MediaMTX مقاس في STREAM فقط؛ محرك إعادة البث المنفصل وجلسات WebRTC/RTSP ليست ضمن القياس. "+
         (d.status==="partial"?"بعض البيانات غير متوفرة، فلا نعتبر كل الخدمات سليمة.":""));
 
+
+      var shared=m.sharedRelayTracks||{};
+      value("shared-relay-audio-summary",shared.dataAvailable?
+        "تغذيات Relay: "+crossReading(true,shared.feeds)+
+        " · عينات بلا مسار صوت: "+crossReading(true,shared.audioNoTrackFeeds)+
+        " · مراجعة ترميز: "+crossReading(true,shared.audioCodecReviewFeeds)+
+        " · اضطراب نقل الصوت: "+crossReading(true,shared.audioTransportAnomalyFeeds)+
+        " · اضطراب نقل الصورة: "+crossReading(true,shared.videoTransportAnomalyFeeds)+
+        " · عينات قديمة/غير مكتملة: "+crossReading(true,shared.missingOrStaleEvidenceFeeds)+
+        (shared.channelsTruncated?" · بعض الصفوف غير معروضة":""):
+        "قياس صوت البث المشترك غير متاح.");
+      var sharedRows=$("shared-relay-audio-rows");sharedRows.replaceChildren();
+      var sharedTrackStates={audio_decoder_compatibility_review:"راجع دعم ترميز الجهاز",
+        no_audio_declared_in_observed_pmt:"PMT لم تعلن مسار صوت",
+        audio_track_declared:"مسار صوت معلن، السماع غير مفحوص",
+        stale:"بيانات الترميز قديمة",not_measured:"لم تُقَس",
+        track_metadata_incomplete:"المعلومات غير كافية"};
+      var sharedContinuity={transport_anomaly_observed:"مؤشر اضطراب نقل",
+        single_continuity_jump:"قفزة واحدة",
+        no_anomaly_in_bounded_sample:"لم يظهر اضطراب في العينة",
+        no_payload_observed:"لم ترصد حزم",unknown:"غير معروف"};
+      (Array.isArray(shared.channels)?shared.channels:[]).slice(0,64).forEach(function(feed){
+        var tr=node("tr"),track=feed.diagnosis||{};
+        cell(tr,"قناة "+crossReading(true,feed.channel));
+        cell(tr,crossReading(true,feed.attachedReaders));
+        var codecs=Array.isArray(track.audioCodecs)?track.audioCodecs.slice(0,5).join(", "):"";
+        cell(tr,(sharedTrackStates[track.finding]||"غير معروف")+(codecs?" · "+codecs:""));
+        cell(tr,sharedContinuity[track.audioTransportState]||"غير معروف");
+        cell(tr,sharedContinuity[track.videoTransportState]||"غير معروف");
+        cell(tr,Number.isSafeInteger(track.lastObservedAgeSeconds)?
+          count(track.lastObservedAgeSeconds)+" ثانية":"لم تحدد");
+        sharedRows.appendChild(tr);
+      });
+      if(!sharedRows.children.length){
+        var emptyShared=node("tr"),td=cell(emptyShared,
+          shared.dataAvailable?"لا توجد تغذيات Relay نشطة الآن.":"البيانات غير متاحة.");
+        td.colSpan=6;sharedRows.appendChild(emptyShared);
+      }
       var rest=m.operatorRestream||{};
       var restStates={checking:"الفحص جار",unverified:"لم يفحص",
         first_bytes_verified:"نجح أول بايت",probe_failed:"فشل نقل الوسائط",
@@ -2762,12 +2811,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           item.scope==="mediamtx_current"?"محرك MediaMTX":
           item.scope==="edge_last_5m"?"بوابة Edge":
           item.scope==="operator_restream_recent"?"مسارات المشرف":
-          item.scope==="operator_restream_tracks"?"ترميزات المشرف":"بوابة Xtream");
+          item.scope==="operator_restream_tracks"?"ترميزات المشرف":
+          item.scope==="relay_input_sample"?"صوت Relay المشترك":"بوابة Xtream");
         cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":
           item.scope==="mediamtx_current"?"الحالة الحالية":
           item.scope==="edge_last_5m"?"آخر 5 دقائق":
           item.scope==="operator_restream_recent"?"آخر 5 دقائق":
-          item.scope==="operator_restream_tracks"?"آخر دقيقتين":"آخر ساعة");
+          item.scope==="operator_restream_tracks"?"آخر دقيقتين":
+          item.scope==="relay_input_sample"?"آخر دقيقتين":"آخر ساعة");
         cell(tr,crossReading(true,item.count));
         cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
         rows.appendChild(tr);
@@ -2790,6 +2841,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         "تعذر جمع مؤشرات الخدمات. لن نعرض صفر مشاهدين أو نعتبر المصادر تعمل دون دليل.");
       value("restream-health-summary","تعذر قراءة مؤشرات المشرف؛ لا توجد نتيجة موثوقة.");
       $("restream-health-rows").replaceChildren();
+      value("shared-relay-audio-summary","تعذر قراءة بيانات Relay الصوتية.");
+      $("shared-relay-audio-rows").replaceChildren();
       value("cross-service-check","تحقق من اتصال البوابة بالواجهة المحمية وسجلات السيرفر، دون زيادة طلبات البث.");
     }
   }
