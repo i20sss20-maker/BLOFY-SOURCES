@@ -127,6 +127,13 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   assert.match(html,/id="library-type"/);
   assert.match(html,/library-go/);
   assert.match(html,/organize/);
+  for(const id of ['issue-search','issue-status','stat-active','stat-expiring',
+    'stat-expired','expiry-alert','clients-rows','renew-dialog','customer-dialog',
+    'customer-name','customer-phone','issues-more'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  for(const action of ['relogin','renew','customer','clients'])
+    assert.match(html,new RegExp("request\\('"+action+"'"));
+  assert.doesNotMatch(html,/id="trial-phone"|id="trial-field"/);
   assert.doesNotMatch(html,/data-tab="sources"/);
   assert.doesNotMatch(html,/data-tab="restream"/);
   const sc=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
