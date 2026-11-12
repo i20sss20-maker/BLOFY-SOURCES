@@ -13,10 +13,15 @@ const sample={
   ok:true,readOnly:true,
   sourceCount:1,actualConcurrentViewersMeasured:false,
   accountCountsAvailable:true,unboundActiveGatewayAccounts:0,
+  directHttpTransferMeasurementAvailable:true,
+  directHttpTransferCountsReliable:true,
+  activeDirectHttpMediaTransfers:3,activeDirectLiveHttpTransfers:2,
   summary:{restricted:1,warning:0,unknown:0},
   sources:[{id:'4f03227d-c2ce-427c-a677-85ba1f9b725e',
     name:'Source 1',status:'online',enabled:true,
-    lastTestAt:1762960000000,sourceReportedMaxConnections:1,
+    lastTestAt:1762960000000,
+    activeDirectHttpMediaTransfers:3,activeDirectLiveHttpTransfers:2,
+    sourceReportedMaxConnections:1,
     sourceReportedActiveConnections:1,activeGatewayAccounts:27,
     level:'restricted',providerSnapshotFresh:true}]
 };
@@ -96,6 +101,11 @@ test('source capacity UI distinguishes active gateway subscriptions from live vi
   assert.match(html,/الاشتراكات الفعالة ليست عدد اتصالات البث/);
   assert.match(html,/data\.accountCountsAvailable/);
   assert.match(html,/sourceReportedMaxConnections/);
+  assert.match(html,/row\.activeDirectHttpMediaTransfers/);
+  assert.match(html,/row\.activeDirectLiveHttpTransfers/);
+  assert.match(html,/data\.directHttpTransferMeasurementAvailable/);
+  assert.match(html,/لا يمثل عدد المشاهدين المميزين/);
+  assert.match(html,/لا يشمل التحويل 307/);
   assert.match(html,/async function loadSourceCapacity/);
   const scripts=[...html.matchAll(/<script nonce="source-capacity-qa">([\s\S]*?)<\/script>/g)];
   assert.ok(scripts.length>0);
