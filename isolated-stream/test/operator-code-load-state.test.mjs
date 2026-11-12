@@ -37,3 +37,17 @@ test('code management actions require the authenticated same-origin operator API
  assert.match(page,/if\(!confirm\("نقل الكود/);
  assert.match(page,/if\(!confirm\("تجديد الكود/);
 });
+
+test('code reuse is explicitly admin-approved once per 10-minute window, without a new code',()=>{
+ const page=renderOperatorDashboard('csp-test');
+ assert.match(page,/↻ إعادة دخول/);
+ assert.match(page,/إعادة دخول بنفس الكود/);
+ assert.match(page,/10 دقائق/);
+ assert.match(page,/code-relogin/);
+ assert.match(page,/authorizeSameCodeRelogin/);
+ assert.match(page,/السماح بإعادة الدخول/);
+ assert.doesNotMatch(page,/adminReloginUntil.*localStorage/);
+ const script=page.match(/<script nonce="csp-test">([\s\S]*?)<\/script>/);
+ assert.ok(script);
+ assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
