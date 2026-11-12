@@ -9,6 +9,8 @@ import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
 import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
 import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs';
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
+import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
+import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -49,6 +51,7 @@ async function readAdminJson(req){
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',edgeObservabilityKey='',
+  playbackGroqApiKey='',
   liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
@@ -60,6 +63,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     relayStats:sharedRelayStats,
     restreamPaths:()=>liveSupervisor?.list?.()||null,
     mediaControl:control,edgeMetrics:()=>edgeClient.snapshot(),streamOps});
+  const smartPlayback=createSmartPlaybackMonitor({
+    collect:()=>crossService.snapshot()});
+  const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -155,6 +161,24 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       // requests, no source/edge probes and no subscriber information.
       void crossService.snapshot().then(report=>json(res,report.ok?200:503,report))
         .catch(()=>json(res,503,{ok:false,code:'cross_service_telemetry_unavailable'}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/playback-health'){
+      // Precomputed in-memory minute samples, no on-demand media or provider
+      // request, no customer identifiers or source credentials.
+      json(res,200,{...smartPlayback.snapshot(),ai:playbackAi.status()});
+      return true;
+    }
+    if(req.method==='POST'&&path==='/operator/api/playback-health/ai'){
+      if(req.headers['x-blofy-operator-action']!=='playback-ai-explain'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      // Optional explicit manual click only. Only anonymous, allowlisted
+      // metric codes go to Groq, never raw URLs/account/stream evidence.
+      void playbackAi.explain(smartPlayback.snapshot().assessment)
+        .then(result=>json(res,result.ok?200:result.code==='playback_ai_cooldown'||
+          result.code==='playback_ai_busy'?429:503,result))
+        .catch(()=>json(res,503,{ok:false,code:'playback_ai_unavailable'}));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/security'){
@@ -380,5 +404,6 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     json(res,404,{ok:false,code:'route_not_found'});return true;
   };
-  return {enabled,handle};
+  return {enabled,handle,smartPlayback,
+    start:()=>smartPlayback.start(),stop:()=>smartPlayback.stop()};
 }

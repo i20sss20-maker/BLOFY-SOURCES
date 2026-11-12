@@ -244,6 +244,29 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="smart-ops-history"></tbody></table></div>
 <p class="muted" id="smart-ops-last-check" aria-live="polite">هذه النتائج مؤشرات تشغيل مؤقتة. الصوت والصورة وحدود المصدر الحقيقي لم يتم التحقق منها هنا.</p>
 </div>
+<div class="panel" id="smart-playback-panel">
+ <div class="controls"><div><h3>🧠 BLOFY Smart Playback Health</h3>
+ <p class="muted">تشخيص شامل لأخطاء المصدر والنقل والصوت والصورة ومؤشرات الترميز. التحليل من بيانات السيرفر الموجودة، ولا يجري بثًا جديدًا أو يغيّر الأكواد أو يعيد تشغيل القنوات.</p></div>
+ <button class="btn secondary" id="playback-health-refresh" type="button">↻ قراءة تشخيص البث</button></div>
+ <p id="playback-health-status" class="muted" role="status" aria-live="polite">لم تصل بيانات الفحص بعد.</p>
+ <div class="inline">
+  <span class="pill">الملاحظات: <strong id="playback-health-issues">—</strong></span>
+  <span class="pill">مشاكل صوت/ترميز: <strong id="playback-health-audio">—</strong></span>
+  <span class="pill">مشاكل الصورة: <strong id="playback-health-video">—</strong></span>
+  <span class="pill">طبقات القياس الناقصة: <strong id="playback-health-missing">—</strong></span>
+  <span class="pill">عينات المراقبة: <strong id="playback-health-samples">—</strong></span>
+ </div>
+ <div class="tablewrap"><table><thead><tr><th>المشكلة المحتملة</th><th>الأهمية</th><th>الأحداث المرصودة</th><th>الخطوة المقترحة</th></tr></thead>
+ <tbody id="playback-health-incidents"></tbody></table></div>
+ <p class="muted" id="playback-health-coverage">المعلومات غير المكتملة لا تعني أن جميع القنوات تعمل. نتائج المصدر والتشفير لا تثبت فك الصوت والصورة على جهاز العميل.</p>
+ <h4>سجل الحالات (مراقبة دورية)</h4>
+ <div class="tablewrap"><table><thead><tr><th>الوقت</th><th>الحالة</th><th>الملاحظات</th></tr></thead><tbody id="playback-health-events"></tbody></table></div>
+ <div class="controls"><div><h4>🤖 شرح Groq AI (اختياري)</h4>
+ <p class="muted">عند الضغط فقط، يُرسل للذكاء الاصطناعي رموز مشاكل مجهولة وعددها، لا بيانات المشتركين ولا روابط المصادر. اقتراح فقط، ولا ينفذ أي إصلاح تلقائي.</p></div>
+ <button class="btn secondary" id="playback-health-ai-button" type="button" disabled>تفسير المشاكل بالذكاء الاصطناعي</button></div>
+ <p class="muted" id="playback-health-ai-result" role="status" aria-live="polite">لم يتم ربط مفتاح Groq بعد.</p>
+ <p class="muted">المرحلة الأخيرة للتحقق من الصوت والصورة تتطلب تجربة تشغيل على Android 9 وWindows. قد يكون السيرفر يستقبل صوتًا مع أن المشغل لا يفك الترميز؛ لا نحكم على ذلك من PMT وحده.</p>
+</div>
 <div class="panel" id="cross-service-panel">
   <div class="controls"><div><h3>🔎 تشخيص البث بين خدمات BLOFY — Cross-Service</h3>
   <p class="muted">تحليل مؤشرات التشغيل الموجودة أصلًا في بوابة Xtream ونظام المشاركة ومسارات إعادة البث الخاصة بالمشرف. لا يفتح اتصالًا جديدًا بالمصدر ولا يجمع بيانات هوية العملاء.</p></div>
@@ -2631,6 +2654,121 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   }
 
 
+
+  var smartHealthStates={partial:"القياس غير مكتمل · راجع الطبقات الناقصة",
+    attention:"توجد مشاكل مهمة تستحق المراجعة",
+    review:"توجد ملاحظات محدودة للمراجعة",
+    observed_no_flagged_events:"لا تظهر مشاكل في العينات المحدودة",
+    unknown:"غير معروف · القياسات غير متاحة"};
+  var smartSeverity={high:"مرتفعة",medium:"متوسطة",low:"منخفضة"};
+  var smartEventKinds={raised:"تم رصد مشكلة متكررة",resolved:"لم تعد تظهر في عينتين متتاليتين"};
+  var smartIssueNames={
+    provider_admission_refused:"رفض أو تحديد سعة المصدر",
+    provider_upstream_transient:"تعثر الاتصال بالمصدر",
+    gateway_media_interrupted:"انقطاع إرسال بعد البداية",
+    relay_provider_failures:"تعثر مصدر المشاركة منذ التشغيل",
+    relay_audio_ts_transport_anomaly:"اضطراب صوت Relay",
+    relay_video_ts_transport_anomaly:"اضطراب صورة Relay",
+    relay_pmt_audio_missing:"غياب إعلان PMT للصوت في Relay",
+    operator_audio_ts_transport_anomaly:"اضطراب صوت المشرف",
+    operator_video_ts_transport_anomaly:"اضطراب صورة المشرف",
+    operator_input_pmt_no_audio:"PMT بلا مسار صوت",
+    operator_audio_packets_not_seen_in_sample:"لم تُرصد حزم صوت في عينة",
+    operator_video_packets_not_seen_in_sample:"لم تُرصد حزم صورة في عينة",
+    relay_audio_codec_support_review:"مراجعة دعم ترميز Relay",
+    operator_audio_codec_support_review:"مراجعة ترميز مسار المشرف",
+    edge_gateway_5xx_last5m:"أخطاء Edge حديثة",
+    edge_gateway_denied_last5m:"طلبات Edge مرفوضة",
+    media_engine_auth_failure:"مصادقة MediaMTX",
+    media_engine_control_unavailable:"اتصال MediaMTX الداخلي",
+    operator_restream_recent_probe_failure:"فشل فحص أول بيانات فيديو",
+    gateway_catalog_missing:"محتوى مفقود من الفهرس",
+    gateway_auth_rejected:"رفض دخول بوابة Xtream"};
+  var playbackStatus=null;
+  function smartDate(t){
+    return Number.isSafeInteger(t)&&t>0?
+      new Date(t).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"}):"غير متاح";
+  }
+  async function loadPlaybackHealth(){
+    try{
+      var data=await api("playback-health");
+      playbackStatus=data;
+      var d=data.assessment||{},incidents=Array.isArray(d.incidents)?d.incidents:[],
+        coverage=d.coverage||{},missing=Array.isArray(d.missingLayers)?d.missingLayers:[];
+      value("playback-health-status",
+        "الحالة: "+(smartHealthStates[data.state]||"غير معروف")+
+        " · آخر فحص: "+smartDate(data.lastCollectedAt)+
+        (data.dataFresh?" · البيانات حديثة":" · البيانات قديمة أو غير مكتملة"));
+      value("playback-health-issues",data.dataFresh?count(incidents.length):"غير معروف");
+      value("playback-health-audio",data.dataFresh?
+        count(incidents.filter(x=>x.area==="audio"||x.area==="decoder").length):"—");
+      value("playback-health-video",data.dataFresh?
+        count(incidents.filter(x=>x.area==="video").length):"—");
+      value("playback-health-missing",data.dataFresh?count(missing.length):"غير معروف");
+      value("playback-health-samples",count(data.samplesSinceBoot));
+      var rows=$("playback-health-incidents");rows.replaceChildren();
+      incidents.slice(0,14).forEach(function(issue){
+        var tr=node("tr");
+        cell(tr,String(issue.title||smartIssueNames[issue.code]||"مشكلة غير معروفة"));
+        cell(tr,smartSeverity[issue.severity]||"غير محددة");
+        cell(tr,count(issue.count)+" · "+(issue.evidenceScope==="relay_since_boot"?
+          "منذ التشغيل":"ضمن مجال الرصد"));
+        cell(tr,String(issue.action||"يلزم فحص يدوي"));
+        rows.appendChild(tr);
+      });
+      if(!rows.children.length){
+        var tr=node("tr"),td=cell(tr,data.dataFresh&&missing.length===0?
+          "لم تظهر مشاكل في القياسات المحدودة. يلزم تأكيد تجربة الجهاز.":
+          "لا توجد نتيجة موثوقة كافية للحكم. راجع مصادر البيانات.");
+        td.colSpan=4;rows.appendChild(tr);
+      }
+      value("playback-health-coverage",
+        "طبقات القياس: "+
+        Object.entries(coverage).map(function(e){return e[0]+": "+(e[1]?"متاح":"غير متاح")}).join(" · ")+
+        " · الحوادث تتضمن عينات محدودة داخل سيرفر واحد، وقد لا تشمل كل العملاء. "+
+        (data.state==="partial"?"تحقق من مصدر البيانات الناقص قبل اعتبار العطل محلولًا.":"")+
+        " لا توجد تعديلات تلقائية على البث.");
+      var events=$("playback-health-events");events.replaceChildren();
+      (Array.isArray(data.events)?data.events:[]).slice(-12).reverse().forEach(function(event){
+        var tr=node("tr");
+        cell(tr,smartDate(event.at));
+        cell(tr,smartEventKinds[event.kind]||"تغير حالة");
+        cell(tr,smartIssueNames[event.code]||"مشكلة قياس عامة");
+        events.appendChild(tr);
+      });
+      if(!events.children.length){
+        var tr=node("tr"),td=cell(tr,"لا توجد حوادث مؤكدة بعد؛ يتطلب الرصد تكرار المشكلة في عينتين.");
+        td.colSpan=3;events.appendChild(tr);
+      }
+      var aiReady=data.ai?.configured===true&&data.dataFresh===true;
+      $("playback-health-ai-button").disabled=!aiReady;
+      if(!aiReady)value("playback-health-ai-result",data.ai?.configured?
+        "أكمل جمع بيانات المراقبة أولًا؛ زر Groq لا يعالج بيانات قديمة.":
+        "Groq AI غير مهيأ على السيرفر. التشخيص المحلي يعمل بدون مفتاح خارجي.");
+    }catch{
+      playbackStatus=null;
+      value("playback-health-status","تعذر جمع بيانات Smart Playback Health؛ الحالة غير معروفة");
+      $("playback-health-ai-button").disabled=true;
+      value("playback-health-coverage","فشل قراءة التشخيص. لا نعتبر صفر المشاهدين أو سلامة الصوت مثبتة دون قياس.");
+      $("playback-health-incidents").replaceChildren();
+      $("playback-health-events").replaceChildren();
+    }
+  }
+  $("playback-health-refresh").addEventListener("click",loadPlaybackHealth);
+  $("playback-health-ai-button").addEventListener("click",async function(){
+    if(!playbackStatus?.dataFresh)return;
+    this.disabled=true;value("playback-health-ai-result","جار الحصول على تفسير رموز المشاكل فقط...");
+    try{
+      var ai=await action("playback-health/ai","playback-ai-explain",{});
+      value("playback-health-ai-result","Groq (استشارة غير تنفيذية): "+
+        (ai.explanationAr||"لم يُرجع تفسيرًا")+
+        " · المشكلة الأهم: "+(smartIssueNames[ai.priorityCode]||"غير محددة")+
+        " · يتطلب التأكد من جهاز فعلي.");
+    }catch{
+      value("playback-health-ai-result",
+        "تعذر الحصول على تفسير Groq حاليًا. التشخيص المحلي يظل متاحًا؛ لا يُعاد الطلب تلقائيًا.");
+    }finally{this.disabled=false;}
+  });
   var crossReasons={
     provider_admission_refused:"رفض مصدر Xtream الاتصال 403/429/456. راجع صلاحية المصدر وحدوده ولا تكرر الطلب.",
     provider_upstream_transient:"تعثر نقل مؤقت من المصدر 408/5xx. راجع استقراره قبل تعديل الأكواد.",
@@ -3245,8 +3383,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);
 })();
 </script>
 </body></html>`;
