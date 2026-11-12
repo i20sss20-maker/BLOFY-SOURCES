@@ -48,12 +48,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     }});
   }
   function distributorAdminAction(id,kind,data={}){
-    if(!UUID.test(id)||!['credits','status','reset'].includes(kind))
+    if(!UUID.test(id)||!['credits','status','reset','limits'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_action_denied'}});
     return call(ROOT+'/distributors/'+id+'/'+kind,{method:'POST',body:data});
   }
   function distributorRequest(kind,body={}){
-    if(!['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin'].includes(kind))
+    if(!['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','activity','analytics','export'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
