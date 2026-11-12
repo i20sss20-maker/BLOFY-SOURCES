@@ -48,6 +48,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
+  streamOps=()=>({ok:false,code:'not_configured'}),
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
@@ -133,6 +134,13 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/smart-ops'){
+      // The operator auth gate above applies to this endpoint. This
+      // snapshot never triggers real media probes or changes subscriptions.
+      try{json(res,200,streamOps())}
+      catch{json(res,503,{ok:false,code:'smart_ops_unavailable'})}
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/security'){
       const relay=sharedRelayStats()||{};
