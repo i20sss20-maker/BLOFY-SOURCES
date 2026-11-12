@@ -1701,6 +1701,21 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("حد الإصدار",async function(){
+        var input=prompt("الحد الأقصى لإصدارات الموزّع خلال 24 ساعة (1–10000):",
+          String(d.dailyLimit||100));
+        if(input===null)return;
+        var limit=Number(input);
+        if(!Number.isSafeInteger(limit)||limit<1||limit>10000){
+          show("أدخل عددًا صحيحًا من 1 إلى 10000.",false);return;
+        }
+        if(!confirm("تحديد الحد اليومي لـ "+d.name+" على "+limit+" إصدار؟"))return;
+        try{
+          await action("distributors/"+d.id+"/limits","distributor-limits",
+            {dailyLimit:limit});
+          show("تم تغيير حد الإصدار اليومي.",true);await loadDistributors();
+        }catch(e){show("تعذر تحديث الحد: "+e.message,false)}
+      },"secondary"));
       actions.appendChild(button("كلمة مرور جديدة",async function(){
         if(!confirm("سيتم إلغاء جميع جلسات هذه اللوحة وتغيير كلمة مرور الموزع. متابعة؟"))return;
         try{
