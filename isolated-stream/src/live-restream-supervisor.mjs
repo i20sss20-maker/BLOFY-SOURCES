@@ -185,7 +185,7 @@ export function createLiveRestreamSupervisor({
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1,
-        audioMode,trackInspector:createTsAudioInspector()};
+        audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null};
       const config={source:'publisher',
         runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
@@ -243,6 +243,7 @@ export function createLiveRestreamSupervisor({
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,
       mediaTracks:row.trackInspector?.summary()||null,
+      trackInspectedAt:row.trackInspectedAt||null,
       audioMode:row.audioMode||'copy',
       onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
       preferredSource:row.preferredIndex===0?'primary':'backup',
@@ -334,20 +335,27 @@ export function createLiveRestreamSupervisor({
       if(sourceIndex!==row.preferredIndex){
         row.preferredIndex=sourceIndex;row.failovers++;row.lastError='restream_switched_source';
       }
+      // Reset PAT/PMT evidence on *each* authorized publisher session, even
+      // when switching to a backup. Never describe an old source's codec as
+      // belonging to the replacement. Does not read or alter media bytes.
+      row.trackInspector=createTsAudioInspector();
+      row.trackInspectedAt=null;
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'x-content-type-options':'nosniff'});
       const stream=Readable.from((async function*(){
         // Observe the existing MediaMTX publisher input stream. Packet bytes
         // are passed through unchanged, with no new connection to the source.
         let chunk=Buffer.from(active.first.value);
-        try{row.trackInspector?.push(chunk)}catch{row.trackInspector=null}
+        try{row.trackInspector?.push(chunk);row.trackInspectedAt=clock()}
+            catch{row.trackInspector=null;row.trackInspectedAt=null}
         yield chunk;
         while(true){
           const next=await active.reader.read();
           if(next.done)return;
           if(next.value?.byteLength){
             chunk=Buffer.from(next.value);
-            try{row.trackInspector?.push(chunk)}catch{row.trackInspector=null}
+            try{row.trackInspector?.push(chunk);row.trackInspectedAt=clock()}
+            catch{row.trackInspector=null;row.trackInspectedAt=null}
             yield chunk;
           }
         }
