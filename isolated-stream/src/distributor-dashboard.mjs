@@ -121,6 +121,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <span>التجارب <strong id="stat-trials">—</strong></span>
 <span>التجديدات <strong id="stat-renewals">—</strong></span>
 <span>التحويلات <strong id="stat-converted">—</strong></span>
+<span>الأكثر <strong id="stat-top-plan">—</strong></span>
 <span>الحد اليومي <strong id="stat-quota">—</strong></span></div>
 <div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
 <div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
@@ -343,6 +344,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     ['المدة الأساسية',item.days===1?(item.converted?'تجريبي محوّل':'تجريبي'):item.days+' يوم'],
     ['الخصم',Number(item.chargedCredits||0)+' شهر'],
     ['إعادة الدخول',item.reloginCount||0],
+    ['آخر إعادة دخول',dateOnly(item.lastReloginAt)],
     ['الجهاز',item.type==='app'?(item.canRelogin?'مرتبط':'—'):'—']
   ];
   for(const [label,value] of fields){
@@ -481,6 +483,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   text('stat-today',x.today||0);text('stat-month',x.month||0);
   text('stat-trials',x.trialsTotal||0);text('stat-renewals',x.renewalsMonth||0);
   text('stat-converted',x.convertedTrials||0);
+  const labels={1:'تجريبي',30:'شهر',90:'3 أشهر',180:'6 أشهر',365:'سنة'};
+  text('stat-top-plan',labels[x.topPlanDays]||'—');
   text('stat-quota',(x.issued24h||0)+' / '+(x.dailyLimit||100));
   const credits=Number($('credits').textContent)||0;
   $('balance-alert').hidden=credits>3;
@@ -489,12 +493,12 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function renderActivity(){
   const body=$('activity-rows');body.replaceChildren();
   const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
-    refund:'استرجاع',renew:'تجديد'};
+    refund:'استرجاع',renew:'تجديد',relogin:'إعادة دخول'};
   for(const item of activityRows){
    const tr=document.createElement('tr');
    tableCell(tr,types[item.type]||item.type);
    tableCell(tr,(item.delta>0?'+':'')+item.delta);
-   tableCell(tr,item.balanceAfter);
+   tableCell(tr,item.balanceAfter==null?'—':item.balanceAfter);
    tableCell(tr,dateOnly(item.date));
    body.appendChild(tr);
   }
