@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -72,7 +72,7 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 <button class="btn secondary" id="logout" type="button" hidden>خروج</button></header>
 <p class="notice" id="notice" role="status" hidden></p>
 <section class="card" id="login-panel"><h1>دخول الموزّع</h1>
-<p class="muted">هذه اللوحة لإصدار الاشتراكات فقط. إدارة المصادر والبث والعملاء والمكتبة غير متاحة للموزعين.</p>
+<p class="muted">اللوحة لإصدار الاشتراكات وتنظيم مكتبتك الخاصة فقط. إدارة المصادر والبث والمشتركين غير متاحة.</p>
 <form id="login-form" class="formgrid">
 <div class="field"><label for="username">اسم المستخدم</label><input id="username" autocomplete="username" required maxlength="32"></div>
 <div class="field"><label for="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" required></div>
@@ -80,33 +80,51 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 </form></section>
 <section id="workspace" hidden>
 <div class="card"><div class="row"><div><h1>توزيع BLOFY STREAM</h1>
-<p class="muted" id="who">—</p></div><span class="badge">صلاحيات إصدار فقط</span></div>
-<div class="stats"><div class="stat"><small>رصيد الأكواد/الحسابات</small><strong id="credits">—</strong></div>
+<p class="muted" id="who">—</p></div><span class="badge">إصدار ومكتبة خاصة فقط</span></div>
+<div class="stats"><div class="stat"><small>رصيد الأشهر</small><strong id="credits">—</strong></div>
 <div class="stat"><small>الإصدارات المسجلة</small><strong id="used">—</strong></div>
 <div class="stat"><small>حالة اللوحة</small><strong id="enabled">—</strong></div></div></div>
 <div class="card"><h2>استخراج اشتراك جديد</h2>
-<p class="muted">كل عملية تستهلك رصيدًا واحدًا. تستطيع اختيار كود تطبيق أو حساب Xtream. لا يمكنك الوصول إلى أي قسم إداري آخر.</p>
-<div class="chips"><button class="chip active" data-kind="app" type="button">كود BLOFY STREAM</button>
+<p class="muted">خصم الرصيد بالأشهر: شهر = 1، سنة = 12، وتجربة يوم مجانية. جميع الإصدارات مرتبطة بمصدر Xtream saleh فقط، وليس Xtream 2.</p>
+<p style="color:#8af0c9">● المصدر ثابت: saleh فقط — لا يمكن تغيير المصدر من هذه اللوحة.</p><div class="chips"><button class="chip active" data-kind="app" type="button">كود BLOFY STREAM</button>
 <button class="chip" data-kind="xtream" type="button">حساب Xtream</button></div>
 <form id="issue-form"><div class="formgrid">
 <div class="field"><label for="label">اسم الاشتراك</label><input id="label" maxlength="80" value="BLOFY STREAM" required></div>
 <div class="field"><label for="days">المدة</label><select id="days">
-<option value="30">شهر (30 يومًا)</option><option value="90">3 أشهر</option><option value="180">6 أشهر</option><option value="365">سنة</option><option value="730">سنتان</option></select></div>
-<div class="field"><label for="connections">الاتصالات</label><select id="connections">
+<option value="1">تجريبي يوم واحد — مجاني</option><option value="30" selected>شهر — 1 رصيد</option><option value="90">3 أشهر — 3</option><option value="180">6 أشهر — 6</option><option value="365">سنة — 12</option><option value="730">سنتان — 24</option></select></div>
+<div class="field" id="trial-field" hidden><label for="trial-phone">جوال عميل التجربة (مرة واحدة لكل عميل)</label><input id="trial-phone" type="tel" autocomplete="tel" placeholder="05xxxxxxxx" maxlength="19"></div><div class="field"><label for="connections">الاتصالات</label><select id="connections">
 <option value="1">اتصال واحد</option><option value="2">اتصالان</option><option value="3">3 اتصالات</option></select></div>
 </div><div class="row" style="margin-top:17px">
-<p class="muted" id="kind-help">كود يُدخل في تطبيق BLOFY STREAM. يبدأ عند التفعيل الأول.</p>
+<div><p class="muted" id="kind-help">كود يُدخل في تطبيق BLOFY STREAM. يبدأ عند التفعيل الأول.</p><p id="credit-cost" style="color:#8af0c9">الخصم: شهر واحد.</p></div>
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card"><div class="row"><h2>سجل إصداراتك</h2><button class="btn secondary" id="refresh" type="button">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>النوع</th><th>الوصف</th><th>المدة</th><th>الوقت</th><th>الحالة</th><th>التحكم</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>النوع</th><th>الوصف</th><th>المدة</th><th>خصم الأشهر</th><th>الوقت</th><th>الحالة</th><th>التحكم</th></tr></thead>
 <tbody id="items"></tbody></table></div></div>
+<div class="card" id="library-panel"><div class="row"><div><h2>مكتبة saleh · تنظيم خاص بالموزع</h2>
+<p class="muted">تنظيم أسماء العرض والمجموعات وترتيب عناصر saleh في لوحة الموزع فقط، دون تعديل مكتبة المشتركين أو السيرفر.</p></div>
+<span class="badge">saleh فقط</span></div>
+<div class="formgrid"><div class="field"><label for="library-type">نوع المحتوى</label><select id="library-type">
+<option value="live">القنوات</option><option value="movie" selected>الأفلام</option><option value="series">المسلسلات</option></select></div>
+<div class="field"><label for="library-search">بحث</label><input id="library-search" type="search" maxlength="85" placeholder="ابحث عن عنوان..."></div>
+<div class="field"><label>&nbsp;</label><button id="library-go" class="btn secondary" type="button">عرض المحتوى</button></div></div>
+<div class="tablewrap" style="margin-top:15px"><table><thead><tr><th>العنوان</th><th>التصنيف</th><th>مجموعتي</th><th>ترتيب</th><th>العرض</th><th>تحكم</th></tr></thead><tbody id="library-rows"></tbody></table></div>
+<div class="row" style="margin-top:12px"><span id="library-count" class="muted">—</span><button id="library-more" class="btn secondary" type="button" hidden>المزيد</button></div></div>
 </section></main>
 <script nonce="__NONCE__">
 "use strict";
 (function(){
  const $=id=>document.getElementById(id),kindButtons=[...document.querySelectorAll('[data-kind]')];
- let currentKind='app',inflightRequest=null;
+ let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
+ const COST={1:0,30:1,90:3,180:6,365:12,730:24};
+ const currentCost=()=>COST[Number($('days').value)]??1;
+ function updateCost(){
+  const n=currentCost();$('trial-field').hidden=n!==0;
+  $('trial-phone').required=n===0;
+  text('credit-cost',n===0?'التجربة مجانية: 0 رصيد، حد 5 في اليوم وواحدة لكل جوال.':
+    'الخصم: '+n+' من رصيد الأشهر.');
+ }
+ $('days').addEventListener('change',updateCost);updateCost();
  function text(id,v){$(id).textContent=String(v??"—")}
  function msg(value,ok){let e=$("notice");e.hidden=false;e.textContent=value;e.className="notice "+(ok?"ok":"");}
  async function request(method,data){
@@ -148,10 +166,10 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
  async function loadItems(){
   const d=await request('list');const body=$("items");body.replaceChildren();
   if(!(d.items||[]).length){const tr=document.createElement('tr'),td=document.createElement('td');
-    td.colSpan=6;td.textContent="لم يتم إصدار أي اشتراكات بعد";tr.appendChild(td);body.appendChild(tr);return}
+    td.colSpan=7;td.textContent="لم يتم إصدار أي اشتراكات بعد";tr.appendChild(td);body.appendChild(tr);return}
   for(const it of d.items){
    const tr=document.createElement('tr');
-   const fields=[it.type==='app'?'كود التطبيق':'Xtream',it.label,it.days+' يوم',
+   const fields=[it.type==='app'?'كود التطبيق':'Xtream',it.label,it.days+' يوم',String(it.chargedCredits??1),
      new Date(it.createdAt).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'}),
      it.status==='done'?'تم':it.status==='review'?'يحتاج مراجعة':it.status==='pending'?'جارٍ':'لم يتم'];
    for(const v of fields){const td=document.createElement('td');td.textContent=v;tr.appendChild(td)}
@@ -185,12 +203,13 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
   finally{btn.disabled=false}
  });
  $('issue-form').addEventListener('submit',async e=>{
-  e.preventDefault();const btn=$('issue-button');if(!confirm("استخراج اشتراك جديد مقابل رصيد واحد؟"))return;
+  e.preventDefault();const btn=$('issue-button');const cost=currentCost();
+  if(!confirm(cost===0?'إصدار تجربة مجانية يومًا واحدًا؟':'إصدار اشتراك من saleh وخصم '+cost+' من رصيد الأشهر؟'))return;
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
    const d=await request('issue',{kind:currentKind,label:$('label').value,
-    durationDays:Number($('days').value),maxConnections:Number($('connections').value),requestId});
-   inflightRequest=null;showIssue(d);msg("تم استخراج الاشتراك وخصم رصيد واحد",true);
+    durationDays:Number($('days').value),maxConnections:Number($('connections').value),trialPhone:cost===0?$('trial-phone').value:'',requestId});
+   inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
    await profile();await loadItems();
   }catch(err){
    msg('تعذر الإصدار: '+err.message+
@@ -198,6 +217,52 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
    if(err.message!=='distributor_issuance_needs_review'&&
       err.message!=='distributor_request_already_processing')inflightRequest=null;
   }finally{btn.disabled=false}
+ });
+
+ async function loadLibrary(more=false){
+  const type=$('library-type').value,q=$('library-search').value.trim();
+  if(!more)libraryOffset=0;
+  const d=await request('library',{type,q,offset:libraryOffset});
+  const body=$('library-rows');if(!more)body.replaceChildren();
+  for(const item of d.items||[]){
+   const tr=document.createElement('tr');
+   for(const val of [item.title||item.name,item.categoryName,item.group||'—',
+     item.sortOrder||0,item.hidden?'مخفي':'ظاهر']){
+    const td=document.createElement('td');td.textContent=String(val??'—');tr.appendChild(td);
+   }
+   const cell=document.createElement('td'),btn=document.createElement('button');
+   btn.type='button';btn.className='btn secondary mini';btn.textContent='تنظيم';
+   btn.addEventListener('click',async()=>{
+    const group=prompt('المجموعة الخاصة بهذا العنصر',item.group||'');if(group===null)return;
+    const title=prompt('اسم العرض (فارغ = الأصلي)',item.title||'');if(title===null)return;
+    const order=prompt('ترتيب العنصر: رقم 0 إلى 9999',String(item.sortOrder||0));
+    if(order===null)return;
+    const n=Number(order);if(!Number.isSafeInteger(n)||n<0||n>9999){
+     msg('الترتيب غير صحيح',false);return;
+    }
+    const hidden=confirm('هل تريد إخفاء العنصر من قائمتك الخاصة؟ (إلغاء = ظاهر)');
+    btn.disabled=true;
+    try{
+     await request('organize',{type:item.type,itemId:item.id,
+      group:group.slice(0,60),title:title.slice(0,120),sortOrder:n,hidden});
+     msg('تم تنظيم العنصر في مكتبتك الخاصة',true);
+     await loadLibrary(false);
+    }catch(e){msg('تعذر تنظيم المكتبة: '+e.message,false)}
+    finally{btn.disabled=false}
+   });
+   cell.appendChild(btn);tr.appendChild(cell);body.appendChild(tr);
+  }
+  libraryNext=d.nextOffset;libraryOffset=libraryNext??libraryOffset;
+  $('library-more').hidden=libraryNext==null;
+  text('library-count','المعروض '+body.children.length+' عنوانًا من saleh');
+  if(!body.children.length){const tr=document.createElement('tr'),td=document.createElement('td');
+   td.colSpan=6;td.textContent='لا توجد عناصر مطابقة';tr.appendChild(td);body.appendChild(tr)}
+ }
+ $('library-go').addEventListener('click',()=>loadLibrary().catch(e=>msg(e.message,false)));
+ $('library-more').addEventListener('click',()=>loadLibrary(true).catch(e=>msg(e.message,false)));
+ $('library-type').addEventListener('change',()=>loadLibrary().catch(e=>msg(e.message,false)));
+ $('library-search').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();loadLibrary().catch(x=>msg(x.message,false))}
  });
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
@@ -267,8 +332,11 @@ export function createDistributorDashboard({bridge,log=console}={}){
    if(!sessionToken)return okJson(res,401,{ok:false,code:'distributor_unauthorized'});
    const allowed=action==='issue'?{
       kind:data.kind,label:data.label,durationDays:data.durationDays,
-      maxConnections:data.maxConnections,requestId:data.requestId}:
-     action==='reveal'?{issueId:data.issueId}:{};
+      maxConnections:data.maxConnections,trialPhone:data.trialPhone,requestId:data.requestId}:
+     action==='reveal'?{issueId:data.issueId}:
+     action==='library'?{type:data.type,q:data.q,offset:data.offset}:
+     action==='organize'?{type:data.type,itemId:data.itemId,group:data.group,
+       title:data.title,sortOrder:data.sortOrder,hidden:data.hidden}:{};
    const result=await bridge.distributorRequest(action,{sessionToken,...allowed});
    okJson(res,result.status,result.body);
   }).catch(error=>{
