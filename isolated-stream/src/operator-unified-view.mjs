@@ -390,7 +390,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
 <div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
 <section class="view" id="page-codes">
-<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div></div>
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div>
+<a class="btn secondary sm" href="https://blofyplayer.com/sources-admin#xtream" target="_blank" rel="noopener noreferrer">إدارة وتجديد الكود من الموقع الرئيسي ↗</a></div>
+<p class="muted" id="codes-load-state" role="status" aria-live="polite" hidden></p>
 <div class="cards" style="margin-bottom:15px">
 <div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
 <div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
@@ -1548,6 +1550,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }catch(e){show("تعذر نسخ الكود: "+e.message,false)}
   }
   async function loadCodes(more){
+    var indicator=$("codes-load-state");
+    if(indicator){indicator.hidden=false;indicator.textContent="جارٍ جلب أكواد الاشتراكات من النظام الرئيسي…"}
     try{
       var offset=more?state.codesNext||0:0;
       var d=await api("codes?offset="+offset);
@@ -1557,6 +1561,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
       value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
       renderCodes();
+      if(indicator){
+        indicator.textContent="تم تحميل "+count(state.codes.length)+" كودًا. يمكنك عرض بقية الأكواد من زر المزيد.";
+        indicator.hidden=false;
+      }
       void api("sales-summary").then(function(summary){
         value("codes-sold-count",count(summary.sold));
         value("codes-sales-sar",
@@ -1565,7 +1573,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         value("codes-expiring",count(summary.expiring_soon));
         value("codes-transfers",count(summary.transfers));
       }).catch(function(){ /* code ledger remains available if sales summary fails */ });
-    }catch(e){show("تعذر تحميل الأكواد: "+e.message,false)}
+    }catch(e){
+      if(indicator){
+        indicator.hidden=false;
+        indicator.textContent="تعذر تحميل قائمة الأكواد من السيرفر الرئيسي ("+
+          String(e?.message||"خطأ غير معروف").slice(0,65)+
+          "). هذا لا يعني حذف الأكواد. اضغط تحديث، أو افتح إدارة وتجديد الكود من الموقع الرئيسي.";
+      }
+      show("تعذر تحميل الأكواد: "+e.message,false);
+    }
   }
   function renderCodes(){
     var tb=$("codes-list");tb.replaceChildren();
