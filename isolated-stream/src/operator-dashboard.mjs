@@ -62,7 +62,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   }
   const platformAudit=createPlatformSystemAudit({
     portal,engineStatus,mediaControl:control,autoHealth,
-    relayStats:sharedRelayStats
+    liveSupervisor,relayStats:sharedRelayStats
   });
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
 
