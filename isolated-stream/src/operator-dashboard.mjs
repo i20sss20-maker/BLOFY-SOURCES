@@ -5,6 +5,7 @@ import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
+import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -60,9 +61,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }catch{return {reachable:false,httpStatus:null}}
     finally{clearTimeout(timeout)}
   }
+  const releaseInspector=createStreamReleaseInspector({fetchImpl});
   const platformAudit=createPlatformSystemAudit({
     portal,engineStatus,mediaControl:control,autoHealth,
-    liveSupervisor,relayStats:sharedRelayStats
+    liveSupervisor,relayStats:sharedRelayStats,releaseInspector
   });
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
 
@@ -109,6 +111,11 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/stream-release'){
+      void releaseInspector.inspect().then(report=>json(res,200,report))
+        .catch(()=>json(res,503,{ok:false,code:'stream_release_inspector_unavailable'}));
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/full-audit'){
       const sourceId=uri.searchParams.get('sourceId')||'';
