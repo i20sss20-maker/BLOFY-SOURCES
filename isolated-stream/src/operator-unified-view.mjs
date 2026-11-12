@@ -40,6 +40,16 @@ input,select{border:1px solid #405a7e;background:#0c1b2e;color:#edf4ff;border-ra
 .code-tile{padding:12px;background:#0c1b32;border:1px solid #3d5270;border-radius:11px;overflow-wrap:anywhere}
 .code-tile small{display:block;color:#aebdd5}.code-tile strong{display:block;margin-top:3px}
 .code-detail{padding:14px;border-radius:13px;border:1px solid #635588;background:#0b182f;margin-top:14px}
+#codes-dialog{width:min(94vw,860px);max-height:min(92vh,970px);overflow-y:auto;
+ background:linear-gradient(145deg,#17243f,#0c142a);color:#f1f4ff;
+ border:1px solid #8870bd;border-radius:19px;padding:clamp(14px,2vw,25px);box-shadow:0 28px 95px #000b}
+#codes-dialog::backdrop{background:#01050cd6;backdrop-filter:blur(4px)}
+#codes-dialog .code-detail{margin:0}
+#codes-dialog .code-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#codes-dialog .actions{margin-top:15px}
+#codes-dialog .code-renew-row{margin-top:18px;padding-top:15px;border-top:1px solid #344464}
+@media(max-width:740px){#codes-dialog{width:97vw;max-height:95vh;padding:14px;border-radius:14px}
+#codes-dialog .code-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .code-renew-row{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-top:12px}
 .code-renew-row .field{width:180px}.code-renew-row .btn{flex:0 0 auto}
 @media(max-width:740px){.code-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.code-renew-row .field{width:100%}}
@@ -400,7 +410,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
 <section class="view" id="page-codes">
 <div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div>
-<a class="btn secondary sm" href="https://blofyplayer.com/sources-admin#xtream" target="_blank" rel="noopener noreferrer">إدارة وتجديد الكود من الموقع الرئيسي ↗</a></div>
+<span class="pill good">إصدار الكود والتجديد ونقل الجهاز من هنا فقط</span></div>
 <p class="muted" id="codes-load-state" role="status" aria-live="polite" hidden></p>
 <div class="cards" style="margin-bottom:15px">
 <div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
@@ -445,8 +455,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <option value="new">الأحدث</option><option value="expiry">الأقرب للانتهاء</option><option value="old">الأقدم</option></select></div>
 </div>
 <p class="muted">البحث في الأكواد المحمّلة حاليًا. اضغط «المزيد من الأكواد» لجلب البقية. الأكواد المخفية القديمة يُبحث عنها بالأرقام الظاهرة.</p>
-<div id="codes-selected" class="code-detail" hidden aria-live="polite"></div>
 </div>
+<dialog id="codes-dialog" aria-labelledby="codes-dialog-title">
+<div class="controls"><h3 id="codes-dialog-title">مميزات الكود وإدارة الاشتراك</h3>
+<button class="btn secondary sm" id="codes-dialog-close" type="button">إغلاق ×</button></div>
+<p id="codes-dialog-status" class="status" role="status" hidden></p>
+<div id="codes-selected" class="code-detail" aria-live="polite"></div>
+</dialog>
 <div class="panel"><div class="controls"><h3>سجل الأكواد</h3>
 <div class="actions"><button class="btn secondary sm" id="codes-copy-visible" type="button">نسخ الأكواد القابلة للاسترجاع</button><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div></div>
 <p class="muted">زر النسخ ثابت لكل كود جديد مشفّر في الخادم، حتى بعد تحديث الصفحة. الأكواد القديمة التي لم تُحفظ مشفّرة لا يمكن استرجاعها. لا تنسخ الأكواد الملغاة.</p>
@@ -596,7 +611,6 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       status.appendChild(node("div",s.enabled?"مفعل":"موقوف","meta"));cell(row,status);
       cell(row,count(s.counts.live)+" قناة · "+count(s.counts.movie)+" فيلم · "+count(s.counts.series)+" مسلسل");
       var controls=node("div",undefined,"actions");
-      controls.appendChild(button("إدارة الكود",function(){manageCode(code.id)},"secondary sm"));
       controls.appendChild(button("اختبار",function(){doSource(s.id,"test")}));
       controls.appendChild(button("مزامنة",function(){doSource(s.id,"sync")}));
       controls.appendChild(button("فحص فيديو",function(){doSource(s.id,"probe",{type:"live"})}));
@@ -1562,6 +1576,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   // localStorage, sessionStorage, URL parameters or the shared code ledger.
   var recentlyIssuedCodes=new Map();
   var selectedCodeId="";
+  var selectedCodeSnapshot=null;
   async function copyCode(code){
     var key=String(code.id||"");
     if(!code.copyAvailable&&!recentlyIssuedCodes.has(key)){
@@ -1605,7 +1620,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         indicator.hidden=false;
         indicator.textContent="تعذر تحميل قائمة الأكواد من السيرفر الرئيسي ("+
           String(e?.message||"خطأ غير معروف").slice(0,65)+
-          "). هذا لا يعني حذف الأكواد. اضغط تحديث، أو افتح إدارة وتجديد الكود من الموقع الرئيسي.";
+          "). هذا لا يعني حذف الأكواد. اضغط تحديث هنا؛ الاشتراكات محفوظة في النظام الرئيسي.";
       }
       show("تعذر تحميل الأكواد: "+e.message,false);
     }
@@ -1642,15 +1657,59 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     item.appendChild(node("small",label));item.appendChild(node("strong",text));
     grid.appendChild(item);
   }
-  function manageCode(id){
+  function manageCode(id,focusRenew){
     selectedCodeId=String(id);
+    var record=state.codes.find(function(x){return String(x.id)===selectedCodeId});
+    if(record)selectedCodeSnapshot=record;
+    $("codes-dialog-status").hidden=true;
     renderCodeDetail();
-    $("codes-manager").scrollIntoView({behavior:"smooth",block:"start"});
-    $("codes-manager").focus({preventScroll:true});
+    var dlg=$("codes-dialog");
+    if(typeof dlg.showModal==="function"&&!dlg.open)dlg.showModal();
+    else if(!dlg.open)dlg.setAttribute("open","");
+    if(focusRenew)setTimeout(function(){
+      var input=$("selected-code-days");if(input)input.focus();
+    },0);
+  }
+  $("codes-dialog-close").addEventListener("click",function(){
+    var dlg=$("codes-dialog");if(typeof dlg.close==="function")dlg.close();
+    else dlg.removeAttribute("open");
+  });
+  function codeDialogMessage(message,ok){
+    var n=$("codes-dialog-status");n.hidden=false;n.textContent=message;
+    n.className="status "+(ok?"good":"bad");
+  }
+
+  async function transferCode(c,btn){
+    if(c.status!=="redeemed"||c.channel!=="app"||c.deviceTransferPending||
+      Number(c.expiresAt||0)<=Date.now()){
+      show("النقل متاح فقط لكود تطبيق مفعل وساري ومرتبط بجهاز. جدّد المنتهي أولًا.",false);
+      return;
+    }
+    if(!confirm("نقل الكود "+(c.codeHint||"")+" لجهاز جديد؟ سيتم إلغاء وصول الجهاز والكود السابق فورًا، ويبقى تاريخ الانتهاء كما هو. لا يمكن التراجع."))return;
+    btn.disabled=true;
+    try{
+      var result=await action("code/"+c.id+"/transfer","code-transfer",{});
+      var fresh=String(result.code||"");
+      if(fresh)recentlyIssuedCodes.set(String(c.id),fresh);
+      if(result.item)selectedCodeSnapshot=result.item;
+      selectedCodeId=String(c.id);
+      await loadCodes(false);
+      manageCode(c.id);
+      var note=fresh?
+        "تم نقل الجهاز بنجاح. انسخ الكود الجديد أدناه وأرسله للعميل؛ القديم لم يعد صالحًا. مدة الاشتراك لم تتغير.":
+        "تم نقل الجهاز. لم يظهر الكود في الاستجابة؛ استخدم نسخ الكود من تفاصيل الاشتراك.";
+      codeDialogMessage(note,Boolean(fresh));
+      show("تم إلغاء الكود السابق ونقل الجهاز إلى كود جديد دون تجديد المدة.",true);
+    }catch(e){
+      if($("codes-dialog").open)codeDialogMessage("تعذر نقل الجهاز: "+e.message,false);
+      show("تعذر نقل الجهاز: "+e.message,false);
+    }finally{btn.disabled=false}
   }
   function renderCodeDetail(){
     var box=$("codes-selected");
     var c=state.codes.find(function(x){return String(x.id)===selectedCodeId});
+    if(c)selectedCodeSnapshot=c;
+    else c=selectedCodeSnapshot&&String(selectedCodeSnapshot.id)===selectedCodeId?selectedCodeSnapshot:null;
     box.replaceChildren();box.hidden=!c;
     if(!c)return;
     var phase=codePhase(c);
@@ -1665,6 +1724,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     detailValue(grid,"مدة الكود",String(c.durationDays)+" يوم");
     detailValue(grid,"أقصى الاتصالات",String(c.maxConnections||1));
     detailValue(grid,"الأيام المضافة",String(c.extendedDays||0));
+    detailValue(grid,"مميزات الكود",c.channel==="app"?"دخول للتطبيق بكود · هوست داخلي":"حساب Xtream خارجي");
     detailValue(grid,"مرات نقل الجهاز",String(c.transferCount||0));
     detailValue(grid,"العميل",c.buyerName||"غير مسجل");
     if(c.buyerPhone)detailValue(grid,"الجوال",c.buyerPhone);
@@ -1696,30 +1756,18 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         renew.disabled=true;
         try{
           var d=await action("code/"+c.id+"/extend","code-extend",{days:countDays});
+          if(d.item)selectedCodeSnapshot=d.item;
+          codeDialogMessage("نجح تجديد الصلاحية، وينتهي الاشتراك بتاريخ "+dateTime(d.item?.expiresAt),true);
           show("تم التجديد. الصلاحية حتى "+dateTime(d.item?.expiresAt),true);
           await loadCodes(false);await loadAccounts(false);
-        }catch(e){show("تعذر تجديد الاشتراك: "+e.message,false)}
+        }catch(e){codeDialogMessage("فشل التجديد: "+e.message,false);
+          show("تعذر تجديد الاشتراك: "+e.message,false)}
         finally{renew.disabled=false}
       });
       row.appendChild(renew);box.appendChild(row);
       if(c.channel==="app"&&!c.deviceTransferPending&&Number(c.expiresAt||0)>Date.now()){
-        actions.appendChild(button("نقل الجهاز",async function(){
-          if(!confirm("سيصبح الكود القديم وجهازه غير صالحين فورًا، وسينشأ كود جديد بنفس تاريخ انتهاء الاشتراك. متابعة؟"))return;
-          this.disabled=true;
-          try{
-            var d=await action("code/"+c.id+"/transfer","code-transfer",{});
-            var fresh=String(d.code||"");
-            if(fresh)recentlyIssuedCodes.set(String(c.id),fresh);
-            var target=$("codes-issued");target.hidden=false;target.replaceChildren();
-            target.appendChild(node("strong","تم نقل الجهاز. الكود القديم لم يعد صالحًا."));
-            if(fresh)attachCopy(target,"كود الجهاز الجديد",fresh);
-            else target.appendChild(node("p","انسخ الكود البديل من سجل الأكواد؛ لم يصل الرقم الكامل في الاستجابة.","warn"));
-            attachCopy(target,"تاريخ الانتهاء",dateTime(d.expiresAt));
-            target.scrollIntoView({behavior:"smooth",block:"center"});
-            show("تم نقل الاشتراك دون بدء مدة جديدة.",true);
-            await loadCodes(false);
-          }catch(e){show("تعذر نقل الجهاز: "+e.message,false)}
-          finally{this.disabled=false}
+        actions.appendChild(button("نقل الجهاز",function(){
+          void transferCode(c,this);
         },"danger"));
       }else if(c.deviceTransferPending){
         box.appendChild(node("p","تم إصدار كود نقل سابقًا؛ انسخه من السجل وفعّله بالجهاز الجديد قبل طلب نقل آخر.","warn"));
@@ -1758,8 +1806,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var label=code.status==="unused"?"بانتظار التفعيل":
         code.status==="revoked"?"ملغى":code.deviceTransferPending?"بانتظار الجهاز":
         Number(code.expiresAt||0)<=Date.now()?"منتهي الصلاحية":"ساري";
-      var status=node("strong",label,code.status==="redeemed"?"ok":
-        code.status==="unused"?"warn":"fail");cell(tr,status);
+      var status=node("strong",label,codePhase(code)==="active"?"ok":
+        codePhase(code)==="unused"||codePhase(code)==="pending"?"warn":"fail");cell(tr,status);
       var sale=code.soldAt?(String((code.salePriceHalalas||0)/100)+" ر.س"):
         "غير مسجل";
       var buyer=node("div");
@@ -1785,36 +1833,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           });show("تم تسجيل البيع اليدوي.",true);
             await loadCodes(false)}catch(e){show("تعذر تسجيل البيع: "+e.message,false)}
         }));
+      controls.appendChild(button("المميزات وإدارة الكود",function(){manageCode(code.id)},"secondary sm"));
       if(code.status==="redeemed")
-        controls.appendChild(button("تمديد",async function(){
-          var input=prompt("كم يومًا تضيف إلى الاشتراك؟ (1 إلى 730):","30");
-          if(input===null)return;
-          var days=Number(input);
-          if(!Number.isInteger(days)||days<1||days>730){
-            show("اختر مدة من يوم إلى 730 يومًا.",false);return;
-          }
-          if(!confirm("سيتم تمديد تاريخ انتهاء الاشتراك الحالي، دون بدء اشتراك جديد."))return;
-          try{
-            var d=await action("code/"+code.id+"/extend","code-extend",{days});
-            show("تم التمديد إلى "+dateTime(d.item?.expiresAt),true);
-            await loadCodes(false);await loadAccounts(false)
-          }catch(e){show("تعذر التمديد: "+e.message,false)}
-        }));
-      if(code.status==="redeemed"&&code.channel==="app"&&!code.deviceTransferPending)
-        controls.appendChild(button("نقل الجهاز",async function(){
-          if(!confirm("سيتم إلغاء وصول الجهاز الحالي فورًا، وإنشاء كود جديد للجهاز الآخر. المدة المتبقية لا تتغير. هل تتابع؟"))return;
-          try{
-            var d=await action("code/"+code.id+"/transfer","code-transfer",{});
-            if(d.code)recentlyIssuedCodes.set(String(code.id),String(d.code));
-            var target=$("codes-issued");target.hidden=false;target.replaceChildren();
-            target.appendChild(node("strong","كود استعادة الجهاز الجديد — يظهر مرة واحدة"));
-            attachCopy(target,"الكود الجديد",d.code);
-            attachCopy(target,"ينتهي الاشتراك في",dateTime(d.expiresAt));
-            target.scrollIntoView({behavior:"smooth",block:"center"});
-            show("تم إلغاء جلسة الجهاز السابق. أعطِ العميل الكود الجديد.",true);
-            await loadCodes(false);
-          }catch(e){show("تعذر نقل الجهاز: "+e.message,false)}
-        },"danger"));
+        controls.appendChild(button(codePhase(code)==="expired"?"إعادة صلاحية":"تجديد الصلاحية",
+          function(){manageCode(code.id,true)},"secondary sm"));
+      if(code.status==="redeemed"&&code.channel==="app"&&!code.deviceTransferPending&&
+        Number(code.expiresAt||0)>Date.now())
+        controls.appendChild(button("نقل الجهاز",function(){void transferCode(code,this)},"danger"));
       if(code.status==="unused")
         controls.appendChild(button("إلغاء",async function(){
           if(!confirm("إلغاء هذا الكود غير المفعّل؟ لن يمكن استخدامه بعدها."))return;
