@@ -224,7 +224,13 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
   if(!more)libraryOffset=0;
   const d=await request('library',{type,q,offset:libraryOffset});
   const body=$('library-rows');if(!more)body.replaceChildren();
-  for(const item of d.items||[]){
+  const items=(d.items||[]).slice().sort((a,b)=>{
+    const na=Number(a.sortOrder)>0?Number(a.sortOrder):Number.MAX_SAFE_INTEGER;
+    const nb=Number(b.sortOrder)>0?Number(b.sortOrder):Number.MAX_SAFE_INTEGER;
+    return na-nb||String(a.group||'').localeCompare(String(b.group||''),'ar')||
+      String(a.name||'').localeCompare(String(b.name||''),'ar');
+  });
+  for(const item of items){
    const tr=document.createElement('tr');
    for(const val of [item.title||item.name,item.categoryName,item.group||'—',
      item.sortOrder||0,item.hidden?'مخفي':'ظاهر']){
