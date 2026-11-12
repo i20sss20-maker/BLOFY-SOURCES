@@ -526,6 +526,17 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
 <button class="btn secondary" id="diagnostic-media">فحص الوسائط</button>
 </div><pre id="diagnostic-output" class="log">نتائج فحوص الوسائط ستظهر هنا.</pre></div>
+<div class="panel" id="series-episode-diagnostic-panel">
+<div class="controls"><h3>فحص خريطة حلقات مسلسل</h3>
+<button class="btn secondary sm" id="diagnostic-episode-map-run" type="button">قراءة الحلقات</button></div>
+<p class="muted">يعرض الحلقات المربوطة بالمصدر المحدد دون تشغيل أو حذف. الحد 120 حلقة.</p>
+<div class="inline"><label for="diagnostic-series-id">معرف المسلسل</label>
+<input id="diagnostic-series-id" maxlength="100" placeholder="معرف المسلسل من المصدر" dir="ltr">
+</div>
+<p id="diagnostic-episode-map-status" class="muted" role="status">لم يبدأ الفحص</p>
+<div class="tablewrap"><table><thead><tr><th>الرقم</th><th>معرف الحلقة</th><th>امتداد التشغيل</th></tr></thead>
+<tbody id="diagnostic-episode-map-results"></tbody></table></div>
+</div>
 <div class="panel"><div class="controls"><h3>العناصر التي أعاد المزود لها 404</h3>
 <button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث الحالات</button></div>
 <p class="muted">إحصاءات مسجلة من فحوص التشغيل الحقيقية. عدم وجود سجل لا يعني أن جميع عناصر المكتبة تعمل.</p>
@@ -684,6 +695,33 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   }
 
 
+
+ async function loadEpisodeMap(){
+  var sourceId=$("diagnostic-source").value,seriesId=$("diagnostic-series-id").value.trim();
+  if(!sourceId){show("اختر مصدرًا أولًا",false);return}
+  if(!/^[A-Za-z0-9._-]{1,100}$/.test(seriesId)){
+    show("أدخل معرف مسلسل صحيحًا من المصدر",false);return;
+  }
+  var button=$("diagnostic-episode-map-run"),table=$("diagnostic-episode-map-results");
+  button.disabled=true;value("diagnostic-episode-map-status","جارٍ جلب الحلقات...");
+  try{
+    var result=await api("episodes?"+new URLSearchParams({sourceId:sourceId,seriesId:seriesId}));
+    var items=Array.isArray(result.items)?result.items:[];
+    table.replaceChildren();
+    items.slice(0,120).forEach(function(item,index){
+      var tr=node("tr");cell(tr,String(index+1));
+      cell(tr,String(item.id||"—").slice(0,110));
+      cell(tr,String(item.extension||"—").slice(0,12));
+      table.appendChild(tr);
+    });
+    value("diagnostic-episode-map-status",items.length+
+      " حلقة مربوطة. هذا فحص للفهرس فقط ولا يثبت تشغيل كل حلقة."+
+      (items.length>=120?" قد توجد حلقات إضافية لم تظهر ضمن الحد.":""));
+  }catch(e){
+    value("diagnostic-episode-map-status","تعذر قراءة الخريطة: "+e.message);
+  }finally{button.disabled=false}
+ }
+ $("diagnostic-episode-map-run").addEventListener("click",loadEpisodeMap);
   var deepAuditNames={
     bridge:"بوابة الاتصال",sources:"مصادر Xtream",catalog_live:"فهرس القنوات",
     catalog_movie:"فهرس الأفلام",catalog_series:"فهرس المسلسلات",
