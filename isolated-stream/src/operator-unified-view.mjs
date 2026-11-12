@@ -151,6 +151,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <button class="navlink" data-tab="library"><span>▣</span>المكتبة</button>
 <button class="navlink" data-tab="accounts"><span>♙</span>المشتركون</button>
 <button class="navlink" data-tab="codes"><span>▤</span>أكواد الاشتراك</button>
+<button class="navlink" data-tab="distributors"><span>♧</span>لوحات التوزيع</button>
 <button class="navlink" data-tab="diagnostics"><span>⚙</span>الفحص والصيانة</button>
 </nav><div class="navfoot">الإدارة من مكان واحد، وبيانات المصادر والمشتركين من النظام الأصلي مباشرة.</div>
 </aside><div class="content">
@@ -471,6 +472,28 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="codes-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="codes-next" type="button" hidden>المزيد من الأكواد</button></div>
 </div></section>
+<section class="view" id="page-distributors">
+<div class="heading"><div><h2>لوحات التوزيع</h2>
+<p>أنشئ لوحة خاصة لكل موزع لإصدار أكواد BLOFY STREAM وحسابات Xtream فقط. لا يمكن للموزعين الوصول إلى إدارة المصادر أو المكتبة أو البث.</p></div>
+<a class="btn secondary" href="/distributor" target="_blank" rel="noopener noreferrer">فتح لوحة التوزيع ↗</a></div>
+<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+<div class="stat"><small>إجمالي لوحات التوزيع</small><strong id="dist-total">—</strong></div>
+<div class="stat"><small>اللوحات النشطة</small><strong id="dist-active">—</strong></div>
+<div class="stat"><small>الرصيد المتبقي للموزعين</small><strong id="dist-credits">—</strong></div></div>
+<div class="panel"><h3>إصدار لوحة توزيع جديدة</h3>
+<p class="muted">سيتم إنشاء اسم مستخدم وكلمة مرور خاصة بالموزع؛ كلمة المرور تظهر لك عند الإنشاء فقط. الرصيد هو عدد الاشتراكات التي يستطيع استخراجها.</p>
+<form id="dist-create-form"><div class="formgrid">
+<div class="field"><label for="dist-name">اسم الموزع</label><input id="dist-name" name="name" minlength="2" maxlength="80" required placeholder="اسم المحل / الموزع"></div>
+<div class="field"><label for="dist-username">اسم الدخول الإنجليزي</label><input id="dist-username" name="username" minlength="4" maxlength="32" pattern="[a-z][a-z0-9_.-]{3,31}" required placeholder="distributor01" dir="ltr"></div>
+<div class="field"><label for="dist-initial">الرصيد الأولي</label><input id="dist-initial" name="credits" type="number" min="0" max="10000" value="0" required></div>
+</div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">＋ إنشاء لوحة توزيع</button></div></form>
+<div id="dist-secret" class="accountsecret" hidden style="margin-top:13px"></div></div>
+<div class="panel"><div class="controls"><h3>إدارة الموزعين</h3>
+<button class="btn secondary sm" id="dist-refresh" type="button">↻ تحديث الموزعين</button></div>
+<p class="muted">تستطيع إضافة أرصدة، إيقاف اللوحة أو تغيير كلمة المرور. الإيقاف يلغي جلسات الدخول فورًا. لا تخرج كلمة المرور إلا لصاحب اللوحة.</p>
+<div class="tablewrap"><table><thead><tr><th>الموزع</th><th>اسم المستخدم</th><th>الرصيد</th><th>الإصدارات</th><th>الحالة</th><th>التحكم</th></tr></thead>
+<tbody id="dist-list"></tbody></table></div></div>
+</section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -494,8 +517,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 "use strict";
 (function(){
   var $=function(id){return document.getElementById(id)};
-  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
+  var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",distributors:"لوحات التوزيع",diagnostics:"الفحص والصيانة"};
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,distributors:[],codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
     vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
@@ -511,7 +534,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   function tab(id){if(!tabs[id])return;document.querySelectorAll(".view").forEach(function(x){x.classList.toggle("active",x.id==="page-"+id)});
     document.querySelectorAll(".navlink").forEach(function(x){x.classList.toggle("active",x.dataset.tab===id)});
     $("title").textContent=tabs[id];if(id==="library"&&!state.libParams)loadCatalog(false);
-    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);if(id==="library")void updateLibraryAIStatus();window.scrollTo({top:0,behavior:"instant"});
+    if(id==="accounts")loadAccounts(false);if(id==="codes")loadCodes(false);
+    if(id==="distributors")void loadDistributors();if(id==="library")void updateLibraryAIStatus();window.scrollTo({top:0,behavior:"instant"});
   }
   document.querySelectorAll("[data-tab]").forEach(function(e){e.addEventListener("click",function(){tab(e.dataset.tab)})});
   document.querySelectorAll("[data-go]").forEach(function(e){e.addEventListener("click",function(){
@@ -1627,6 +1651,81 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
 
+
+  async function loadDistributors(){
+    try{
+      var response=await api("distributors");
+      state.distributors=Array.isArray(response.items)?response.items:[];
+      value("dist-total",count(state.distributors.length));
+      value("dist-active",count(state.distributors.filter(function(x){return x.enabled}).length));
+      value("dist-credits",count(state.distributors.reduce(function(n,x){return n+Number(x.credits||0)},0)));
+      renderDistributors();
+    }catch(e){show("تعذر تحميل الموزعين: "+e.message,false)}
+  }
+  function showDistributorCredentials(reply){
+    var t=$("dist-secret");t.hidden=false;t.replaceChildren();
+    t.appendChild(node("strong","بيانات الدخول للوحة التوزيع — انسخها وشاركها مع الموزع فقط"));
+    attachCopy(t,"الرابط",location.origin+"/distributor");
+    attachCopy(t,"اسم المستخدم",reply.item.username);
+    attachCopy(t,"كلمة المرور",reply.password);
+    t.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+  function renderDistributors(){
+    var tb=$("dist-list");tb.replaceChildren();
+    if(!state.distributors.length){
+      var tr=node("tr"),td=cell(tr,"لم تُنشأ لوحات توزيع بعد");
+      td.colSpan=6;tb.appendChild(tr);return;
+    }
+    state.distributors.forEach(function(d){
+      var row=node("tr");
+      cell(row,d.name);cell(row,d.username);cell(row,count(d.credits));
+      cell(row,count(d.used));cell(row,d.enabled?"نشطة":"موقوفة");
+      var actions=node("div",undefined,"actions");
+      actions.appendChild(button("إضافة رصيد",async function(){
+        var input=prompt("عدد أرصدة الاشتراكات المراد إضافتها (1 إلى 1000):","10");
+        if(input===null)return;
+        var credits=Number(input);
+        if(!Number.isSafeInteger(credits)||credits<1||credits>1000){
+          show("أدخل رصيدًا صحيحًا بين 1 و1000.",false);return;
+        }
+        if(!confirm("إضافة "+credits+" رصيد إلى لوحة "+d.name+"؟"))return;
+        try{
+          await action("distributors/"+d.id+"/credits","distributor-credits",{credits});
+          show("تمت إضافة الرصيد.",true);await loadDistributors();
+        }catch(e){show("تعذر إضافة الرصيد: "+e.message,false)}
+      }));
+      actions.appendChild(button(d.enabled?"إيقاف":"تفعيل",async function(){
+        if(!confirm("تأكيد "+(d.enabled?"إيقاف":"تفعيل")+" لوحة "+d.name+"؟"))return;
+        try{
+          await action("distributors/"+d.id+"/status","distributor-status",{enabled:!d.enabled});
+          show("تم تحديث حالة اللوحة.",true);await loadDistributors();
+        }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
+      },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("كلمة مرور جديدة",async function(){
+        if(!confirm("سيتم إلغاء جميع جلسات هذه اللوحة وتغيير كلمة مرور الموزع. متابعة؟"))return;
+        try{
+          var result=await action("distributors/"+d.id+"/reset","distributor-reset",{});
+          showDistributorCredentials(result);
+          show("تم تغيير كلمة المرور. انسخ البيانات الجديدة وأبلغ الموزع.",true);
+        }catch(e){show("تعذر تغيير كلمة المرور: "+e.message,false)}
+      }));
+      cell(row,actions);tb.appendChild(row);
+    });
+  }
+  $("dist-refresh").addEventListener("click",loadDistributors);
+  $("dist-create-form").addEventListener("submit",async function(e){
+    e.preventDefault();
+    var btn=this.querySelector("button[type=submit]");btn.disabled=true;
+    var data=Object.fromEntries(new FormData(this));
+    data.credits=Number(data.credits);
+    try{
+      var created=await action("distributors","distributor-create",data);
+      showDistributorCredentials(created);
+      this.reset();show("تم إنشاء لوحة توزيع محدودة الصلاحيات.",true);
+      await loadDistributors();
+    }catch(e){show("تعذر إنشاء اللوحة: "+e.message,false)}
+    finally{btn.disabled=false}
+  });
   function codePhase(code){
     if(code.status==="revoked")return "revoked";
     if(code.status==="unused")return "unused";
