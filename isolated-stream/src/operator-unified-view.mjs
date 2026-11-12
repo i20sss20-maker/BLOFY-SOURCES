@@ -230,6 +230,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <span class="pill">تنبيهات نشطة: <strong id="smart-ops-alerts">—</strong></span>
 <span class="pill">تنبيهات حرجة: <strong id="smart-ops-critical">—</strong></span>
 <span class="pill">رفض انضمام جديد في آخر عينة: <strong id="smart-ops-capacity-delta">—</strong></span>
+<span class="pill">ذروة المشاهدين خلال المراقبة: <strong id="smart-ops-peak-viewers">—</strong></span>
+<span class="pill">اتجاه المصدر (KiB/s): <strong id="smart-ops-ingress">—</strong></span>
+<span class="pill">تنبيهات سجلت أثناء إغلاق اللوحة: <strong id="smart-ops-incidents">—</strong></span>
 </div>
 <p id="smart-ops-scope" class="muted">لن نستنتج عدد عملاء التطبيق من بيانات مشاركة البث؛ ولا نغير حدود الاشتراك الأصلية.</p>
 <div class="grid">
@@ -237,6 +240,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="tablewrap"><table><thead><tr><th>قناة مؤقتة</th><th>الحالة</th><th>المشاهدون</th><th>السعة الداخلية</th><th>آخر بيانات</th></tr></thead><tbody id="smart-ops-channels"></tbody></table></div></div>
 <div><h3>التنبيهات وأسبابها</h3><div class="tablewrap"><table><thead><tr><th>الدرجة</th><th>القناة/المسار</th><th>التشخيص</th></tr></thead><tbody id="smart-ops-issues"></tbody></table></div></div>
 </div>
+<div class="tablewrap"><table><thead><tr><th>التاريخ</th><th>التغير</th><th>الدرجة</th><th>السبب</th></tr></thead>
+<tbody id="smart-ops-history"></tbody></table></div>
 <p class="muted" id="smart-ops-last-check" aria-live="polite">هذه النتائج مؤشرات تشغيل مؤقتة. الصوت والصورة وحدود المصدر الحقيقي لم يتم التحقق منها هنا.</p>
 </div>
 <div class="panel" id="security-center">
@@ -2593,6 +2598,27 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("smart-ops-alerts",count(d.alertCount));
       value("smart-ops-critical",count(d.criticalCount));
       value("smart-ops-capacity-delta",d.sampleIntervalMs===null?"جار تكوين خط الأساس":count(d.deltas?.capacityRejections));
+      var points=Array.isArray(d.trend)?d.trend:[];
+      var peak=points.reduce(function(n,p){return Math.max(n,Number(p.viewers)||0)},0);
+      value("smart-ops-peak-viewers",points.length?count(peak):"—");
+      var recent=points[points.length-1];
+      var ingress=recent&&recent.intervalMs>0?
+        ((Number(recent.sourceBytes)||0)*1000/1024/recent.intervalMs).toFixed(1):null;
+      value("smart-ops-ingress",ingress===null?"—":ingress);
+      value("smart-ops-incidents",count(d.totalRaised));
+      var history=$("smart-ops-history");history.replaceChildren();
+      (d.recentChanges||[]).slice(0,18).forEach(function(entry){
+        var tr=node("tr");
+        cell(tr,new Date(entry.at).toLocaleTimeString("en-GB",{timeZone:"Asia/Riyadh"}));
+        cell(tr,entry.state==="raised"?"بدأ":"انتهى");
+        cell(tr,entry.level==="critical"?"حرج":"تنبيه");
+        cell(tr,smartOpsLabels[entry.code]||"مؤشر غير معروف");
+        history.appendChild(tr);
+      });
+      if(!history.children.length){
+        var empty=node("tr"),td=cell(empty,"لا توجد حوادث مرصودة منذ تشغيل السيرفر.");
+        td.colSpan=4;history.appendChild(empty);
+      }
       value("smart-ops-scope",d.sharedLiveEnabled===true?
         "المشاركة مفعّلة لهذه المسارات فقط. الحد الداخلي "+count(d.capacity?.maxViewersPerFeed)+" قارئًا لكل قناة؛ لا يمثل حد مزود المحتوى ولا عدد مشاهدي التطبيق.":
         "مشاركة القنوات غير مفعّلة أو ليس لها مشاهدون. الأرقام لا تشمل بث التطبيق المباشر ولا تثبت قدرة المصدر على 500 مشاهد.");
@@ -2623,7 +2649,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         var empty=node("tr"),td=cell(empty,"لا توجد إشارات خلل في القياسات المتاحة.");
         td.colSpan=3;alerts.appendChild(empty);
       }
-      value("smart-ops-last-check","آخر قراءة: "+new Date(d.checkedAt).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"})+
+      value("smart-ops-last-check",(d.backgroundSampling?"مراقبة آلية كل 15 ثانية":"مراقبة عند الطلب فقط")+
+        " · آخر قراءة: "+new Date(d.checkedAt).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"})+
         " · أخطاء المصدر المكتشفة منذ القراءة السابقة: "+count(d.deltas?.providerFailures)+
         " · انقطاعات القراء البطيئين: "+count(d.deltas?.slowViewerDisconnects)+
         ". لا يتم إنشاء طلبات بث إضافية لهذا الفحص.");

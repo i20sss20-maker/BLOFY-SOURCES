@@ -280,7 +280,7 @@ export function createStreamServer({
     timer.unref?.();
   }
   return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
-    liveSupervisor,autoHealth,sharedReadiness,
+    liveSupervisor,autoHealth,streamOps,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
 
@@ -302,6 +302,9 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     service.startBootCanary();
     service.startBootSourceReadiness();
     service.autoHealth.start();
+    // Passive in-memory snapshots continue while the admin page is closed.
+    // No extra source/media requests, no customer cutover, no account writes.
+    service.streamOps.start();
     // Coarse on-instance media failure diagnosis; log aggregate-only reason
     // buckets when counts change. Never emit token paths, provider hosts,
     // subscriber IPs or upstream credentials.
@@ -406,6 +409,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     }
   });
   process.on('SIGTERM',()=>{
-    service.autoHealth.stop();service.app.close(()=>process.exit(0));
+    service.streamOps.stop();service.autoHealth.stop();
+    service.app.close(()=>process.exit(0));
   });
 }
