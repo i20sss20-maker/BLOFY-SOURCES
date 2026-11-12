@@ -111,13 +111,19 @@ export function createStreamCrossServiceDiagnosis({
         count:edgeMeasured?measured(edge.lastFiveMinutes?.admissionRefusals):0,
         severity:'notice'},
       {code:'operator_restream_recent_probe_failure',scope:'operator_restream_recent',
-        count:operatorRestream.failedRecentPaths??0,severity:'warning'}
+        count:operatorRestream.failedRecentPaths??0,severity:'warning'},
+      // PMT describes input elementary streams, NOT sound audibility.
+      {code:'operator_input_pmt_no_audio',scope:'operator_restream_tracks',
+        count:operatorRestream.audioNoTrackPaths??0,severity:'warning'},
+      {code:'operator_audio_codec_support_review',scope:'operator_restream_tracks',
+        count:operatorRestream.audioCodecReviewPaths??0,severity:'notice'}
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
        (row.scope==='relay_since_boot'&&sharedMeasured)||
        (row.scope==='mediamtx_current'&&mtxConfigured)||
        (row.scope==='edge_last_5m'&&edgeMeasured)||
-       (row.scope==='operator_restream_recent'&&operatorRestream.dataAvailable)));
+       (row.scope==='operator_restream_recent'&&operatorRestream.dataAvailable)||
+       (row.scope==='operator_restream_tracks'&&operatorRestream.dataAvailable)));
     // Unknown must never be rendered as green or turned into zero.
     const unknown=!qualityMeasured||!gatewayMeasured||!sharedMeasured||
       !hlsMeasured||!mtxOnline||mtxReady===null||mtxHls===null||!edgeMeasured;
