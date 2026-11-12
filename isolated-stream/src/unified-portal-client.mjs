@@ -53,7 +53,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/distributors/'+id+'/'+kind,{method:'POST',body:data});
   }
   function distributorRequest(kind,body={}){
-    if(!['login','me','logout','list','issue','reveal','library','organize'].includes(kind))
+    if(!['login','me','logout','list','issue','reveal','library','organize','customer','renew','relogin'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
