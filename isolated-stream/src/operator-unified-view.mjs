@@ -244,7 +244,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div><h3>📺 صحة كل قناة مشتركة</h3>
 <p class="muted">الأرقام مؤقتة وتتغير بعد إعادة تشغيل السيرفر. لا تُظهر بيانات المصدر أو أكواد العملاء.</p>
 <div class="tablewrap"><table><thead><tr>
-<th>مرجع</th><th>الحالة</th><th>مشاهدون</th><th>آخر بيانات</th><th>إعادة اتصال</th>
+<th>مرجع</th><th>الحالة</th><th>مشاهدون</th><th>آخر بيانات</th><th>إعادة اتصال</th><th>مسار الصوت</th>
 </tr></thead><tbody id="security-channel-health"></tbody></table></div></div>
 <div><h3>🩺 آخر أحداث الاتصال</h3>
 <div class="tablewrap"><table><thead><tr>
@@ -2412,6 +2412,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   $("live-search").addEventListener("keydown",function(e){
     if(e.key==="Enter"){e.preventDefault();loadLiveChannels()}
   });
+  function audioTrackLabel(tracks){
+    if(!tracks)return "لم يُفحص";
+    if(tracks.status==="audio-stream-declared")
+      return "🎵 "+(tracks.audioCodecs||[]).join("، ")+" (معلن، غير مفكوك)";
+    if(tracks.status==="no-audio-stream-declared")
+      return "⚠ لا يوجد مسار صوت معلن في PMT";
+    if(tracks.status==="pmt-not-observed")return "تعذر العثور على بيانات مسار الصوت";
+    return "لم تتوفر معلومات الصوت بعد";
+  }
   function renderLive(items,mediaPaths){
     var byPath=new Map((mediaPaths||[]).map(function(p){return [p.name,p]}));
     var tbody=$("live-active");tbody.replaceChildren();
@@ -2428,6 +2437,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var status=item.connections>0?String(item.connections)+" اتصال بالمصدر":
         "جاهز عند الطلب · لا يوجد سحب حالي";
       if(item.failovers)status+=" · تبديلات: "+item.failovers;
+      if(item.mediaTracks?.inspectedBytes>0)
+        status+=" · صوت: "+audioTrackLabel(item.mediaTracks);
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe){
         var reason=String(item.lastProbe.code||"");
@@ -2546,11 +2557,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         cell(tr,age===null||age===undefined?"لم يصل بث":
           (Math.floor(Number(age)/1000)+" ث"));
         cell(tr,count(item.reconnects));
+        cell(tr,audioTrackLabel(item.audio));
         channelRows.appendChild(tr);
       });
       if(!(d.media?.channels||[]).length){
         var empty=node("tr"),td=cell(empty,"لا توجد قنوات مشتركة قيد المشاهدة.");
-        td.colSpan=5;channelRows.appendChild(empty);
+        td.colSpan=6;channelRows.appendChild(empty);
       }
       var eventsRows=$("security-channel-events");
       eventsRows.replaceChildren();
