@@ -597,3 +597,28 @@ test('a source whose cancel promise hangs cannot block the next shared TS connec
    }),{headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('100 concurrent synthetic viewers receive one licensed TS source without extra provider logins',async()=>{
+ let calls=0,writer;
+ const upstream=new ReadableStream({start(controller){writer=controller}});
+ await service(async(base,broker)=>{
+  const requests=Array.from({length:100},()=>fetch(base+'/live'));
+  for(let n=0;n<260&&broker.stats().viewers<100;n++)
+   await new Promise(done=>setTimeout(done,10));
+  assert.equal(broker.stats().viewers,100);
+  writer.enqueue(new Uint8Array(packet));
+  const responses=await Promise.all(requests);
+  assert.equal(responses.filter(x=>x.status===200).length,100);
+  assert.equal(calls,1,'100 viewers must share exactly one upstream source request');
+  const readers=responses.map(x=>x.body.getReader());
+  const chunks=await Promise.all(readers.map(x=>x.read()));
+  assert.ok(chunks.every(x=>Buffer.compare(Buffer.from(x.value),packet)===0));
+  const stats=broker.stats();
+  assert.equal(stats.activeFeeds,1);
+  assert.equal(stats.viewers,100);
+  assert.equal(stats.upstreamSessionsOpened,1);
+  await Promise.all(readers.map(x=>x.cancel().catch(()=>{})));
+ },{maxViewersPerFeed:128,fetchImpl:async()=>{
+  calls++;return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
