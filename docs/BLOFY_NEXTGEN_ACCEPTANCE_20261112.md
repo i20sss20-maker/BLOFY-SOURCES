@@ -70,3 +70,14 @@ Date: 2026-11-12 (Asia/Riyadh). This tracker describes **verified code and remai
 - The operator diagnostic remains read-only by default. Optional FFmpeg AAC conversion is explicitly restricted to an operator QA path. Normal customer playback and their codes are preserved.
 
 **Still NOT complete:** Real-world audio success on affected Android 9 devices, Windows app parity/build tests, a validated Railway Postgres restore of customer data, source-provider-signed capacity entitlement for multiple simultaneous channel streams, independently measured production QoE and installation of a verified 55.8.13+ signed APK.
+
+## Signed website APK verification evidence (actual asset, not metadata alone)
+
+GitHub Actions workflow **BLOFY STREAM - verify actual published owner APK**, run `43190948013`, completed with **SUCCESS** on November 12, 2026.
+
+It downloaded the existing GitHub Release asset `BLOFY-STREAM-55.8.12-FFMPEG-OWNER-SIGNED.apk` and verified:
+- Actual binary size **135509813 bytes** and actual SHA-256 **91655f8953aaf621ede08ab248995ecc8d42bc7571b444a6f36355cd09376573**, matching the independent release manifest.
+- Android APK Signature Scheme v2 verification using `apksigner` and the pinned owner signing certificate fingerprint.
+- Actual APK package `tv.blofy.player.v2.stream`, versionCode `2000089`, versionName `2.0.0-rc07.55.8.12-STREAM`, 16-KiB zip alignment and FFmpeg decoder JNI presence.
+
+**Important:** This verifies the *published 55.8.12 APK bytes* and certificate, not any particular customer's installed APK, and does not say that 55.8.13 has been signed or that Android TV 9 audio is functioning.
