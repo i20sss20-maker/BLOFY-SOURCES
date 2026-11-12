@@ -114,7 +114,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/value="365">سنة · 12/);
   assert.match(html,/value="1">تجريبي · مجاني/);
-  assert.match(html,/id="trial-phone"/);
+  assert.match(html,/id="customer-phone"/);
   assert.match(html,/trialPhone:cost===0/);
   assert.doesNotMatch(html,/saleh فقط|XTREAM 2|خصم الرصيد بالأشهر:/);
   assert.equal((html.match(/<h1 class="page-title">لوحة توزيع<\/h1>/g)||[]).length,1);
