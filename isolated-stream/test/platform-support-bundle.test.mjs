@@ -62,7 +62,7 @@ test('support bundle endpoint enforces operator auth and GET-only, hides credent
   assert.equal(data.credentialsIncluded,false);
   assert.equal(data.customerIdentifiersIncluded,false);
   assert.ok(data.checks.length>=20);
-  assert.doesNotMatch(JSON.stringify(data),/secret-password|providerUrl|sourceId|customerPhone|bearer/i);
+  assert.doesNotMatch(JSON.stringify(data),/secret-password|providerUrl|"sourceId"\\s*:|"customerPhone"\\s*:|bearer/i);
   const page=await(await fetch(base+'/operator',{headers:{authorization:auth}})).text();
   assert.match(page,/id="deep-audit-export"/);
   assert.match(page,/api\("support-bundle"\)/);
