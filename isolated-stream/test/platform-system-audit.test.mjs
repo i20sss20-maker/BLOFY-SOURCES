@@ -21,6 +21,14 @@ function fixture(){
    ]})},
   async salesSummary(){count('salesSummary');return ok({totals:{total:30},expiring_soon:4})},
   async libraryAIStatus(){count('libraryAIStatus');return ok({configured:false})},
+  async mediaQuality(){count('mediaQuality');return ok({
+    started:38,failed:7,p95StartMs:9200,slowStarts:9,
+    byKind:{
+      live:{started:24,failed:5,interrupted:2},
+      movie:{started:10,failed:1,interrupted:0},
+      series:{started:4,failed:1,interrupted:0}
+    }
+  })},
   async opsSourceStats({sourceId:id}){count('opsSourceStats');assert.equal(id,sourceId);
     return ok({livePlayback:{started:20,failed:5,interrupted:2,
       slowStarts:3,p95StartMs:8200,clientOrProxyClosed:4}})}
@@ -42,7 +50,7 @@ test('full audit aggregates existing safe summaries without media playback or mu
  assert.equal(a.ok,true);assert.equal(a.readOnly,true);
  assert.equal(a.customerTrafficChanged,false);
  assert.equal(a.mediaBytesFetched,false);
- assert.equal(a.checks.length,19);
+ assert.equal(a.checks.length,23);
  assert.deepEqual(a,b,'concurrent callers coalesce into one audit');
  assert.equal(f.calls.overview,1);
  assert.equal(f.calls.opsSourceStats,1);
@@ -54,6 +62,12 @@ test('full audit aggregates existing safe summaries without media playback or mu
  assert.equal(c('media404').metrics.missing,4);
  assert.equal(c('playback').status,'warning');
  assert.equal(c('playback').metrics.failed,5);
+ assert.equal(c('quality_live').status,'warning');
+ assert.equal(c('quality_live').metrics.started,24);
+ assert.equal(c('quality_movie').status,'ok');
+ assert.equal(c('quality_series').status,'ok');
+ assert.equal(c('quality_startup').status,'warning');
+ assert.equal(c('quality_startup').metrics.p95StartMs,9200);
  assert.equal(c('restream').status,'warning');
  assert.equal(c('engine').status,'ok');
  assert.equal(c('mediamtx').status,'ok');
@@ -76,6 +90,7 @@ test('failure to connect never presents healthy playback or false-green diagnost
    mediaFailures:async()=>({status:503,body:{ok:false}}),
    salesSummary:async()=>({status:502,body:{ok:false}}),
    libraryAIStatus:async()=>({status:503,body:{ok:false}}),
+   mediaQuality:async()=>({status:503,body:{ok:false}}),
    opsSourceStats:async()=>{throw Error('must not be called')}
   },
   engineStatus:async()=>({reachable:false,httpStatus:null}),
@@ -85,7 +100,8 @@ test('failure to connect never presents healthy playback or false-green diagnost
  });
  const result=await audit.audit();
  assert.equal(result.ok,true);
- for(const id of ['bridge','sources','playback','catalog_live','catalog_series','episodes'])
+ for(const id of ['bridge','sources','playback','quality_live','quality_startup',
+  'catalog_live','catalog_series','episodes'])
   assert.equal(result.checks.find(x=>x.id===id).status,'unknown');
  assert.equal(result.checks.find(x=>x.id==='engine').status,'warning');
  assert.equal(result.checks.find(x=>x.id==='mediamtx').status,'warning');
