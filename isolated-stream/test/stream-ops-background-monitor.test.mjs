@@ -88,5 +88,5 @@ test('operator page offers real bounded incident history, passive trend and no a
   const script=html.match(/<script nonce="trend-test">([\s\S]*?)<\/script>/);
   assert.ok(script,'nonce-protected page script');
   assert.doesNotThrow(()=>new vm.Script(script[1]));
-  assert.doesNotMatch(html,/api\("smart-ops"[^]*?method:"POST"/);
+  assert.doesNotMatch(html,/action\("smart-ops"/);
 });
