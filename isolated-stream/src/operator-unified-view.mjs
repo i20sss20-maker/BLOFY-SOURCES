@@ -1754,7 +1754,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(current!==state.codesEpoch)return;
       if(indicator){
         indicator.hidden=false;
-        indicator.textContent="تعذر جلب أحدث الأكواد؛ السجل السابق محفوظ على الشاشة. حاول التحديث.";
+        indicator.textContent="تعذر جلب أحدث الأكواد؛ هذا لا يعني حذف الأكواد. السجل السابق محفوظ على الشاشة، حاول التحديث.";
       }
       show("تعذر تحميل الأكواد: "+e.message,false);
     }finally{
