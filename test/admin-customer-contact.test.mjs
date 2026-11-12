@@ -35,8 +35,8 @@ test('lookup finds Saudi local/international phone as well as name and username'
 test('CSV cells cannot execute Excel or spreadsheet formulas',()=>{
   for(const dangerous of ['=2+3','+CMD|a','-cmd()','@SUM(1,1)','  =WEBSERVICE("x")','\t=IMPORTDATA("x")']){
     const cell=spreadsheetSafeCell(dangerous);
-    assert.ok(cell.startsWith('"\\''),JSON.stringify(cell));
-    assert.ok(!/^"\\s*[=+@-]/.test(cell),JSON.stringify(cell));
+    assert.equal(cell[1], "'", JSON.stringify(cell));
+    assert.ok(!/^"\s*[=+@-]/.test(cell), JSON.stringify(cell));
   }
   assert.equal(spreadsheetSafeCell('Saleh "test"'),'"Saleh ""test"""');
   assert.equal(spreadsheetSafeCell('0551234567'),'"0551234567"');
@@ -46,7 +46,7 @@ test('phone survives create/edit/restart; secrets never appear in accounts listi
   const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
   const dir=mkdtempSync(path.join(tmpdir(),'blofy-phone-'));
   try{
-    const script=String.raw\`
+    const script=String.raw`
       const assert=(await import('node:assert/strict')).default;
       const c=await import('./src/context.mjs');
       const created=await c.createAccount({
@@ -66,7 +66,7 @@ test('phone survives create/edit/restart; secrets never appear in accounts listi
       await c.updateAccount('contact42',{phone:''});
       assert.equal(c.listAccounts().find(x=>x.username==='contact42').phone,'');
       await c.updateAccount('contact42',{phone:'0501234567'});
-    \`;
+    `;
     const env={...process.env,DATA_DIR:dir,SESSION_SECRET:'c'.repeat(64),
       XTREAM_USERNAME:'',XTREAM_PASSWORD:'',AZURE_STORAGE_ACCOUNT:'',
       IDENTITY_ENDPOINT:'',IDENTITY_HEADER:''};
