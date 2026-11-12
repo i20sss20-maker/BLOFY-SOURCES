@@ -57,7 +57,7 @@ test('read-only path snapshot counts actual operator-only readers, recent failur
 test('failed probe turns stale after 5min; a pending probe does not count as failure',()=>{
  let snapshot=summarizeOperatorRestreamPaths(fake,{now:now+300000});
  assert.equal(snapshot.failedRecentPaths,0);
- assert.equal(snapshot.staleProbePaths,2);
+ assert.equal(snapshot.staleProbePaths,3); // both earlier probes and already-stale path
  assert.equal(snapshot.pendingProbes,1);
  assert.equal(snapshot.paths[1].lastErrorCode,'restream_provider_denied');
  assert.equal(snapshot.paths[1].state,'probe_stale');
