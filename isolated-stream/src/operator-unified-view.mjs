@@ -186,6 +186,18 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="row"><span class="muted">الأجهزة المفعلة</span><strong id="home-devices">—</strong></div>
 <div class="row"><span class="muted">المصادر المتصلة</span><strong id="home-online">—</strong></div>
 <div class="row"><span class="muted">الارتباط بالنظام الرئيسي</span><strong id="home-bridge">جار الفحص</strong></div></div></div>
+<div class="panel" id="home-checks-panel"><div class="controls">
+<h3>فحص الخدمات</h3>
+<button class="btn secondary sm" id="home-check-all" type="button">↻ فحص شامل</button></div>
+<p class="muted" id="home-checks-time" role="status" aria-live="polite">لم يبدأ الفحص بعد</p>
+<div class="cards">
+<div class="stat"><small>لوحة الإدارة</small><strong id="check-api">—</strong></div>
+<div class="stat"><small>المصدر والمكتبة</small><strong id="check-sources">—</strong></div>
+<div class="stat"><small>MediaMTX</small><strong id="check-media">—</strong></div>
+<div class="stat"><small>مراقبة إعادة البث</small><strong id="check-health">—</strong></div>
+<div class="stat"><small>الحماية</small><strong id="check-security">—</strong></div>
+</div><p class="muted">فحص قراءة فقط. لا يعيد تشغيل البث ولا يغير الاشتراكات.</p>
+</div>
 </section>
 <section class="view" id="page-sources">
 <div class="heading"><div><h2>إدارة المصادر</h2><p>إضافة المصادر واختبارها ومزامنتها والتحكم بنشرها من هذه اللوحة.</p></div><button class="btn" id="toggle-source-form">＋ إضافة مصدر</button></div>
@@ -518,7 +530,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 (function(){
   var $=function(id){return document.getElementById(id)};
   var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",distributors:"لوحات التوزيع",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,distributors:[],codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,distributors:[],codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,libEpoch:0,libLoading:false,
+    health:null,security:null,refreshVersion:0,healthTime:null,
+    live:{overview:false,engine:false,health:false,security:false},
     vodSelected:null};
   var formatter=new Intl.NumberFormat('en-US');
   function show(text,ok){var n=$("notice");n.hidden=false;n.textContent=text;n.className="status "+(ok?"good":"bad");}
@@ -590,7 +604,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("k-sources",count(t.servers));value("k-live",count(t.live));value("k-movie",count(t.movie));value("k-series",count(t.series));
       value("home-online",count(t.online));value("stream-online",count(t.online));
       value("home-accounts",count(s.gateway&&s.gateway.active));value("home-devices",count(s.devices&&s.devices.active));
-      value("home-bridge","متصل");$("system-pill").textContent="النظام متصل";$("system-pill").className="pill good";
+      value("home-bridge",state.live.overview?"متصل":"آخر بيانات معروفة");
+      $("system-pill").textContent=state.live.overview?"النظام متصل":"الاتصال بالمصادر غير مؤكد";
+      $("system-pill").className="pill "+(state.live.overview?"good":"bad");
       renderSources();
     }else{$("system-pill").textContent="النظام غير متصل";$("system-pill").className="pill bad";value("home-bridge","غير متصل")}
     if(e){
@@ -609,9 +625,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         Object.entries(shared.relayFailureCounts||{}).map(function(entry){
           return entry[0]+": "+count(entry[1])
         }).join(" • ");
-      value("home-api","ONLINE");value("home-media",ready?"ONLINE":"غير متصل");
+      value("home-api",state.live.engine?"ONLINE":"غير مؤكد");
+      value("home-media",state.live.engine?(ready?"ONLINE":"غير متصل"):"غير مؤكد");
       value("home-paths",count(m.activePaths));value("home-sessions",count(m.hlsSessions));
-      value("stream-engine",ready?"ONLINE":"غير متصل");value("stream-paths",count(m.activePaths));
+      value("stream-engine",state.live.engine?(ready?"ONLINE":"غير متصل"):"غير مؤكد");
+      value("stream-paths",count(m.activePaths));
       value("stream-sessions",count(m.hlsSessions));
       value("stream-note",m.controlAvailable?"المحرك متصل. المسارات النشطة تخص MediaMTX فقط، ولا تعني تحويل المشتركين إليه.":"واجهة محرك البث غير متاحة. الحالة غير مؤكدة.");
     }
@@ -650,18 +668,54 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       cell(row,controls);tb.appendChild(row);
     });
   }
-  async function refresh(){try{var results=await Promise.allSettled([api("overview"),api("state")]);
-    if(results[0].status==="fulfilled")state.overview=results[0].value;
-    else{state.overview=null;show("تعذر جلب المصادر: "+results[0].reason.message,false)}
-    if(results[1].status==="fulfilled")state.engine=results[1].value;else state.engine=null;
-    renderHome();
-    if(state.overview&&state.engine){
-      var saudiTime=new Intl.DateTimeFormat("en-GB",{
-        hour:"2-digit",minute:"2-digit",timeZone:"Asia/Riyadh"
-      }).format(new Date());
-      value("last-updated","آخر تحديث: "+saudiTime+" KSA");
-    }else value("last-updated","حالة بعض الخدمات غير مؤكدة");
-  }catch(e){show(e.message,false)}}
+
+  function renderChecks(){
+    value("check-api",state.live.engine?"متصل":"غير مؤكد");
+    value("check-sources",state.live.overview?"متصل":"غير مؤكد");
+    value("check-media",state.live.engine?
+      (state.engine?.engine?.reachable?"متصل":"غير متصل"):"غير مؤكد");
+    value("check-health",state.live.health?
+      (state.health?.ok?"يعمل":"غير مؤكد"):"غير مؤكد");
+    value("check-security",state.live.security?
+      (state.security?.protection?.operatorBruteForce===true?"مفعلة":"غير مؤكدة"):"غير مؤكد");
+    if(state.healthTime){
+      var formatted=new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",
+        second:"2-digit",timeZone:"Asia/Riyadh"}).format(new Date(state.healthTime));
+      value("home-checks-time","آخر فحص "+formatted+" KSA");
+    }
+  }
+  async function refresh(){
+    var current=++state.refreshVersion;
+    var results=await Promise.allSettled([
+      api("overview"),api("state"),api("auto-health"),api("security")
+    ]);
+    if(current!==state.refreshVersion)return;
+    var keys=["overview","engine","health","security"];
+    results.forEach(function(result,i){
+      var key=keys[i];
+      state.live[key]=result.status==="fulfilled"&&result.value?.ok!==false;
+      if(state.live[key])state[key]=result.value;
+    });
+    state.healthTime=Date.now();
+    renderHome();renderChecks();
+    var good=keys.filter(function(key){return state.live[key]});
+    if(good.length===4){
+      var time=new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",
+        timeZone:"Asia/Riyadh"}).format(new Date());
+      value("last-updated","آخر تحديث: "+time+" KSA");
+    }else{
+      value("last-updated","تحديث جزئي "+good.length+"/4 · بعض البيانات غير مؤكدة");
+      var failed=keys.filter(function(key){return !state.live[key]});
+      show("تعذر تحديث: "+failed.map(function(key){
+        return {overview:"المصادر",engine:"محرك البث",health:"مراقبة HLS",
+          security:"الحماية"}[key]
+      }).join("، ")+". لم تُحذف آخر البيانات المعروفة.",false);
+    }
+  }
+  $("home-check-all").addEventListener("click",async function(){
+    var button=this;button.disabled=true;
+    try{await refresh()}finally{button.disabled=false}
+  });
   async function doSource(id,cmd,body){try{var d=await action("source/"+id+"/"+cmd,"source-"+cmd,body||{});
     if(cmd==="probe"){show("وصلت نتيجة فحص الوسائط. راجع التشخيص.",true);
       $("diagnostic-output").textContent=JSON.stringify(d,null,2);tab("diagnostics")}
