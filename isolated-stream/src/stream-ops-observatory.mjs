@@ -1,4 +1,4 @@
-// BLOFY STREAM Operations 2.0: read-only, bounded operator-scoped alerts.
+// BLOFY STREAM Operations 3.0: read-only, bounded operator-scoped alerts.
 // Observes existing shared-relay and operator-HLS metrics ONLY.
 // Never opens media connections, changes quotas, or lists customer IPs/URLs.
 const CODES=new Set([
@@ -17,18 +17,23 @@ function countedDiff(current,old){
 }
 export function createStreamOpsObservatory({
   relayStats=()=>null,autoHealth=()=>null,clock=Date.now,
-  capacityWarningPercent=85,mediaStallMs=30000,historyLimit=50
+  capacityWarningPercent=85,mediaStallMs=30000,historyLimit=50,
+  sampleIntervalMs=15000,trendLimit=240
 }={}){
   if(typeof relayStats!=='function'||typeof autoHealth!=='function'||
      typeof clock!=='function'||!Number.isInteger(capacityWarningPercent)||
      capacityWarningPercent<60||capacityWarningPercent>99||
      !Number.isInteger(mediaStallMs)||mediaStallMs<15000||mediaStallMs>120000||
-     !Number.isInteger(historyLimit)||historyLimit<1||historyLimit>100)
+     !Number.isInteger(historyLimit)||historyLimit<1||historyLimit>100||
+     !Number.isInteger(sampleIntervalMs)||sampleIntervalMs<5000||sampleIntervalMs>60000||
+     !Number.isInteger(trendLimit)||trendLimit<10||trendLimit>480)
     throw Error('stream_ops_config_invalid');
   let previous=null,previousAt=null;
   let lastActive=new Map(),history=[],totalRaised=0;
+  const trends=[];
+  let timer=null,lastReport=null;
 
-  function snapshot(){
+  function collect(){
     const now=clock();
     const relay=relayStats()||{};
     const f=relay?.fanout||{};
@@ -114,7 +119,18 @@ export function createStreamOpsObservatory({
     if(history.length>historyLimit)history.length=historyLimit;
     lastActive=current;
 
-    return {ok:true,checkedAt:now,
+    const point={at:now,viewers:bounded(f.viewers,32768),
+      activeFeeds:bounded(f.activeFeeds,64),alertCount:alerts.length,
+      criticalCount:alerts.filter(a=>a.level==='critical').length,
+      providerErrors:delta.providerFailures,
+      capacityRejections:delta.capacityRejections,
+      reconnects:delta.upstreamReconnects,
+      sourceBytes:delta.sourceBytesReceived,
+      viewerBytesQueued:delta.viewerBytesQueued,
+      intervalMs:sinceMs};
+    trends.push(point);
+    if(trends.length>trendLimit)trends.splice(0,trends.length-trendLimit);
+    lastReport={ok:true,checkedAt:now,
       scope:'shared_relay_and_operator_restream_only',
       isAllSubscribersMeasured:false,
       playbackQualityVerified:false,sourceRightsVerified:false,
@@ -128,7 +144,43 @@ export function createStreamOpsObservatory({
       channels,alertCount:alerts.length,criticalCount:
         alerts.filter(a=>a.level==='critical').length,
       alerts:alerts.slice(0,96),recentChanges:history.slice(0,historyLimit),
-      totalRaised,sampleIntervalMs:sinceMs,deltas:delta,hls:hlsTotals};
+      totalRaised,sampleIntervalMs:sinceMs,deltas:delta,hls:hlsTotals,
+      backgroundSampling:timer!==null,
+      historyWindowMinutes:Math.round(sampleIntervalMs*trendLimit/60000),
+      trend:trends.map(x=>({...x}))};
+    return lastReport;
   }
-  return {snapshot};
+  function sample(){
+    try{return collect()}
+    catch{
+      // A corrupt telemetry source is NOT equivalent to zero incidents.
+      lastReport={ok:false,code:'smart_ops_metrics_unavailable',
+        checkedAt:clock(),readOnly:true,actionsTaken:0,
+        scope:'shared_relay_and_operator_restream_only',
+        isAllSubscribersMeasured:false,backgroundSampling:timer!==null,
+        trend:trends.map(x=>({...x}))};
+      return lastReport;
+    }
+  }
+  function start(){
+    if(timer)return;
+    // Initialize the baseline even when nobody has the dashboard open.
+    sample();
+    timer=setInterval(sample,sampleIntervalMs);
+    timer.unref?.();
+    if(lastReport)lastReport={...lastReport,backgroundSampling:true};
+  }
+  function stop(){
+    if(timer){clearInterval(timer);timer=null}
+    if(lastReport)lastReport={...lastReport,backgroundSampling:false};
+  }
+  function snapshot(){
+    // Browser requests never alter incident deltas when monitoring is on.
+    // Tests/standalone consumers can still take ad-hoc snapshots before start.
+    if(timer)return {...lastReport,trend:trends.map(x=>({...x})),
+      recentChanges:Array.isArray(lastReport?.recentChanges)?
+        lastReport.recentChanges.map(x=>({...x})):[]};
+    return sample();
+  }
+  return {snapshot,start,stop,sample};
 }
