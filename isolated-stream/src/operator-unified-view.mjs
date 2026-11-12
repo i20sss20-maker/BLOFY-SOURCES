@@ -519,6 +519,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <p class="muted" id="deep-audit-status" role="status" aria-live="polite">لم يبدأ الفحص بعد.</p>
 <div class="tablewrap"><table><thead><tr><th>القسم</th><th>الحالة</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
 <tbody id="deep-audit-items"></tbody></table></div>
+<h4>الخطوات المقترحة</h4><div id="deep-audit-recommendations" aria-live="polite"></div>
 </div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -769,6 +770,18 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         cell(row,auditMetrics(entry.metrics));
         tbody.appendChild(row);
       });
+      var recommended=$("deep-audit-recommendations");recommended.replaceChildren();
+      (result.recommendations||[]).slice(0,12).forEach(function(entry){
+        var element=node("div",undefined,"row");
+        element.style.margin="8px 0";
+        var title=node("strong",deepAuditNames[entry.checkId]||"توصية");
+        var description=node("span",entry.recommendation,"muted");
+        var open=button("فتح القسم",function(){tab(entry.module||"diagnostics")},"secondary");
+        element.appendChild(title);element.appendChild(description);
+        element.appendChild(open);recommended.appendChild(element);
+      });
+      if(!recommended.children.length)
+        recommended.appendChild(node("p","لا توجد توصيات جديدة من المؤشرات الحالية.","muted"));
       var now=new Date(result.checkedAt||Date.now()).toLocaleString("ar-SA",
         {timeZone:"Asia/Riyadh"});
       value("deep-audit-status","آخر فحص: "+now+" · "+result.checks.length+
