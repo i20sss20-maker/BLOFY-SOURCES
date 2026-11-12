@@ -21,7 +21,7 @@ function audioSummary({gap=false}={}){
   const inspector=createTsAudioInspector({maxBytes:PACKET*120});
   const packets=[packet(0,0,pat()),packet(256,0,pmt())];
   for(let i=0;i<118;i++)packets.push(packet(i%2===0?289:288,
-    gap&&i<10?i*3:i));
+    gap&&i<10?Math.floor(i/2)*3:Math.floor(i/2)));
   inspector.push(Buffer.concat(packets));
   return inspector.summary();
 }
