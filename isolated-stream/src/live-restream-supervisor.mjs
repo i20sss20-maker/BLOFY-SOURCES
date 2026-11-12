@@ -7,6 +7,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
+import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 
 const MTX='http://blofy-stream-media.railway.internal:9997';
 const HLS='http://blofy-stream-media.railway.internal:8888';
@@ -160,7 +161,8 @@ export function createLiveRestreamSupervisor({
         sourceId:upstream.body.sourceId,channelId:upstream.body.channelId,
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
-        candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1};
+        candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1,
+        trackInspector:createTsAudioInspector()};
       const config={source:'publisher',
         runOnDemand:buildCommand(name,ticket,{httpEofReconnect}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
@@ -217,6 +219,7 @@ export function createLiveRestreamSupervisor({
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,
+      mediaTracks:row.trackInspector?.summary()||null,
       onDemand:true,backupConfigured:row.backupConfigured,failovers:row.failovers,
       preferredSource:row.preferredIndex===0?'primary':'backup',
       playlist:'/operator/api/live/'+row.name+'/index.m3u8'
@@ -310,11 +313,19 @@ export function createLiveRestreamSupervisor({
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'x-content-type-options':'nosniff'});
       const stream=Readable.from((async function*(){
-        yield Buffer.from(active.first.value);
+        // Observe the existing MediaMTX publisher input stream. Packet bytes
+        // are passed through unchanged, with no new connection to the source.
+        let chunk=Buffer.from(active.first.value);
+        try{row.trackInspector?.push(chunk)}catch{row.trackInspector=null}
+        yield chunk;
         while(true){
           const next=await active.reader.read();
           if(next.done)return;
-          if(next.value?.byteLength)yield Buffer.from(next.value);
+          if(next.value?.byteLength){
+            chunk=Buffer.from(next.value);
+            try{row.trackInspector?.push(chunk)}catch{row.trackInspector=null}
+            yield chunk;
+          }
         }
       })());
       try{
