@@ -79,7 +79,7 @@ test('EDGE measures real HTTP response headers and does not modify media bytes/r
   assert.equal(stats.byKind.live,2);
   assert.equal(stats.byKind.api,1);
   assert.equal(stats.byKind.hls,1);
-  assert.equal(stats.responseClasses['2xx'],4);
+  assert.equal(stats.originResponseClasses['2xx'],4);
   assert.equal(stats.activeOriginHeaderRequests,0);
   assert.equal(stats.lastFiveMinutes.requests,4);
   assert.equal(stats.p95OriginHeadersMs,0);
@@ -115,9 +115,9 @@ test('EDGE respects no live replay, bounded single VOD retry, denial and no prox
   assert.equal(stats.totalOriginRequestsSinceBoot,4);
   assert.equal(stats.sourceAdmissionRefusalsSinceBoot,1);
   assert.equal(stats.upstream5xxSinceBoot,2);
-  assert.equal(stats.responseClasses['5xx'],2);
-  assert.equal(stats.responseClasses['4xx'],1);
-  assert.equal(stats.responseClasses['2xx'],1);
+  assert.equal(stats.originResponseClasses['5xx'],2);
+  assert.equal(stats.originResponseClasses['4xx'],1);
+  assert.equal(stats.originResponseClasses['2xx'],1);
   assert.equal(stats.activeOriginHeaderRequests,0);
   assert.equal(stats.lastFiveMinutes.errors5xx,2);
   assert.ok(!JSON.stringify(stats).includes('leak.invalid'));
