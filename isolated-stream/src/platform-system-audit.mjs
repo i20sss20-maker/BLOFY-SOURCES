@@ -57,7 +57,7 @@ function media404(body){
     {missing,due,recovered,scope:'verified_upstream_404_only'});
 }
 export function createPlatformSystemAudit({
-  portal,engineStatus,mediaControl,autoHealth,relayStats=()=>({}),
+  portal,engineStatus,mediaControl,autoHealth,liveSupervisor=null,relayStats=()=>({}),
   clock=Date.now,cacheMs=30_000
 }={}){
   if(!portal||typeof portal.overview!=='function'||
@@ -162,11 +162,28 @@ export function createPlatformSystemAudit({
         const sourceStats=item[0].status==='fulfilled'?item[0].value:null;
         checks.push(checked(sourceStats,'playback',safePlayback));
       }else checks.push(check('playback','unknown','source_not_selected'));
+      // Passive MPEG-TS PAT/PMT metadata is useful for finding missing
+      // declared audio tracks, but never proves that a device decodes sound.
+      let operatorPaths=[];
+      try{
+        const listed=liveSupervisor?.list?.();
+        operatorPaths=Array.isArray(listed?.items)?listed.items.slice(0,64):[];
+      }catch{}
+      const feedChannels=Array.isArray(fanout?.fanout?.channels)?
+        fanout.fanout.channels.slice(0,64):[];
+      const signals=[...operatorPaths.map(x=>x.mediaTracks),
+        ...feedChannels.map(x=>x.audio)].filter(Boolean);
+      const declaredAudio=signals.filter(x=>x.status==='audio-stream-declared').length;
+      const missingAudio=signals.filter(x=>x.status==='no-audio-stream-declared').length;
+      checks.push(check('audio',missingAudio?'warning':'unknown',
+        missingAudio?'pmt_audio_missing':declaredAudio?
+          'audio_track_metadata_detected':'audio_track_not_decoded',
+        {observed:signals.length,declaredAudio,missingAudio,
+          decodedOnClient:false}));
       // A successful catalog query/health endpoint never proves that device
       // codecs, audio, subtitles, playback or an installed APK work.
       for(const [id,code] of [
         ['episodes','episode_playback_not_sampled'],
-        ['audio','audio_track_not_decoded'],
         ['subtitles','subtitle_render_not_tested'],
         ['appUpdates','release_channel_not_examined'],
         ['backup','restore_test_not_observed']
