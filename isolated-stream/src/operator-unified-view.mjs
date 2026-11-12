@@ -511,7 +511,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
 <div class="panel" id="deep-audit-panel">
 <div class="controls"><h3>فحص النظام بالكامل</h3>
-<button id="deep-audit-run" class="btn" type="button">بدء الفحص</button></div>
+<button id="deep-audit-run" class="btn" type="button">بدء الفحص</button>
+<button id="deep-audit-export" class="btn secondary" type="button">تصدير تقرير الدعم</button></div>
 <p class="muted">فحص قراءة فقط، يعتمد على السجلات وحالات الخدمات، ولا يشغّل فيديو أو يغيّر اشتراكات العملاء.</p>
 <div class="cards">
 <div class="stat"><small>سليم حسب المؤشرات</small><strong id="deep-audit-ok">—</strong></div>
@@ -873,6 +874,26 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }finally{button.disabled=false}
   }
   $("deep-audit-run").addEventListener("click",loadDeepAudit);
+  $("deep-audit-export").addEventListener("click",async function(){
+    var button=this;button.disabled=true;
+    try{
+      var report=await api("support-bundle");
+      if(!report.ok||report.schema!=="blofy-stream-support-v1")
+        throw Error("التقرير غير متاح");
+      // The backend already strips source IDs, URLs, credentials and PII.
+      var bytes=JSON.stringify(report,null,2);
+      var blob=new Blob([bytes],{type:"application/json;charset=utf-8"});
+      var url=URL.createObjectURL(blob);
+      var link=document.createElement("a");
+      link.href=url;
+      link.download="blofy-stream-support-"+new Date()
+        .toLocaleDateString("en-CA",{timeZone:"Asia/Riyadh"})+".json";
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(function(){URL.revokeObjectURL(url)},2000);
+      show("تم تنزيل تقرير التشخيص بدون معرفات أو بيانات العملاء.",true);
+    }catch(err){show("تعذر تصدير التقرير: "+err.message,false)}
+    finally{button.disabled=false}
+  });
   function renderChecks(){
     value("check-api",state.live.engine?"متصل":"غير مؤكد");
     value("check-sources",state.live.overview?"متصل":"غير مؤكد");
