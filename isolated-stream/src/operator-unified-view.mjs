@@ -244,6 +244,24 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="smart-ops-history"></tbody></table></div>
 <p class="muted" id="smart-ops-last-check" aria-live="polite">هذه النتائج مؤشرات تشغيل مؤقتة. الصوت والصورة وحدود المصدر الحقيقي لم يتم التحقق منها هنا.</p>
 </div>
+<div class="panel" id="cross-service-panel">
+  <div class="controls"><div><h3>🔎 تشخيص البث بين خدمات BLOFY — Cross-Service</h3>
+  <p class="muted">تحليل مؤشرات التشغيل الموجودة أصلًا في بوابة Xtream ونظام المشاركة ومسارات إعادة البث الخاصة بالمشرف. لا يفتح اتصالًا جديدًا بالمصدر ولا يجمع بيانات هوية العملاء.</p></div>
+  <button class="btn secondary" id="cross-service-refresh" type="button">↻ تحديث التشخيص</button></div>
+  <div class="inline">
+    <span class="pill" id="cross-service-status" role="status" aria-live="polite">جار تحليل البيانات المتاحة...</span>
+    <span class="pill">نقل مباشر ببوابة Xtream: <strong id="cross-direct">—</strong></span>
+    <span class="pill">مشاهدو المشاركة (مسار مختلف): <strong id="cross-relay">—</strong></span>
+    <span class="pill">قراء مسارات HLS للمشرف: <strong id="cross-hls">—</strong></span>
+    <span class="pill">بدايات إرسال الوسائط خلال ساعة: <strong id="cross-started">—</strong></span>
+    <span class="pill">أخطاء البوابة خلال ساعة: <strong id="cross-failed">—</strong></span>
+    <span class="pill">تأخر بدء البث P95: <strong id="cross-p95">—</strong></span>
+  </div>
+  <p class="muted" id="cross-service-coverage">الأعداد مستقلة ولا تُجمع لاستخراج عدد المشاهدين. قياس خدمة Edge وعمليات MediaMTX الأخرى غير متوفر حاليًا.</p>
+  <div class="tablewrap"><table><thead><tr><th>المصدر التشغيلي</th><th>الفترة</th><th>الأحداث المرصودة</th><th>المراجعة</th></tr></thead>
+    <tbody id="cross-service-issues"></tbody></table></div>
+  <p class="muted" id="cross-service-check">ملخص سجل البوابة محدود بآخر 400 حدث محفوظ في هذه العملية. لا يثبت تشغيل الصوت والصورة بعد فكهما ولا قدرة مزود المحتوى على عدد مشاهدين محدد.</p>
+</div>
 <div class="panel" id="source-capacity-panel">
   <div class="controls"><div><h3>📡 حدود مصادر Xtream — بيانات الحساب المحفوظة</h3>
   <p class="muted">هذا التقرير يقرأ آخر معلومات الاتصال التي أعلنها مزود المصدر وعدد الاشتراكات المرتبطة من قاعدة BLOFY. لا ينشئ اتصال بث ولا يُمثل عدد المشاهدين المتصلين الآن.</p></div>
@@ -2588,6 +2606,71 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     });
   }
 
+
+  var crossReasons={
+    provider_admission_refused:"رفض مصدر Xtream الاتصال 403/429/456. راجع صلاحية المصدر وحدوده ولا تكرر الطلب.",
+    provider_upstream_transient:"تعثر نقل مؤقت من المصدر 408/5xx. راجع استقراره قبل تعديل الأكواد.",
+    gateway_media_interrupted:"انقطع إرسال HTTP بعد بدء الوسائط في بوابة BLOFY.",
+    gateway_catalog_missing:"المحتوى غير موجود في فهرس البوابة. راجع المزامنة ولا تحذف محتوى العملاء.",
+    gateway_auth_rejected:"فُشلت محاولة دخول محلية. لا تُنسب إلى تعطل مزود المحتوى.",
+    relay_provider_failures:"محرك المشاركة سجّل فشل مصدر منذ تشغيل السيرفر؛ ليس بالضرورة عطلًا جاريًا."
+  };
+  function crossReading(measured,value){
+    return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
+  }
+  async function loadCrossService(){
+    try{
+      var d=await api("cross-service");
+      if(d?.ok!==true)throw Error("cross_service_unavailable");
+      var m=d.observations||{},g=m.gateway||{},direct=m.direct||{},
+        relay=m.relay||{},hls=m.operatorHls||{};
+      var states={
+        partial:"القياس جزئي · بعض الأنظمة غير معروفة",
+        attention:"توجد ملاحظات تحتاج مراجعة",
+        observed_no_recent_faults:"لا تظهر أخطاء في المقاييس المحدودة"
+      };
+      value("cross-service-status",states[d.status]||"تعذر تحديد حالة شاملة");
+      value("cross-direct",crossReading(direct.dataAvailable,direct.activeMedia)+
+        (direct.countsReliable===false?" (ناقص)":""));
+      value("cross-relay",crossReading(relay.dataAvailable,relay.attachedReaders));
+      value("cross-hls",crossReading(hls.dataAvailable,hls.activePathReaders));
+      value("cross-started",crossReading(g.dataAvailable,g.attemptedMediaStarts));
+      value("cross-failed",crossReading(g.dataAvailable,g.failed));
+      value("cross-p95",g.dataAvailable&&Number.isFinite(g.p95StartupMs)?
+        count(g.p95StartupMs)+" ms":"غير متاح");
+      value("cross-service-coverage",
+        "نطاق البوابة: جلسات HTTP مباشرة بهذه العملية فقط؛ نطاق المشاركة: قراء المشاركة في STREAM API فقط؛ نطاق HLS: مسارات المشرف فقط. "+
+        "لا تجمع هذه الأعداد لأنها قد تتداخل. خدمة Xtream Edge واتصالات MediaMTX الأخرى غير مقاسة حاليًا. "+
+        (d.status==="partial"?"بعض البيانات غير متوفرة، فلا نعتبر كل الخدمات سليمة.":""));
+      var rows=$("cross-service-issues");rows.replaceChildren();
+      (Array.isArray(d.problems)?d.problems:[]).slice(0,15).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":"بوابة Xtream");
+        cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":"آخر ساعة");
+        cell(tr,crossReading(true,item.count));
+        cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
+        rows.appendChild(tr);
+      });
+      if(!rows.children.length){
+        var tr=node("tr"),td=cell(tr,
+          d.status==="partial"?
+            "بعض مصادر القياس غير متوفرة. غياب التنبيهات هنا لا يثبت سلامة التشغيل.":
+            "لا توجد إشارات خلل ضمن المقاييس المتاحة حاليًا.");
+        td.colSpan=4;rows.appendChild(tr);
+      }
+      value("cross-service-check",
+        "آخر تجميع: "+new Date(d.checkedAt).toLocaleString("ar-SA-u-nu-latn",
+          {timeZone:"Asia/Riyadh"})+
+        " · بدأ نقل وسائط صحيح في البوابة لا يعني وصول الصوت والصورة للمشاهد. "+
+        "سجل الأداء محدود بحد أقصى 400 حدث لكل عملية خلال ساعة؛ ولا يشمل تلقائيًا الاتصالات المحولة إلى Edge أو العملاء على نسخ أخرى.");
+    }catch{
+      value("cross-service-status","التشخيص غير متاح · لا توجد نتيجة موثوقة");
+      value("cross-service-coverage",
+        "تعذر جمع مؤشرات الخدمات. لن نعرض صفر مشاهدين أو نعتبر المصادر تعمل دون دليل.");
+      value("cross-service-check","تحقق من اتصال البوابة بالواجهة المحمية وسجلات السيرفر، دون زيادة طلبات البث.");
+    }
+  }
+  $("cross-service-refresh").addEventListener("click",loadCrossService);
   // Smart Ops 2.0 does NOT poll source URLs or invoke any media action.
   // It reads bounded, already-collected server counters only.
   var smartOpsLabels={
@@ -2986,8 +3069,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService()}},60000);
 })();
 </script>
 </body></html>`;
