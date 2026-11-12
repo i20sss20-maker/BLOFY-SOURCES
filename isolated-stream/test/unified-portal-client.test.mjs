@@ -67,3 +67,31 @@ test('distributor customer directory route reaches the protected backend (regres
  assert.equal(calls[0].body.q,'555');
  assert.equal((await client.distributorRequest('sources',{sessionToken:'session'})).status,400);
 });
+
+test('operator non-distributor modules expose independent read-only health checks',()=>{
+ const html=renderOperatorDashboard('checknonce');
+ for(const id of ['home-checks-panel','home-check-all','check-api','check-sources',
+  'check-media','check-health','check-security','home-checks-time'])
+  assert.ok(html.includes('id="'+id+'"'),'missing '+id);
+ assert.match(html,/api\("overview"\),api\("state"\),api\("auto-health"\),api\("security"\)/);
+ assert.match(html,/state\.live\.overview\?"متصل":"آخر بيانات معروفة"/);
+ assert.match(html,/if\(current!==state\.refreshVersion\)return/);
+ assert.match(html,/لم تُحذف آخر البيانات المعروفة/);
+ const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
+ assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+test('operator catalog and code/account pagination cannot mix stale responses or invent host',()=>{
+ const html=renderOperatorDashboard('checknonce');
+ assert.match(html,/id="accounts-host-value"/);
+ assert.doesNotMatch(html,/bfy\.up\.railway\.app/);
+ assert.match(html,/state\.libEpoch/);
+ assert.match(html,/if\(requestEpoch!==state\.libEpoch\)return/);
+ assert.match(html,/state\.libLoading/);
+ assert.match(html,/if\(current!==state\.codesEpoch\)return/);
+ assert.match(html,/if\(current!==state\.accountsEpoch\)return/);
+ assert.match(html,/var seen=new Set\(state\.codes\.map/);
+ assert.match(html,/var seen=new Set\(state\.accounts\.map/);
+ assert.match(html,/if\(!state\.accountHost\)/);
+ const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
+ assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
