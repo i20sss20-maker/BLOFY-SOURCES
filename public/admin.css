@@ -72,3 +72,14 @@ button,input,select{font:inherit}.app-shell{display:grid;grid-template-columns:2
 #view-restream .data-table{overflow:auto}
 #view-restream .data-table table{min-width:570px}
 @media(max-width:800px){.restream-steps{grid-template-columns:1fr}.restream-notice .panel-head{align-items:flex-start}}
+
+/* BLOFY Admin: phone and page controls, compact 2026 customer management */
+.phone-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;font-size:12px;min-width:0;overflow-wrap:anywhere}
+.phone-line .inline-copy{flex:0 0 auto}
+.subscriber-pager{display:flex;align-items:center;justify-content:center;gap:14px;margin:16px 0 0}
+.subscriber-pager span{direction:ltr;font-variant-numeric:tabular-nums;color:var(--muted);min-width:58px;text-align:center}
+.subscriber-pager button:disabled{opacity:.4;cursor:not-allowed}
+#phoneModal .modal-card{max-width:460px;width:min(100% - 24px,460px)}
+#phoneForm{display:grid;gap:16px}
+#subscriberPhone,#newPhone{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+@media(max-width:560px){.subscriber-actions{gap:6px;flex-wrap:wrap}.subscriber-pager .btn{min-height:44px}.phone-line{font-size:11px}}
