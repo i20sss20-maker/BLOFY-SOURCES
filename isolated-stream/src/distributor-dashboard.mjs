@@ -125,6 +125,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
 <div class="card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
+<div class="searchbar"><input type="search" id="clients-search" maxlength="80" placeholder="بحث بالاسم أو الجوال" aria-label="بحث العملاء"></div>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
 <tbody id="clients-rows"></tbody></table></div></div>
 <dialog id="renew-dialog" aria-labelledby="renew-title"><h2 id="renew-title">تجديد الاشتراك</h2>
@@ -295,7 +296,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
   }
  }
  async function loadClients(){
-  const data=await request('clients');
+  const data=await request('clients',{q:$('clients-search').value.trim()});
   const target=$('clients-rows');target.replaceChildren();
   if(!data.items?.length){const tr=document.createElement('tr');
     const td=tableCell(tr,'لا يوجد عملاء مسجلون');td.colSpan=4;target.appendChild(tr);return;}
@@ -324,6 +325,10 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
   $('issue-status').scrollIntoView({behavior:'smooth',block:'center'});
  });
  $('clients-refresh').addEventListener('click',()=>loadClients().catch(e=>msg(e.message,false)));
+ $('clients-search').addEventListener('input',()=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>loadClients().catch(e=>msg(e.message,false)),260);
+ });
  document.querySelectorAll('[data-close-dialog]').forEach(btn=>
   btn.addEventListener('click',()=>$(
     btn.getAttribute('data-close-dialog')).close()));
