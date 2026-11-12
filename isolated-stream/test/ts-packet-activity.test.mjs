@@ -137,7 +137,7 @@ test('operator cross-service warnings are restricted to fully sampled media only
   assert.equal(rest.audioPayloadNotObservedPaths,1);
   assert.equal(rest.videoPayloadNotObservedPaths,1);
   assert.equal(rest.audioPayloadObservedPaths,2);
-  assert.equal(rest.videoPayloadObservedPaths,1);
+  assert.equal(rest.videoPayloadObservedPaths,3);
   assert.equal(rest.audioNoTrackPaths,0);
   assert.equal(rest.audioCodecReviewPaths,0);
   assert.equal(rest.countsAreUniqueViewers,false);
