@@ -1,3 +1,5 @@
+import {createServer} from 'node:http';
+import {createDistributorDashboard} from '../src/distributor-dashboard.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
@@ -62,4 +64,45 @@ test('owner panel offers create, credit, suspend and reset without exposing admi
   });
   assert.equal(forbidden.status,401);
  });
+});
+
+test('distributor login sets private cookie and never returns session token to browser scripts',async()=>{
+ const secretToken='A'.repeat(43),calls=[];
+ const bridge={async distributorRequest(action,data){
+   calls.push({action,data});
+   if(action==='login')return {status:200,body:{ok:true,token:secretToken,
+     expiresIn:43200,item:{name:'Distribution Test'}}};
+   if(action==='me')return {status:200,body:{ok:true,item:{
+     name:'Distribution Test',username:'dist-demo',credits:5,used:0,enabled:true}}};
+   if(action==='issue')return {status:200,body:{ok:true,code:'12345678'}};
+   return {status:404,body:{ok:false,code:'route_not_found'}};
+ }};
+ const dashboard=createDistributorDashboard({bridge});
+ const server=createServer((req,res)=>{
+  if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ const origin='https://127.0.0.1:'+server.address().port;
+ try{
+  const login=await fetch(base+'/distributor/api/login',{method:'POST',
+   headers:{origin,'content-type':'application/json','x-blofy-distributor-action':'login'},
+   body:JSON.stringify({username:'dist-demo',password:'not-logged-secret'})});
+  assert.equal(login.status,200);
+  const body=await login.text();
+  assert.doesNotMatch(body,/AAAAAA/);
+  assert.doesNotMatch(body,/not-logged-secret/);
+  const cookie=login.headers.get('set-cookie');
+  assert.match(cookie,/HttpOnly/);assert.match(cookie,/Secure/);
+  assert.match(cookie,/SameSite=Strict/);assert.match(cookie,/Path=\/distributor/);
+  const me=await fetch(base+'/distributor/api/me',{method:'POST',
+    headers:{origin,'content-type':'application/json',
+      'x-blofy-distributor-action':'me',cookie:cookie.split(';')[0]},body:'{}'});
+  assert.equal(me.status,200);
+  assert.equal(calls[1].data.sessionToken,secretToken);
+  const forbidden=await fetch(base+'/distributor/api/me',{method:'POST',
+    headers:{origin,'content-type':'application/json','x-blofy-distributor-action':'me'},
+    body:'{}'});
+  assert.equal(forbidden.status,401);
+ }finally{await new Promise(resolve=>server.close(resolve))}
 });
