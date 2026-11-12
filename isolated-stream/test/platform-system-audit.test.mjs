@@ -119,3 +119,20 @@ test('full operational audit is operator-authenticated, read-only and never expo
     headers:{authorization:basic}})).status,404);
  }finally{await new Promise(resolve=>app.close(resolve))}
 });
+
+test('incident recommendations are bounded, evidence-based and never auto-apply changes',async()=>{
+ const f=fixture(),data=await f.audit.audit();
+ assert.ok(data.recommendations.length>=2);
+ assert.equal(data.recommendations[0].priority,'high');
+ assert.equal(data.recommendations[0].code,'recent_playback_failures');
+ assert.equal(data.recommendations.every(x=>x.requiresApproval&&x.automatedChange===false),true);
+ assert.doesNotMatch(JSON.stringify(data.recommendations),
+   /https?:\/\/|password|secret|token|credentials|userName/i);
+ const html=await (async()=>{
+   const {renderOperatorDashboard}=await import('../src/operator-unified-view.mjs');
+   return renderOperatorDashboard('examplenonce');
+ })();
+ assert.match(html,/id="deep-audit-recommendations"/);
+ assert.match(html,/result\.recommendations/);
+ assert.match(html,/لا توجد توصيات جديدة/);
+});
