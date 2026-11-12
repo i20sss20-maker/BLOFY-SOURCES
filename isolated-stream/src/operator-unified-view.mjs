@@ -281,6 +281,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="inline" style="margin-top:12px">
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
+<label><input id="live-aac-audio" type="checkbox"> تجربة تحويل الصوت إلى AAC</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 <button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
@@ -293,6 +294,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
 <option value="">بدون قناة احتياطية</option></select></div>
 <p class="muted">🛡 فحص المشاركة يفتح اتصالًا واحدًا مصرحًا بالمصدر وقارئين داخليين لمدة 26 ثانية، ولا يغيّر أي كود أو قناة للمشتركين. يفحص نقل TS وليس جودة الصوت أو الصورة بعد فك التشفير.</p>
+<p class="muted">تجربة AAC للمشرف فقط، ولا تشمل مشتركي التطبيق. تنسخ الفيديو وتحوّل مسار الصوت عند وجوده؛ تستهلك موارد FFmpeg ولا تُنشئ صوتًا مفقودًا من المصدر. مسار تحويل واحد كحد أقصى.</p>
 <div class="inline" style="margin-top:9px">
 <span class="pill" id="shared-live-readiness-state">لم يُفحص البث المشترك بعد</span>
 <span class="pill">اتصالات المصدر: <strong id="shared-live-readiness-upstreams">—</strong></span>
@@ -2442,6 +2444,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(item.failovers)status+=" · تبديلات: "+item.failovers;
       if(item.mediaTracks?.inspectedBytes>0)
         status+=" · صوت: "+audioTrackLabel(item.mediaTracks);
+      if(item.audioMode==="aac")status+=" · تحويل AAC تجريبي";
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe){
         var reason=String(item.lastProbe.code||"");
@@ -2701,9 +2704,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(Boolean(backupSourceId)!==Boolean(backupChannelId)){
         show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
       }
+      var audioMode=$("live-aac-audio").checked?"aac":"copy";
+      if(audioMode==="aac"&&!confirm(
+        "تجربة AAC تخص مسار المشرف فقط وتستهلك CPU. لن تتغير أكواد أو قنوات العملاء. متابعة؟"))
+        return;
       var result=await action("live/start","live-start",{
         sourceId:sourceId,channelId:channelId,
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
+        audioMode:audioMode,audioTranscodeConfirmed:audioMode==="aac",
         rightsConfirmed:true
       });
       $("live-result").textContent=
@@ -2712,6 +2720,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         "\nتنبيه: لم يبدأ سحب المصدر بعد، ولا يعني إنشاء المسار أن الصورة والصوت يعملان."+
         "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
         "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
+        "\nالصوت: "+(result.audioMode==="aac"?"تحويل AAC للمشرف فقط":"نسخ دون تحويل")+
         "\nالمسار: "+String(result.path||"");
       show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);
       await loadLive();
