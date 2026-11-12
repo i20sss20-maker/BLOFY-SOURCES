@@ -6,6 +6,7 @@ import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
+import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -115,6 +116,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     if(req.method==='GET'&&path==='/operator/api/stream-release'){
       void releaseInspector.inspect().then(report=>json(res,200,report))
         .catch(()=>json(res,503,{ok:false,code:'stream_release_inspector_unavailable'}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/support-bundle'){
+      void platformAudit.audit().then(report=>json(res,report.ok?200:503,
+        buildOperatorSupportBundle(report)))
+        .catch(()=>json(res,503,{ok:false,code:'audit_not_available'}));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/full-audit'){
