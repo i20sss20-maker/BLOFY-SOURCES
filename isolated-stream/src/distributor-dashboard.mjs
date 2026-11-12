@@ -263,7 +263,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
       const result=await request('relogin',{issueId:item.id,requestId:id.id});
       retryActions.delete(id.key);
       msg('إعادة الدخول متاحة لنفس الكود لمدة 10 دقائق',true);
-      await loadItems(false);
+      await refreshViews();
     });
    }
    rowButton(actions,'العميل',async()=>{
@@ -341,7 +341,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
    const result=await request('renew',{issueId:issue.id,days,requestId:op.id});
    retryActions.delete(op.key);$('renew-dialog').close();
    msg('تم التجديد إلى '+dateOnly(result.expiresAt),true);
-   await Promise.all([profile(),loadItems(false),loadClients()]);
+   await refreshViews();
   }catch(err){msg('تعذر التجديد: '+err.message,false)}
   finally{btn.disabled=false}
  });
@@ -352,16 +352,28 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
    await request('customer',{issueId:activeIssue.id,
     name:$('edit-customer-name').value,phone:$('edit-customer-phone').value});
    $('customer-dialog').close();msg('تم حفظ بيانات العميل',true);
-   await Promise.all([loadItems(false),loadClients()]);
+   await refreshViews();
   }catch(err){msg('تعذر الحفظ: '+err.message,false)}
   finally{btn.disabled=false}
  });
- async function refresh(){try{
-    await profile();await Promise.all([loadItems(false),loadClients()]);
-   }catch(e){
-   setLogged(false);if(e.message!=='distributor_unauthorized'&&e.message!=='distributor_session_expired')
-     msg("تعذر تحميل لوحة التوزيع: "+e.message,false);
- }}
+ async function refresh(){
+  try{await profile()}
+  catch(e){
+   setLogged(false);
+   if(!['distributor_unauthorized','distributor_session_expired'].includes(e.message))
+    msg("تعذر تسجيل الدخول: "+e.message,false);
+   return;
+  }
+  // An optional list failure must never log out an authenticated reseller.
+  const results=await Promise.allSettled([loadItems(false),loadClients()]);
+  const failed=results.find(r=>r.status==='rejected');
+  if(failed)msg("تعذر تحديث بعض البيانات: "+failed.reason.message,false);
+ }
+ async function refreshViews(){
+  const results=await Promise.allSettled([profile(),loadItems(false),loadClients()]);
+  const failed=results.find(r=>r.status==='rejected');
+  if(failed)msg("تم حفظ العملية، لكن تعذر تحديث العرض: "+failed.reason.message,false);
+ }
  kindButtons.forEach(btn=>btn.addEventListener('click',()=>{
   currentKind=btn.dataset.kind;
   kindButtons.forEach(x=>x.classList.toggle("active",x===btn));
@@ -384,7 +396,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
    inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
-   await Promise.all([profile(),loadItems(false),loadClients()]);
+   await refreshViews();
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
    if(err.message!=='distributor_issuance_needs_review'&&
