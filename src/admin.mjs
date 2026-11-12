@@ -9,6 +9,7 @@ import { baseUrl,xtreamBaseUrl,json,text,readJsonBody } from './http.mjs';
 import { syncAll,syncSource,syncState } from './sync.mjs';
 import { activeConnectionCount } from './connections.mjs';
 import { restreamOverview } from './restream-dashboard.mjs';
+import { accountMatchesSearch } from './admin-customer-helpers.mjs';
 
 const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const LOGIN_WINDOW_MS=10*60_000,LOGIN_MAX_ATTEMPTS=8,loginAttempts=new Map();
@@ -56,11 +57,15 @@ export async function adminApi(req,res,url){
     return json(res,200,{ok:true,adminBaseUrl:baseUrl(req),baseUrl:xtreamBaseUrl(req),stats:catalog.stats(),arabic,accountsSummary:accountSummary(accounts),providers:providerDefinitions.map(p=>({id:p.id,name:p.name,kind:p.kind,enabled:p.enabled(),rights:p.rights,runtime:catalog.sources[p.id]||null,counts:perSource[p.id]||{live:0,movies:0,episodes:0,total:0}})),account:accounts[0]||null,...sync});
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='GET'){
-    const accounts=withConnectionState(listAccounts());return json(res,200,{ok:true,summary:accountSummary(accounts),accounts});
+    const accounts=withConnectionState(listAccounts());
+    const query=String(url.searchParams.get('q')||'').trim().slice(0,128);
+    // Existing unfiltered clients keep the full list; admin-only search can
+    // find a stored customer phone without sending phone data to public APIs.
+    return json(res,200,{ok:true,summary:accountSummary(accounts),accounts:query?accounts.filter(a=>accountMatchesSearch(a,query)):accounts});
   }
   if(url.pathname==='/api/admin/accounts'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));
-    try{const account=await createAccount({username:body.username,password:body.password,durationDays:body.durationDays,maxConnections:body.maxConnections,label:body.label,note:body.note});const host=xtreamBaseUrl(req);return json(res,201,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+    try{const account=await createAccount({username:body.username,password:body.password,durationDays:body.durationDays,maxConnections:body.maxConnections,label:body.label,note:body.note,phone:body.phone});const host=xtreamBaseUrl(req);return json(res,201,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/accounts/bulk'&&req.method==='POST'){
     try{
@@ -83,7 +88,7 @@ export async function adminApi(req,res,url){
     const body=await readJsonBody(req).catch(()=>({}));try{return json(res,200,{ok:true,account:await setAccountEnabled(body.username,body.enabled)})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/accounts/update'&&req.method==='POST'){
-    const body=await readJsonBody(req).catch(()=>({}));try{return json(res,200,{ok:true,account:await updateAccount(body.username,{maxConnections:body.maxConnections,label:body.label,note:body.note})})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
+    const body=await readJsonBody(req).catch(()=>({}));try{return json(res,200,{ok:true,account:await updateAccount(body.username,{maxConnections:body.maxConnections,label:body.label,note:body.note,phone:body.phone})})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
   }
   if(url.pathname==='/api/admin/accounts/password'&&req.method==='POST'){
     const body=await readJsonBody(req).catch(()=>({}));try{const account=await resetAccountPassword(body.username,body.password);const host=xtreamBaseUrl(req);return json(res,200,{ok:true,host,...account,m3u:`${host}/get.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}&type=m3u_plus&output=ts`,playerApi:`${host}/player_api.php?username=${encodeURIComponent(account.username)}&password=${encodeURIComponent(account.password)}`})}catch(e){return json(res,400,{ok:false,error:String(e?.message||e)})}
