@@ -46,3 +46,14 @@ Date: 2026-11-12 (Asia/Riyadh). This tracker describes **verified code and remai
 - Source rights/capacity confirmed and existing accounts preserved.
 - Windows + Android signed builds tested on devices before end-user distribution.
 - Only then mark features #01/#02/#04/#05/#11/#17/#18 complete.
+
+## Incremental delivery: passive audio, AAC trial, 250 simulated viewers and release verification
+
+- **Audio transport observations:** `ts-audio-inspector.mjs` now reads bounded MPEG-TS PAT/PMT metadata from an **existing** licensed TS feed. It differentiates no audio PID observed, a declared AAC/AC3/etc. audio track, and a stream whose PSI was not observed. It **does not** decode audio or alter stream bytes. Both operator HLS publisher and licensed shared-fanout expose temporary safe track signals.
+- **Audio conversion QA:** New operator-only `audioMode='aac'` option transforms existing audio to stereo AAC with FFmpeg while copying video unchanged. It requires explicit confirmation, allows a single transcode path, and refuses conflicting extra licensed source connections. Default remains `copy`, and **subscriber routes are not changed**. This is not proof of audibility on Android TV.
+- **Capacity:** The isolated TS harness now covers **250 simultaneous synthetic viewers across two separate feeds with exactly two provider GETs**. This verifies sharing behavior, not production-provider capacity nor 250 independent Xtream accounts.
+- **Update metadata:** Fixed, authenticated STREAM release manifest inspection verifies version, package, SHA-format and URL consistency but explicitly reports that APK bytes, signature and installed version remain unverified.
+- **Android QA only:** An independent branch `feature/stream-nextgen-supported-audio-recovery-qa-20261112` based on STREAM 55.8.13 owner QA contains a single-track auto-selection recovery when Media3 declares a supported track but has not selected any. It does not override an explicit mute, restart the player, or bypass authentication. **No production APK was signed, uploaded or published from this change**. Its unit-test/compile workflow was added but full device acceptance is not demonstrated here.
+- **Quality gate:** Real devices must confirm playback and audio on Android 9, Android TV, and Windows; FFmpeg stereo AAC must be evaluated for source authorization, CPU overhead and actual MediaMTX behavior before any subscriber-facing use.
+
+**Status:** The admin/backend improvements have passed automated build gates and health checks. Audio codec observability and synthetic concurrency are implemented; client audio success, real-provider scalability, backup restore and signed device updates remain open acceptance criteria.
