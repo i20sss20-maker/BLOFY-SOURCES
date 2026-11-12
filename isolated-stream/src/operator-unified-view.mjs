@@ -530,7 +530,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 (function(){
   var $=function(id){return document.getElementById(id)};
   var tabs={home:"الرئيسية",sources:"المصادر",restream:"إعادة البث",library:"المكتبة",accounts:"المشتركون",codes:"أكواد الاشتراك",distributors:"لوحات التوزيع",diagnostics:"الفحص والصيانة"};
-  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,distributors:[],codes:[],codesOffset:0,codesNext:null,libOffset:0,libParams:null,libEpoch:0,libLoading:false,
+  var state={overview:null,engine:null,accounts:[],accountsNext:null,accountsOffset:0,accountsEpoch:0,accountsLoading:false,distributors:[],codes:[],codesOffset:0,codesNext:null,codesEpoch:0,codesLoading:false,libOffset:0,libParams:null,libEpoch:0,libLoading:false,
     health:null,security:null,refreshVersion:0,healthTime:null,
     live:{overview:false,engine:false,health:false,security:false},
     vodSelected:null};
@@ -1554,13 +1554,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
       cell(tr,dates);
       var urls=node("div");
-      urls.appendChild(node("div",state.accountHost||"https://bfy.up.railway.app","meta num"));
+      urls.appendChild(node("div",state.accountHost||"الهوست غير متاح","meta num"));
       urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
-      urls.appendChild(button("نسخ الهوست",function(){
-        navigator.clipboard.writeText(state.accountHost||"https://bfy.up.railway.app")
+      var hostCopy=button("نسخ الهوست",function(){
+        if(!state.accountHost){show("لم يصل عنوان الهوست من الخادم.",false);return}
+        navigator.clipboard.writeText(state.accountHost)
           .then(function(){show("تم نسخ الهوست.",true)})
           .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
-      }));
+      });
+      hostCopy.disabled=!state.accountHost;urls.appendChild(hostCopy);
       cell(tr,urls);
       var ctl=node("div",undefined,"actions");
       ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
@@ -1640,15 +1642,34 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     $("accounts-next").hidden=state.accountsNext===null;
   }
   async function loadAccounts(more){
+    if(more&&(state.accountsLoading||state.accountsNext===null))return;
+    var current=more?state.accountsEpoch:++state.accountsEpoch;
+    var offset=more?state.accountsNext:0;
+    state.accountsLoading=true;$("accounts-next").disabled=true;
     try{
-      var offset=more?state.accountsNext||0:0;
       var d=await api("accounts?offset="+offset);
-      state.accounts=more?state.accounts.concat(d.items||[]):d.items||[];
+      if(current!==state.accountsEpoch)return;
+      var items=Array.isArray(d.items)?d.items:[];
+      if(more){
+        var seen=new Set(state.accounts.map(function(x){return String(x.id)}));
+        state.accounts=state.accounts.concat(items.filter(function(x){
+          if(!x||seen.has(String(x.id)))return false;
+          seen.add(String(x.id));return true;
+        }));
+      }else state.accounts=items;
       state.accountsNext=d.nextOffset===undefined?null:d.nextOffset;
       state.accountsTotal=d.total;
-      state.accountHost=d.serverUrl||state.accountHost||"https://bfy.up.railway.app";
+      // Never invent an Xtream host; display only the URL returned by backend.
+      if(typeof d.serverUrl==="string"&&/^https?:\/\//i.test(d.serverUrl))
+        state.accountHost=d.serverUrl;
       renderAccounts();
-    }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}
+    }catch(e){
+      if(current===state.accountsEpoch)show("تعذر تحميل المشتركين: "+e.message,false);
+    }finally{
+      if(current===state.accountsEpoch){
+        state.accountsLoading=false;$("accounts-next").disabled=false;
+      }
+    }
   }
   $("reload-accounts").addEventListener("click",function(){loadAccounts(false)});
   $("accounts-next").addEventListener("click",function(){loadAccounts(true)});
@@ -1691,40 +1712,55 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }catch(e){show("تعذر نسخ الكود: "+e.message,false)}
   }
   async function loadCodes(more){
+    if(more&&(state.codesLoading||state.codesNext===null))return;
+    var current=more?state.codesEpoch:++state.codesEpoch;
     var indicator=$("codes-load-state");
-    if(indicator){indicator.hidden=false;indicator.textContent="جارٍ جلب أكواد الاشتراكات من النظام الرئيسي…"}
+    if(indicator){indicator.hidden=false;indicator.textContent="جارٍ جلب أكواد الاشتراكات…"}
+    state.codesLoading=true;$("codes-next").disabled=true;
     try{
-      var offset=more?state.codesNext||0:0;
+      var offset=more?state.codesNext:0;
       var d=await api("codes?offset="+offset);
-      state.codes=more?state.codes.concat(d.items||[]):d.items||[];
+      if(current!==state.codesEpoch)return;
+      var items=Array.isArray(d.items)?d.items:[];
+      if(more){
+        var seen=new Set(state.codes.map(function(x){return String(x.id)}));
+        state.codes=state.codes.concat(items.filter(function(x){
+          if(!x||seen.has(String(x.id)))return false;
+          seen.add(String(x.id));return true;
+        }));
+      }else state.codes=items;
       state.codesNext=d.nextOffset===undefined?null:d.nextOffset;
       var totals=d.totals||{};
       value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
       value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
       renderCodes();
       if(indicator){
-        indicator.textContent="تم تحميل "+count(state.codes.length)+" كودًا. يمكنك عرض بقية الأكواد من زر المزيد.";
+        indicator.textContent="تم تحميل "+count(state.codes.length)+" كودًا."+
+          (state.codesNext===null?"":" اضغط المزيد لعرض بقية الأكواد.");
         indicator.hidden=false;
       }
       void api("sales-summary").then(function(summary){
+        if(current!==state.codesEpoch)return;
         value("codes-sold-count",count(summary.sold));
         value("codes-sales-sar",
           (Number(summary.recorded_revenue_halalas||0)/100).toLocaleString("en-US",
             {minimumFractionDigits:2,maximumFractionDigits:2})+" ر.س");
         value("codes-expiring",count(summary.expiring_soon));
         value("codes-transfers",count(summary.transfers));
-      }).catch(function(){ /* code ledger remains available if sales summary fails */ });
+      }).catch(function(){});
     }catch(e){
+      if(current!==state.codesEpoch)return;
       if(indicator){
         indicator.hidden=false;
-        indicator.textContent="تعذر تحميل قائمة الأكواد من السيرفر الرئيسي ("+
-          String(e?.message||"خطأ غير معروف").slice(0,65)+
-          "). هذا لا يعني حذف الأكواد. اضغط تحديث هنا؛ الاشتراكات محفوظة في النظام الرئيسي.";
+        indicator.textContent="تعذر جلب أحدث الأكواد؛ السجل السابق محفوظ على الشاشة. حاول التحديث.";
       }
       show("تعذر تحميل الأكواد: "+e.message,false);
+    }finally{
+      if(current===state.codesEpoch){
+        state.codesLoading=false;$("codes-next").disabled=false;
+      }
     }
   }
-
 
   async function loadDistributors(){
     try{
