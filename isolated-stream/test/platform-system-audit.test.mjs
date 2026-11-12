@@ -166,3 +166,53 @@ test('series diagnostic is bounded to one validated source and mapped episode ID
  const sc=html.match(/<script nonce="noncecheck">([\s\S]*?)<\/script>/);
  assert.ok(sc);assert.doesNotThrow(()=>new Function(sc[1]));
 });
+
+test('release metadata is diagnostic only, even when the manifest matches the app',async()=>{
+ const releaseInspector={inspect:async()=>({ok:true,metadataConsistent:true,
+   packageName:'tv.blofy.player.v2.stream',versionName:'2.0.0-rc07.55.8.12-STREAM',
+   versionCode:2000089,sha256FieldPresent:true,apkBytesVerified:false,
+   deviceUpdateTested:false,signatureVerified:false})};
+ const noCalls=async()=>({status:503,body:{ok:false}});
+ const report=await createPlatformSystemAudit({
+  portal:{overview:noCalls,mediaFailures:noCalls,salesSummary:noCalls,
+   libraryAIStatus:noCalls,mediaQuality:noCalls},
+  releaseInspector,engineStatus:async()=>({reachable:false}),
+  mediaControl:{overview:async()=>({online:false})},autoHealth:()=>null
+ }).audit();
+ const update=report.checks.find(x=>x.id==='appUpdates');
+ assert.equal(update.status,'unknown');
+ assert.equal(update.code,'release_manifest_consistent_apk_unverified');
+ assert.equal(update.metrics.versionCode,2000089);
+ assert.equal(update.metrics.apkBytesVerified,false);
+});
+test('release metadata mismatch is flagged, never treated as a valid app update',async()=>{
+ const noCalls=async()=>({status:503,body:{ok:false}});
+ const report=await createPlatformSystemAudit({
+  portal:{overview:noCalls,mediaFailures:noCalls,salesSummary:noCalls,
+   libraryAIStatus:noCalls,mediaQuality:noCalls},
+  releaseInspector:{inspect:async()=>({ok:true,metadataConsistent:false,
+    versionCode:2000089})},
+  engineStatus:async()=>({reachable:false}),
+  mediaControl:{overview:async()=>({online:false})},autoHealth:()=>null
+ }).audit();
+ assert.equal(report.checks.find(x=>x.id==='appUpdates').status,'warning');
+});
+test('STREAM release safety check requires owner auth and has no mutation endpoint',async()=>{
+ const {app}=createStreamServer({adminToken:'blofy-nextgen-release-admin-credential-123456'});
+ app.listen(0,'127.0.0.1');await once(app,'listening');
+ try{
+  const base='http://127.0.0.1:'+app.address().port;
+  const denied=await fetch(base+'/operator/api/stream-release');
+  assert.equal(denied.status,401);
+  const auth='Basic '+Buffer.from('operator:blofy-nextgen-release-admin-credential-123456').toString('base64');
+  const notAllowed=await fetch(base+'/operator/api/stream-release',{method:'POST',
+   headers:{authorization:auth}});
+  assert.equal(notAllowed.status,404);
+  const html=await(await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+  assert.match(html,/id="stream-release-inspector-panel"/);
+  assert.match(html,/id="stream-release-check"/);
+  assert.match(html,/id="stream-release-info"/);
+  assert.match(html,/api\("stream-release"\)/);
+  assert.match(html,/توقيع وبصمة ملفات APK الفعلية/);
+ }finally{await new Promise(resolve=>app.close(resolve))}
+});
