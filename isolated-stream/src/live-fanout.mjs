@@ -3,6 +3,7 @@
 // viewers. Never store source URLs or credentials in logs or public responses.
 import {createHash} from 'node:crypto';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
+import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
@@ -91,6 +92,11 @@ export function createLiveFanout({
   }
   function deliver(row,chunk){
     row.lastMediaAt=clock();
+    // Parse only in-flight MPEG-TS metadata, with a strict memory/CPU cap.
+    // Never decode, change a byte, or open an extra connection to the provider.
+    if(row.trackInspector){
+      try{row.trackInspector.push(chunk)}catch{row.trackInspector=null}
+    }
     // Aggregate-only bandwidth accounting: counts upstream bytes once,
     // outbound bytes as queued writes (not verified network delivery).
     counters.sourceBytesReceived+=chunk.length;
@@ -328,7 +334,8 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
-        state:'starting',idleTimer:null,startedAt:null};
+        state:'starting',idleTimer:null,startedAt:null,
+        trackInspector:createTsAudioInspector()};
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
@@ -366,7 +373,10 @@ export function createLiveFanout({
       channel:row.channelNumber,state:row.state,viewers:row.viewers.size,
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
-      activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt)
+      activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
+      audio:row.trackInspector?row.trackInspector.summary():{
+        status:'unavailable',audioCodecs:[],videoCodecs:[],
+        hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
     maxFeeds,maxViewersPerFeed}),
