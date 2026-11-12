@@ -102,7 +102,6 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
 <form id="issue-form"><div class="formgrid">
-<div class="field"><label for="label">اسم الاشتراك</label><input id="label" maxlength="80" value="اشتراك" required></div>
 <div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
 <div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
@@ -118,8 +117,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 <option value="active">نشطة</option><option value="expiring">قريبة الانتهاء</option>
 <option value="expired">منتهية</option><option value="unused">لم تُفعّل</option>
 <option value="disabled">موقوفة</option></select></div>
-<div class="tablewrap"><table><thead><tr><th>النوع</th><th>العميل</th><th>الاشتراك</th>
-<th>الانتهاء</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>النوع</th><th>العميل</th><th>الانتهاء</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
@@ -238,13 +236,12 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
  function renderIssueRows(){
   const target=$('items');target.replaceChildren();
   if(!issueRows.length){const tr=document.createElement('tr');
-    const td=tableCell(tr,'لا توجد اشتراكات');td.colSpan=6;target.appendChild(tr);}
+    const td=tableCell(tr,'لا توجد اشتراكات');td.colSpan=5;target.appendChild(tr);}
   for(const item of issueRows){
    const row=document.createElement('tr');
    tableCell(row,item.type==='app'?'كود':'Xtream');
    const customer=tableCell(row,item.customerName||'—');
    if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
-   tableCell(row,item.label);
    tableCell(row,dateOnly(item.expiresAt));
    tableCell(row,outcomeStatus(item));
    const td=document.createElement('td'),actions=document.createElement('div');
@@ -389,7 +386,7 @@ dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px
 
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
-   const d=await request('issue',{kind:currentKind,label:$('label').value,
+   const d=await request('issue',{kind:currentKind,
     durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
@@ -520,7 +517,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
    }
    if(!sessionToken)return okJson(res,401,{ok:false,code:'distributor_unauthorized'});
    const allowed=action==='issue'?{
-      kind:data.kind,label:data.label,durationDays:data.durationDays,
+      kind:data.kind,label:'BLOFY STREAM',durationDays:data.durationDays,
       trialPhone:data.trialPhone,
       customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
      action==='reveal'?{issueId:data.issueId}:
