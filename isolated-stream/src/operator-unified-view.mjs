@@ -728,6 +728,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     media404:"أخطاء 404 الموثقة",codes:"أكواد الاشتراكات",libraryAI:"تنظيم المكتبة الذكي",
     subscribers:"المشتركون",engine:"محرك الوسائط",mediamtx:"MediaMTX",
     restream:"مراقبة إعادة البث",fanout:"مشاركة البث",playback:"أداء التشغيل",
+    quality_live:"جودة تشغيل القنوات",quality_movie:"جودة تشغيل الأفلام",
+    quality_series:"جودة تشغيل المسلسلات",quality_startup:"سرعة بدء التشغيل",
     episodes:"تشغيل الحلقات",audio:"الصوت",subtitles:"الترجمة",
     appUpdates:"تحديثات التطبيقات",backup:"اختبار استعادة النسخ الاحتياطية"
   };
@@ -761,6 +763,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     recent_playback_failures:"توجد أخطاء تشغيل حديثة",
     relay_start_events_recorded:"سُجّلت طلبات بدء تشغيل؛ لا تثبت مشاهدة الصورة",
     no_playback_samples:"لم تُسجّل عينات تشغيل كافية",
+    media_quality_unavailable:"لم تصل مقاييس تشغيل هذه الخدمة",
+    media_relay_failures:"توجد حالات فشل أو انقطاع مسجلة خلال الساعة",
+    media_relay_starts:"سُجل بدء نقل فيديو؛ لا يثبت وصول الصورة للجهاز",
+    insufficient_startup_samples:"عدد عينات البداية لا يكفي للحكم",
+    slow_playback_start:"زمن بدء التشغيل مرتفع في بعض العينات",
+    startup_telemetry_available:"تم تسجيل أزمنة بداية التشغيل",
     source_not_selected:"لم يتحدد مصدر صالح للفحص",
     episode_playback_not_sampled:"لم تُختبر ملفات الحلقات على جهاز حقيقي",
     audio_track_not_decoded:"لم يُفك ترميز الصوت على جهاز حقيقي",
@@ -776,6 +784,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       interrupted:"انقطع",slowStarts:"بدء بطيء",p95StartMs:"P95 بالمللي ثانية",
       hlsSessions:"جلسات HLS",readyPaths:"مسارات جاهزة",
       viewers:"مشاهدون",sourceOutages:"انقطاعات المصدر",sourceBytesReceived:"بايتات",
+      errorPercent:"نسبة الأخطاء",p95StartMs:"زمن بدء التشغيل P95",
       active:"نشطة",paths:"مسارات",count:"عدد",checked:"مفحوص"
     };
     var values=Object.entries(value).filter(function(pair){
