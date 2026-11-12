@@ -416,7 +416,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
 <option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
 <button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
-<p class="muted">الهوست: <strong class="num">https://bfy.up.railway.app</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<p class="muted">الهوست: <strong class="num" id="accounts-host-value">غير محدد</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
 <div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
@@ -1519,11 +1519,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   function showCredentials(target,creds,label){
     target.hidden=false;target.replaceChildren();
     target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
-    var host=creds.serverUrl||"https://bfy.up.railway.app";
+    var host=creds.serverUrl||state.accountHost||"";
     var m3u=creds.m3uUrl||(
-      host+"/get.php?"+new URLSearchParams({username:creds.username||"",
-      password:creds.password||"",type:"m3u_plus",output:"ts"}).toString());
-    attachCopy(target,"الهوست",host);
+      host&&creds.password?host+"/get.php?"+new URLSearchParams({
+        username:creds.username||"",password:creds.password||"",
+        type:"m3u_plus",output:"ts"}).toString():"");
+    attachCopy(target,"الهوست",host||"غير متاح");
     attachCopy(target,"اليوزر",creds.username||"");
     attachCopy(target,"الباسورد (يظهر مرة واحدة)",creds.password||"");
     attachCopy(target,"M3U",creds.password?m3u:"");
@@ -1662,6 +1663,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       // Never invent an Xtream host; display only the URL returned by backend.
       if(typeof d.serverUrl==="string"&&/^https?:\/\//i.test(d.serverUrl))
         state.accountHost=d.serverUrl;
+      value("accounts-host-value",state.accountHost||"غير محدد");
       renderAccounts();
     }catch(e){
       if(current===state.accountsEpoch)show("تعذر تحميل المشتركين: "+e.message,false);
