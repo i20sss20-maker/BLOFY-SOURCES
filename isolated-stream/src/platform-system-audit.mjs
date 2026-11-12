@@ -84,7 +84,8 @@ export function createPlatformSystemAudit({
         portal.salesSummary(),
         portal.libraryAIStatus(),
         engineStatus(),
-        mediaControl.overview()
+        mediaControl.overview(),
+        typeof portal.mediaQuality==='function'?portal.mediaQuality():null
       ]);
       const get=i=>results[i].status==='fulfilled'?results[i].value:null;
       const overview=get(0),overviewOk=ok(overview),body=overviewOk?overview.body:{};
@@ -133,6 +134,29 @@ export function createPlatformSystemAudit({
           viewers:n(fanout?.fanout?.viewers),
           sourceOutages:n(fanout?.fanout?.sourceOutages),
           providerFailures:n(fanout?.fanout?.providerFailures)}));
+      const quality=get(6);
+      const qBody=ok(quality)?quality.body:null;
+      for(const kind of ['live','movie','series']){
+        const sample=qBody?.byKind?.[kind];
+        if(!sample){checks.push(check('quality_'+kind,'unknown','media_quality_unavailable'));continue}
+        const started=n(sample.started),failed=n(sample.failed),
+          interrupted=n(sample.interrupted);
+        const attempts=started+failed;
+        const pct=attempts?Math.round(failed*100/attempts):null;
+        const bad=failed>=3||interrupted>=3||
+          (attempts>=6&&pct!==null&&pct>=25);
+        checks.push(check('quality_'+kind,bad?'warning':started?'ok':'unknown',
+          bad?'media_relay_failures':started?'media_relay_starts':'no_playback_samples',
+          {started,failed,interrupted,errorPercent:pct,decodedOnClient:false}));
+      }
+      const p95=qBody?.p95StartMs;
+      checks.push(check('quality_startup',!qBody?'unknown':
+        qBody.started<6?'unknown':
+        Number.isFinite(p95)&&p95>6500?'warning':'ok',
+        !qBody?'media_quality_unavailable':qBody.started<6?'insufficient_startup_samples':
+        Number.isFinite(p95)&&p95>6500?'slow_playback_start':'startup_telemetry_available',
+        {started:n(qBody?.started),p95StartMs:Number.isFinite(p95)?n(p95):null,
+         slowStarts:n(qBody?.slowStarts)}));
       if(selected){
         const item=await Promise.allSettled([portal.opsSourceStats({sourceId:selected.id})]);
         const sourceStats=item[0].status==='fulfilled'?item[0].value:null;
