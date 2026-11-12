@@ -756,6 +756,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     media404:"أخطاء 404 الموثقة",codes:"أكواد الاشتراكات",libraryAI:"تنظيم المكتبة الذكي",
     subscribers:"المشتركون",engine:"محرك الوسائط",mediamtx:"MediaMTX",
     restream:"مراقبة إعادة البث",fanout:"مشاركة البث",playback:"أداء التشغيل",
+    sourceCapacity:"حد اتصالات المصدر الحقيقي",
     quality_live:"جودة تشغيل القنوات",quality_movie:"جودة تشغيل الأفلام",
     quality_series:"جودة تشغيل المسلسلات",quality_startup:"سرعة بدء التشغيل",
     episodes:"تشغيل الحلقات",audio:"الصوت",subtitles:"الترجمة",
@@ -807,6 +808,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     release_manifest_consistent_apk_unverified:"معلومات الإصدار متطابقة، لكن ملف APK وتوقيعه غير مفحوصين",
     release_manifest_mismatch:"بيانات تحديث STREAM لا تتوافق مع الحزمة المعتمدة",
     release_manifest_not_verified:"ملف معلومات الإصدار غير متاح أو لم يُتحقق منه",
+    source_capacity_unavailable:"لم تتوفر حدود الاتصالات من المزود",
+    source_restream_or_capacity_denied:"المصدر لا يسمح بإعادة البث أو يعلن صفر اتصالات",
+    source_upstream_at_limit:"المصدر وصل إلى الحد المعلن للاتصالات",
+    source_single_connection_only:"المصدر يسمح باتصال واحد فقط؛ اختلاف القنوات يحتاج تخطيط",
+    source_capacity_reported_not_load_tested:"تم الإبلاغ عن حد الاتصالات، لكن تحمّل المشاهدين لم يُختبر",
+    source_upstream_capacity_unknown:"حد اتصالات المصدر غير معروف",
     restore_test_not_observed:"لا يوجد دليل على اختبار استعادة نسخة احتياطية"
   };
   function auditMetrics(value){
@@ -819,7 +826,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       viewers:"مشاهدون",sourceOutages:"انقطاعات المصدر",sourceBytesReceived:"بايتات",
       errorPercent:"نسبة الأخطاء",p95StartMs:"زمن بدء التشغيل P95",
       observed:"مسارات مرصودة",declaredAudio:"بمسار صوت",missingAudio:"بلا مسار صوت معلن",
-      versionCode:"رقم البناء",
+      versionCode:"رقم البناء",maxConnections:"الحد من المزود",
+      activeConnections:"اتصالات المصدر النشطة",sharedUpstreamForCodes:"الأكواد تشترك بالمصدر",
       active:"نشطة",paths:"مسارات",count:"عدد",checked:"مفحوص"
     };
     var values=Object.entries(value).filter(function(pair){
