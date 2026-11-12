@@ -634,10 +634,12 @@ test('live fanout exposes passive audio codec PMT metadata without any additiona
  const pmt=Buffer.from([2,0xb0,23,0,1,0xc1,0,0,0xe1,0,0xf0,0,
   0x1b,0xe1,0x20,0xf0,0,0x0f,0xe1,0x21,0xf0,0,0,0,0,0]);
  const media=Buffer.concat([packet(0,pat),packet(256,pmt)]);
+ const openStream=new ReadableStream({start(ctrl){ctrl.enqueue(new Uint8Array(media))}});
  await service(async(base,fanout)=>{
   const r=await fetch(base+'/live');
   assert.equal(r.status,200);
-  const chunk=await r.body.getReader().read();
+  const reader=r.body.getReader();
+  const chunk=await reader.read();
   assert.deepEqual(Buffer.from(chunk.value),media);
   const stats=fanout.stats();
   assert.equal(stats.channels.length,1);
@@ -647,7 +649,8 @@ test('live fanout exposes passive audio codec PMT metadata without any additiona
   assert.equal(stats.channels[0].audio.decodedAudio,false);
   assert.equal(requests,1);
   assert.doesNotMatch(JSON.stringify(stats),/password|https:\/\/licensed\.example/i);
+  await reader.cancel();
  },{fetchImpl:async()=>{
-  requests++;return new Response(media,{headers:{'content-type':'video/mp2t'}});
+  requests++;return new Response(openStream,{headers:{'content-type':'video/mp2t'}});
  }});
 });
