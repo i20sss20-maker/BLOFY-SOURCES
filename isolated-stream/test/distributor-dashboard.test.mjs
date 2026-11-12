@@ -19,7 +19,7 @@ test('distributor portal is a separate page with code and Xtream issuance, not o
   assert.match(html,/لوحة التوزيع المحدودة/);
   assert.match(html,/كود BLOFY STREAM/);
   assert.match(html,/حساب Xtream/);
-  assert.match(html,/رصيد الأكواد/);
+  assert.match(html,/رصيد الأشهر/);
   assert.match(html,/x-blofy-distributor-action/);
   assert.doesNotMatch(html,/data-tab="sources"|data-tab="library"|data-tab="restream"/);
   const nonce=html.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/);
