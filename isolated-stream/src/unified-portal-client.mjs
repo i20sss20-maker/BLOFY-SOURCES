@@ -64,6 +64,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   const codes=({offset=0}={})=>call(ROOT+'/codes?'+
     new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
   const salesSummary=()=>call(ROOT+'/codes/sales-summary');
+  const mediaQuality=()=>call(ROOT+'/media-quality');
   const codeReveal=id=>UUID.test(String(id||''))
     ?call(ROOT+'/codes/'+id+'/reveal')
     :Promise.resolve({status:400,body:{ok:false,code:'invalid_code_id'}});
@@ -241,6 +242,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
