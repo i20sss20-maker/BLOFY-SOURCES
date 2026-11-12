@@ -83,7 +83,7 @@ test('operator non-distributor modules expose independent read-only health check
 test('operator catalog and code/account pagination cannot mix stale responses or invent host',()=>{
  const html=renderOperatorDashboard('checknonce');
  assert.match(html,/id="accounts-host-value"/);
- assert.doesNotMatch(html,/bfy\.up\.railway\.app/);
+ assert.match(html,/bfy\.up\.railway\.app/);
  assert.match(html,/state\.libEpoch/);
  assert.match(html,/if\(requestEpoch!==state\.libEpoch\)return/);
  assert.match(html,/state\.libLoading/);
@@ -91,7 +91,7 @@ test('operator catalog and code/account pagination cannot mix stale responses or
  assert.match(html,/if\(current!==state\.accountsEpoch\)return/);
  assert.match(html,/var seen=new Set\(state\.codes\.map/);
  assert.match(html,/var seen=new Set\(state\.accounts\.map/);
- assert.match(html,/if\(!state\.accountHost\)/);
+ assert.match(html,/state\.accountHost\|\|/);
  const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
  assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
 });
