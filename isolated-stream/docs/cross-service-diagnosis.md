@@ -11,7 +11,7 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 | Xtream gateway HTTP transfers | Active *direct* authenticated HTTP response transfers in the portal process | Unique human viewers, 307 redirects, licensed fanout, independent edge, HLS segments, other Railway replicas |
 | Xtream gateway media quality | First valid media bytes sent, failed and interrupted transfer attempts, p95 startup latency, HTTP reasons | Decoded picture/audio; all customer playback sessions; full historical coverage |
 | STREAM fanout | Current shared-relay readers and feed count in the isolated STREAM API process | Ordinary direct streams and customers outside that process |
-| Operator HLS | Operator supervisor path reader counters | Every MediaMTX or end-user HLS session |
+| Operator HLS | Operator supervisor path reader counters; per-path cached first-media-byte probe age/outcome, backup enabled and failovers since boot | Other MediaMTX/HLS viewers; decoding success, any independent restream service, licensed provider capacity |
 | Source capacity | Cached provider-reported limits and pinned gateway subscriptions | Live true upstream socket sessions or source redistribution authorization |
 | STREAM MediaMTX (private Control API) | Real **ready path** total and **HLS session count** on the isolated STREAM media service, read-only fixed internal peer | WebRTC/RTSP peers, independent `blofy-restream-engine`, unique viewers, decoded A/V. Engine sessions may overlap other counters | 
 | Xtream Edge (one Railway Bun Function instance) | Header-level requests forwarded to the authoritative gateway, recent 5-minute HTTP 5xx/denials, in-flight origin header requests, P95 response header latency | **Not media-body streaming duration**, unique viewers, active video connections, other Edge replicas, or actual client playback |
@@ -24,6 +24,8 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 - HTTP 408 and 500/502/503/504 appear as transport/upstream symptoms over the portal's one-hour bounded sample.
 - Local gateway auth denials are separate from provider failures; missing catalog entries do not imply source downtime.
 - Relay provider failures are cumulative **since STREAM API boot**, unlike gateway counters sampled over the last hour.
+- Per-operator restream path last probes are classified as verified-first-bytes, recent failed, pending, stale (>5 minutes) or unverified. A *recent failed* path adds an operator-only issue; an old failure is not treated as an ongoing outage. Failover counts are cumulative since process boot and do not prove the backup audio/video decoded. Operator HLS readers already appear elsewhere, so the new per-path total is a duplicate scope, **not additional viewers**.
+- The operator restream details include **only numbered slots**, bounded readers, safe allowlisted error codes and aggregate probe ages. Never return source IDs, channel IDs, path names, channel titles, M3U URLs, ticket IDs, passwords or subscriber identities. No FFmpeg paths or source probes are created by opening this panel.
 - Portal metrics store at most **400 events per process**; the dashboard explicitly flags that earlier events can be excluded.
 - A missing upstream service appears as partial/unknown; zero events does not imply healthy A/V.
 
