@@ -34,6 +34,15 @@ input,select{border:1px solid #405a7e;background:#0c1b2e;color:#edf4ff;border-ra
 .empty{padding:25px;text-align:center;color:var(--muted)}.controls{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px}.controls .inline{flex:1}.controls .inline>*{max-width:260px}
 .accountsecret{background:#11372e;border:1px solid #287a62;color:#d6fff0;padding:13px;border-radius:10px;overflow-wrap:anywhere}.accountsecret[hidden]{display:none}
 [hidden]{display:none!important}
+
+.code-manager{background:linear-gradient(130deg,#22213e,#0e283d);border-color:#8167b5}
+.code-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}
+.code-tile{padding:12px;background:#0c1b32;border:1px solid #3d5270;border-radius:11px;overflow-wrap:anywhere}
+.code-tile small{display:block;color:#aebdd5}.code-tile strong{display:block;margin-top:3px}
+.code-detail{padding:14px;border-radius:13px;border:1px solid #635588;background:#0b182f;margin-top:14px}
+.code-renew-row{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-top:12px}
+.code-renew-row .field{width:180px}.code-renew-row .btn{flex:0 0 auto}
+@media(max-width:740px){.code-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.code-renew-row .field{width:100%}}
 footer{text-align:center;color:#788da9;padding-top:24px;font-size:11px}
 @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:740px){.layout{display:block}aside{position:static;height:auto;padding:10px 12px;border-left:0;border-bottom:1px solid var(--border)}.logo{margin:0 0 12px}.logo-icon{width:39px;height:39px;font-size:19px}nav{display:flex;overflow:auto;gap:5px}.navlink{flex:0 0 auto;width:auto;padding:7px 10px;white-space:nowrap}.navtitle,.navfoot{display:none}.top{height:auto;min-height:60px;padding:12px 15px}.top p{display:none}main{padding:17px 13px}.heading h2{font-size:22px}.formgrid{grid-template-columns:1fr}.stat{padding:12px}.stat strong{font-size:22px}}
@@ -422,6 +431,22 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">إصدار الأكواد</button></div></form>
 <div id="codes-issued" class="accountsecret" style="margin-top:12px" hidden></div>
  <p class="muted" style="margin-top:12px">مهم: الأكواد القديمة غير المحفوظة مشفّرة لا يمكن استرجاعها. الأكواد الصادرة بعد هذا التحديث متاحة للنسخ بعد تحديث الصفحة، للمشرف المصرّح فقط.</p></div>
+<div class="panel code-manager" id="codes-manager" tabindex="-1">
+<div class="controls"><div><h3>إدارة الكود · تجديد الصلاحية · نقل الجهاز</h3>
+<p class="muted">اختر الكود من القائمة لإظهار صلاحياته ومدة اشتراكه وعمليات التجديد والنقل. لن تتم أي عملية إلا بعد تأكيدك.</p></div>
+<span class="pill" id="codes-filter-count">—</span></div>
+<div class="formgrid">
+<div class="field"><label for="codes-search">بحث بالكود أو اسم العميل أو جواله</label><input id="codes-search" type="search" autocomplete="off" placeholder="آخر أرقام الكود، الاسم، الرقم..."></div>
+<div class="field"><label for="codes-filter">تصفية حسب الحالة</label><select id="codes-filter">
+<option value="all">كل الأكواد</option><option value="active">ساري</option><option value="expired">منتهي الصلاحية</option>
+<option value="expiring">ينتهي خلال 7 أيام</option><option value="pending">بانتظار الجهاز الجديد</option>
+<option value="unused">غير مفعل</option><option value="revoked">ملغى</option></select></div>
+<div class="field"><label for="codes-sort">الترتيب</label><select id="codes-sort">
+<option value="new">الأحدث</option><option value="expiry">الأقرب للانتهاء</option><option value="old">الأقدم</option></select></div>
+</div>
+<p class="muted">البحث في الأكواد المحمّلة حاليًا. اضغط «المزيد من الأكواد» لجلب البقية. الأكواد المخفية القديمة يُبحث عنها بالأرقام الظاهرة.</p>
+<div id="codes-selected" class="code-detail" hidden aria-live="polite"></div>
+</div>
 <div class="panel"><div class="controls"><h3>سجل الأكواد</h3>
 <div class="actions"><button class="btn secondary sm" id="codes-copy-visible" type="button">نسخ الأكواد القابلة للاسترجاع</button><button class="btn secondary sm" id="reload-codes" type="button">↻ تحديث</button></div></div>
 <p class="muted">زر النسخ ثابت لكل كود جديد مشفّر في الخادم، حتى بعد تحديث الصفحة. الأكواد القديمة التي لم تُحفظ مشفّرة لا يمكن استرجاعها. لا تنسخ الأكواد الملغاة.</p>
@@ -571,6 +596,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       status.appendChild(node("div",s.enabled?"مفعل":"موقوف","meta"));cell(row,status);
       cell(row,count(s.counts.live)+" قناة · "+count(s.counts.movie)+" فيلم · "+count(s.counts.series)+" مسلسل");
       var controls=node("div",undefined,"actions");
+      controls.appendChild(button("إدارة الكود",function(){manageCode(code.id)},"secondary sm"));
       controls.appendChild(button("اختبار",function(){doSource(s.id,"test")}));
       controls.appendChild(button("مزامنة",function(){doSource(s.id,"sync")}));
       controls.appendChild(button("فحص فيديو",function(){doSource(s.id,"probe",{type:"live"})}));
@@ -1535,6 +1561,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   // The database persists irreversible code proofs. Never write plaintext to
   // localStorage, sessionStorage, URL parameters or the shared code ledger.
   var recentlyIssuedCodes=new Map();
+  var selectedCodeId="";
   async function copyCode(code){
     var key=String(code.id||"");
     if(!code.copyAvailable&&!recentlyIssuedCodes.has(key)){
@@ -1583,11 +1610,139 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       show("تعذر تحميل الأكواد: "+e.message,false);
     }
   }
+
+  function codePhase(code){
+    if(code.status==="revoked")return "revoked";
+    if(code.status==="unused")return "unused";
+    if(code.deviceTransferPending)return "pending";
+    return Number(code.expiresAt||0)<=Date.now()?"expired":"active";
+  }
+  function visibleCodes(){
+    var q=$("codes-search").value.trim().toLowerCase(),f=$("codes-filter").value;
+    var result=state.codes.filter(function(c){
+      var expiry=Number(c.expiresAt||0),phase=codePhase(c);
+      if(!(f==="all"||f===phase||f==="expiring"&&c.status==="redeemed"&&
+        expiry>Date.now()&&expiry<=Date.now()+7*86400000))return false;
+      if(!q)return true;
+      return [c.label,c.codeHint,c.buyerName,c.buyerPhone,c.id,
+        recentlyIssuedCodes.get(String(c.id))].some(function(x){
+        return String(x||"").toLowerCase().includes(q);
+      });
+    });
+    var sort=$("codes-sort").value;
+    result.sort(function(a,b){
+      if(sort==="expiry")return (Number(a.expiresAt)||Infinity)-(Number(b.expiresAt)||Infinity);
+      var difference=(Number(b.createdAt)||0)-(Number(a.createdAt)||0);
+      return sort==="old"?-difference:difference;
+    });
+    return result;
+  }
+  function detailValue(grid,label,text){
+    var item=node("div",undefined,"code-tile");
+    item.appendChild(node("small",label));item.appendChild(node("strong",text));
+    grid.appendChild(item);
+  }
+  function manageCode(id){
+    selectedCodeId=String(id);
+    renderCodeDetail();
+    $("codes-manager").scrollIntoView({behavior:"smooth",block:"start"});
+    $("codes-manager").focus({preventScroll:true});
+  }
+  function renderCodeDetail(){
+    var box=$("codes-selected");
+    var c=state.codes.find(function(x){return String(x.id)===selectedCodeId});
+    box.replaceChildren();box.hidden=!c;
+    if(!c)return;
+    var phase=codePhase(c);
+    var phaseNames={unused:"لم يُفعّل",active:"ساري",pending:"بانتظار الجهاز الجديد",
+      expired:"منتهي الصلاحية",revoked:"ملغى"};
+    box.appendChild(node("h3","اشتراك "+(c.label||"BLOFY STREAM")+" · "+phaseNames[phase]));
+    var grid=node("div",undefined,"code-grid");
+    detailValue(grid,"الكود",recentlyIssuedCodes.get(String(c.id))||c.codeHint||"مخفي");
+    detailValue(grid,"النوع",c.channel==="app"?"تطبيق BLOFY STREAM":"Xtream");
+    detailValue(grid,"تاريخ التفعيل",dateTime(c.redeemedAt));
+    detailValue(grid,"تاريخ الانتهاء",dateTime(c.expiresAt));
+    detailValue(grid,"مدة الكود",String(c.durationDays)+" يوم");
+    detailValue(grid,"أقصى الاتصالات",String(c.maxConnections||1));
+    detailValue(grid,"الأيام المضافة",String(c.extendedDays||0));
+    detailValue(grid,"مرات نقل الجهاز",String(c.transferCount||0));
+    detailValue(grid,"العميل",c.buyerName||"غير مسجل");
+    if(c.buyerPhone)detailValue(grid,"الجوال",c.buyerPhone);
+    if(c.status==="redeemed"){
+      var remain=Math.ceil((Number(c.expiresAt||0)-Date.now())/86400000);
+      detailValue(grid,"المتبقي",remain>0?remain+" يوم":"منتهي");
+    }
+    box.appendChild(grid);
+    var actions=node("div",undefined,"actions");
+    if(c.status!=="revoked"&&(c.copyAvailable||recentlyIssuedCodes.has(String(c.id))))
+      actions.appendChild(button("نسخ الكود",function(){void copyCode(c)}));
+    if(c.status==="redeemed"){
+      var row=node("div",undefined,"code-renew-row"),field=node("div",undefined,"field");
+      var label=node("label","تجديد الصلاحية بالأيام");
+      var days=node("input");days.type="number";days.min="1";days.max="730";
+      days.step="1";days.value="30";days.id="selected-code-days";label.htmlFor=days.id;
+      field.append(label,days);row.appendChild(field);
+      [30,90,180,365,730].forEach(function(n){
+        row.appendChild(button(n===365?"سنة":n===730?"سنتان":n+" يوم",
+          function(){days.value=String(n)},"secondary sm"));
+      });
+      var renew=button(phase==="expired"?"إعادة صلاحية الكود":"تجديد / تمديد",async function(){
+        var countDays=Number(days.value);
+        if(!Number.isSafeInteger(countDays)||countDays<1||countDays>730){
+          show("مدة التجديد يجب أن تكون بين 1 و730 يومًا.",false);return;
+        }
+        if(!confirm("تجديد الكود "+(c.codeHint||"")+" "+countDays+
+          " يومًا؟ تُضاف المدة إلى تاريخ الانتهاء الحالي أو إلى اليوم إذا انتهى الاشتراك."))return;
+        renew.disabled=true;
+        try{
+          var d=await action("code/"+c.id+"/extend","code-extend",{days:countDays});
+          show("تم التجديد. الصلاحية حتى "+dateTime(d.item?.expiresAt),true);
+          await loadCodes(false);await loadAccounts(false);
+        }catch(e){show("تعذر تجديد الاشتراك: "+e.message,false)}
+        finally{renew.disabled=false}
+      });
+      row.appendChild(renew);box.appendChild(row);
+      if(c.channel==="app"&&!c.deviceTransferPending&&Number(c.expiresAt||0)>Date.now()){
+        actions.appendChild(button("نقل الجهاز",async function(){
+          if(!confirm("سيصبح الكود القديم وجهازه غير صالحين فورًا، وسينشأ كود جديد بنفس تاريخ انتهاء الاشتراك. متابعة؟"))return;
+          this.disabled=true;
+          try{
+            var d=await action("code/"+c.id+"/transfer","code-transfer",{});
+            var fresh=String(d.code||"");
+            if(fresh)recentlyIssuedCodes.set(String(c.id),fresh);
+            var target=$("codes-issued");target.hidden=false;target.replaceChildren();
+            target.appendChild(node("strong","تم نقل الجهاز. الكود القديم لم يعد صالحًا."));
+            if(fresh)attachCopy(target,"كود الجهاز الجديد",fresh);
+            else target.appendChild(node("p","انسخ الكود البديل من سجل الأكواد؛ لم يصل الرقم الكامل في الاستجابة.","warn"));
+            attachCopy(target,"تاريخ الانتهاء",dateTime(d.expiresAt));
+            target.scrollIntoView({behavior:"smooth",block:"center"});
+            show("تم نقل الاشتراك دون بدء مدة جديدة.",true);
+            await loadCodes(false);
+          }catch(e){show("تعذر نقل الجهاز: "+e.message,false)}
+          finally{this.disabled=false}
+        },"danger"));
+      }else if(c.deviceTransferPending){
+        box.appendChild(node("p","تم إصدار كود نقل سابقًا؛ انسخه من السجل وفعّله بالجهاز الجديد قبل طلب نقل آخر.","warn"));
+      }else if(c.channel==="app"&&Number(c.expiresAt||0)<=Date.now()){
+        box.appendChild(node("p","جدّد الاشتراك أولًا حتى يصبح نقل الجهاز متاحًا.","warn"));
+      }
+    }else if(c.status==="unused"){
+      box.appendChild(node("p","هذا الكود لم يُفعّل بعد؛ مدته تبدأ عند أول استخدام.","muted"));
+    }else{
+      box.appendChild(node("p","الكود الملغى لا يمكن تجديده أو نقله. أنشئ كودًا جديدًا عند الحاجة.","warn"));
+    }
+    if(actions.childNodes.length)box.appendChild(actions);
+  }
+  ["codes-search","codes-filter","codes-sort"].forEach(function(id){
+    $(id).addEventListener(id==="codes-search"?"input":"change",renderCodes);
+  });
   function renderCodes(){
     var tb=$("codes-list");tb.replaceChildren();
-    if(!state.codes.length){var tr=node("tr");var td=cell(tr,"لم يتم إصدار أكواد بعد");
+    var filtered=visibleCodes();
+    value("codes-filter-count","المعروض "+count(filtered.length)+" من "+count(state.codes.length));
+    if(!filtered.length){var tr=node("tr");var td=cell(tr,state.codes.length?"لا توجد أكواد مطابقة للبحث أو الفلتر.":"لم يتم إصدار أكواد بعد");
       td.colSpan=8;tb.appendChild(tr)}
-    state.codes.forEach(function(code){
+    filtered.forEach(function(code){
       var tr=node("tr");
       cell(tr,(code.label||"BLOFY")+(code.channel==="app"?" · تطبيق فقط":" · Xtream"));
       var visibleCode=recentlyIssuedCodes.get(String(code.id||""));
@@ -1601,7 +1756,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       cell(tr,codeCell);
       cell(tr,String(code.durationDays)+" يوم");
       var label=code.status==="unused"?"بانتظار التفعيل":
-        code.status==="redeemed"?"تم التفعيل":"ملغى";
+        code.status==="revoked"?"ملغى":code.deviceTransferPending?"بانتظار الجهاز":
+        Number(code.expiresAt||0)<=Date.now()?"منتهي الصلاحية":"ساري";
       var status=node("strong",label,code.status==="redeemed"?"ok":
         code.status==="unused"?"warn":"fail");cell(tr,status);
       var sale=code.soldAt?(String((code.salePriceHalalas||0)/100)+" ر.س"):
@@ -1671,6 +1827,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     });
     $("codes-pagination").textContent="المعروض "+state.codes.length+" كود";
     $("codes-next").hidden=state.codesNext===null;
+    renderCodeDetail();
   }
   $("reload-codes").addEventListener("click",function(){loadCodes(false)});
   $("codes-copy-visible").addEventListener("click",async function(){
