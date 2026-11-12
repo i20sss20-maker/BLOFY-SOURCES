@@ -754,11 +754,20 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   async function loadCatalog(more){
     var type=$("library-type").value,serverId=$("library-source").value,q=$("library-search").value.trim();
     var params={type:type,serverId:serverId,q:q};
-    if(!more||!state.libParams||JSON.stringify(params)!==JSON.stringify(state.libParams)){
-      state.libOffset=0;state.libParams=params;$("library-results").replaceChildren();
-    }
-    var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(state.libOffset)});
-    try{var d=await api("catalog?"+query.toString());var items=d.items||[];
+    var fresh=!more||!state.libParams||
+      JSON.stringify(params)!==JSON.stringify(state.libParams);
+    if(more&&state.libLoading)return;
+    var requestEpoch=fresh?++state.libEpoch:state.libEpoch;
+    var offset=fresh?0:state.libOffset;
+    var oldParams=state.libParams,oldOffset=state.libOffset;
+    var oldMoreHidden=$("library-more").hidden;
+    state.libLoading=true;$("library-more").disabled=true;
+    if(fresh){state.libOffset=0;state.libParams=params;$("library-more").hidden=true}
+    var query=new URLSearchParams({type:type,serverId:serverId,q:q,offset:String(offset)});
+    try{var d=await api("catalog?"+query.toString());
+      if(requestEpoch!==state.libEpoch)return;
+      var items=d.items||[];
+      if(!Array.isArray(items))throw Error("library_items_invalid");
       if(smartLibraryOn){
         var ranks=["رياضة","أخبار","أطفال وأنمي","أفلام","مسلسلات","عام"];
         items=items.map(function(item,i){return {item:item,index:i,group:smartGroup(item)}})
@@ -767,7 +776,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         $("library-smart-summary").textContent="تنظيم تلقائي للقائمة المعروضة (حتى 40 عنصرًا في الصفحة) • رياضة، أخبار، أطفال، أفلام، مسلسلات • لا يعدّل فئات المصدر ولا يستخدم نموذج AI خارجي.";
       }else $("library-smart-summary").textContent="عرض المصدر بترتيب Xtream بعد آخر مزامنة؛ لم يُطبّق أي ترتيب ذكي على النتائج.";
 
-      if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
+      if(fresh)$("library-results").replaceChildren();
+      if(fresh&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
         var src=(state.overview&&state.overview.sources||[]).find(function(x){return x.id===item.serverId});
         cell(tr,src?src.name:item.serverId);cell(tr,(smartLibraryOn?"["+smartGroup(item)+"] ":"")+(item.categoryName||"—"));
@@ -780,7 +790,17 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         cell(tr,controls);
         $("library-results").appendChild(tr)});
       state.libOffset=d.nextOffset||0;$("library-more").hidden=!d.nextOffset;
-    }catch(e){show("تعذر تحميل المكتبة: "+e.message,false)}
+    }catch(e){
+      if(requestEpoch===state.libEpoch){
+        if(fresh){state.libParams=oldParams;state.libOffset=oldOffset;
+          $("library-more").hidden=oldMoreHidden}
+        show("تعذر تحميل المكتبة: "+e.message,false);
+      }
+    }finally{
+      if(requestEpoch===state.libEpoch){
+        state.libLoading=false;$("library-more").disabled=false;
+      }
+    }
   }
   var libraryReviewReport=null;
   async function loadLibraryReview(){
