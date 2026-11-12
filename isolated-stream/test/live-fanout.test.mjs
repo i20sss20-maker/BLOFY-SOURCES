@@ -654,3 +654,47 @@ test('live fanout exposes passive audio codec PMT metadata without any additiona
   requests++;return new Response(openStream,{headers:{'content-type':'video/mp2t'}});
  }});
 });
+
+test('250 simulated viewers over two licensed feeds keep exactly two upstream sockets',async()=>{
+ let callsA=0,callsB=0,controllerA,controllerB;
+ const streamA=new ReadableStream({start(c){controllerA=c}});
+ const streamB=new ReadableStream({start(c){controllerB=c}});
+ const fanout=createLiveFanout({
+  maxFeeds:4,maxViewersPerFeed:128,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   if(url.pathname.endsWith('/a.ts')){callsA++;return new Response(streamA,{headers:{'content-type':'video/mp2t'}})}
+   callsB++;return new Response(streamB,{headers:{'content-type':'video/mp2t'}});
+  }
+ });
+ const srv=http.createServer((req,res)=>void fanout.handle(req,res,
+  'https://licensed.example/live/account/'+(req.url==='/a'?'a':'b')+'.ts'));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const url='http://127.0.0.1:'+srv.address().port;
+  const reads=[...Array.from({length:125},()=>fetch(url+'/a')),
+   ...Array.from({length:125},()=>fetch(url+'/b'))];
+  for(let i=0;i<350&&fanout.stats().viewers<250;i++)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(fanout.stats().viewers,250);
+  controllerA.enqueue(new Uint8Array(packet));
+  controllerB.enqueue(new Uint8Array(packet));
+  const responses=await Promise.all(reads);
+  assert.equal(responses.filter(x=>x.status===200).length,250);
+  const readers=responses.map(x=>x.body.getReader());
+  const chunks=await Promise.all(readers.map(r=>r.read()));
+  assert.ok(chunks.every(x=>x.done===false&&
+   Buffer.compare(Buffer.from(x.value),packet)===0));
+  assert.equal(callsA,1);
+  assert.equal(callsB,1);
+  const stats=fanout.stats();
+  assert.equal(stats.activeFeeds,2);
+  assert.equal(stats.viewers,250);
+  assert.equal(stats.capacityRejections,0);
+  assert.equal(stats.slowViewerDisconnects,0);
+  assert.equal(stats.upstreamSessionsOpened,2);
+  await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));
+ }finally{
+  fanout.close();srv.closeAllConnections();await new Promise(ok=>srv.close(ok));
+ }
+});
