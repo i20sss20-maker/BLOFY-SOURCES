@@ -57,7 +57,8 @@ function media404(body){
     {missing,due,recovered,scope:'verified_upstream_404_only'});
 }
 export function createPlatformSystemAudit({
-  portal,engineStatus,mediaControl,autoHealth,liveSupervisor=null,relayStats=()=>({}),
+  portal,engineStatus,mediaControl,autoHealth,liveSupervisor=null,
+  releaseInspector=null,relayStats=()=>({}),
   clock=Date.now,cacheMs=30_000
 }={}){
   if(!portal||typeof portal.overview!=='function'||
@@ -85,7 +86,8 @@ export function createPlatformSystemAudit({
         portal.libraryAIStatus(),
         engineStatus(),
         mediaControl.overview(),
-        typeof portal.mediaQuality==='function'?portal.mediaQuality():null
+        typeof portal.mediaQuality==='function'?portal.mediaQuality():null,
+        releaseInspector?.inspect?.()||null
       ]);
       const get=i=>results[i].status==='fulfilled'?results[i].value:null;
       const overview=get(0),overviewOk=ok(overview),body=overviewOk?overview.body:{};
@@ -162,6 +164,15 @@ export function createPlatformSystemAudit({
         const sourceStats=item[0].status==='fulfilled'?item[0].value:null;
         checks.push(checked(sourceStats,'playback',safePlayback));
       }else checks.push(check('playback','unknown','source_not_selected'));
+      const releaseResult=get(7);
+      const release=releaseResult&&typeof releaseResult==='object'?releaseResult:null;
+      checks.push(check('appUpdates',release?.ok&&release.metadataConsistent===false?
+        'warning':'unknown',
+        release?.metadataConsistent?'release_manifest_consistent_apk_unverified':
+          release?.ok?'release_manifest_mismatch':'release_manifest_not_verified',
+        {versionCode:Number.isSafeInteger(release?.versionCode)?release.versionCode:null,
+          sha256FieldPresent:release?.sha256FieldPresent===true,
+          apkBytesVerified:false,signatureVerified:false,deviceUpdateTested:false}));
       // Passive MPEG-TS PAT/PMT metadata is useful for finding missing
       // declared audio tracks, but never proves that a device decodes sound.
       let operatorPaths=[];
@@ -185,7 +196,6 @@ export function createPlatformSystemAudit({
       for(const [id,code] of [
         ['episodes','episode_playback_not_sampled'],
         ['subtitles','subtitle_render_not_tested'],
-        ['appUpdates','release_channel_not_examined'],
         ['backup','restore_test_not_observed']
       ])checks.push(check(id,'unknown',code));
       const summary={ok:checks.filter(x=>x.status==='ok').length,
