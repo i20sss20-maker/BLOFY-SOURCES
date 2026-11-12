@@ -622,3 +622,32 @@ test('100 concurrent synthetic viewers receive one licensed TS source without ex
   calls++;return new Response(upstream,{headers:{'content-type':'video/mp2t'}});
  }});
 });
+
+test('live fanout exposes passive audio codec PMT metadata without any additional provider GET',async()=>{
+ let requests=0;
+ function packet(pid,section){
+  const b=Buffer.alloc(188,0xff);
+  b[0]=0x47;b[1]=0x40|((pid>>8)&31);b[2]=pid&255;b[3]=0x10;
+  b[4]=0;section.copy(b,5);return b;
+ }
+ const pat=Buffer.from([0,0xb0,13,0,1,0xc1,0,0,0,1,0xe1,0,0,0,0,0]);
+ const pmt=Buffer.from([2,0xb0,23,0,1,0xc1,0,0,0xe1,0,0xf0,0,
+  0x1b,0xe1,0x20,0xf0,0,0x0f,0xe1,0x21,0xf0,0,0,0,0,0]);
+ const media=Buffer.concat([packet(0,pat),packet(256,pmt)]);
+ await service(async(base,fanout)=>{
+  const r=await fetch(base+'/live');
+  assert.equal(r.status,200);
+  const chunk=await r.body.getReader().read();
+  assert.deepEqual(Buffer.from(chunk.value),media);
+  const stats=fanout.stats();
+  assert.equal(stats.channels.length,1);
+  assert.equal(stats.channels[0].audio.status,'audio-stream-declared');
+  assert.deepEqual(stats.channels[0].audio.audioCodecs,['aac']);
+  assert.deepEqual(stats.channels[0].audio.videoCodecs,['h264']);
+  assert.equal(stats.channels[0].audio.decodedAudio,false);
+  assert.equal(requests,1);
+  assert.doesNotMatch(JSON.stringify(stats),/password|https:\/\/licensed\.example/i);
+ },{fetchImpl:async()=>{
+  requests++;return new Response(media,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
