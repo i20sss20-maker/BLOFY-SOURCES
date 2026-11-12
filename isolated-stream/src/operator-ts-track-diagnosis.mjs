@@ -24,6 +24,25 @@ export function diagnoseOperatorTsTracks({
   const video=[...new Set((Array.isArray(info?.videoCodecs)?
     info.videoCodecs:[]).slice(0,12).filter(c=>KNOWN_VIDEO.has(c)))].slice(0,5);
   const inspectedBytes=safeInteger(info?.inspectedBytes,188*1500);
+  const audioPayloadPackets=safeInteger(info?.audioPayloadPackets,1500);
+  const videoPayloadPackets=safeInteger(info?.videoPayloadPackets,1500);
+  const complete=info?.samplingComplete===true&&inspectedBytes!==null;
+  // A PMT followed only by a few transport packets is NOT meaningful
+  // absence evidence. Require at least 100 packets and an active other track
+  // before even flagging "not seen in this sample".
+  const sufficientlySampled=current&&complete&&
+    inspectedBytes>=188*100;
+  const trustedAudio=current&&state==='audio-stream-declared'&&
+    info?.hasAudioStream===true;
+  const audioPacketEvidence=!trustedAudio||audioPayloadPackets===null?
+    'unknown':audioPayloadPackets>0?'observed_payload':
+    sufficientlySampled&&videoPayloadPackets!==null&&
+      videoPayloadPackets>=3?'not_seen_in_bounded_sample':'insufficient_sample';
+  const videoPacketEvidence=!current||video.length===0||
+      videoPayloadPackets===null?'unknown':
+    videoPayloadPackets>0?'observed_payload':
+    sufficientlySampled&&audioPayloadPackets!==null&&
+      audioPayloadPackets>=3?'not_seen_in_bounded_sample':'insufficient_sample';
   let finding='not_measured';
   if(age!==null&&!current)finding='stale';
   else if(current&&state==='no-audio-stream-declared'&&info?.hasAudioStream===false)
@@ -44,6 +63,12 @@ export function diagnoseOperatorTsTracks({
     audioCodecs:current?audio:[],
     videoCodecs:current?video:[],
     inspectedBytes:current?inspectedBytes:null,
+    audioPayloadPackets:current?audioPayloadPackets:null,
+    videoPayloadPackets:current?videoPayloadPackets:null,
+    boundedSampleCompleted:current?complete:null,
+    audioPacketEvidence,videoPacketEvidence,
+    packetsProveAudibleSound:false,
+    packetsProveDecodedVideo:false,
     selectedOutputMode:audioMode==='aac'?'aac_transcode_configured':'copy_configured',
     outputTranscodeVerified:false,
     decodedAudioVerified:false,decodedVideoVerified:false,
