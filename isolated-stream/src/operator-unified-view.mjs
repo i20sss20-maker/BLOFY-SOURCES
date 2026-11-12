@@ -219,6 +219,26 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
+<div class="panel" id="smart-ops-panel">
+<div class="controls"><div><h3>📡 Smart Ops 2.0 — إدارة الثبات والاتصالات</h3>
+<p class="muted">بيانات مباشرة لمسارات المشاركة المفعّلة ومسارات HLS التابعة للمشرف فقط؛ لا تشمل جميع المشتركين أو كل قنوات Xtream. هذا النظام للقراءة ولا يعيد البث أو يغير الاشتراكات.</p></div>
+<button class="btn secondary" id="smart-ops-refresh" type="button">↻ تحديث تشخيص الاتصال</button></div>
+<div class="inline">
+<span class="pill" id="smart-ops-status" role="status" aria-live="polite">جار قراءة المؤشرات...</span>
+<span class="pill">مشاهدو المشاركة الحالية: <strong id="smart-ops-viewers">—</strong></span>
+<span class="pill">مسارات مشاركة نشطة: <strong id="smart-ops-feeds">—</strong></span>
+<span class="pill">تنبيهات نشطة: <strong id="smart-ops-alerts">—</strong></span>
+<span class="pill">تنبيهات حرجة: <strong id="smart-ops-critical">—</strong></span>
+<span class="pill">رفض انضمام جديد في آخر عينة: <strong id="smart-ops-capacity-delta">—</strong></span>
+</div>
+<p id="smart-ops-scope" class="muted">لن نستنتج عدد عملاء التطبيق من بيانات مشاركة البث؛ ولا نغير حدود الاشتراك الأصلية.</p>
+<div class="grid">
+<div><h3>حالة مسارات المشاركة</h3>
+<div class="tablewrap"><table><thead><tr><th>قناة مؤقتة</th><th>الحالة</th><th>المشاهدون</th><th>السعة الداخلية</th><th>آخر بيانات</th></tr></thead><tbody id="smart-ops-channels"></tbody></table></div></div>
+<div><h3>التنبيهات وأسبابها</h3><div class="tablewrap"><table><thead><tr><th>الدرجة</th><th>القناة/المسار</th><th>التشخيص</th></tr></thead><tbody id="smart-ops-issues"></tbody></table></div></div>
+</div>
+<p class="muted" id="smart-ops-last-check" aria-live="polite">هذه النتائج مؤشرات تشغيل مؤقتة. الصوت والصورة وحدود المصدر الحقيقي لم يتم التحقق منها هنا.</p>
+</div>
 <div class="panel" id="security-center">
 <div class="controls"><div><h3>🔐 BLOFY SECURITY</h3>
 <p class="muted">حماية لوحة المشرف وأذونات المشاهدة المؤقتة، ومراقبة محاولات الدخول والحدود الأمنية دون كشف بيانات المشتركين.</p></div>
@@ -2552,6 +2572,67 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       cell(tr,controls);tbody.appendChild(tr);
     });
   }
+
+  // Smart Ops 2.0 does NOT poll source URLs or invoke any media action.
+  // It reads bounded, already-collected server counters only.
+  var smartOpsLabels={
+    feed_near_capacity:"القناة قريبة من الحد الداخلي للمشاهدين. راجع صلاحية المصدر قبل زيادة السعة.",
+    feed_media_stalled:"توجد جلسات مشاهدة لكن آخر بيانات الوسائط قديمة. افحص النقل والمصدر.",
+    provider_failures_increased:"ازدادت حالات تعثر المصدر منذ آخر قراءة.",
+    capacity_rejections_increased:"رُفضت طلبات مشاهدة جديدة لحماية السعة الحالية، ولم تُطرد الجلسات القائمة.",
+    reconnects_increased:"زادت محاولات إعادة الاتصال بالمصدر (حدود السيرفر كما هي).",
+    slow_viewer_disconnects_increased:"فُصلت جلسات قراءة بطيئة لحماية موارد الاتصال والمشاهدين.",
+    operator_hls_probe_failed:"فشلت عينة HLS لمسار المشرف. لا يدل وحده على تعطل كل قنوات العملاء."
+  };
+  async function loadSmartOps(){
+    try{
+      var d=await api("smart-ops");
+      value("smart-ops-status",d.alertCount===0?"لا توجد تنبيهات تشغيل نشطة":"يوجد "+count(d.alertCount)+" تنبيه");
+      value("smart-ops-viewers",count(d.capacity?.activeViewers));
+      value("smart-ops-feeds",count(d.capacity?.activeFeeds));
+      value("smart-ops-alerts",count(d.alertCount));
+      value("smart-ops-critical",count(d.criticalCount));
+      value("smart-ops-capacity-delta",d.sampleIntervalMs===null?"جار تكوين خط الأساس":count(d.deltas?.capacityRejections));
+      value("smart-ops-scope",d.sharedLiveEnabled===true?
+        "المشاركة مفعّلة لهذه المسارات فقط. الحد الداخلي "+count(d.capacity?.maxViewersPerFeed)+" قارئًا لكل قناة؛ لا يمثل حد مزود المحتوى ولا عدد مشاهدي التطبيق.":
+        "مشاركة القنوات غير مفعّلة أو ليس لها مشاهدون. الأرقام لا تشمل بث التطبيق المباشر ولا تثبت قدرة المصدر على 500 مشاهد.");
+      var channels=$("smart-ops-channels");channels.replaceChildren();
+      (d.channels||[]).slice(0,64).forEach(function(row){
+        var tr=node("tr");
+        cell(tr,"#"+count(row.channel));
+        var states={ready:"يبث",starting:"جار البدء",reconnecting:"يعيد الاتصال",failed:"متعثر",idle:"غير مستخدم",unknown:"غير معروف"};
+        cell(tr,states[row.state]||"غير معروف");
+        cell(tr,count(row.viewers));
+        cell(tr,row.saturationPercent===null?"غير معروف":count(row.saturationPercent)+"٪");
+        cell(tr,row.lastMediaAgeMs===null?"لم تظهر بيانات":count(Math.round(row.lastMediaAgeMs/1000))+" ثانية");
+        channels.appendChild(tr);
+      });
+      if(!channels.children.length){
+        var empty=node("tr"),td=cell(empty,"لا توجد قنوات مشاركة نشطة ضمن هذه الخدمة.");
+        td.colSpan=5;channels.appendChild(empty);
+      }
+      var alerts=$("smart-ops-issues");alerts.replaceChildren();
+      (d.alerts||[]).slice(0,40).forEach(function(issue){
+        var tr=node("tr");
+        cell(tr,issue.level==="critical"?"حرج":"تنبيه");
+        cell(tr,issue.channel?"#"+count(issue.channel):issue.path||"السيرفر");
+        cell(tr,smartOpsLabels[issue.code]||"حدث تشغيل غير معروف");
+        alerts.appendChild(tr);
+      });
+      if(!alerts.children.length){
+        var empty=node("tr"),td=cell(empty,"لا توجد إشارات خلل في القياسات المتاحة.");
+        td.colSpan=3;alerts.appendChild(empty);
+      }
+      value("smart-ops-last-check","آخر قراءة: "+new Date(d.checkedAt).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"})+
+        " · أخطاء المصدر المكتشفة منذ القراءة السابقة: "+count(d.deltas?.providerFailures)+
+        " · انقطاعات القراء البطيئين: "+count(d.deltas?.slowViewerDisconnects)+
+        ". لا يتم إنشاء طلبات بث إضافية لهذا الفحص.");
+    }catch(e){
+      value("smart-ops-status","تعذر قراءة مؤشرات الاتصال");
+      value("smart-ops-last-check","البيانات غير متاحة، ولا يجوز اعتبار جميع القنوات سليمة. "+e.message);
+    }
+  }
+  $("smart-ops-refresh").addEventListener("click",loadSmartOps);
   var liveProbeRefresh=null;
   async function loadAutoHealth(){
     try{
@@ -2806,8 +2887,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps()}},60000);
 })();
 </script>
 </body></html>`;
