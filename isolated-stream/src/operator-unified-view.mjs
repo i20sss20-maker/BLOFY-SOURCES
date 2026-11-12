@@ -416,7 +416,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
 <option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
 <button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
-<p class="muted">الهوست: <strong class="num" id="accounts-host-value">غير محدد</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<p class="muted">الهوست: <strong class="num" id="accounts-host-value">https://bfy.up.railway.app</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
 <div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
@@ -1519,7 +1519,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   function showCredentials(target,creds,label){
     target.hidden=false;target.replaceChildren();
     target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
-    var host=creds.serverUrl||state.accountHost||"";
+    var host=creds.serverUrl||state.accountHost||"https://bfy.up.railway.app";
     var m3u=creds.m3uUrl||(
       host&&creds.password?host+"/get.php?"+new URLSearchParams({
         username:creds.username||"",password:creds.password||"",
@@ -1555,15 +1555,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
       cell(tr,dates);
       var urls=node("div");
-      urls.appendChild(node("div",state.accountHost||"الهوست غير متاح","meta num"));
+      urls.appendChild(node("div",state.accountHost||"https://bfy.up.railway.app","meta num"));
       urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
       var hostCopy=button("نسخ الهوست",function(){
-        if(!state.accountHost){show("لم يصل عنوان الهوست من الخادم.",false);return}
-        navigator.clipboard.writeText(state.accountHost)
+        navigator.clipboard.writeText(state.accountHost||"https://bfy.up.railway.app")
           .then(function(){show("تم نسخ الهوست.",true)})
           .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
       });
-      hostCopy.disabled=!state.accountHost;urls.appendChild(hostCopy);
+      urls.appendChild(hostCopy);
       cell(tr,urls);
       var ctl=node("div",undefined,"actions");
       ctl.appendChild(button(a.enabled?"تعطيل":"تفعيل",async function(){
@@ -1663,7 +1662,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       // Never invent an Xtream host; display only the URL returned by backend.
       if(typeof d.serverUrl==="string"&&/^https?:\/\//i.test(d.serverUrl))
         state.accountHost=d.serverUrl;
-      value("accounts-host-value",state.accountHost||"غير محدد");
+      value("accounts-host-value",state.accountHost||"https://bfy.up.railway.app");
       renderAccounts();
     }catch(e){
       if(current===state.accountsEpoch)show("تعذر تحميل المشتركين: "+e.message,false);
