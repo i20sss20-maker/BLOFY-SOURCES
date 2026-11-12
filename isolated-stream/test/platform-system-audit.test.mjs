@@ -136,3 +136,17 @@ test('incident recommendations are bounded, evidence-based and never auto-apply 
  assert.match(html,/result\.recommendations/);
  assert.match(html,/لا توجد توصيات جديدة/);
 });
+
+test('series diagnostic is bounded to one validated source and mapped episode IDs',async()=>{
+ const {renderOperatorDashboard}=await import('../src/operator-unified-view.mjs');
+ const html=renderOperatorDashboard('noncecheck');
+ for(const id of ['series-episode-diagnostic-panel','diagnostic-series-id',
+   'diagnostic-episode-map-run','diagnostic-episode-map-status','diagnostic-episode-map-results'])
+  assert.ok(html.includes('id="'+id+'"'));
+ assert.match(html,/\/\^\[A-Za-z0-9\._-\]\{1,100\}\$\/\.test\(seriesId\)/);
+ assert.match(html,/api\("episodes\?"/);
+ assert.match(html,/items\.slice\(0,120\)/);
+ assert.match(html,/لا يثبت تشغيل كل حلقة/);
+ const sc=html.match(/<script nonce="noncecheck">([\s\S]*?)<\/script>/);
+ assert.ok(sc);assert.doesNotThrow(()=>new Function(sc[1]));
+});
