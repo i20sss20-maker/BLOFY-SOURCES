@@ -4,6 +4,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 COPY package.json ./
 COPY src ./src
+COPY edge-function ./edge-function
 COPY test ./test
 RUN npm test
 USER node
