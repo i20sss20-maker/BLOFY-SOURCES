@@ -424,6 +424,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="panel"><h3>إدارة الأجهزة وتجديد الاشتراكات</h3>
 <div class="row"><span class="muted">تستحق الانتهاء خلال 7 أيام</span><strong id="codes-expiring">—</strong></div>
 <div class="row"><span class="muted">نقل جهاز الاشتراك</span><strong id="codes-transfers">—</strong></div>
+<p class="muted">إعادة الدخول: اضغط «إعادة دخول» عند طلب العميل، ثم يدخل نفس الكود خلال 10 دقائق. تستطيع تكرار الموافقة كلما احتاج، ولا تتغير مدة الاشتراك.</p>
 <p class="muted">زر «نقل الجهاز» يولّد كود استعادة جديدًا ويبطل جلسة الجهاز القديم، <b>دون بدء مدة جديدة</b>.</p>
 </div></div>
 <div class="panel"><h3>إصدار أكواد جديدة</h3>
@@ -443,7 +444,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
  <p class="muted" style="margin-top:12px">مهم: الأكواد القديمة غير المحفوظة مشفّرة لا يمكن استرجاعها. الأكواد الصادرة بعد هذا التحديث متاحة للنسخ بعد تحديث الصفحة، للمشرف المصرّح فقط.</p></div>
 <div class="panel code-manager" id="codes-manager" tabindex="-1">
 <div class="controls"><div><h3>إدارة الكود · تجديد الصلاحية · نقل الجهاز</h3>
-<p class="muted">اختر الكود من القائمة لإظهار صلاحياته ومدة اشتراكه وعمليات التجديد والنقل. لن تتم أي عملية إلا بعد تأكيدك.</p></div>
+<p class="muted">لكل كود يمكنك السماح بإعادة الدخول بنفس الرقم بضغط زر، حتى بعد تغيير نسخة التطبيق أو الجهاز. كل موافقة تفتح فرصة دخول واحدة لمدة 10 دقائق، دون تجديد أو تغيير الكود.</p></div>
 <span class="pill" id="codes-filter-count">—</span></div>
 <div class="formgrid">
 <div class="field"><label for="codes-search">بحث بالكود أو اسم العميل أو جواله</label><input id="codes-search" type="search" autocomplete="off" placeholder="آخر أرقام الكود، الاسم، الرقم..."></div>
@@ -1679,6 +1680,34 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     n.className="status "+(ok?"good":"bad");
   }
 
+
+  // Operator-only consent for the EXISTING code; no new code or new duration.
+  async function authorizeSameCodeRelogin(c,btn){
+    if(c.status!=="redeemed"||c.channel!=="app"||c.deviceTransferPending||
+       Number(c.expiresAt||0)<=Date.now()){
+      show("إعادة الدخول متاحة لكود تطبيق مفعّل وساري ومرتبط بجهاز. جدّد الصلاحية إذا انتهت.",false);
+      return;
+    }
+    if(!confirm("السماح بإعادة الدخول بنفس كود العميل "+(c.codeHint||"")+"؟\n"+
+      "يستطيع أول جهاز جديد يمتلك الكود تسجيل الدخول خلال 10 دقائق فقط، ثم تنتهي الموافقة تلقائيًا.\n"+
+      "بعد دخول الجهاز الجديد سيتوقف تسجيل دخول الجهاز السابق. الصلاحية والكود لا يتغيران. متابعة؟"))return;
+    btn.disabled=true;
+    try{
+      var result=await action("code/"+c.id+"/relogin","code-relogin",{});
+      if(result.item)selectedCodeSnapshot=result.item;
+      var until=result.allowedUntil?dateTime(result.allowedUntil):"خلال 10 دقائق";
+      await loadCodes(false);
+      manageCode(c.id);
+      var message="تم السماح بإعادة الدخول بنفس الكود حتى "+until+
+        ". أعط العميل كوده السابق ليدخله في النسخة الجديدة. يمكن تكرار هذه العملية عند الحاجة، "+
+        "لكن كل ضغطة تسمح بنقل واحد فقط، ولا تزيد مدة الاشتراك.";
+      codeDialogMessage(message,true);
+      show("تم السماح بإعادة الدخول لمدة 10 دقائق دون تغيير الكود أو الصلاحية.",true);
+    }catch(e){
+      if($("codes-dialog").open)codeDialogMessage("تعذر السماح بإعادة الدخول: "+e.message,false);
+      show("تعذر السماح بإعادة الدخول: "+e.message,false);
+    }finally{btn.disabled=false;}
+  }
   async function transferCode(c,btn){
     if(c.status!=="redeemed"||c.channel!=="app"||c.deviceTransferPending||
       Number(c.expiresAt||0)<=Date.now()){
@@ -1726,6 +1755,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     detailValue(grid,"الأيام المضافة",String(c.extendedDays||0));
     detailValue(grid,"مميزات الكود",c.channel==="app"?"دخول للتطبيق بكود · هوست داخلي":"حساب Xtream خارجي");
     detailValue(grid,"مرات نقل الجهاز",String(c.transferCount||0));
+    detailValue(grid,"مرات إعادة الدخول المكتملة",String(c.adminReloginCount||0));
+    if(Number(c.adminReloginUntil||0)>Date.now())
+      detailValue(grid,"إذن إعادة الدخول نشط حتى",dateTime(c.adminReloginUntil));
     detailValue(grid,"العميل",c.buyerName||"غير مسجل");
     if(c.buyerPhone)detailValue(grid,"الجوال",c.buyerPhone);
     if(c.status==="redeemed"){
@@ -1766,6 +1798,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       });
       row.appendChild(renew);box.appendChild(row);
       if(c.channel==="app"&&!c.deviceTransferPending&&Number(c.expiresAt||0)>Date.now()){
+        actions.appendChild(button("↻ إعادة دخول بنفس الكود",function(){
+          void authorizeSameCodeRelogin(c,this);
+        },"secondary sm"));
         actions.appendChild(button("نقل الجهاز",function(){
           void transferCode(c,this);
         },"danger"));
@@ -1838,8 +1873,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         controls.appendChild(button(codePhase(code)==="expired"?"إعادة صلاحية":"تجديد الصلاحية",
           function(){manageCode(code.id,true)},"secondary sm"));
       if(code.status==="redeemed"&&code.channel==="app"&&!code.deviceTransferPending&&
-        Number(code.expiresAt||0)>Date.now())
+        Number(code.expiresAt||0)>Date.now()){
+        controls.appendChild(button("↻ إعادة دخول",function(){void authorizeSameCodeRelogin(code,this)},"secondary sm"));
         controls.appendChild(button("نقل الجهاز",function(){void transferCode(code,this)},"danger"));
+      }
       if(code.status==="unused")
         controls.appendChild(button("إلغاء",async function(){
           if(!confirm("إلغاء هذا الكود غير المفعّل؟ لن يمكن استخدامه بعدها."))return;
