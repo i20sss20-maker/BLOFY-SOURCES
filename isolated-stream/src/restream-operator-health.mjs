@@ -37,6 +37,7 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
       audioDeclaredPaths:null,audioNoTrackPaths:null,
       audioCodecReviewPaths:null,audioEvidenceUnavailablePaths:null,
       audioPayloadNotObservedPaths:null,videoPayloadNotObservedPaths:null,
+      audioTransportAnomalyPaths:null,videoTransportAnomalyPaths:null,
       audioPayloadObservedPaths:null,videoPayloadObservedPaths:null,
       backupConfiguredPaths:null,failoversSinceBoot:null,paths:[],
       readOnly:true,decodedAudioVideoVerified:false,
@@ -47,6 +48,7 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
     audioDeclaredPaths:0,audioNoTrackPaths:0,
     audioCodecReviewPaths:0,audioEvidenceUnavailablePaths:0,
     audioPayloadNotObservedPaths:0,videoPayloadNotObservedPaths:0,
+    audioTransportAnomalyPaths:0,videoTransportAnomalyPaths:0,
     audioPayloadObservedPaths:0,videoPayloadObservedPaths:0,
     failoversSinceBoot:0};
   const listed=report.items.slice(0,MAX_PATHS);
@@ -89,6 +91,10 @@ export function summarizeOperatorRestreamPaths(report,{now=Date.now(),
       counts.audioPayloadObservedPaths++;
     if(track.videoPacketEvidence==='observed_payload')
       counts.videoPayloadObservedPaths++;
+    if(track.audioTransportState==='transport_anomaly_observed')
+      counts.audioTransportAnomalyPaths++;
+    if(track.videoTransportState==='transport_anomaly_observed')
+      counts.videoTransportAnomalyPaths++;
     // Index only, not a media path, title, sourceId, URL, token or channelId.
     paths.push({slot:i+1,state,activeOperatorReaders:active,
       latestProbeAgeSeconds:ageMs===null?null:Math.round(ageMs/1000),
