@@ -120,7 +120,11 @@ export function createStreamCrossServiceDiagnosis({
       {code:'operator_audio_packets_not_seen_in_sample',scope:'operator_restream_tracks',
         count:operatorRestream.audioPayloadNotObservedPaths??0,severity:'warning'},
       {code:'operator_video_packets_not_seen_in_sample',scope:'operator_restream_tracks',
-        count:operatorRestream.videoPayloadNotObservedPaths??0,severity:'warning'}
+        count:operatorRestream.videoPayloadNotObservedPaths??0,severity:'warning'},
+      {code:'operator_audio_ts_transport_anomaly',scope:'operator_restream_tracks',
+        count:operatorRestream.audioTransportAnomalyPaths??0,severity:'warning'},
+      {code:'operator_video_ts_transport_anomaly',scope:'operator_restream_tracks',
+        count:operatorRestream.videoTransportAnomalyPaths??0,severity:'warning'}
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
        (row.scope==='relay_since_boot'&&sharedMeasured)||
