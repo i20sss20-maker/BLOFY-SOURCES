@@ -253,11 +253,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     <span class="pill">نقل مباشر ببوابة Xtream: <strong id="cross-direct">—</strong></span>
     <span class="pill">مشاهدو المشاركة (مسار مختلف): <strong id="cross-relay">—</strong></span>
     <span class="pill">قراء مسارات HLS للمشرف: <strong id="cross-hls">—</strong></span>
+    <span class="pill">جلسات MediaMTX HLS: <strong id="cross-mediamtx-hls">—</strong></span>
+    <span class="pill">مسارات MediaMTX الجاهزة: <strong id="cross-mediamtx-paths">—</strong></span>
+    <span class="pill">ربط MediaMTX: <strong id="cross-mediamtx-status">—</strong></span>
     <span class="pill">بدايات إرسال الوسائط خلال ساعة: <strong id="cross-started">—</strong></span>
     <span class="pill">أخطاء البوابة خلال ساعة: <strong id="cross-failed">—</strong></span>
     <span class="pill">تأخر بدء البث P95: <strong id="cross-p95">—</strong></span>
   </div>
-  <p class="muted" id="cross-service-coverage">الأعداد مستقلة ولا تُجمع لاستخراج عدد المشاهدين. قياس خدمة Edge وعمليات MediaMTX الأخرى غير متوفر حاليًا.</p>
+  <p class="muted" id="cross-service-coverage">الأعداد مستقلة ولا تُجمع لاستخراج عدد المشاهدين. تتم قراءة جلسات HLS من محرك MediaMTX الخاص بخدمة STREAM فقط، ولا تشمل محرك إعادة البث المنفصل أو خدمة Edge.</p>
   <div class="tablewrap"><table><thead><tr><th>المصدر التشغيلي</th><th>الفترة</th><th>الأحداث المرصودة</th><th>المراجعة</th></tr></thead>
     <tbody id="cross-service-issues"></tbody></table></div>
   <p class="muted" id="cross-service-check">ملخص سجل البوابة محدود بآخر 400 حدث محفوظ في هذه العملية. لا يثبت تشغيل الصوت والصورة بعد فكهما ولا قدرة مزود المحتوى على عدد مشاهدين محدد.</p>
@@ -2613,7 +2616,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     gateway_media_interrupted:"انقطع إرسال HTTP بعد بدء الوسائط في بوابة BLOFY.",
     gateway_catalog_missing:"المحتوى غير موجود في فهرس البوابة. راجع المزامنة ولا تحذف محتوى العملاء.",
     gateway_auth_rejected:"فُشلت محاولة دخول محلية. لا تُنسب إلى تعطل مزود المحتوى.",
-    relay_provider_failures:"محرك المشاركة سجّل فشل مصدر منذ تشغيل السيرفر؛ ليس بالضرورة عطلًا جاريًا."
+    relay_provider_failures:"محرك المشاركة سجّل فشل مصدر منذ تشغيل السيرفر؛ ليس بالضرورة عطلًا جاريًا.",
+    media_engine_control_unavailable:"تعذر الاتصال بواجهة MediaMTX الداخلية. لا نجزم بتوقف بث العملاء من هذا وحده.",
+    media_engine_auth_failure:"تعذرت مصادقة MediaMTX الداخلية؛ لا تعرض عدد جلسات افتراضيًا."
   };
   function crossReading(measured,value){
     return measured&&Number.isSafeInteger(value)?count(value):"غير متاح";
@@ -2623,7 +2628,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var d=await api("cross-service");
       if(d?.ok!==true)throw Error("cross_service_unavailable");
       var m=d.observations||{},g=m.gateway||{},direct=m.direct||{},
-        relay=m.relay||{},hls=m.operatorHls||{};
+        relay=m.relay||{},hls=m.operatorHls||{},mtx=m.mediaMtx||{};
       var states={
         partial:"القياس جزئي · بعض الأنظمة غير معروفة",
         attention:"توجد ملاحظات تحتاج مراجعة",
@@ -2634,19 +2639,25 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         (direct.countsReliable===false?" (ناقص)":""));
       value("cross-relay",crossReading(relay.dataAvailable,relay.attachedReaders));
       value("cross-hls",crossReading(hls.dataAvailable,hls.activePathReaders));
+      value("cross-mediamtx-hls",crossReading(mtx.dataAvailable,mtx.hlsSessions));
+      value("cross-mediamtx-paths",crossReading(mtx.online===true,mtx.readyPaths));
+      value("cross-mediamtx-status",mtx.controlConfigured===false?"لم تُهيأ المصادقة":
+        mtx.online===false?"تعذر الاتصال":mtx.dataAvailable?"متصل":"القراءات غير مكتملة");
       value("cross-started",crossReading(g.dataAvailable,g.attemptedMediaStarts));
       value("cross-failed",crossReading(g.dataAvailable,g.failed));
       value("cross-p95",g.dataAvailable&&Number.isFinite(g.p95StartupMs)?
         count(g.p95StartupMs)+" ms":"غير متاح");
       value("cross-service-coverage",
         "نطاق البوابة: جلسات HTTP مباشرة بهذه العملية فقط؛ نطاق المشاركة: قراء المشاركة في STREAM API فقط؛ نطاق HLS: مسارات المشرف فقط. "+
-        "لا تجمع هذه الأعداد لأنها قد تتداخل. خدمة Xtream Edge واتصالات MediaMTX الأخرى غير مقاسة حاليًا. "+
+        "لا تجمع هذه الأعداد لأنها قد تتداخل؛ جلسة MediaMTX HLS ليست مشاهدًا فريدًا. تم فحص محرك MediaMTX داخل STREAM فقط؛ خدمة Xtream Edge ومحرك إعادة البث المنفصل وجلسات WebRTC/RTSP ليست ضمن القياس. "+
         (d.status==="partial"?"بعض البيانات غير متوفرة، فلا نعتبر كل الخدمات سليمة.":""));
       var rows=$("cross-service-issues");rows.replaceChildren();
       (Array.isArray(d.problems)?d.problems:[]).slice(0,15).forEach(function(item){
         var tr=node("tr");
-        cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":"بوابة Xtream");
-        cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":"آخر ساعة");
+        cell(tr,item.scope==="relay_since_boot"?"محرك المشاركة":
+          item.scope==="mediamtx_current"?"محرك MediaMTX":"بوابة Xtream");
+        cell(tr,item.scope==="relay_since_boot"?"منذ التشغيل":
+          item.scope==="mediamtx_current"?"الحالة الحالية":"آخر ساعة");
         cell(tr,crossReading(true,item.count));
         cell(tr,crossReasons[item.code]||"إشارة غير معروفة");
         rows.appendChild(tr);
