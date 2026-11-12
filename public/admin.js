@@ -1,7 +1,8 @@
 const $=id=>document.getElementById(id);
 const API='/admin-api/';
 const PAGE_SIZE=60;
-let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',passwordUser='',lastCreated=null;
+const SUBSCRIBER_PAGE_SIZE=40;
+let state=null,allSubscribers=[],catalogOffset=0,arabicOffset=0,arabicKind='',subscriberFilter='',renewUser='',passwordUser='',phoneUser='',subscriberPageIndex=0,lastCreated=null;
 let bulkDownloadUrl=null;
 
 const titles={
@@ -14,9 +15,9 @@ const titles={
 };
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const fmt=n=>new Intl.NumberFormat('ar-SA').format(Number(n||0));
+const fmt=n=>new Intl.NumberFormat('en-US').format(Number(n||0));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const dateText=v=>v?new Date(v).toLocaleDateString('ar-SA',{year:'numeric',month:'short',day:'numeric'}):'بدون انتهاء';
+const dateText=v=>v?new Date(v).toLocaleDateString('ar-SA-u-nu-latn',{year:'numeric',month:'short',day:'numeric'}):'بدون انتهاء';
 const daysLeft=v=>v?Math.ceil((new Date(v).getTime()-Date.now())/86400000):null;
 
 function toast(message,type=''){
@@ -261,12 +262,20 @@ async function loadArabic(reset=false){
   }catch(e){toast(e.message,'error')}
 }
 
+function normalizedPhoneKey(value) {
+  const digits=String(value??'').replace(/\D/g,'');
+  if(digits.startsWith('00966')&&digits.length===14)return '0'+digits.slice(5);
+  if(digits.startsWith('966')&&digits.length===12)return '0'+digits.slice(3);
+  return digits;
+}
 function filteredSubscribers(){
-  const q=$('subscriberSearch').value.trim().toLowerCase();
+  const q=$('subscriberSearch').value.trim().toLocaleLowerCase('ar');
+  const queryPhone=normalizedPhoneKey(q);
   const selectFilter=$('subscriberStatus').value||subscriberFilter;
   const sort=$('subscriberSort')?.value||'attention';
   const rows=allSubscribers.filter(a=>{
-    const matches=!q||`${a.username} ${a.label||''} ${a.note||''}`.toLowerCase().includes(q);
+    const matches=!q||`${a.username} ${a.label||''} ${a.note||''} ${a.phone||''}`.toLocaleLowerCase('ar').includes(q)||
+      (queryPhone.length>=3&&normalizedPhoneKey(a.phone).includes(queryPhone));
     if(!matches)return false;
     if(!selectFilter)return true;
     return subscriberStatus(a).key===selectFilter;
@@ -320,16 +329,27 @@ async function savePassword(){
 
 function renderSubscribers(){
   const rows=filteredSubscribers();
-  $('subscriberCount').textContent=`${fmt(rows.length)} من ${fmt(allSubscribers.length)} مشترك`;
-  $('subscriberRows').innerHTML=rows.length?rows.map(a=>{
+  const maxPage=Math.max(0,Math.ceil(rows.length/SUBSCRIBER_PAGE_SIZE)-1);
+  subscriberPageIndex=Math.min(subscriberPageIndex,maxPage);
+  const start=subscriberPageIndex*SUBSCRIBER_PAGE_SIZE;
+  const visibleRows=rows.slice(start,start+SUBSCRIBER_PAGE_SIZE);
+  $('subscriberCount').textContent=rows.length
+    ? `عرض ${fmt(start+1)}–${fmt(start+visibleRows.length)} من ${fmt(rows.length)} نتيجة · إجمالي ${fmt(allSubscribers.length)} مشترك`
+    : `لا توجد نتائج من أصل ${fmt(allSubscribers.length)} مشترك`;
+  $('subscriberPage').textContent=`${fmt(subscriberPageIndex+1)} / ${fmt(Math.max(1,maxPage+1))}`;
+  $('subscriberPrev').disabled=subscriberPageIndex===0;
+  $('subscriberNext').disabled=subscriberPageIndex>=maxPage;
+  $('subscriberRows').innerHTML=visibleRows.length?visibleRows.map(a=>{
     const st=subscriberStatus(a),left=daysLeft(a.expiresAt);
     return `<tr class="subscriber-row status-${st.key}">
-      <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline username-line">${esc(a.username)} <button class="copy-user inline-copy" data-user="${esc(a.username)}">نسخ</button></div></td>
+      <td><strong>${esc(a.label||'بدون اسم')}</strong><div class="muted ltr-inline username-line">${esc(a.username)} <button class="copy-user inline-copy" data-user="${esc(a.username)}">نسخ</button></div>
+      <div class="muted ltr-inline phone-line" dir="ltr">${a.phone?`<span>${esc(a.phone)}</span> <button class="copy-phone inline-copy" data-phone="${esc(a.phone)}" aria-label="نسخ رقم الجوال">نسخ</button>`:'<span>بدون رقم جوال</span>'}</div></td>
       <td><span class="badge ${st.cls}">${st.label}</span></td>
       <td>${dateText(a.expiresAt)}${left!=null&&!a.expired? `<div class="muted">${fmt(Math.max(0,left))} يوم</div>`:''}</td>
       <td><strong>${fmt(a.activeConnections||0)}</strong> / ${fmt(a.maxConnections||1)}<div class="muted">نشط / الحد</div></td>
       <td><div class="subscriber-actions">
         <button class="tiny-btn primary renew-user" data-user="${esc(a.username)}">تجديد</button>
+        <button class="tiny-btn phone-user" data-user="${esc(a.username)}">الجوال</button>
         ${a.bootstrap?'':`<button class="tiny-btn password-user" data-user="${esc(a.username)}">كلمة السر</button>`}
         <button class="tiny-btn toggle-user" data-user="${esc(a.username)}" data-enable="${a.enabled?'0':'1'}">${a.enabled?'تعطيل':'تفعيل'}</button>
         ${a.bootstrap?'':`<button class="tiny-btn danger delete-user" data-user="${esc(a.username)}">حذف</button>`}
@@ -349,7 +369,7 @@ async function loadSubscribers(){
 
 async function createSubscriber(){
   const body={
-    label:$('newLabel').value.trim(),username:$('newUsername').value.trim(),password:$('newPassword').value,
+    label:$('newLabel').value.trim(),phone:$('newPhone').value.trim(),username:$('newUsername').value.trim(),password:$('newPassword').value,
     durationDays:Number($('newDuration').value),maxConnections:Number($('newConnections').value)
   };
   try{
@@ -363,17 +383,19 @@ async function createSubscriber(){
       <div class="created-grid"><span>Host</span><code>${esc(j.host)}</code><span>Username</span><code>${esc(j.username)}</code><span>Password</span><code>${esc(j.password)}</code><span>الانتهاء</span><code>${esc(dateText(j.expiresAt))}</code></div>
       <button id="copyCreatedSubscriber" class="btn primary">نسخ Host + Username + Password + M3U</button>`;
     $('serverUsername').value=j.username;$('serverPassword').value=j.password;renderAccessLinks();
-    $('newLabel').value='';$('newUsername').value='';$('newPassword').value='';
+    $('newLabel').value='';$('newPhone').value='';$('newUsername').value='';$('newPassword').value='';
     toast('تم إنشاء المشترك','success');await Promise.all([loadSubscribers(),refresh()]);
   }catch(e){
-    const map={username_exists:'اسم المستخدم موجود مسبقًا',invalid_username:'اسم المستخدم غير صالح',invalid_password:'كلمة السر يجب أن تكون 8 أحرف أو أكثر',xtream_gateway_username_exists:'اسم المستخدم موجود مسبقًا',xtream_gateway_username_invalid:'اسم المستخدم غير صالح',xtream_gateway_password_invalid:'كلمة السر يجب أن تكون 8 أحرف أو أكثر'};
+    const map={username_exists:'اسم المستخدم موجود مسبقًا',invalid_username:'اسم المستخدم غير صالح',invalid_password:'كلمة السر يجب أن تكون 8 أحرف أو أكثر',xtream_gateway_username_exists:'اسم المستخدم موجود مسبقًا',xtream_gateway_username_invalid:'اسم المستخدم غير صالح',xtream_gateway_password_invalid:'كلمة السر يجب أن تكون 8 أحرف أو أكثر',invalid_customer_phone:'أدخل رقم جوال صحيح (7 إلى 15 رقمًا)'};
     toast(map[e.message]||e.message,'error');
   }finally{$('createSubscriberBtn').disabled=false}
 }
 
 function escapeBulkCsvCell(value){
   const s=String(value??'');
-  return '"'+s.replace(/"/g,'""')+'"';
+  // Excel/LibreOffice must not execute formulas embedded in customer labels.
+  const safe=/^[\s\u0000-\u001f]*[=+@\-]/u.test(s)?"'"+s:s;
+  return '"'+safe.replace(/"/g,'""')+'"';
 }
 
 async function createBulkSubscribers(){
@@ -501,13 +523,17 @@ $('closeCreateSubscriber').onclick=()=>{$('createSubscriberCard').hidden=true};
 $('createSubscriberBtn').onclick=createSubscriber;
 $('bulkCreateBtn').onclick=createBulkSubscribers;
 
-$('subscriberSearch').addEventListener('input',renderSubscribers);
-$('subscriberStatus').onchange=()=>{subscriberFilter='';document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x.dataset.status===$('subscriberStatus').value));renderSubscribers()};
-$('subscriberSort').onchange=renderSubscribers;
-document.querySelectorAll('.summary-pill').forEach(b=>b.onclick=()=>{subscriberFilter=b.dataset.status;$('subscriberStatus').value=b.dataset.status;document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x===b));renderSubscribers()});
+$('subscriberSearch').addEventListener('input',()=>{subscriberPageIndex=0;renderSubscribers()});
+$('subscriberPrev').onclick=()=>{if(subscriberPageIndex>0){subscriberPageIndex--;renderSubscribers()}};
+$('subscriberNext').onclick=()=>{subscriberPageIndex++;renderSubscribers()};
+$('subscriberStatus').onchange=()=>{subscriberFilter='';document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x.dataset.status===$('subscriberStatus').value));subscriberPageIndex=0;renderSubscribers()};
+$('subscriberSort').onchange=()=>{subscriberPageIndex=0;renderSubscribers()};
+document.querySelectorAll('.summary-pill').forEach(b=>b.onclick=()=>{subscriberFilter=b.dataset.status;$('subscriberStatus').value=b.dataset.status;document.querySelectorAll('.summary-pill').forEach(x=>x.classList.toggle('active',x===b));subscriberPageIndex=0;renderSubscribers()});
 
 $('subscriberRows').addEventListener('click',e=>{
   const c=e.target.closest('.copy-user');if(c)return copyText(c.dataset.user,'تم نسخ Username');
+  const phone=e.target.closest('.copy-phone');if(phone)return copyText(phone.dataset.phone,'تم نسخ رقم الجوال');
+  const editPhone=e.target.closest('.phone-user');if(editPhone)return openPhone(editPhone.dataset.user);
   const r=e.target.closest('.renew-user');if(r)return openRenew(r.dataset.user);
   const p=e.target.closest('.password-user');if(p)return openPassword(p.dataset.user);
   const t=e.target.closest('.toggle-user');if(t)return toggleSubscriber(t.dataset.user,t.dataset.enable==='1',t);
@@ -530,12 +556,12 @@ $('passwordResult').addEventListener('click',e=>{
 
 $('exportSubscribersBtn').onclick=()=>{
   if(!allSubscribers.length)return toast('لا يوجد مشتركون للتصدير','error');
-  const rows=[['username','label','status','expires_at','active_connections','max_connections','note']];
+  const rows=[['username','label','phone','status','expires_at','active_connections','max_connections','note']];
   for(const a of allSubscribers){
     const st=subscriberStatus(a);
-    rows.push([a.username,a.label||'',st.key,a.expiresAt||'',a.activeConnections||0,a.maxConnections||1,a.note||'']);
+    rows.push([a.username,a.label||'',a.phone||'',st.key,a.expiresAt||'',a.activeConnections||0,a.maxConnections||1,a.note||'']);
   }
-  const csv='\uFEFF'+rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const csv='\uFEFF'+rows.map(row=>row.map(escapeBulkCsvCell).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download=`blofy-subscribers-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
   toast('تم تصدير المشتركين','success');
