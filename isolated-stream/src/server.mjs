@@ -14,6 +14,7 @@ import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
+import {createStreamOpsObservatory} from './stream-ops-observatory.mjs';
 import {probeLicensedSharedLive} from './shared-live-canary.mjs';
 import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -139,8 +140,10 @@ export function createStreamServer({
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
   const autoHealth=createLiveAutoHealth({liveSupervisor,
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
+  const streamOps=createStreamOpsObservatory({
+    relayStats:()=>relayBroker.stats(),autoHealth:()=>autoHealth.snapshot()});
   const operatorDashboard=createOperatorDashboard({
-    liveSupervisor,vodBroker,sharedReadiness,
+    liveSupervisor,vodBroker,sharedReadiness,streamOps:()=>streamOps.snapshot(),
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
