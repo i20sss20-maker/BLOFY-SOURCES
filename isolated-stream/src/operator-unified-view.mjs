@@ -507,6 +507,19 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="dist-list"></tbody></table></div></div>
 </section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
+<div class="panel" id="deep-audit-panel">
+<div class="controls"><h3>فحص النظام بالكامل</h3>
+<button id="deep-audit-run" class="btn" type="button">بدء الفحص</button></div>
+<p class="muted">فحص قراءة فقط، يعتمد على السجلات وحالات الخدمات، ولا يشغّل فيديو أو يغيّر اشتراكات العملاء.</p>
+<div class="cards">
+<div class="stat"><small>سليم حسب المؤشرات</small><strong id="deep-audit-ok">—</strong></div>
+<div class="stat"><small>يحتاج مراجعة</small><strong id="deep-audit-warning">—</strong></div>
+<div class="stat"><small>لم يتم التحقق</small><strong id="deep-audit-unknown">—</strong></div>
+</div>
+<p class="muted" id="deep-audit-status" role="status" aria-live="polite">لم يبدأ الفحص بعد.</p>
+<div class="tablewrap"><table><thead><tr><th>القسم</th><th>الحالة</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
+<tbody id="deep-audit-items"></tbody></table></div>
+</div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
 <button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
@@ -669,6 +682,103 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     });
   }
 
+
+  var deepAuditNames={
+    bridge:"بوابة الاتصال",sources:"مصادر Xtream",catalog_live:"فهرس القنوات",
+    catalog_movie:"فهرس الأفلام",catalog_series:"فهرس المسلسلات",
+    media404:"أخطاء 404 الموثقة",codes:"أكواد الاشتراكات",libraryAI:"تنظيم المكتبة الذكي",
+    subscribers:"المشتركون",engine:"محرك الوسائط",mediamtx:"MediaMTX",
+    restream:"مراقبة إعادة البث",fanout:"مشاركة البث",playback:"أداء التشغيل",
+    episodes:"تشغيل الحلقات",audio:"الصوت",subtitles:"الترجمة",
+    appUpdates:"تحديثات التطبيقات",backup:"اختبار استعادة النسخ الاحتياطية"
+  };
+  var deepAuditCodes={
+    data_unavailable:"تعذر قراءة حالة الخدمة",
+    primary_bridge_unavailable:"الاتصال بالنظام الرئيسي غير مؤكد",
+    primary_bridge_responded:"وصلت استجابة من الخدمة الرئيسية",
+    no_enabled_sources:"لا توجد مصادر مفعلة",
+    sources_not_all_online:"بعض المصادر لا تبلغ عن حالة اتصال سليمة",
+    reported_sources_online:"المصادر المفعّلة تبلغ عن حالة اتصال سليمة",
+    indexed_items_present:"الفهرس يحتوي على عناصر؛ التشغيل غير مفحوص",
+    no_indexed_items:"لا توجد عناصر مفهرسة",
+    verified_provider_404_recorded:"توجد استجابات 404 موثقة من المصدر",
+    no_verified_404_recorded:"لا توجد حالات 404 موثقة في السجل الحالي",
+    sales_ledger_available:"وصلت بيانات الاشتراكات",
+    assistance_configured:"نظام اقتراحات التنظيم متاح",
+    assistance_not_configured:"خدمة AI الاختيارية غير مهيأة",
+    subscription_counts_available:"وصلت إحصائيات المشتركين",
+    subscriber_stats_unavailable:"لم تصل إحصائيات المشتركين",
+    media_listener_replied:"محرك الوسائط يستجيب، لكن تشغيل الفيديو غير مؤكد",
+    media_listener_unreachable:"محرك الوسائط لا يستجيب",
+    mediamtx_control_online:"واجهة تحكم MediaMTX تستجيب",
+    mediamtx_control_offline:"واجهة تحكم MediaMTX غير متاحة",
+    monitor_unavailable:"تعذر قراءة نظام المراقبة",
+    operator_paths_failed:"توجد مسارات تشغيل متعثرة",
+    operator_paths_not_all_verified:"بعض مسارات التشغيل لم تُختبر",
+    no_operator_paths:"لا توجد مسارات تشغيل تحت المراقبة",
+    fanout_runtime_available:"بيانات المشاركة متاحة",
+    fanout_runtime_not_verified:"إحصائيات المشاركة غير مؤكدة",
+    metrics_not_available:"مقاييس التشغيل غير متاحة",
+    recent_playback_failures:"توجد أخطاء تشغيل حديثة",
+    relay_start_events_recorded:"سُجّلت طلبات بدء تشغيل؛ لا تثبت مشاهدة الصورة",
+    no_playback_samples:"لم تُسجّل عينات تشغيل كافية",
+    source_not_selected:"لم يتحدد مصدر صالح للفحص",
+    episode_playback_not_sampled:"لم تُختبر ملفات الحلقات على جهاز حقيقي",
+    audio_track_not_decoded:"لم يُفك ترميز الصوت على جهاز حقيقي",
+    subtitle_render_not_tested:"لم تُختبر الترجمة على جهاز حقيقي",
+    release_channel_not_examined:"لم يُفحص توافق آخر إصدار للتطبيقات",
+    restore_test_not_observed:"لا يوجد دليل على اختبار استعادة نسخة احتياطية"
+  };
+  function auditMetrics(value){
+    if(!value||typeof value!=="object")return "—";
+    var labels={
+      total:"الإجمالي",enabled:"مفعلة",online:"متصلة",items:"عناصر",missing:"مفقود",
+      due:"تستحق فحصًا",recovered:"تعافت",started:"بدأ",failed:"فشل",
+      interrupted:"انقطع",slowStarts:"بدء بطيء",p95StartMs:"P95 بالمللي ثانية",
+      hlsSessions:"جلسات HLS",readyPaths:"مسارات جاهزة",
+      viewers:"مشاهدون",sourceOutages:"انقطاعات المصدر",sourceBytesReceived:"بايتات",
+      active:"نشطة",paths:"مسارات",count:"عدد",checked:"مفحوص"
+    };
+    var values=Object.entries(value).filter(function(pair){
+      return labels[pair[0]]!==undefined&&
+        (typeof pair[1]==="number"||typeof pair[1]==="boolean");
+    }).slice(0,5).map(function(pair){
+      return labels[pair[0]]+": "+String(pair[1]);
+    });
+    return values.join(" · ")||"—";
+  }
+  async function loadDeepAudit(){
+    var button=$("deep-audit-run"),tbody=$("deep-audit-items");
+    if(button.disabled)return;
+    button.disabled=true;value("deep-audit-status","جارٍ فحص مؤشرات النظام...");
+    try{
+      var sid=$("diagnostic-source").value||"";
+      var result=await api("full-audit"+(sid?"?sourceId="+encodeURIComponent(sid):""));
+      if(!result.ok||!Array.isArray(result.checks))throw Error("نتيجة الفحص غير متاحة");
+      value("deep-audit-ok",count(result.summary?.ok));
+      value("deep-audit-warning",count(result.summary?.warning));
+      value("deep-audit-unknown",count(result.summary?.unknown));
+      tbody.replaceChildren();
+      result.checks.forEach(function(entry){
+        var row=node("tr"),status=entry.status==="ok"?"سليم حسب المؤشرات":
+          entry.status==="warning"?"يحتاج مراجعة":"غير مؤكّد";
+        cell(row,deepAuditNames[entry.id]||"مؤشر إضافي");
+        var color=node("span",status,entry.status==="ok"?"ok":"warn");
+        cell(row,color);
+        cell(row,deepAuditCodes[entry.code]||"النتيجة غير معروفة");
+        cell(row,auditMetrics(entry.metrics));
+        tbody.appendChild(row);
+      });
+      var now=new Date(result.checkedAt||Date.now()).toLocaleString("ar-SA",
+        {timeZone:"Asia/Riyadh"});
+      value("deep-audit-status","آخر فحص: "+now+" · "+result.checks.length+
+        " مؤشر"+(result.cacheHit?" · نتيجة محفوظة حديثًا":"")+
+        " · لا يشمل فك ترميز فيديو أو صوت على الأجهزة.");
+    }catch(e){
+      value("deep-audit-status","تعذر إكمال الفحص: "+e.message);
+    }finally{button.disabled=false}
+  }
+  $("deep-audit-run").addEventListener("click",loadDeepAudit);
   function renderChecks(){
     value("check-api",state.live.engine?"متصل":"غير مؤكد");
     value("check-sources",state.live.overview?"متصل":"غير مؤكد");
