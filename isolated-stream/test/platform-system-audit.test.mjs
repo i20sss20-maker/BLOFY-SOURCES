@@ -30,7 +30,9 @@ function fixture(){
     }
   })},
   async opsSourceStats({sourceId:id}){count('opsSourceStats');assert.equal(id,sourceId);
-    return ok({livePlayback:{started:20,failed:5,interrupted:2,
+    return ok({liveSourceCapacity:{maxConnections:1,activeConnections:1,
+      restreamer:true,sourceAccountSharedByCodes:true},
+      livePlayback:{started:20,failed:5,interrupted:2,
       slowStarts:3,p95StartMs:8200,clientOrProxyClosed:4}})}
  };
  const audit=createPlatformSystemAudit({
@@ -50,7 +52,7 @@ test('full audit aggregates existing safe summaries without media playback or mu
  assert.equal(a.ok,true);assert.equal(a.readOnly,true);
  assert.equal(a.customerTrafficChanged,false);
  assert.equal(a.mediaBytesFetched,false);
- assert.equal(a.checks.length,23);
+ assert.equal(a.checks.length,24);
  assert.deepEqual(a,b,'concurrent callers coalesce into one audit');
  assert.equal(f.calls.overview,1);
  assert.equal(f.calls.opsSourceStats,1);
@@ -62,6 +64,9 @@ test('full audit aggregates existing safe summaries without media playback or mu
  assert.equal(c('media404').metrics.missing,4);
  assert.equal(c('playback').status,'warning');
  assert.equal(c('playback').metrics.failed,5);
+ assert.equal(c('sourceCapacity').status,'warning');
+ assert.equal(c('sourceCapacity').metrics.maxConnections,1);
+ assert.equal(c('sourceCapacity').metrics.activeConnections,1);
  assert.equal(c('quality_live').status,'warning');
  assert.equal(c('quality_live').metrics.started,24);
  assert.equal(c('quality_movie').status,'ok');
