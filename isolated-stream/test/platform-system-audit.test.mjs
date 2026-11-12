@@ -1,0 +1,121 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {once} from 'node:events';
+import {createPlatformSystemAudit} from '../src/platform-system-audit.mjs';
+import {createStreamServer} from '../src/server.mjs';
+const sourceId='f60487ab-a652-4639-a4ae-855de68e7802';
+const ok=body=>({status:200,body:{ok:true,...body}});
+function fixture(){
+ let calls={},clockMs=Date.parse('2026-11-12T09:00:00Z');
+ const count=name=>{calls[name]=(calls[name]||0)+1};
+ const portal={
+  async overview(){count('overview');return ok({
+   sources:[{id:sourceId,name:'saleh',enabled:true,status:'online'},
+    {id:'5b92ef45-3552-4ef3-a622-36b37653c99f',name:'backup',enabled:false,status:'offline'}],
+   totals:{servers:2,enabled:1,online:1,live:9000,movie:24000,series:5000},
+   subscribers:{gateway:{total:120,active:105}}
+  })},
+  async mediaFailures(){count('mediaFailures');return ok({entries:[
+    {kind:'movie',state:'missing',count:4,due:2},
+    {kind:'series',state:'recovered',count:6,due:0}
+   ]})},
+  async salesSummary(){count('salesSummary');return ok({totals:{total:30},expiring_soon:4})},
+  async libraryAIStatus(){count('libraryAIStatus');return ok({configured:false})},
+  async opsSourceStats({sourceId:id}){count('opsSourceStats');assert.equal(id,sourceId);
+    return ok({livePlayback:{started:20,failed:5,interrupted:2,
+      slowStarts:3,p95StartMs:8200,clientOrProxyClosed:4}})}
+ };
+ const audit=createPlatformSystemAudit({
+  portal,
+  engineStatus:async()=>{count('engineStatus');return {reachable:true,httpStatus:404}},
+  mediaControl:{overview:async()=>{count('mediaControl');return {online:true,readyPaths:3,hlsSessions:2}}},
+  autoHealth:()=>({ok:true,totals:{paths:3,healthy:2,failed:1,warning:0}}),
+  relayStats:()=>({enabled:true,fanout:{activeFeeds:2,viewers:10,providerFailures:1}}),
+  clock:()=>clockMs,
+  cacheMs:30000
+ });
+ return {audit,calls,advance:ms=>{clockMs+=ms}};
+}
+test('full audit aggregates existing safe summaries without media playback or mutations',async()=>{
+ const f=fixture();
+ const [a,b]=await Promise.all([f.audit.audit(),f.audit.audit()]);
+ assert.equal(a.ok,true);assert.equal(a.readOnly,true);
+ assert.equal(a.customerTrafficChanged,false);
+ assert.equal(a.mediaBytesFetched,false);
+ assert.equal(a.checks.length,19);
+ assert.deepEqual(a,b,'concurrent callers coalesce into one audit');
+ assert.equal(f.calls.overview,1);
+ assert.equal(f.calls.opsSourceStats,1);
+ assert.equal(a.source.id,sourceId);
+ const c=id=>a.checks.find(x=>x.id===id);
+ assert.equal(c('sources').status,'ok');
+ assert.equal(c('catalog_movie').metrics.items,24000);
+ assert.equal(c('media404').status,'warning');
+ assert.equal(c('media404').metrics.missing,4);
+ assert.equal(c('playback').status,'warning');
+ assert.equal(c('playback').metrics.failed,5);
+ assert.equal(c('restream').status,'warning');
+ assert.equal(c('engine').status,'ok');
+ assert.equal(c('mediamtx').status,'ok');
+ assert.equal(c('audio').status,'unknown');
+ assert.equal(c('subtitles').status,'unknown');
+ assert.equal(c('episodes').status,'unknown');
+ assert.equal(c('backup').status,'unknown');
+ assert.ok(a.summary.warning>=3);
+ assert.doesNotMatch(JSON.stringify(a),/password|authToken|secret|bearer|api_key/i);
+ assert.equal((await f.audit.audit()).cacheHit,true);
+ assert.equal(f.calls.overview,1);
+ f.advance(31000);
+ await f.audit.audit();
+ assert.equal(f.calls.overview,2);
+});
+test('failure to connect never presents healthy playback or false-green diagnostics',async()=>{
+ const audit=createPlatformSystemAudit({
+  portal:{
+   overview:async()=>({status:503,body:{ok:false,code:'service_unreachable'}}),
+   mediaFailures:async()=>({status:503,body:{ok:false}}),
+   salesSummary:async()=>({status:502,body:{ok:false}}),
+   libraryAIStatus:async()=>({status:503,body:{ok:false}}),
+   opsSourceStats:async()=>{throw Error('must not be called')}
+  },
+  engineStatus:async()=>({reachable:false,httpStatus:null}),
+  mediaControl:{overview:async()=>({online:false})},
+  autoHealth:()=>({ok:false}),
+  relayStats:()=>({enabled:false})
+ });
+ const result=await audit.audit();
+ assert.equal(result.ok,true);
+ for(const id of ['bridge','sources','playback','catalog_live','catalog_series','episodes'])
+  assert.equal(result.checks.find(x=>x.id===id).status,'unknown');
+ assert.equal(result.checks.find(x=>x.id==='engine').status,'warning');
+ assert.equal(result.checks.find(x=>x.id==='mediamtx').status,'warning');
+ assert.equal(result.summary.ok,0);
+ assert.equal((await audit.audit({sourceId:'../../admin'})).code,'platform_audit_source_invalid');
+});
+test('full operational audit is operator-authenticated, read-only and never exposes credentials',async()=>{
+ const secret='blofy-nextgen-test-operator-credential-1234567890';
+ const {app}=createStreamServer({adminToken:secret});
+ app.listen(0,'127.0.0.1');await once(app,'listening');
+ const url='http://127.0.0.1:'+app.address().port;
+ try{
+  const no=await fetch(url+'/operator/api/full-audit');
+  assert.equal(no.status,401);
+  const basic='Basic '+Buffer.from('operator:'+secret).toString('base64');
+  const bad=await fetch(url+'/operator/api/full-audit?sourceId=evil',{headers:{authorization:basic}});
+  assert.equal(bad.status,400);
+  const r=await fetch(url+'/operator/api/full-audit',{headers:{authorization:basic}});
+  assert.equal(r.status,200);
+  const body=await r.json();
+  assert.equal(body.readOnly,true);
+  assert.equal(body.mediaBytesFetched,false);
+  assert.equal(body.checks.find(x=>x.id==='audio').status,'unknown');
+  assert.doesNotMatch(JSON.stringify(body),/username|password|sourceUrl|secret|credential|m3u/i);
+  const page=await(await fetch(url+'/operator',{headers:{authorization:basic}})).text();
+  for(const id of ['deep-audit-panel','deep-audit-run','deep-audit-items','deep-audit-status'])
+    assert.ok(page.includes('id="'+id+'"'));
+  assert.match(page,/api\("full-audit"/);
+  assert.match(page,/renderChecks\(\)/);
+  assert.equal((await fetch(url+'/operator/api/full-audit',{method:'POST',
+    headers:{authorization:basic}})).status,404);
+ }finally{await new Promise(resolve=>app.close(resolve))}
+});
