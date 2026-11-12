@@ -22,23 +22,36 @@ const pure=(value)=>Number.isFinite(value)&&value>=0?Math.round(value):null;
 
 export function createStreamCrossServiceDiagnosis({
   portal,relayStats=()=>null,restreamPaths=()=>null,
-  streamOps=()=>null,clock=Date.now,cacheMs=15000
+  streamOps=()=>null,mediaControl=null,clock=Date.now,cacheMs=15000
 }={}){
   if(!portal||typeof portal.mediaQuality!=='function'||
     typeof portal.sourceCapacity!=='function'||
     typeof relayStats!=='function'||typeof restreamPaths!=='function'||
-    typeof streamOps!=='function'||typeof clock!=='function'||
+    typeof streamOps!=='function'||
+    (mediaControl!==null&&typeof mediaControl?.overview!=='function')||
+    typeof clock!=='function'||
     !Number.isInteger(cacheMs)||cacheMs<5000||cacheMs>60000)
     throw Error('stream_cross_service_config_invalid');
   let cache=null,expiresAt=0,inflight=null;
   async function collect(){
     // Both requests go through the existing fixed-origin authenticated bridge.
     // Media health is in-memory; capacity is a single read-only DB aggregate.
-    const [qualityResult,capacityResult]=await Promise.allSettled([
-      portal.mediaQuality(),portal.sourceCapacity()
+    const [qualityResult,capacityResult,mediaMtxResult]=await Promise.allSettled([
+      portal.mediaQuality(),portal.sourceCapacity(),
+      mediaControl?mediaControl.overview():Promise.resolve(null)
     ]);
     const media=qualityResult.status==='fulfilled'?good(qualityResult.value):null;
     const capacity=capacityResult.status==='fulfilled'?good(capacityResult.value):null;
+    // MediaMTX overview comes only from the fixed internal private Control
+    // peer. Never forward path names, source URLs, session IDs or client IPs.
+    const mtx=mediaMtxResult.status==='fulfilled'?mediaMtxResult.value:null;
+    const mtxConfigured=mtx?.configured===true;
+    const mtxOnline=mtxConfigured&&mtx?.online===true;
+    const mtxReady=mtxOnline?safeCount(mtx.readyPaths):null;
+    const mtxHls=mtxOnline?safeCount(mtx.hlsSessions):null;
+    const mtxDiagnostic=mtxConfigured&&!mtxOnline?
+      mtx?.diagnostics==='mediamtx_auth_failed'?'media_engine_auth_failure':
+        'media_engine_control_unavailable':null;
     let relay=null,restream=null,ops=null;
     try{relay=relayStats()}catch{}
     try{restream=restreamPaths()}catch{}
@@ -76,12 +89,17 @@ export function createStreamCrossServiceDiagnosis({
       {code:'gateway_auth_rejected',scope:'gateway_last_hour',
         count:measured(media?.byReason?.gateway_auth_denied),severity:'notice'},
       {code:'relay_provider_failures',scope:'relay_since_boot',
-        count:measured(fanout?.providerFailures),severity:'warning'}
+        count:measured(fanout?.providerFailures),severity:'warning'},
+      {code:mtxDiagnostic||'media_engine_control_unavailable',
+        scope:'mediamtx_current',
+        count:mtxDiagnostic?1:0,severity:'warning'}
     ].filter(row=>row.count>0&&
       ((row.scope==='gateway_last_hour'&&qualityMeasured)||
-       (row.scope==='relay_since_boot'&&sharedMeasured)));
+       (row.scope==='relay_since_boot'&&sharedMeasured)||
+       (row.scope==='mediamtx_current'&&mtxConfigured)));
     // Unknown must never be rendered as green or turned into zero.
-    const unknown=!qualityMeasured||!gatewayMeasured||!sharedMeasured||!hlsMeasured;
+    const unknown=!qualityMeasured||!gatewayMeasured||!sharedMeasured||
+      !hlsMeasured||!mtxOnline||mtxReady===null||mtxHls===null;
     const observations={
       gateway:{
         dataAvailable:qualityMeasured,scope:'portal_process_bounded_last_hour',
@@ -124,7 +142,19 @@ export function createStreamCrossServiceDiagnosis({
         pathsCountMayBeTruncated:hlsMeasured&&restream.items.length>32
       },
       edge:{dataAvailable:false,scope:'independent_xtream_edge_not_instrumented'},
-      mediaMtx:{dataAvailable:false,scope:'mediamtx_runtime_connections_not_instrumented'}
+      mediaMtx:{
+        dataAvailable:mtxOnline&&mtxReady!==null&&mtxHls!==null,
+        scope:'isolated_stream_mediamtx_control_api_hls_sessions_only',
+        controlConfigured:mtx?.configured===false?false:mtxConfigured?true:null,
+        online:mtxConfigured?mtxOnline:null,
+        readyPaths:mtxReady,
+        hlsSessions:mtxHls,
+        hlsSessionsAreUniqueViewers:false,
+        includesWebRtcOrRtspSessions:false,
+        includesIndependentRestreamEngine:false,
+        decodedAudioVideoVerified:false,
+        diagnostic:mtxDiagnostic
+      }
     };
     const at=clock();
     return {
@@ -135,7 +165,7 @@ export function createStreamCrossServiceDiagnosis({
       decodedAudioVideoVerified:false,
       freshness:'cached_15_seconds_or_less',observations,
       problems:faults,
-      note:'Do not sum direct transfers, shared fanout readers, operator HLS sessions or subscriptions. Portal media logs are max 400 events per process and may omit older events. No MediaMTX/Edge viewer telemetry in this report.'
+      note:'Do not sum gateway direct HTTP transfers, STREAM fanout readers, operator HLS path readers, MediaMTX HLS sessions or subscriptions. MediaMTX Control API covers the isolated STREAM media engine only, not the independent restream engine, WebRTC/RTSP clients or unique people. Edge viewer telemetry remains unmeasured; portal media logs retain max 400 events per process.'
     };
   }
   async function snapshot(){

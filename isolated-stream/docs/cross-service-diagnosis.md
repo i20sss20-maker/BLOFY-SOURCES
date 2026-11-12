@@ -13,7 +13,8 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 | STREAM fanout | Current shared-relay readers and feed count in the isolated STREAM API process | Ordinary direct streams and customers outside that process |
 | Operator HLS | Operator supervisor path reader counters | Every MediaMTX or end-user HLS session |
 | Source capacity | Cached provider-reported limits and pinned gateway subscriptions | Live true upstream socket sessions or source redistribution authorization |
-| Xtream Edge & MediaMTX | Explicitly **unmeasured** here | Do not substitute relay totals |
+| STREAM MediaMTX (private Control API) | Real **ready path** total and **HLS session count** on the isolated STREAM media service, read-only fixed internal peer | WebRTC/RTSP peers, independent `blofy-restream-engine`, unique viewers, decoded A/V. Engine sessions may overlap other counters | 
+| Xtream Edge | Explicitly **unmeasured** | Current Edge service has no trusted per-connection telemetry integration; do not substitute relay totals |
 
 **Never sum** direct transfers, shared-relay readers, HLS readings or subscription counts into a claim about all viewers. An individual viewer can appear in more than one layer; uninstrumented paths may not appear anywhere.
 
@@ -32,7 +33,9 @@ This feature combines **existing read-only snapshots** from the BLOFY activation
 - Only the existing **fixed-origin Bearer** client calls the portal's already-authenticated `/internal/blofy-stream/media-quality` and `/internal/blofy-stream/source-capacity` endpoints.
 - Parallel requests coalesce and cache for 15 seconds. No new media probes, FFmpeg work, account writes, migrations or provider logins.
 - The response is an allowlist of bounded metrics and generic error codes. It never returns IP addresses, source URLs, credentials, tokens, phone numbers, stream IDs or subscriber identities.
+- MediaMTX `createMediaControlClient().overview()` uses only `blofy-stream-media.railway.internal:9997`, the existing fixed authenticated `/v3/info`, `/v3/paths/list` and `/v3/hls/sessions/list` GETs. The diagnosis outputs **only bounded numeric totals** and an allowlisted generic authentication/availability error, never private paths/readers or HLS session records.
+- Without configured MediaMTX credentials or a healthy HLS endpoint, media session counts are **unknown (`null`)**, not zero. This feature makes up to three small internal GETs per 15-second shared cache refresh; it does not probe provider streams or modify MediaMTX.
 
 ## Before any additional rollout
 
-Run full isolated-stream and core GitHub tests, then check Railway deployment status and 5xx. Physical Android 9/Windows playback, independent Edge viewer instrumentation, MediaMTX sessions, unique viewer correlation and licensed large-scale provider capacity remain separate verification tasks.
+Run full isolated-stream and core GitHub tests, then check Railway deployment status and 5xx. Physical Android 9/Windows playback, independent Edge viewer instrumentation, MediaMTX WebRTC/RTSP sessions and independent engine sessions, unique viewer correlation and licensed large-scale provider capacity remain separate verification tasks.

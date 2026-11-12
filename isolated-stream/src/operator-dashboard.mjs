@@ -56,7 +56,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   const crossService=createStreamCrossServiceDiagnosis({portal,
     relayStats:sharedRelayStats,
     restreamPaths:()=>liveSupervisor?.list?.()||null,
-    streamOps});
+    mediaControl:control,streamOps});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
