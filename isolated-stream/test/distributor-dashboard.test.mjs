@@ -16,10 +16,10 @@ test('distributor portal is a separate page with code and Xtream issuance, not o
  await withServer(async base=>{
   const result=await fetch(base+'/distributor');assert.equal(result.status,200);
   const html=await result.text();
-  assert.match(html,/لوحة التوزيع/);
-  assert.match(html,/كود BLOFY STREAM/);
-  assert.match(html,/حساب Xtream/);
-  assert.match(html,/رصيد الأشهر/);
+  assert.match(html,/<h1 class="page-title">لوحة توزيع<\/h1>/);
+  assert.match(html,/>كود<\/button>/);
+  assert.match(html,/>Xtream<\/button>/);
+  assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/x-blofy-distributor-action/);
   assert.doesNotMatch(html,/data-tab="sources"|data-tab="library"|data-tab="restream"/);
   const nonce=html.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/);
@@ -111,12 +111,15 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
  await withServer(async base=>{
   const response=await fetch(base+'/distributor');assert.equal(response.status,200);
   const html=await response.text();
-  assert.match(html,/رصيد الأشهر/);
+  assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/value="365">سنة · 12/);
   assert.match(html,/value="1">تجريبي · مجاني/);
   assert.match(html,/id="trial-phone"/);
   assert.match(html,/trialPhone:cost===0/);
   assert.doesNotMatch(html,/saleh فقط|XTREAM 2|خصم الرصيد بالأشهر:/);
+  assert.equal((html.match(/<h1 class="page-title">لوحة توزيع<\/h1>/g)||[]).length,1);
+  assert.doesNotMatch(html,/<span class="mark">|<strong>BLOFY STREAM<\/strong>|<h1>توزيع BLOFY STREAM<\/h1>/);
+  assert.doesNotMatch(html,/<small>حالة اللوحة<\/small>|<p class="muted" id="who">/);
   assert.doesNotMatch(html,/id="kind-help"|id="credit-cost"/);
   assert.doesNotMatch(html,/إصدار اشتراك من saleh وخصم/);
   assert.match(html,/id="issue-button"/);
