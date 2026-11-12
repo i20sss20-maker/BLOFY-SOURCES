@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -56,7 +56,7 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 .notice{border:1px solid #a16a68;border-radius:11px;background:#39262d;padding:12px 14px;color:#ffd7d3;margin:13px 0}
 .notice.ok{border-color:#42745f;background:#17372f;color:#a8f4d3}.notice[hidden],[hidden]{display:none!important}
 .badge{border:1px solid #485d7b;border-radius:30px;padding:5px 12px;color:#e5dcff}
-.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
 .stat{padding:14px;border:1px solid #3c4a66;background:#141e34;border-radius:14px}.stat small{display:block;color:var(--muted)}.stat strong{font-size:25px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}.chip{border:1px solid #536384;color:#e6dfff;background:#24324c;border-radius:10px;padding:8px 17px;cursor:pointer}
 .chip.active{border-color:#8c9fbc;background:#354862;color:white}
@@ -64,6 +64,16 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 .secret strong{display:block;direction:ltr;text-align:right;font:700 19px/1.5 Consolas,monospace}
 .secret .fieldline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:11px;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff19}
 .tablewrap{overflow:auto;border-radius:13px;border:1px solid #354966}table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:13px 11px;border-bottom:1px solid #354966;white-space:nowrap}th{color:#c8d3f0;background:#202d46}td{color:#edf1fd}
+.mini{font-size:12px;padding:5px 10px}.searchbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.searchbar input{flex:2 1 220px}.searchbar select{flex:1 1 165px;width:auto}
+.issue-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.issue-actions .btn{white-space:nowrap}.stat strong{font-variant-numeric:tabular-nums}
+#expiry-alert{margin:0 0 14px;border:1px solid #816b3d;background:#322c1b;color:#ffe6a3;border-radius:12px;padding:11px 14px}
+#expiry-alert button{margin-inline-start:12px}
+dialog{width:min(95vw,480px);max-height:90vh;overflow-y:auto;color:var(--white);background:var(--card);border:1px solid var(--stroke);border-radius:17px;padding:22px}
+dialog::backdrop{background:#030612b8}
+dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .mini{font-size:12px;padding:5px 10px}.num{direction:ltr;unicode-bidi:isolate;display:inline-block}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
 </style></head><body><main>
@@ -79,25 +89,57 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 </form></section>
 <section id="workspace" hidden>
 <div class="card"><span id="who" hidden></span><span id="enabled" hidden></span>
-<div class="stats"><div class="stat"><small>الرصيد</small><strong id="credits">—</strong></div>
-<div class="stat"><small>الإصدارات</small><strong id="used">—</strong></div></div></div>
+<div class="stats">
+<div class="stat"><small>الرصيد</small><strong id="credits">—</strong></div>
+<div class="stat"><small>الإصدارات</small><strong id="used">—</strong></div>
+<div class="stat"><small>النشطة</small><strong id="stat-active">—</strong></div>
+<div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
+<div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
+</div></div><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
+<button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card"><h2>استخراج اشتراك</h2>
 
 <div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
 <form id="issue-form"><div class="formgrid">
 <div class="field"><label for="label">اسم الاشتراك</label><input id="label" maxlength="80" value="اشتراك" required></div>
+<div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
+<div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
 <option value="1">تجريبي · مجاني</option><option value="30" selected>شهر · 1</option><option value="90">3 أشهر · 3</option><option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option><option value="730">سنتان · 24</option></select></div>
-<div class="field" id="trial-field" hidden><label for="trial-phone">جوال العميل</label><input id="trial-phone" type="tel" autocomplete="tel" placeholder="05xxxxxxxx" maxlength="19"></div><div class="field"><label for="connections">الاتصالات</label><select id="connections">
+<div class="field"><label for="connections">الاتصالات</label><select id="connections">
 <option value="1">اتصال واحد</option><option value="2">اتصالان</option><option value="3">3 اتصالات</option></select></div>
 </div><div class="row" style="margin-top:17px">
 
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
-<div class="card"><div class="row"><h2>الإصدارات</h2><button class="btn secondary" id="refresh" type="button">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>النوع</th><th>الوصف</th><th>المدة</th><th>خصم الأشهر</th><th>الوقت</th><th>الحالة</th><th>التحكم</th></tr></thead>
-<tbody id="items"></tbody></table></div></div>
+<div class="card"><div class="row"><h2>الاشتراكات</h2><button class="btn secondary mini" id="refresh" type="button">تحديث</button></div>
+<div class="searchbar"><input id="issue-search" type="search" maxlength="80" placeholder="بحث بالكود أو العميل أو الجوال" aria-label="بحث الاشتراكات">
+<select id="issue-status" aria-label="حالة الاشتراك"><option value="all">جميع الحالات</option>
+<option value="active">نشطة</option><option value="expiring">قريبة الانتهاء</option>
+<option value="expired">منتهية</option><option value="unused">لم تُفعّل</option>
+<option value="disabled">موقوفة</option></select></div>
+<div class="tablewrap"><table><thead><tr><th>النوع</th><th>العميل</th><th>الاشتراك</th>
+<th>الانتهاء</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+<tbody id="items"></tbody></table></div>
+<div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
+<button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
+<div class="card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
+<tbody id="clients-rows"></tbody></table></div></div>
+<dialog id="renew-dialog" aria-labelledby="renew-title"><h2 id="renew-title">تجديد الاشتراك</h2>
+<form id="renew-form"><div class="formgrid"><div class="field"><label for="renew-days">المدة</label>
+<select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
+<option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option>
+<option value="730">سنتان · 24</option></select></div></div>
+<div class="dialog-buttons"><button type="button" data-close-dialog="renew-dialog" class="btn secondary">إلغاء</button>
+<button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
+<dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
+<form id="customer-form"><div class="formgrid"><div class="field"><label for="edit-customer-name">الاسم</label>
+<input id="edit-customer-name" maxlength="80"></div><div class="field"><label for="edit-customer-phone">الجوال</label>
+<input id="edit-customer-phone" maxlength="19" type="tel"></div></div>
+<div class="dialog-buttons"><button type="button" data-close-dialog="customer-dialog" class="btn secondary">إلغاء</button>
+<button id="customer-confirm" class="btn" type="submit">حفظ</button></div></form></dialog>
 <div class="card" id="library-panel"><div class="row"><h2>المكتبة</h2></div>
 <div class="formgrid"><div class="field"><label for="library-type">نوع المحتوى</label><select id="library-type">
 <option value="live">القنوات</option><option value="movie" selected>الأفلام</option><option value="series">المسلسلات</option></select></div>
@@ -111,12 +153,12 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
 (function(){
  const $=id=>document.getElementById(id),kindButtons=[...document.querySelectorAll('[data-kind]')];
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
+ let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null;
+ const retryActions=new Map();let searchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12,730:24};
  const currentCost=()=>COST[Number($('days').value)]??1;
  function updateCost(){
-  const n=currentCost();$('trial-field').hidden=n!==0;
-  $('trial-phone').required=n===0;
-
+  $('customer-phone').required=currentCost()===0;
  }
  $('days').addEventListener('change',updateCost);updateCost();
  function text(id,v){$(id).textContent=String(v??"—")}
@@ -155,30 +197,163 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
     line(box,"كلمة المرور",d.credentials.password);
     if(d.credentials.m3uUrl)line(box,"رابط M3U",d.credentials.m3uUrl);
   }
+  const all=[d.code&&'الكود: '+d.code,
+   d.credentials&&'الهوست: '+d.credentials.serverUrl,
+   d.credentials&&'اسم المستخدم: '+d.credentials.username,
+   d.credentials&&'كلمة المرور: '+d.credentials.password,
+   d.credentials?.m3uUrl&&'M3U: '+d.credentials.m3uUrl].filter(Boolean).join('\n');
+  if(all){const copyAll=document.createElement('button');copyAll.className='btn secondary mini';
+    copyAll.type='button';copyAll.textContent='نسخ الكل';
+    copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll)}
   box.scrollIntoView({behavior:'smooth',block:'center'});
  }
- async function loadItems(){
-  const d=await request('list');const body=$("items");body.replaceChildren();
-  if(!(d.items||[]).length){const tr=document.createElement('tr'),td=document.createElement('td');
-    td.colSpan=7;td.textContent="لم يتم إصدار أي اشتراكات بعد";tr.appendChild(td);body.appendChild(tr);return}
-  for(const it of d.items){
-   const tr=document.createElement('tr');
-   const fields=[it.type==='app'?'كود':'Xtream',it.label,it.days+' يوم',String(it.chargedCredits??1),
-     new Date(it.createdAt).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'}),
-     it.status==='done'?'تم':it.status==='review'?'يحتاج مراجعة':it.status==='pending'?'جارٍ':'لم يتم'];
-   for(const v of fields){const td=document.createElement('td');td.textContent=v;tr.appendChild(td)}
-   const td=document.createElement('td');
-   if(it.status==='done'){
-    const btn=document.createElement('button');btn.type="button";btn.className="btn secondary mini";
-    btn.textContent="عرض/نسخ";btn.addEventListener('click',async()=>{
-      btn.disabled=true;try{showIssue(await request('reveal',{issueId:it.id}))}
-      catch(e){msg("تعذر عرض الإصدار: "+e.message,false)}finally{btn.disabled=false}
-    });td.appendChild(btn);
-   }else td.textContent="—";
-   tr.appendChild(td);body.appendChild(tr);
+
+ function actionId(kind,id,detail=''){
+  const key=kind+':'+id+':'+detail;
+  if(!retryActions.has(key))retryActions.set(key,crypto.randomUUID());
+  return {key,id:retryActions.get(key)};
+ }
+ function outcomeStatus(row){
+  const names={active:'ساري',expiring:'ينتهي قريبًا',expired:'منتهي',
+    unused:'لم يُفعّل',disabled:'موقوف',pending:'قيد المعالجة',
+    review:'تحتاج مراجعة',failed:'فشل'};
+  return names[row.subscriptionStatus]||names[row.status]||'—';
+ }
+ function dateOnly(timestamp){
+  return timestamp?new Date(timestamp).toLocaleDateString('ar-SA',{
+   timeZone:'Asia/Riyadh',day:'2-digit',month:'2-digit',year:'numeric'
+  }):'—';
+ }
+ function tableCell(tr,value){
+  const td=document.createElement('td');td.textContent=String(value??'—');
+  tr.appendChild(td);return td;
+ }
+ function rowButton(host,title,callback){
+  const btn=document.createElement('button');btn.className='btn secondary mini';
+  btn.type='button';btn.textContent=title;
+  btn.addEventListener('click',async()=>{
+   btn.disabled=true;try{await callback()}catch(e){msg(e.message,false)}
+   finally{btn.disabled=false}
+  });host.appendChild(btn);return btn;
+ }
+ function renderIssueRows(){
+  const target=$('items');target.replaceChildren();
+  if(!issueRows.length){const tr=document.createElement('tr');
+    const td=tableCell(tr,'لا توجد اشتراكات');td.colSpan=6;target.appendChild(tr);}
+  for(const item of issueRows){
+   const row=document.createElement('tr');
+   tableCell(row,item.type==='app'?'كود':'Xtream');
+   const customer=tableCell(row,item.customerName||'—');
+   if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
+   tableCell(row,item.label);
+   tableCell(row,dateOnly(item.expiresAt));
+   tableCell(row,outcomeStatus(item));
+   const td=document.createElement('td'),actions=document.createElement('div');
+   actions.className='issue-actions';
+   if(item.status==='done'){
+    rowButton(actions,'نسخ',async()=>showIssue(await request('reveal',{issueId:item.id})));
+    if(!['unused','disabled'].includes(item.subscriptionStatus)){
+     rowButton(actions,'تجديد',async()=>{
+      activeIssue=item;$('renew-days').value='30';$('renew-dialog').showModal();
+     });
+    }
+    if(item.canRelogin)rowButton(actions,'إعادة دخول',async()=>{
+      const id=actionId('relogin',item.id);
+      const result=await request('relogin',{issueId:item.id,requestId:id.id});
+      retryActions.delete(id.key);
+      msg('إعادة الدخول متاحة لنفس الكود لمدة 10 دقائق',true);
+      await loadItems(false);
+    });
+   }
+   rowButton(actions,'العميل',async()=>{
+     activeIssue=item;$('edit-customer-name').value=item.customerName||'';
+     $('edit-customer-phone').value=item.customerPhone||'';
+     $('customer-dialog').showModal();
+   });
+   td.appendChild(actions);row.appendChild(td);target.appendChild(row);
+  }
+  text('issues-count','المعروض: '+issueRows.length);
+  $('issues-more').hidden=listNext==null;
+ }
+ async function loadItems(more=false){
+  const epoch=more?listEpoch:++listEpoch;
+  const offset=more?listNext:0;
+  if(more&&offset==null)return;
+  const d=await request('list',{q:$('issue-search').value.trim(),
+   status:$('issue-status').value,offset});
+  if(epoch!==listEpoch)return;
+  issueRows=more?issueRows.concat(d.items||[]):(d.items||[]);
+  listNext=d.nextOffset;
+  renderIssueRows();
+  if(d.stats){
+   text('stat-active',d.stats.active);
+   text('stat-expiring',d.stats.expiring);
+   text('stat-expired',d.stats.expired);
+   const count=Number(d.stats.expiring||0);
+   $('expiry-alert').hidden=count===0;
+   text('expiry-alert-text',count+' اشتراك ينتهي خلال 7 أيام');
   }
  }
- async function refresh(){try{await profile();await loadItems()}catch(e){
+ async function loadClients(){
+  const data=await request('clients');
+  const target=$('clients-rows');target.replaceChildren();
+  if(!data.items?.length){const tr=document.createElement('tr');
+    const td=tableCell(tr,'لا يوجد عملاء مسجلون');td.colSpan=4;target.appendChild(tr);return;}
+  for(const client of data.items){
+   const tr=document.createElement('tr');
+   tableCell(tr,client.name||'—');tableCell(tr,client.phone||'—');
+   tableCell(tr,client.subscriptions);
+   const td=document.createElement('td');
+   rowButton(td,'اشتراكاته',async()=>{
+    $('issue-search').value=client.phone||client.name;
+    $('issue-status').value='all';
+    await loadItems(false);
+    $('issue-search').scrollIntoView({behavior:'smooth',block:'center'});
+   });tr.appendChild(td);target.appendChild(tr);
+  }
+ }
+ $('issues-more').addEventListener('click',()=>loadItems(true).catch(e=>msg(e.message,false)));
+ $('issue-search').addEventListener('input',()=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>loadItems(false).catch(e=>msg(e.message,false)),260);
+ });
+ $('issue-status').addEventListener('change',()=>loadItems(false).catch(e=>msg(e.message,false)));
+ $('expiry-alert-open').addEventListener('click',()=>{
+  $('issue-search').value='';$('issue-status').value='expiring';
+  loadItems(false).catch(e=>msg(e.message,false));
+  $('issue-status').scrollIntoView({behavior:'smooth',block:'center'});
+ });
+ $('clients-refresh').addEventListener('click',()=>loadClients().catch(e=>msg(e.message,false)));
+ document.querySelectorAll('[data-close-dialog]').forEach(btn=>
+  btn.addEventListener('click',()=>$(
+    btn.getAttribute('data-close-dialog')).close()));
+ $('renew-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!activeIssue)return;
+  const issue=activeIssue,days=Number($('renew-days').value);
+  const btn=$('renew-confirm');btn.disabled=true;
+  const op=actionId('renew',issue.id,String(days));
+  try{
+   const result=await request('renew',{issueId:issue.id,days,requestId:op.id});
+   retryActions.delete(op.key);$('renew-dialog').close();
+   msg('تم التجديد إلى '+dateOnly(result.expiresAt),true);
+   await Promise.all([profile(),loadItems(false),loadClients()]);
+  }catch(err){msg('تعذر التجديد: '+err.message,false)}
+  finally{btn.disabled=false}
+ });
+ $('customer-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!activeIssue)return;
+  const btn=$('customer-confirm');btn.disabled=true;
+  try{
+   await request('customer',{issueId:activeIssue.id,
+    name:$('edit-customer-name').value,phone:$('edit-customer-phone').value});
+   $('customer-dialog').close();msg('تم حفظ بيانات العميل',true);
+   await Promise.all([loadItems(false),loadClients()]);
+  }catch(err){msg('تعذر الحفظ: '+err.message,false)}
+  finally{btn.disabled=false}
+ });
+ async function refresh(){try{
+    await profile();await Promise.all([loadItems(false),loadClients()]);
+   }catch(e){
    setLogged(false);if(e.message!=='distributor_unauthorized'&&e.message!=='distributor_session_expired')
      msg("تعذر تحميل لوحة التوزيع: "+e.message,false);
  }}
@@ -200,9 +375,11 @@ label{display:block;font-weight:600;color:#dae2f7;font-size:13px;margin-bottom:5
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
    const d=await request('issue',{kind:currentKind,label:$('label').value,
-    durationDays:Number($('days').value),maxConnections:Number($('connections').value),trialPhone:cost===0?$('trial-phone').value:'',requestId});
+    durationDays:Number($('days').value),maxConnections:Number($('connections').value),
+    customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
+    trialPhone:cost===0?$('customer-phone').value:'',requestId});
    inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
-   await profile();await loadItems();
+   await Promise.all([profile(),loadItems(false),loadClients()]);
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
    if(err.message!=='distributor_issuance_needs_review'&&
@@ -329,8 +506,14 @@ export function createDistributorDashboard({bridge,log=console}={}){
    if(!sessionToken)return okJson(res,401,{ok:false,code:'distributor_unauthorized'});
    const allowed=action==='issue'?{
       kind:data.kind,label:data.label,durationDays:data.durationDays,
-      maxConnections:data.maxConnections,trialPhone:data.trialPhone,requestId:data.requestId}:
+      maxConnections:data.maxConnections,trialPhone:data.trialPhone,
+      customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
      action==='reveal'?{issueId:data.issueId}:
+     action==='list'?{q:data.q,offset:data.offset,status:data.status}:
+     action==='clients'?{q:data.q}:
+     action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
+     action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
+     action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
      action==='library'?{type:data.type,q:data.q,offset:data.offset}:
      action==='organize'?{type:data.type,itemId:data.itemId,group:data.group,
        title:data.title,sortOrder:data.sortOrder,hidden:data.hidden}:{};
