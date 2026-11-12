@@ -46,7 +46,8 @@ test('cross-service monitors real different layers without double counting or le
   });
   const report=await ops.snapshot();
   assert.equal(report.ok,true);
-  assert.equal(report.status,'attention');
+  assert.equal(report.status,'partial');
+  assert.equal(report.observations.mediaMtx.dataAvailable,false);
   assert.equal(report.allServicesVerified,false);
   assert.equal(report.actualUniqueViewersMeasured,false);
   assert.equal(report.canSumAcrossLayers,false);
@@ -186,7 +187,11 @@ test('Arabic operator panel gives distinct scope and valid CSP nonce JavaScript'
     'cross-service-issues','cross-service-check'])
     assert.ok(html.includes('id="'+id+'"'),id+' absent');
   assert.match(html,/لا تجمع هذه الأعداد/);
-  assert.match(html,/خدمة Xtream Edge واتصالات MediaMTX الأخرى غير مقاسة/);
+  assert.match(html,/خدمة Xtream Edge ومحرك إعادة البث المنفصل/);
+  for(const id of ['cross-mediamtx-hls','cross-mediamtx-paths','cross-mediamtx-status'])
+    assert.ok(html.includes('id="'+id+'"'),id+' absent');
+  assert.match(html,/mtx\.hlsSessions/);
+  assert.match(html,/جلسة MediaMTX HLS ليست مشاهدًا فريدًا/);
   assert.match(html,/async function loadCrossService\(/);
   const script=html.match(/<script nonce="cross-qa-nonce">([\s\S]*?)<\/script>/);
   assert.ok(script,'CSP script missing');
