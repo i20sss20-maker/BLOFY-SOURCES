@@ -38,6 +38,25 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     }catch{return {status:503,body:{ok:false,code:'unified_bridge_unreachable'}}}
     finally{clearTimeout(timer);}
   }
+
+  const distributorAdmins=()=>call(ROOT+'/distributors');
+  function createDistributor(data){
+    return call(ROOT+'/distributors',{method:'POST',body:{
+      name:String(data.name||'').trim().slice(0,80),
+      username:String(data.username||'').trim().toLowerCase().slice(0,32),
+      credits:Number(data.credits)||0
+    }});
+  }
+  function distributorAdminAction(id,kind,data={}){
+    if(!UUID.test(id)||!['credits','status','reset'].includes(kind))
+      return Promise.resolve({status:400,body:{ok:false,code:'distributor_action_denied'}});
+    return call(ROOT+'/distributors/'+id+'/'+kind,{method:'POST',body:data});
+  }
+  function distributorRequest(kind,body={}){
+    if(!['login','me','logout','list','issue','reveal'].includes(kind))
+      return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
+    return call(ROOT+'/distributor/'+kind,{method:'POST',body});
+  }
   const overview=()=>call(ROOT+'/overview');
   const sources=()=>call(ROOT+'/overview');
   const accounts=({offset=0}={})=>call(ROOT+'/accounts?'+
@@ -222,6 +241,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }
