@@ -474,24 +474,24 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div></section>
 <section class="view" id="page-distributors">
 <div class="heading"><div><h2>لوحات التوزيع</h2>
-<p>أنشئ لوحة خاصة لكل موزع لإصدار أكواد BLOFY STREAM وحسابات Xtream فقط. لا يمكن للموزعين الوصول إلى إدارة المصادر أو المكتبة أو البث.</p></div>
+<p>أنشئ لوحة توزيع لاستخراج كود أو Xtream من مصدر saleh فقط (وليس XTREAM 2). للموزع تنظيم قوائم مكتبته الشخصية فقط، دون تعديل مكتبة المشتركين أو إدارة المصادر والبث.</p></div>
 <a class="btn secondary" href="/distributor" target="_blank" rel="noopener noreferrer">فتح لوحة التوزيع ↗</a></div>
 <div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
 <div class="stat"><small>إجمالي لوحات التوزيع</small><strong id="dist-total">—</strong></div>
 <div class="stat"><small>اللوحات النشطة</small><strong id="dist-active">—</strong></div>
-<div class="stat"><small>الرصيد المتبقي للموزعين</small><strong id="dist-credits">—</strong></div></div>
+<div class="stat"><small>رصيد الأشهر المتبقي للموزعين</small><strong id="dist-credits">—</strong></div></div>
 <div class="panel"><h3>إصدار لوحة توزيع جديدة</h3>
-<p class="muted">سيتم إنشاء اسم مستخدم وكلمة مرور خاصة بالموزع؛ كلمة المرور تظهر لك عند الإنشاء فقط. الرصيد هو عدد الاشتراكات التي يستطيع استخراجها.</p>
+<p class="muted">سيتم إنشاء اسم مستخدم وكلمة مرور خاصة بالموزع؛ كلمة المرور تظهر لك عند الإنشاء فقط. الرصيد بوحدة الشهر: شهر يخصم 1، سنة تخصم 12، والتجربة اليومية مجانية (مرة لكل جوال، بحد يومي).</p>
 <form id="dist-create-form"><div class="formgrid">
 <div class="field"><label for="dist-name">اسم الموزع</label><input id="dist-name" name="name" minlength="2" maxlength="80" required placeholder="اسم المحل / الموزع"></div>
 <div class="field"><label for="dist-username">اسم الدخول الإنجليزي</label><input id="dist-username" name="username" minlength="4" maxlength="32" pattern="[a-z][a-z0-9_.-]{3,31}" required placeholder="distributor01" dir="ltr"></div>
-<div class="field"><label for="dist-initial">الرصيد الأولي</label><input id="dist-initial" name="credits" type="number" min="0" max="10000" value="0" required></div>
+<div class="field"><label for="dist-initial">رصيد الأشهر الأولي</label><input id="dist-initial" name="credits" type="number" min="0" max="10000" value="0" required></div>
 </div><div class="actions" style="margin-top:15px"><button class="btn" type="submit">＋ إنشاء لوحة توزيع</button></div></form>
 <div id="dist-secret" class="accountsecret" hidden style="margin-top:13px"></div></div>
 <div class="panel"><div class="controls"><h3>إدارة الموزعين</h3>
 <button class="btn secondary sm" id="dist-refresh" type="button">↻ تحديث الموزعين</button></div>
-<p class="muted">تستطيع إضافة أرصدة، إيقاف اللوحة أو تغيير كلمة المرور. الإيقاف يلغي جلسات الدخول فورًا. لا تخرج كلمة المرور إلا لصاحب اللوحة.</p>
-<div class="tablewrap"><table><thead><tr><th>الموزع</th><th>اسم المستخدم</th><th>الرصيد</th><th>الإصدارات</th><th>الحالة</th><th>التحكم</th></tr></thead>
+<p class="muted">تستطيع إضافة رصيد أشهر (مثل 12 شهرًا لسنة)، إيقاف اللوحة أو تغيير كلمة المرور. الإيقاف يلغي جلسات الدخول فورًا. لا تخرج كلمة المرور إلا لصاحب اللوحة.</p>
+<div class="tablewrap"><table><thead><tr><th>الموزع</th><th>اسم المستخدم</th><th>رصيد الأشهر</th><th>الإصدارات</th><th>الحالة</th><th>التحكم</th></tr></thead>
 <tbody id="dist-list"></tbody></table></div></div>
 </section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
@@ -1682,13 +1682,13 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       cell(row,count(d.used));cell(row,d.enabled?"نشطة":"موقوفة");
       var actions=node("div",undefined,"actions");
       actions.appendChild(button("إضافة رصيد",async function(){
-        var input=prompt("عدد أرصدة الاشتراكات المراد إضافتها (1 إلى 1000):","10");
+        var input=prompt("كم شهر رصيد تضيف للموزع؟ (1 إلى 1000):","10");
         if(input===null)return;
         var credits=Number(input);
         if(!Number.isSafeInteger(credits)||credits<1||credits>1000){
           show("أدخل رصيدًا صحيحًا بين 1 و1000.",false);return;
         }
-        if(!confirm("إضافة "+credits+" رصيد إلى لوحة "+d.name+"؟"))return;
+        if(!confirm("إضافة "+credits+" شهر رصيد إلى لوحة "+d.name+"؟"))return;
         try{
           await action("distributors/"+d.id+"/credits","distributor-credits",{credits});
           show("تمت إضافة الرصيد.",true);await loadDistributors();
