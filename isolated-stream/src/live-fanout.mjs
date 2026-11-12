@@ -112,8 +112,16 @@ export function createLiveFanout({
     row.lastMediaAt=clock();
     // Parse only in-flight MPEG-TS metadata, with a strict memory/CPU cap.
     // Never decode, change a byte, or open an extra connection to the provider.
-    if(row.trackInspector){
-      try{row.trackInspector.push(chunk)}catch{row.trackInspector=null}
+    if(row.trackInspector&&!row.trackBudgetComplete){
+      try{
+        const before=row.trackInspector.summary().inspectedBytes;
+        const observed=row.trackInspector.push(chunk);
+        if(observed.inspectedBytes>before)row.trackInspectedAt=clock();
+        if(observed.samplingComplete)row.trackBudgetComplete=true;
+      }catch{
+        row.trackInspector=null;row.trackInspectedAt=null;
+        row.trackBudgetComplete=true;
+      }
     }
     // Aggregate-only bandwidth accounting: counts upstream bytes once,
     // outbound bytes as queued writes (not verified network delivery).
@@ -225,6 +233,12 @@ export function createLiveFanout({
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
           row.sourceStarts++;
+          // Every accepted upstream session may have a different MPEG-TS
+          // program/codec after a permitted reconnect. Evidence is scoped
+          // to current publisher only, not the previously connected origin.
+          row.trackInspector=createTsAudioInspector();
+          row.trackInspectedAt=null;
+          row.trackBudgetComplete=false;
           if(reopening){
             counters.reconnectRecovered++;reopening=false;
             event(row,'recovered');
@@ -357,7 +371,8 @@ export function createLiveFanout({
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
         state:'starting',idleTimer:null,startedAt:null,providerRetryAfterMs:0,
-        trackInspector:createTsAudioInspector()};
+        trackInspector:createTsAudioInspector(),trackInspectedAt:null,
+        trackBudgetComplete:false};
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
@@ -396,6 +411,7 @@ export function createLiveFanout({
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
       activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
+      trackInspectedAt:row.trackInspectedAt,
       audio:row.trackInspector?row.trackInspector.summary():{
         status:'unavailable',audioCodecs:[],videoCodecs:[],
         hasAudioStream:false,decodedAudio:false}
