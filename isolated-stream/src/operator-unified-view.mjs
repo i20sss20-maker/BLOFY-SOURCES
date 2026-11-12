@@ -528,6 +528,12 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <button class="btn" id="diagnostic-test">فحص اتصال المصدر</button>
 <button class="btn secondary" id="diagnostic-media">فحص الوسائط</button>
 </div><pre id="diagnostic-output" class="log">نتائج فحوص الوسائط ستظهر هنا.</pre></div>
+<div class="panel" id="stream-release-inspector-panel">
+<div class="controls"><h3>تحديث تطبيق BLOFY STREAM</h3>
+<button id="stream-release-check" type="button" class="btn secondary sm">فحص معلومات الإصدار</button></div>
+<p id="stream-release-info" class="muted" role="status" aria-live="polite">لم يتم فحص بيانات الإصدار بعد.</p>
+<p class="muted">يعرض معلومات ملف التحديث فقط. لا يؤكد توقيع APK أو تثبيته أو عمله على التلفزيون؛ يلزم فحص الملف والجهاز قبل النشر.</p>
+</div>
 <div class="panel" id="series-episode-diagnostic-panel">
 <div class="controls"><h3>فحص خريطة حلقات مسلسل</h3>
 <button class="btn secondary sm" id="diagnostic-episode-map-run" type="button">قراءة الحلقات</button></div>
@@ -698,6 +704,25 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 
 
 
+
+ async function checkStreamRelease(){
+  var b=$("stream-release-check");b.disabled=true;
+  value("stream-release-info","جارٍ قراءة معلومات الإصدار المنشور...");
+  try{
+    var release=await api("stream-release");
+    if(!release.ok||release.metadataConsistent!==true){
+      value("stream-release-info","⚠ بيانات التحديث غير مؤكدة أو لا تتطابق مع تطبيق STREAM؛ لا تحدّث الأجهزة قبل المراجعة.");
+      return;
+    }
+    value("stream-release-info","الإصدار "+String(release.versionName||"—")+
+      " · رقم البناء "+String(release.versionCode||"—")+
+      " · الحزمة "+String(release.packageName||"—")+
+      " · صيغة البيانات سليمة، لكن توقيع وبصمة ملفات APK الفعلية وتوافق الجهاز لم يتم التحقق منها.");
+  }catch{
+    value("stream-release-info","تعذر الاتصال بخدمة التحديثات. لا يعني هذا حذف الإصدار.");
+  }finally{b.disabled=false}
+ }
+ $("stream-release-check").addEventListener("click",checkStreamRelease);
  async function loadEpisodeMap(){
   var sourceId=$("diagnostic-source").value,seriesId=$("diagnostic-series-id").value.trim();
   if(!sourceId){show("اختر مصدرًا أولًا",false);return}
@@ -778,6 +803,9 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     audio_track_metadata_detected:"تم رصد ترميز صوت معلن، لكن الصوت على الجهاز لم يُختبر",
     subtitle_render_not_tested:"لم تُختبر الترجمة على جهاز حقيقي",
     release_channel_not_examined:"لم يُفحص توافق آخر إصدار للتطبيقات",
+    release_manifest_consistent_apk_unverified:"معلومات الإصدار متطابقة، لكن ملف APK وتوقيعه غير مفحوصين",
+    release_manifest_mismatch:"بيانات تحديث STREAM لا تتوافق مع الحزمة المعتمدة",
+    release_manifest_not_verified:"ملف معلومات الإصدار غير متاح أو لم يُتحقق منه",
     restore_test_not_observed:"لا يوجد دليل على اختبار استعادة نسخة احتياطية"
   };
   function auditMetrics(value){
@@ -790,6 +818,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       viewers:"مشاهدون",sourceOutages:"انقطاعات المصدر",sourceBytesReceived:"بايتات",
       errorPercent:"نسبة الأخطاء",p95StartMs:"زمن بدء التشغيل P95",
       observed:"مسارات مرصودة",declaredAudio:"بمسار صوت",missingAudio:"بلا مسار صوت معلن",
+      versionCode:"رقم البناء",
       active:"نشطة",paths:"مسارات",count:"عدد",checked:"مفحوص"
     };
     var values=Object.entries(value).filter(function(pair){
