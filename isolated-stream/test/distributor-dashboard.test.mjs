@@ -106,3 +106,24 @@ test('distributor login sets private cookie and never returns session token to b
   assert.equal(forbidden.status,401);
  }finally{await new Promise(resolve=>server.close(resolve))}
 });
+
+test('distributor page shows month-credit pricing, free daily trial and own saleh library only',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');assert.equal(response.status,200);
+  const html=await response.text();
+  assert.match(html,/رصيد الأشهر/);
+  assert.match(html,/value="365">سنة — 12/);
+  assert.match(html,/value="1">تجريبي يوم واحد/);
+  assert.match(html,/id="trial-phone"/);
+  assert.match(html,/trialPhone:cost===0/);
+  assert.match(html,/saleh فقط/);
+  assert.match(html,/id="library-panel"/);
+  assert.match(html,/id="library-type"/);
+  assert.match(html,/library-go/);
+  assert.match(html,/organize/);
+  assert.doesNotMatch(html,/data-tab="sources"/);
+  assert.doesNotMatch(html,/data-tab="restream"/);
+  const sc=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(sc);assert.doesNotThrow(()=>new vm.Script(sc[1]));
+ });
+});
