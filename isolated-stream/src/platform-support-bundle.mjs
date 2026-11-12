@@ -10,7 +10,9 @@ const KEYS=new Set([
  'stale','checking','warning','hlsSessions','readyPaths','observed',
  'declaredAudio','missingAudio','errorPercent','versionCode','expiringSoon',
  'active','decodedOnClient','verifiedPlayback','apkBytesVerified',
- 'signatureVerified','deviceUpdateTested','sha256FieldPresent','inspectedBytes'
+ 'signatureVerified','deviceUpdateTested','sha256FieldPresent','inspectedBytes',
+ 'maxConnections','activeConnections','restreamer','sharedUpstreamForCodes',
+ 'productionViewersVerified'
 ]);
 const allowed=code=>typeof code==='string'&&SAFE_CHECK.test(code)?code:'unrecognized';
 const values=obj=>{
