@@ -96,12 +96,13 @@ test('over-capacity join returns 503 without interrupting existing authorized vi
     send();
     const accepted=await next;
     assert.equal(accepted.status,200);
-    const data=await accepted.body.getReader().read();
+    const acceptedReader=accepted.body.getReader();
+    const data=await acceptedReader.read();
     assert.deepEqual(Buffer.from(data.value),packet);
     assert.equal(upstreamStarts(),1,
       'replacing a disconnected viewer must reuse the still-running upstream');
     assert.equal(fanout.stats().viewers,16);
-    await accepted.body.cancel().catch(()=>{});
+    await acceptedReader.cancel().catch(()=>{});
     await Promise.all(readers.slice(1).map(reader=>reader.cancel().catch(()=>{})));
   });
 });
