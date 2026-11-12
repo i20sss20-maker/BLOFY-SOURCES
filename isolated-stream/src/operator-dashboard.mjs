@@ -4,6 +4,7 @@ import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
+import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -59,6 +60,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }catch{return {reachable:false,httpStatus:null}}
     finally{clearTimeout(timeout)}
   }
+  const platformAudit=createPlatformSystemAudit({
+    portal,engineStatus,mediaControl:control,autoHealth,
+    relayStats:sharedRelayStats
+  });
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
 
   // Basic auth is protected against brute-force without lockout of a valid
@@ -104,6 +109,13 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/full-audit'){
+      const sourceId=uri.searchParams.get('sourceId')||'';
+      void platformAudit.audit({sourceId}).then(result=>
+        json(res,result.ok?200:result.code==='platform_audit_source_invalid'?400:503,result))
+        .catch(()=>json(res,503,{ok:false,code:'platform_audit_unavailable'}));
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
