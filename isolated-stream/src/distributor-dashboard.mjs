@@ -75,6 +75,7 @@ dialog::backdrop{background:#030612b8}
 dialog .formgrid{grid-template-columns:1fr}.dialog-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .mini{font-size:12px;padding:5px 10px}
+input[type="checkbox"]{width:auto;min-height:25px;min-width:25px;accent-color:#5884c0}
 .compact-kpis{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
 .compact-kpis span{padding:9px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--card);color:var(--muted)}
 .compact-kpis strong{color:var(--white);margin-inline-start:6px;font-variant-numeric:tabular-nums}
@@ -186,13 +187,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="field"><label>&nbsp;</label><button id="library-go" class="btn secondary" type="button">عرض المحتوى</button></div></div>
 <div class="tablewrap" style="margin-top:15px"><table><thead><tr><th>العنوان</th><th>التصنيف</th><th>مجموعتي</th><th>ترتيب</th><th>العرض</th><th>تحكم</th></tr></thead><tbody id="library-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="library-count" class="muted">—</span><button id="library-more" class="btn secondary" type="button" hidden>المزيد</button></div></div>
+<dialog id="library-dialog" aria-labelledby="library-edit-title">
+<h2 id="library-edit-title">تنظيم المحتوى</h2>
+<form id="library-edit-form"><div class="formgrid">
+<div class="field"><label for="library-edit-group">المجموعة</label><input id="library-edit-group" maxlength="60"></div>
+<div class="field"><label for="library-edit-name">اسم العرض</label><input id="library-edit-name" maxlength="120"></div>
+<div class="field"><label for="library-edit-sort">الترتيب</label><input id="library-edit-sort" type="number" min="0" max="9999" step="1" value="0"></div>
+<div class="field"><label for="library-edit-hidden">إخفاء من قائمتي</label><input id="library-edit-hidden" type="checkbox"></div>
+</div><div class="dialog-buttons">
+<button type="button" data-close-dialog="library-dialog" class="btn secondary">إلغاء</button>
+<button id="library-edit-save" type="submit" class="btn">حفظ</button>
+</div></form></dialog>
 </section></main>
 <script nonce="__NONCE__">
 "use strict";
 (function(){
  const $=id=>document.getElementById(id),kindButtons=[...document.querySelectorAll('[data-kind]')];
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
- let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null;
+ let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
@@ -615,23 +627,13 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    }
    const cell=document.createElement('td'),btn=document.createElement('button');
    btn.type='button';btn.className='btn secondary mini';btn.textContent='تنظيم';
-   btn.addEventListener('click',async()=>{
-    const group=prompt('المجموعة الخاصة بهذا العنصر',item.group||'');if(group===null)return;
-    const title=prompt('اسم العرض (فارغ = الأصلي)',item.title||'');if(title===null)return;
-    const order=prompt('ترتيب العنصر: رقم 0 إلى 9999',String(item.sortOrder||0));
-    if(order===null)return;
-    const n=Number(order);if(!Number.isSafeInteger(n)||n<0||n>9999){
-     msg('الترتيب غير صحيح',false);return;
-    }
-    const hidden=confirm('هل تريد إخفاء العنصر من قائمتك الخاصة؟ (إلغاء = ظاهر)');
-    btn.disabled=true;
-    try{
-     await request('organize',{type:item.type,itemId:item.id,
-      group:group.slice(0,60),title:title.slice(0,120),sortOrder:n,hidden});
-     msg('تم تنظيم العنصر في مكتبتك الخاصة',true);
-     await loadLibrary(false);
-    }catch(e){msg('تعذر تنظيم المكتبة: '+e.message,false)}
-    finally{btn.disabled=false}
+   btn.addEventListener('click',()=>{
+    activeLibraryItem=item;
+    $('library-edit-group').value=item.group||'';
+    $('library-edit-name').value=item.title||'';
+    $('library-edit-sort').value=String(item.sortOrder||0);
+    $('library-edit-hidden').checked=item.hidden===true;
+    $('library-dialog').showModal();
    });
    cell.appendChild(btn);tr.appendChild(cell);body.appendChild(tr);
   }
@@ -641,6 +643,22 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   if(!body.children.length){const tr=document.createElement('tr'),td=document.createElement('td');
    td.colSpan=6;td.textContent='لا توجد عناصر مطابقة';tr.appendChild(td);body.appendChild(tr)}
  }
+
+ $('library-edit-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!activeLibraryItem)return;
+  const item=activeLibraryItem,n=Number($('library-edit-sort').value);
+  if(!Number.isSafeInteger(n)||n<0||n>9999){msg('الترتيب غير صحيح',false);return}
+  const btn=$('library-edit-save');btn.disabled=true;
+  try{
+   await request('organize',{type:item.type,itemId:item.id,
+    group:$('library-edit-group').value.slice(0,60),
+    title:$('library-edit-name').value.slice(0,120),
+    sortOrder:n,hidden:$('library-edit-hidden').checked});
+   $('library-dialog').close();msg('تم الحفظ',true);
+   await loadLibrary(false);
+  }catch(err){msg('تعذر الحفظ: '+err.message,false)}
+  finally{btn.disabled=false}
+ });
  $('library-go').addEventListener('click',()=>loadLibrary().catch(e=>msg(e.message,false)));
  $('library-more').addEventListener('click',()=>loadLibrary(true).catch(e=>msg(e.message,false)));
  $('library-type').addEventListener('change',()=>loadLibrary().catch(e=>msg(e.message,false)));
