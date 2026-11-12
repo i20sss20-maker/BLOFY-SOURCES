@@ -34,3 +34,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm test
+      # Railway builds this Dockerfile and runs npm test in the image.
+      # Exercise the exact Docker context, not only repository-local npm test.
+      - run: docker build -f Dockerfile -t blofy-isolated-stream-ci .
