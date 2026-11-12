@@ -141,7 +141,8 @@ test('optional model AI is visibly distinct from local rules and requires affirm
     assert.match(html,/id="library-ai-results"/);
     assert.match(html,/api\("library-ai\/status"\)/);
     assert.match(html,/action\("library-ai","library-ai"/);
-    assert.match(html,/confirm\("سيُرسل إلى خدمة OpenAI/);
+    assert.match(html,/libraryAIProvider==="gemini"/);
+    assert.match(html,/id="library-ai-check"/);
     assert.match(html,/لا تُطبّق اقتراحات AI تلقائيًا/);
     const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
     assert.ok(script);
@@ -203,4 +204,154 @@ test('premium operator UX preserves every workflow and is accessible on TV/mobil
     assert.ok(script,'nonce-bound operator script exists');
     assert.doesNotThrow(()=>new Function(script[1]),'all dashboard JS remains valid');
   });
+});
+
+test('AUTO HEALTH read endpoint requires operator credentials and never exposes subscriber secrets',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const noAuth=await fetch(base+'/operator/api/auto-health');
+    assert.equal(noAuth.status,401);
+    const response=await fetch(base+'/operator/api/auto-health',{
+      headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const data=await response.json();
+    assert.equal(data.customerTrafficChanged,false);
+    assert.equal(data.scope,'operator_restream_only');
+    assert.equal(data.recoveryProbeEnabled,false);
+    assert.equal(JSON.stringify(data).includes('password'),false);
+    const html=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+    assert.match(html,/id="auto-health-panel"/);
+    assert.match(html,/id="auto-health-status"/);
+    assert.match(html,/id="auto-health-events"/);
+    assert.match(html,/loadAutoHealth\(\)/);
+    assert.match(html,/لا نعيد الاتصال بالمصدر تلقائيًا/);
+    const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
+  });
+});
+
+test('BLOFY SECURITY is private, aggregated, and visible in the operator console',async()=>{
+  await withServer({adminToken:secret,relaySharedToken:'test-stream-relay-secret-abcdefghijklmnopqrstuvwxyz'},async base=>{
+    const anonymous=await fetch(base+'/operator/api/security');
+    assert.equal(anonymous.status,401);
+    const report=await fetch(base+'/operator/api/security',{headers:{authorization:auth}});
+    assert.equal(report.status,200);
+    const body=await report.json();
+    assert.equal(body.protection.operatorBruteForce,true);
+    assert.equal(body.protection.relayIssuanceThrottle,true);
+    assert.equal(body.relay.activeTickets,0);
+    assert.equal(body.operator.failedAuthAttempts,1);
+    assert.doesNotMatch(JSON.stringify(body),/password|token|sourceUrl|customerIp/);
+    const page=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+    assert.match(page,/id="security-center"/);
+    assert.match(page,/loadSecurity\(\)/);
+  });
+});
+test('invalid operator passwords are rate-limited but correct credentials never lock out',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const bad='Basic '+Buffer.from('operator:wrong-password').toString('base64');
+    let capped=0;
+    for(let i=0;i<16;i++){
+      const resp=await fetch(base+'/operator/api/security',{headers:{authorization:bad}});
+      if(resp.status===429)capped++;
+      else assert.equal(resp.status,401);
+    }
+    assert.ok(capped>=4);
+    const valid=await fetch(base+'/operator/api/security',{headers:{authorization:auth}});
+    assert.equal(valid.status,200);
+    const body=await valid.json();
+    assert.equal(body.operator.failedAuthAttempts,16);
+    assert.equal(body.operator.throttledAuthAttempts,capped);
+    assert.ok(!('ipAddresses' in body.operator));
+  });
+});
+
+
+test('shared-live 26-second canary endpoint requires operator auth and explicit rights',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const denied=await fetch(base+'/operator/api/shared-live/probe',{method:'POST'});
+  assert.equal(denied.status,401);
+  const noHeader=await fetch(base+'/operator/api/shared-live/probe',{
+   method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+   body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',
+    channelId:'100',rightsConfirmed:true})
+  });
+  assert.equal(noHeader.status,403);
+  const noRights=await fetch(base+'/operator/api/shared-live/probe',{
+   method:'POST',headers:{authorization:auth,
+    'x-blofy-operator-action':'shared-live-probe',
+    'content-type':'application/json'},
+   body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',
+    channelId:'100',rightsConfirmed:false})
+  });
+  assert.equal(noRights.status,403);
+  const body=await noRights.json();
+  assert.equal(body.code,'stream_rights_confirmation_required');
+  assert.doesNotMatch(JSON.stringify(body),/sourceUrl|token|password/);
+  const page=await(await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+  assert.match(page,/id="shared-live-probe"/);
+  assert.match(page,/id="shared-live-probe-result"/);
+ });
+});
+
+test('new live paths tell the operator On-Demand is not verified playback',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(r.status,200);
+  const page=await r.text();
+  assert.match(page,/جاهز عند الطلب · لا يوجد سحب حالي/);
+  assert.match(page,/لم يبدأ HLS/);
+  assert.match(page,/لم يبدأ سحب المصدر بعد/);
+  assert.match(page,/اضغط فحص HLS في صف القناة/);
+  assert.doesNotMatch(page,/\b0 سحب مباشر\b/);
+ });
+});
+
+test('read-only shared-source readiness is authenticated and never leaks source secrets',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const bad=await fetch(base+'/operator/api/shared-live/status');
+  assert.equal(bad.status,401);
+  const ok=await fetch(base+'/operator/api/shared-live/status',{headers:{authorization:auth}});
+  assert.equal(ok.status,200);
+  const body=await ok.json();
+  assert.equal(body.ok,true);
+  assert.equal(body.state,'not_tested');
+  assert.equal(body.last,null);
+  assert.equal(body.customerTrafficChanged,false);
+  assert.doesNotMatch(JSON.stringify(body),/sourceUrl|password|username|ticket|credential/);
+  const html=await (await fetch(base+'/operator',{headers:{authorization:auth}})).text();
+  assert.match(html,/id="shared-live-readiness-state"/);
+  assert.match(html,/id="shared-live-readiness-upstreams"/);
+  assert.match(html,/loadSharedReadiness\(\)/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);assert.doesNotThrow(()=>new Function(script[1]));
+ });
+});
+
+test('security dashboard describes active fanout feeds, bounded retry and recovered streams',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const r=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(r.status,200);
+  const page=await r.text();
+  for(const id of ['security-active-feeds','security-viewers',
+    'security-source-sessions','security-initial-retries',
+    'security-reconnect-recovered','security-source-outages'])
+   assert.ok(page.includes('id="'+id+'"'),id);
+  assert.match(page,/لا توجد قناة مشتركة نشطة الآن/);
+  assert.match(page,/المقاييس إجمالية منذ آخر تشغيل/);
+ });
+});
+
+test('authenticated security dashboard has anonymous per-channel stream diagnostics',async()=>{
+ await withServer({adminToken:secret},async base=>{
+  const res=await fetch(base+'/operator',{headers:{authorization:auth}});
+  assert.equal(res.status,200);
+  const html=await res.text();
+  for(const id of ['security-channel-health','security-channel-events'])
+   assert.match(html,new RegExp('id="'+id+'"'));
+  assert.match(html,/لا توجد قنوات مشتركة قيد المشاهدة/);
+  assert.match(html,/توقف لعدم وجود مشاهدين/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);
+  assert.doesNotThrow(()=>new Function(script[1]));
+ });
 });

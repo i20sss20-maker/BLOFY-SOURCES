@@ -10,7 +10,10 @@ test('unified operator UI contains real source management, no legacy redirect or
   for(const item of ['id="source-form"','id="source-list"','id="account-list"',
     'id="library-results"','id="stream-probe"','id="diagnostic-media"'])
     assert.ok(html.includes(item),item);
-  assert.equal(html.includes('/sources-admin'),false);
+  // Do not redirect or replace the native STREAM operator console with
+  // /sources-admin. A user-initiated account-support link is allowed.
+  assert.equal(html.includes("location.href='/sources-admin'"),false);
+  assert.ok(html.includes('href="https://blofyplayer.com/sources-admin#xtream"'));
   assert.equal(html.includes('/admin#'),false);
   assert.equal(html.includes('demo-start'),false);
   assert.equal(html.includes('blofy-demo'),false);

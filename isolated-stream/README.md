@@ -108,3 +108,87 @@ URLs shown to customers, logs or client JavaScript.
 
 Tests: `cd isolated-stream && npm test`. The Docker build runs tests,
 and GitHub Actions tests should be green before any deployment.
+
+ 
+## 2026-11-10 research: safe TS EOF recovery canary (operator only)
+
+The on-demand MediaMTX process logs showed FFmpeg starting and repeatedly
+exiting with status 0. This alone is not a codec or source diagnosis. FFmpeg's
+official HTTP protocol docs distinguish ordinary `reconnect` from
+`reconnect_at_eof`, which treats normal HTTP EOF like a recoverable live
+stream discontinuity. In an isolated local experiment (valid H264/AAC TS,
+HTTP responses containing an exact Content-Length), the old FFmpeg flags
+made ONE upstream GET and stopped at four seconds. Adding
+`-reconnect_at_eof 1` made THREE sequential GETs and continued past nine
+seconds. This is *synthetic transport proof*, not real Xtream A/V verification.
+
+The operator-only flag `BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT=1`
+enables additional FFmpeg options when a new operator HLS path is created:
+
+- `-reconnect_at_eof 1` (recover clean EOF);
+- `-reconnect_on_network_error 1`, selective `500,502,503,504` retries;
+- `-reconnect_max_retries 3`, total reconnect delay 12s;
+- never automatically retry 401/403/404/456 or bypass source rights.
+
+The flag defaults OFF. It affects ONLY operator-managed new MediaMTX
+`runOnDemand` HLS paths; it neither enables shared-live customer cutover nor
+changes any BLOFY PLAYER subscriber route. Set it in Railway only after
+testing in an isolated preview. Verify codec compatibility, TS packet
+continuity, real HLS segments, and decoded audio/video on a real authorized
+channel before canary approval. Never set this feature across all subscribers.
+
+Official references:
+- https://ffmpeg.org/ffmpeg-protocols.html
+- https://mediamtx.org/docs/features/on-demand-publishing
+- https://mediamtx.org/docs/features/control-api
+- https://github.com/datarhei/core (process watchdog, telemetry and quotas)
+- https://github.com/AlexxIT/go2rtc (multi-reader architecture and security)
+
+
+## 2026-11-10: licensed shared-live acceptance gates (source `saleh`)
+
+Production subscriber traffic remains on its established path. The source-wide
+sharing switch MUST NOT be enabled directly for all customers. The activation
+service has an independent double-gated pilot requiring **both** a specific
+authorized subscription account ID **and** a specific numeric gateway channel
+ID. This prevents the previous 502/503 incident from reaching every viewer.
+
+The STREAM control API now contains a private readiness controller:
+
+- `GET /operator/api/shared-live/status` is HTTP Basic protected, reports
+  the latest source readiness verdict, and never returns Xtream credentials,
+  provider URLs or subscriber identity.
+- `POST /operator/api/shared-live/probe` requires Basic authentication,
+  the anti-CSRF operator action header and explicit rebroadcast consent.
+  It opens at most one authorized upstream source and exactly two local
+  viewers using the production transport engine for up to 26 seconds.
+- Manual and automated probes share a single in-process lock and a minimum
+  one-minute cooldown; a flood does not create dozens of upstream requests.
+- `BLOFY_STREAM_SHARED_REAL_SOURCE_PROBE_ON_BOOT=1` runs only ONE
+  source-scoped acceptance test on service startup, after a 20s delay.
+  It resolves exactly one enabled/published source named `saleh` and
+  exactly one catalog channel prefixed `4K: V SPORT`. Ambiguous or
+  missing matches are **not guessed**: the test is skipped, logged as
+  a sanitized reason and must be selected manually in the operator UI.
+- Real probe reports are transport-level TS proof only, not full decoded
+  picture/audio and not a successful 100-person public rollout.
+
+Safe rollout decision tree:
+1. Capture a 26-second real-source readiness sample: two readers, one source,
+   no 403/456, no 5-second stall, no unbounded reconnect loop.
+2. Validate actual decoded audio and video on a compatible 4K client, and
+   check the HLS segment probe reaches a **final** success (not merely 202).
+3. Activate one named channel for at most two already-authorized test
+   accounts via the separate activation canary environment variables.
+   Compare customer error rate and live channel continuity for 5-10 mins.
+4. Test 10 then 50 then 100 viewers and measure outbound bit rate,
+   provider connection count, CPU and RAM. At 12 Mbit/s a channel
+   watched by 100 viewers requires roughly 1.2 Gbit/s outbound,
+   excluding protocol overhead; reducing source connections does not
+   reduce outbound viewer bandwidth.
+5. Preserve the existing rollback flag for subscriber sharing. Stop on
+   repeated real-provider 5xx or a failed final HLS playback check.
+
+If the auto test reports `pilot_channel_ambiguous`, do NOT disable this
+safety condition or guess a channel from search results. Use the operator
+channel picker for an explicitly selected broadcast.

@@ -15,7 +15,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/library-ai'&&method==='POST'?25000:timeoutMs;
+    const budget=(path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
       const response=await fetchImpl(url,{
@@ -72,6 +72,11 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       body:{ok:false,code:'invalid_account_id'}});
     return call(ROOT+'/accounts/'+id+'/credentials');
   }
+  function accountCompatibility(id){
+    if(!UUID.test(id))return Promise.resolve({status:400,
+      body:{ok:false,code:'invalid_account_id'}});
+    return call(ROOT+'/accounts/'+id+'/compatibility');
+  }
   function resetAccount(id){
     if(!UUID.test(id))return Promise.resolve({status:400,
       body:{ok:false,code:'invalid_account_id'}});
@@ -83,6 +88,61 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/library-review?'+new URLSearchParams({sourceId,type}));
   }
   const libraryAIStatus=()=>call(ROOT+'/library-ai/status');
+  const libraryAIConnectionTest=()=>call(ROOT+'/library-ai/connection-test',{method:'POST',body:{}});
+  // Reuse the verified private bridge; the STREAM API never receives
+  // original Xtream credentials or arbitrary host URLs.
+  function opsRead(path,{sourceId}={}){
+    if(!UUID.test(String(sourceId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_source_id'}});
+    return call(ROOT+'/ops/'+path+'?'+new URLSearchParams({sourceId}));
+  }
+  function opsSchedule({sourceId,enabled,intervalHours}={}){
+    if(!UUID.test(String(sourceId||''))||typeof enabled!=='boolean'||
+       ![6,12,24,48,168].includes(Number(intervalHours)))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_schedule'}});
+    return call(ROOT+'/ops/schedule',{method:'POST',body:{
+      sourceId,enabled,intervalHours:Number(intervalHours)
+    }});
+  }
+  function opsSnapshot({sourceId,label,confirmed}={}){
+    if(!UUID.test(String(sourceId||''))||confirmed!==true||
+       typeof label!=='string'||label.length<4||label.length>60)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_snapshot_confirmation_required'}});
+    return call(ROOT+'/ops/snapshot',{method:'POST',body:{sourceId,label,confirmed:true}});
+  }
+  const opsScheduleStatus=(args)=>opsRead('schedule',args);
+  const opsSnapshots=(args)=>opsRead('snapshots',args);
+  const opsSourceStats=(args)=>opsRead('source-stats',args);
+  function libraryAIScanProgress({sourceId,type}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
+    return call(ROOT+'/library-ai/scan-progress?'+new URLSearchParams({sourceId,type}));
+  }
+  function libraryAIPublishStatus({sourceId}={}){
+    if(!UUID.test(String(sourceId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_selection_invalid'}});
+    return call(ROOT+'/library-ai/publish-status?'+new URLSearchParams({sourceId}));
+  }
+  function libraryAIRollback({sourceId,planId}={}){
+    if(!UUID.test(String(sourceId||''))||!/^[0-9a-f]{48}$/.test(String(planId||'')))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_rollback_invalid'}});
+    return call(ROOT+'/library-ai/rollback',{method:'POST',body:{sourceId,planId}});
+  }
+
+  function libraryAIChat({sourceId,type,message,history=[]}={}){
+    if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
+       typeof message!=='string'||message.trim().length<4||message.length>480)
+      return Promise.resolve({status:400,body:{ok:false,code:'ai_instruction_invalid'}});
+    const previous=Array.isArray(history)?history.slice(-4)
+      .filter(x=>typeof x==='string'&&x.length>=4&&x.length<=480):[];
+    return call(ROOT+'/library-ai/chat',{method:'POST',body:{sourceId,type,message,history:previous}});
+  }
+  function libraryAIApply({planId,approve}={}){
+    if(typeof planId!=='string'||!/^[0-9a-f]{48}$/.test(planId)||approve!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_ai_approval_invalid'}});
+    return call(ROOT+'/library-ai/apply',{method:'POST',body:{planId,approve:true}});
+  }
+
   function libraryAISuggest({sourceId,type,offset=0}={}){
     if(!UUID.test(String(sourceId||''))||!['live','movie','series'].includes(type)||
       !Number.isInteger(offset)||offset<0||offset>40000||offset%12!==0)
@@ -162,5 +222,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,catalog,libraryReview,libraryTitle,libraryAIStatus,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+  return {configured,overview,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
 }

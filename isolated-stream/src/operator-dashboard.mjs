@@ -44,7 +44,8 @@ async function readAdminJson(req){
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',liveSupervisor=null,vodBroker=null,
-  sharedRelayStats=()=>null}={}){
+  sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
+  sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
   async function engineStatus(){
@@ -59,15 +60,41 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     finally{clearTimeout(timeout)}
   }
   const enabled=typeof adminToken==='string'&&adminToken.length>=32;
+
+  // Basic auth is protected against brute-force without lockout of a valid
+  // operator. Only invalid credentials are limited; do not trust spoofable
+  // X-Forwarded-For. Keep at most 256 anonymous buckets in memory.
+  const rejectedByPeer=new Map();
+  const security={failedAuthAttempts:0,throttledAuthAttempts:0};
+  const MAX_BAD_AUTH=12,AUTH_WINDOW_MS=60000;
+  function rejectInvalidOperator(req,res){
+    security.failedAuthAttempts++;
+    const now=Date.now();
+    const peer=String(req.socket?.remoteAddress||'unknown').slice(0,64);
+    let bucket=rejectedByPeer.get(peer);
+    if(!bucket||now-bucket.startedAt>=AUTH_WINDOW_MS)
+      bucket={startedAt:now,attempts:0};
+    bucket.attempts++;
+    rejectedByPeer.delete(peer);rejectedByPeer.set(peer,bucket);
+    while(rejectedByPeer.size>256)
+      rejectedByPeer.delete(rejectedByPeer.keys().next().value);
+    if(bucket.attempts>MAX_BAD_AUTH){
+      security.throttledAuthAttempts++;
+      json(res,429,{ok:false,code:'operator_auth_rate_limited'});
+      return;
+    }
+    res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY STREAM Operator", charset="UTF-8"',
+      'cache-control':'no-store','x-frame-options':'DENY',
+      'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
+    res.end('Authorization required');
+  }
   const handle=(req,res)=>{
     const uri=new URL(req.url||'/', 'http://localhost');
     const path=uri.pathname;
     if(!(path==='/operator'||path==='/operator/'||path.startsWith('/operator/api/')))return false;
     if(!enabled){json(res,404,{ok:false,code:'operator_console_not_configured'});return true;}
     if(!authorized(req,adminToken)){
-      res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY STREAM Operator", charset="UTF-8"',
-        'cache-control':'no-store','x-frame-options':'DENY'});
-      res.end('Authorization required');return true;
+      rejectInvalidOperator(req,res);return true;
     }
     if(req.method==='GET'&&(path==='/operator'||path==='/operator/')){
       const nonce=randomBytes(16).toString('base64');
@@ -77,6 +104,46 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/auto-health'){
+      json(res,200,autoHealth());return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/security'){
+      const relay=sharedRelayStats()||{};
+      const metrics=relay.security||{};
+      // Aggregate-only dashboard: never expose source URLs, client IPs,
+      // token bytes, media tickets or subscriber account identities.
+      json(res,200,{ok:true,service:'BLOFY-STREAM',
+        protection:{operatorBruteForce:true,relayIssuanceThrottle:true,
+          shortLivedTickets:true,authenticatedOperatorOnly:true},
+        operator:{failedAuthAttempts:security.failedAuthAttempts,
+          throttledAuthAttempts:security.throttledAuthAttempts},
+        relay:{activeTickets:Number(relay.activeTickets||0),
+          grantsIssued:Number(metrics.grantsIssued||0),
+          issuerAuthDenied:Number(metrics.issuerAuthDenied||0),
+          issuanceThrottled:Number(metrics.issuanceThrottled||0),
+          capacityRejected:Number(metrics.capacityRejected||0),
+          maxTickets:Number(metrics.maxTickets||0)},
+        media:{providerFailures:Number(relay.fanout?.providerFailures||0),
+          activeFeeds:Number(relay.fanout?.activeFeeds||0),
+          viewers:Number(relay.fanout?.viewers||0),
+          upstreamSessionsOpened:Number(relay.fanout?.upstreamSessionsOpened||0),
+          upstreamReconnects:Number(relay.fanout?.upstreamReconnects||0),
+          initialRetries:Number(relay.fanout?.initialRetries||0),
+          reconnectRecovered:Number(relay.fanout?.reconnectRecovered||0),
+          sourceOutages:Number(relay.fanout?.sourceOutages||0),
+          cooldownRejections:Number(relay.fanout?.cooldownRejections||0),
+          sourceBytesReceived:Number(relay.fanout?.sourceBytesReceived||0),
+          viewerBytesQueued:Number(relay.fanout?.viewerBytesQueued||0),
+          viewersAccepted:Number(relay.fanout?.viewersAccepted||0),
+          // Operator-only ephemeral channel IDs: no source URL,
+          // source name, device, account, IP, ticket, or credentials.
+          channels:Array.isArray(relay.fanout?.channels)?
+            relay.fanout.channels.slice(0,64):[],
+          events:Array.isArray(relay.fanout?.events)?
+            relay.fanout.events.slice(0,32):[],
+          failureReasons:relay.fanout?.failureReasons||{}}
+      });return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){
       void Promise.all([engineStatus(),control.overview()])
@@ -110,6 +177,28 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           .catch(e=>json(res,503,{ok:false,code:'vod_action_failed'}));
         return true;
       }
+    }
+    // Sanitized two-reader proof, with one gate shared by manual checks and
+    // the optional one-shot boot probe; never allow broad subscriber cutover.
+    if(req.method==='GET'&&path==='/operator/api/shared-live/status'){
+      json(res,200,sharedReadiness?sharedReadiness.snapshot():{
+        ok:true,state:'not_configured',customerTrafficChanged:false,last:null
+      });return true;
+    }
+    if(req.method==='POST'&&path==='/operator/api/shared-live/probe'){
+      if(req.headers['x-blofy-operator-action']!=='shared-live-probe'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      if(!sharedReadiness){
+        json(res,503,{ok:false,code:'pilot_not_configured'});return true;
+      }
+      void readAdminJson(req)
+        .then(body=>sharedReadiness.manual(body))
+        .then(({status,body})=>json(res,status,body))
+        .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,
+          {ok:false,code:[400,413,415].includes(e?.status)?
+            e.message:'pilot_validation_unavailable'}));
+      return true;
     }
     // Live video and HLS segments remain behind the SAME operator Basic auth
     // as the page. There are no public media URLs and no customer cutover.
@@ -152,7 +241,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         sourceId:uri.searchParams.get('sourceId'),
         seriesId:uri.searchParams.get('seriesId')
       }),
+      '/operator/api/ops/schedule':()=>portal.opsScheduleStatus({sourceId:uri.searchParams.get('sourceId')||''}),
+      '/operator/api/ops/snapshots':()=>portal.opsSnapshots({sourceId:uri.searchParams.get('sourceId')||''}),
+      '/operator/api/ops/source-stats':()=>portal.opsSourceStats({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/library-ai/status':()=>portal.libraryAIStatus(),
+      '/operator/api/library-ai/publish-status':()=>portal.libraryAIPublishStatus({sourceId:uri.searchParams.get('sourceId')||''}),
+      '/operator/api/library-ai/scan-progress':()=>portal.libraryAIScanProgress({sourceId:uri.searchParams.get('sourceId')||'',type:uri.searchParams.get('type')||''}),
       '/operator/api/library-review':()=>portal.libraryReview({
         sourceId:uri.searchParams.get('sourceId')||'',type:uri.searchParams.get('type')||''
       }),
@@ -173,6 +267,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
       return true;
     }
+    const compatibility=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/compatibility$/i);
+    if(req.method==='GET'&&compatibility){
+      void portal.accountCompatibility(compatibility[1]).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&readable[path]){
       void readable[path]().then(({status,body})=>json(res,status,body))
         .catch(()=>json(res,503,{ok:false,code:'control_bridge_unavailable'}));
@@ -182,7 +282,13 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer)$/i);
-      const action=path==='/operator/api/library-ai'?'library-ai':
+      const action=path==='/operator/api/ops/schedule'?'ops-schedule':
+        path==='/operator/api/ops/snapshot'?'ops-snapshot':
+        path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
+        path==='/operator/api/library-ai/chat'?'library-ai-chat':
+        path==='/operator/api/library-ai/apply'?'library-ai-apply':
+        path==='/operator/api/library-ai/test'?'library-ai-test':
+        path==='/operator/api/library-ai'?'library-ai':
         path==='/operator/api/library-title'?'library-title':
         path==='/operator/api/sources'?'source-add':
         path==='/operator/api/accounts'?'account-add':
@@ -192,6 +298,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='ops-schedule')return portal.opsSchedule(data);
+        if(action==='ops-snapshot')return portal.opsSnapshot(data);
+        if(action==='library-ai-rollback')return portal.libraryAIRollback(data);
+        if(action==='library-ai-chat')return portal.libraryAIChat(data);
+        if(action==='library-ai-apply')return portal.libraryAIApply(data);
+        if(action==='library-ai-test')return portal.libraryAIConnectionTest();
         if(action==='library-ai')return portal.libraryAISuggest(data);
         if(action==='library-title')return portal.libraryTitle(data);
         if(action==='source-add')return portal.addSource(data);

@@ -12,6 +12,9 @@ import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
 import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {createLiveAutoHealth} from './live-auto-health.mjs';
+import {probeLicensedSharedLive} from './shared-live-canary.mjs';
+import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
 import {probeOutboundIpv4} from './outbound-ip-proof.mjs';
 import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mjs';
@@ -54,6 +57,8 @@ export function createStreamServer({
   relayRedirectSourceOrigin='',
   relayFirstByteTimeoutMs=12000,
   sharedLiveEnabled=false,
+  autoHealthProbeEnabled=false,
+  realSourceReadinessOnBoot=false,
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -64,7 +69,15 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled});
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,
+    onSharedLiveEvent:evt=>{
+      // Persist bounded, sanitized connection lifecycle via Railway logs
+      // across restarts while retaining zero URLs or customer identifiers.
+      const payload=JSON.stringify(evt);
+      if(evt.kind==='failed'||evt.kind==='reconnecting')
+        log.warn('BLOFY_STREAM_SHARED_LIVE_EVENT',payload);
+      else log.info('BLOFY_STREAM_SHARED_LIVE_EVENT',payload);
+    }});
   const sourceDiagnostic=createCrossProjectSourceDiagnostic({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
@@ -95,14 +108,40 @@ export function createStreamServer({
   const unifiedPortal=createUnifiedPortalClient({
     secret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',fetchImpl
   });
+  const sharedReadiness=createSharedLiveReadiness({
+    portal:unifiedPortal,sourceName:'saleh',search:'V SPORT',
+    probe:({sourceUrl})=>probeLicensedSharedLive({
+      sourceUrl,fetchImpl:relayFetchImpl,lookup:relayLookup,
+      redirectSourceOrigin:relayRedirectSourceOrigin,
+      approvedProviderRedirect:true,durationMs:26000
+    }),
+    onResult:report=>{
+      // Aggregate only. Do not include source names, URLs, account details,
+      // provider response bodies, customer IDs or auth tickets in logs.
+      log.info('BLOFY_STREAM_SHARED_SOURCE_READINESS',JSON.stringify({
+        ok:report.ok,code:report.code,mode:report.mode,
+        durationMs:report.durationMs,
+        upstreamSessions:report.upstreamSessions,
+        viewerSamples:report.viewerSamples,
+        reconnects:report.reconnects,
+        failureCodes:report.failureCodes,phase:report.phase,
+        transportCode:report.transportCode,
+        customerTrafficChanged:false
+      }));
+    }
+  });
   const liveSupervisor=createLiveRestreamSupervisor({
     portal:unifiedPortal,fetchImpl,
+    httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
   });
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
+  const autoHealth=createLiveAutoHealth({liveSupervisor,
+    relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const operatorDashboard=createOperatorDashboard({
-    liveSupervisor,vodBroker,
+    liveSupervisor,vodBroker,sharedReadiness,
     sharedRelayStats:()=>relayBroker.stats(),
+    autoHealth:()=>autoHealth.snapshot(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
@@ -112,7 +151,7 @@ export function createStreamServer({
       code:lastCanary?.code??null,elapsedMs:lastCanary?.elapsedMs??null,
       realSourceVerified:false,audioVideoDecoded:false
     }),
-    runSmoke:async()=>{
+     runSmoke:async()=>{
       if(checking||(checkedAt&&Date.now()-checkedAt<30_000))
         return {status:429,body:{ok:false,code:'canary_rate_limited'}};
       const report=await canary();
@@ -142,8 +181,23 @@ export function createStreamServer({
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
+      const f=relayBroker.stats().fanout;
       return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
-        role:'media_plane',relayReady:true,customerTrafficEnabled:false});
+        role:'media_plane',relayReady:true,customerTrafficEnabled:false,
+        sharedLiveConfigured:relayBroker.stats().sharedLiveEnabled,
+        // Aggregate counters ONLY. Source URL, ticket, provider identity,
+        // subscriber IP and secrets are not disclosed by this endpoint.
+        fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
+          maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,
+          upstreamReconnects:f.upstreamReconnects,
+          initialRetries:f.initialRetries,
+          reconnectRecovered:f.reconnectRecovered,
+          sourceOutages:f.sourceOutages,
+          reconnectExhaustions:f.reconnectExhaustions,
+          slowViewerDisconnects:f.slowViewerDisconnects,
+          sourceBytesReceived:f.sourceBytesReceived,
+          viewerBytesQueued:f.viewerBytesQueued,
+          viewersAccepted:f.viewersAccepted}});
     }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);
@@ -205,7 +259,23 @@ export function createStreamServer({
     },9000);
     t.unref?.();
   }
-  return {app,config:cfg,startBootCanary,canary,liveSupervisor};
+  function startBootSourceReadiness(){
+    if(!realSourceReadinessOnBoot)return;
+    // Only the uniquely named licensed 'saleh' source and a uniquely matching
+    // 4K V SPORT channel are eligible for this single two-reader, 26s probe.
+    // It does NOT publish a MediaMTX path or redirect any paying customer.
+    const timer=setTimeout(()=>{
+      void sharedReadiness.auto().catch(()=>{
+        log.warn('BLOFY_STREAM_SHARED_SOURCE_READINESS',JSON.stringify({
+          ok:false,code:'pilot_internal_error',customerTrafficChanged:false
+        }));
+      });
+    },20000);
+    timer.unref?.();
+  }
+  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
+    liveSupervisor,autoHealth,sharedReadiness,
+    relayStats:()=>relayBroker.stats()};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -214,6 +284,8 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
+    autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
+    realSourceReadinessOnBoot:process.env.BLOFY_STREAM_SHARED_REAL_SOURCE_PROBE_ON_BOOT==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
     diagnosticAllowedOrigin:process.env.BLOFY_STREAM_DIAGNOSTIC_ALLOW_ORIGIN||'',
     port:process.env.PORT||3000,
@@ -222,6 +294,29 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   service.app.listen(service.config.port,'0.0.0.0',()=>{
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
+    service.startBootSourceReadiness();
+    service.autoHealth.start();
+    // Coarse on-instance media failure diagnosis; log aggregate-only reason
+    // buckets when counts change. Never emit token paths, provider hosts,
+    // subscriber IPs or upstream credentials.
+    let lastRelayFailureReport='';
+    const mediaAudit=setInterval(()=>{
+      const f=service.relayStats().fanout;
+      if(!f?.providerFailures&&!f?.cooldownRejections)return;
+      const audit={providerFailures:f.providerFailures,
+        cooldownRejections:f.cooldownRejections,
+        initialRetries:f.initialRetries,
+        reconnectRecovered:f.reconnectRecovered,
+        sourceOutages:f.sourceOutages,
+        reconnectExhaustions:f.reconnectExhaustions,
+        failureReasons:f.failureReasons};
+      const key=JSON.stringify(audit);
+      if(key!==lastRelayFailureReport){
+        lastRelayFailureReport=key;
+        console.warn('BLOFY_STREAM_MEDIA_FAILURE_AGGREGATE',key);
+      }
+    },60000);
+    mediaAudit.unref?.();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
     let recoveryAttempts=0;
@@ -304,5 +399,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       timer.unref?.();
     }
   });
-  process.on('SIGTERM',()=>service.app.close(()=>process.exit(0)));
+  process.on('SIGTERM',()=>{
+    service.autoHealth.stop();service.app.close(()=>process.exit(0));
+  });
 }

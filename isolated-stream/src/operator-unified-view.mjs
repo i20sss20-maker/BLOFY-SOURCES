@@ -187,6 +187,53 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
+<div class="panel" id="security-center">
+<div class="controls"><div><h3>🔐 BLOFY SECURITY</h3>
+<p class="muted">حماية لوحة المشرف وأذونات المشاهدة المؤقتة، ومراقبة محاولات الدخول والحدود الأمنية دون كشف بيانات المشتركين.</p></div>
+<button class="btn secondary" id="security-refresh" type="button">↻ تحديث الأمان</button></div>
+<div class="inline"><span class="pill" id="security-status">جار الفحص</span>
+<span class="pill">محاولات دخول غير صحيحة: <strong id="security-auth-failures">—</strong></span>
+<span class="pill">طلبات دخول محدودة: <strong id="security-auth-throttled">—</strong></span>
+<span class="pill">تصاريح بث صادرة: <strong id="security-grants-issued">—</strong></span>
+<span class="pill">طلبات بث محدودة: <strong id="security-grants-throttled">—</strong></span>
+<span class="pill">تصاريح نشطة: <strong id="security-active-tickets">—</strong></span>
+<span class="pill">أخطاء مصدر الوسائط: <strong id="security-provider-errors">—</strong></span>
+<span class="pill">📺 قنوات مشتركة نشطة: <strong id="security-active-feeds">—</strong></span>
+<span class="pill">👥 مشاهدون متصلون: <strong id="security-viewers">—</strong></span>
+<span class="pill">اتصالات مصدر بدأت (تراكمي): <strong id="security-source-sessions">—</strong></span>
+<span class="pill">محاولات إنقاذ عند البدء: <strong id="security-initial-retries">—</strong></span>
+<span class="pill">استعادات ناجحة: <strong id="security-reconnect-recovered">—</strong></span>
+<span class="pill">انقطاعات نهائية: <strong id="security-source-outages">—</strong></span>
+<span class="pill">بيانات المصدر: <strong id="security-ingress-mb">—</strong></span>
+<span class="pill">بيانات المشاهدين المجدولة: <strong id="security-egress-mb">—</strong></span>
+<span class="pill">طلبات مؤجلة لحماية المصدر: <strong id="security-cooldown-rejections">—</strong></span></div>
+<p class="muted" id="security-note">التصاريح مؤقتة، والإحصاءات تبدأ من آخر تشغيل للسيرفر.</p>
+<div class="grid" style="margin-top:12px">
+<div><h3>📺 صحة كل قناة مشتركة</h3>
+<p class="muted">الأرقام مؤقتة وتتغير بعد إعادة تشغيل السيرفر. لا تُظهر بيانات المصدر أو أكواد العملاء.</p>
+<div class="tablewrap"><table><thead><tr>
+<th>مرجع</th><th>الحالة</th><th>مشاهدون</th><th>آخر بيانات</th><th>إعادة اتصال</th>
+</tr></thead><tbody id="security-channel-health"></tbody></table></div></div>
+<div><h3>🩺 آخر أحداث الاتصال</h3>
+<div class="tablewrap"><table><thead><tr>
+<th>الوقت</th><th>القناة</th><th>الحدث</th>
+</tr></thead><tbody id="security-channel-events"></tbody></table></div></div>
+</div>
+</div>
+<div class="panel" id="auto-health-panel">
+<div class="controls"><div><h3>🛡 BLOFY AUTO HEALTH</h3><p class="muted">مراقبة مسارات إعادة البث التابعة للمشرف فقط. لا يتضمن التشغيل العادي للعملاء.</p></div>
+<button class="btn secondary" id="auto-health-refresh" type="button">↻ تحديث الحالة</button></div>
+<div class="inline"><span class="pill" id="auto-health-status">جار الفحص</span>
+<span class="pill">مسارات: <strong id="auto-health-total">—</strong></span>
+<span class="pill">عينة ناجحة: <strong id="auto-health-good">—</strong></span>
+<span class="pill">عينة فاشلة: <strong id="auto-health-bad">—</strong></span>
+<span class="pill">غير مفحوص/قديم: <strong id="auto-health-unknown">—</strong></span></div>
+<p id="auto-health-mode" class="muted">لا نعيد الاتصال بالمصدر تلقائيًا إلا بإعداد اختياري.</p>
+<div class="grid"><div><h3>حالة المسارات</h3><div class="tablewrap">
+<table><thead><tr><th>القناة</th><th>الفحص</th><th>البديل</th></tr></thead><tbody id="auto-health-paths"></tbody></table>
+</div></div><div><h3>آخر أحداث الصحة</h3><div class="tablewrap">
+<table><thead><tr><th>الوقت</th><th>المسار</th><th>الحدث</th></tr></thead><tbody id="auto-health-events"></tbody></table>
+</div></div></div></div>
 <div class="panel"><h3>فحص تشغيل المصدر</h3><p class="muted">اختبار طلبات وسائط حقيقية من مزودك، وليس مجرد اتصال API. نجاح العينة لا يعني نجاح كل المحتوى.</p>
 <div class="inline"><select id="stream-source" aria-label="المصدر"></select>
 <select id="stream-type" aria-label="نوع المحتوى"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -203,6 +250,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
+<button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
 <div class="inline" style="margin-top:15px">
 <select id="live-backup-source" aria-label="المصدر الاحتياطي">
@@ -212,6 +260,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div>
 <div class="inline" style="margin-top:12px"><select id="live-backup-channel" aria-label="القناة الاحتياطية">
 <option value="">بدون قناة احتياطية</option></select></div>
+<p class="muted">🛡 فحص المشاركة يفتح اتصالًا واحدًا مصرحًا بالمصدر وقارئين داخليين لمدة 26 ثانية، ولا يغيّر أي كود أو قناة للمشتركين. يفحص نقل TS وليس جودة الصوت أو الصورة بعد فك التشفير.</p>
+<div class="inline" style="margin-top:9px">
+<span class="pill" id="shared-live-readiness-state">لم يُفحص البث المشترك بعد</span>
+<span class="pill">اتصالات المصدر: <strong id="shared-live-readiness-upstreams">—</strong></span>
+<span class="pill">عينات المشاهدة: <strong id="shared-live-readiness-viewers">—</strong></span>
+<button type="button" class="btn secondary sm" id="shared-live-readiness-refresh">تحديث نتيجة الفحص</button>
+</div>
+<p id="shared-live-readiness-note" class="muted">الاختبار لا ينقل المشتركين، ولا يثبت جودة الصورة والصوت بعد فك التشفير.</p>
+<pre id="shared-live-probe-result" class="log" style="min-height:55px">اختر قناة من مصدر saleh، وأكد صلاحية إعادة البث، ثم اضغط فحص المشاركة.</pre>
 <p class="muted" style="margin-top:10px">المصدر الاحتياطي اختياري. اختر نفس القناة من مصدر تملك صلاحية بثه. يتحول النظام إليه إذا فشلت استجابة المصدر الأساسي. الحد: 3 مسارات متزامنة.</p>
 </div>
 <div class="panel"><div class="controls"><h3>قنوات يعيد بثها السيرفر الآن</h3><button class="btn secondary sm" id="live-reload" type="button">تحديث</button></div>
@@ -222,17 +279,42 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
 </section>
 <section class="view" id="page-library">
-<div class="heading"><div><h2>المكتبة</h2><p>تصفح القنوات والأفلام والمسلسلات المخزنة في الفهرس الحقيقي.</p></div></div>
+<div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
 <div class="panel"><div class="controls"><div class="inline">
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
 <input id="library-search" placeholder="ابحث باسم القناة أو الفيلم..." maxlength="85">
 <button class="btn" id="library-submit">بحث</button>
 <button class="btn secondary" id="library-refresh-source" type="button">↻ تحديث محتوى المصدر</button>
-<button class="btn secondary" id="library-smart-toggle" type="button">تنظيم ذكي: تشغيل</button></div></div>
-<p class="muted" id="library-smart-summary">تصنيف تلقائي بالقواعد من أسماء المحتوى والأقسام، دون إرسال البيانات إلى خدمة ذكاء اصطناعي خارجية. لا يغيّر المصدر.</p>
+<button class="btn" id="library-codes-sync-all" type="button">نقل تحديثات Xtream إلى الأكواد</button>
+<button class="btn secondary" id="library-smart-toggle" type="button" aria-pressed="false">عرض تجميعي اختياري: إيقاف</button></div></div>
+<p class="muted" id="library-smart-summary">الترتيب الأصلي من Xtream هو المعتمد. بعد ترتيب المحتوى من لوحة Xtream اختر المصدر واضغط «↻ تحديث محتوى المصدر»، ثم حدّث المكتبة في تطبيق العميل.</p>
+<p class="muted" id="library-codes-sync-status" role="status" aria-live="polite">الأكواد المرتبطة بالمصدر تستخدم مكتبة BLOFY المشتركة. اختر المصدر واضغط نقل تحديثات Xtream لقراءة القنوات والأفلام والمسلسلات معًا؛ لا تتغير صلاحيات الاشتراكات أو مددها.</p>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>المصدر</th><th>القسم</th><th>الحالة</th><th>المعاينة</th></tr></thead><tbody id="library-results"></tbody></table></div>
 <div class="actions"><button class="btn secondary sm" id="library-more" hidden>عرض المزيد</button></div></div>
+<div class="panel" id="library-ops-panel">
+<h3>⚙️ إدارة المزامنة وإصدارات الأكواد</h3>
+<p class="muted">المصدر المعتمد هو Xtream. المزامنة التلقائية لا تبدأ إلا بعد تفعيلها على مصدر محدد. لن تتغير الأكواد أو الاشتراكات.</p>
+<div class="controls"><div class="inline">
+<label>تكرار المزامنة
+<select id="library-auto-hours" aria-label="عدد الساعات بين المزامنات">
+<option value="12">كل 12 ساعة</option><option value="24" selected>كل 24 ساعة</option>
+<option value="48">كل 48 ساعة</option><option value="168">كل أسبوع</option>
+</select></label>
+<button class="btn" id="library-auto-enable" type="button">تفعيل المزامنة التلقائية</button>
+<button class="btn secondary" id="library-auto-disable" type="button">إيقاف المزامنة التلقائية</button>
+<button class="btn secondary" id="library-ops-refresh" type="button">فحص حالة المصدر والأكواد</button>
+</div></div>
+<p class="muted" id="library-auto-status" role="status" aria-live="polite">اختر مصدرًا ثم افحص المزامنة التلقائية.</p>
+<p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
+<p class="muted" id="library-live-capacity-status" role="status" aria-live="polite">سيعرض هذا التقرير قيود حساب Xtream الأصلي وأسباب انقطاع القنوات، دون قراءة بيانات دخول العملاء.</p>
+<div class="actions">
+<button class="btn secondary" id="library-snapshot-create" type="button">حفظ نسخة من تخصيصات الناشر</button>
+<button class="btn secondary" id="library-snapshots-refresh" type="button">عرض النسخ المحفوظة</button>
+</div>
+<p class="muted">النسخ هنا محدودة لتخصيصات المكتبة (حتى 2000 قسم و2000 عنصر معدل)، وليست نسخة احتياطية كاملة من PostgreSQL.</p>
+<div class="log" id="library-snapshots-status" role="status" aria-live="polite"></div>
+</div>
 <div class="panel" id="library-review-panel">
 <div class="controls"><h3>مراجعة المكتبة كاملة — تحليل ذكي</h3>
 <div class="actions"><button class="btn secondary" id="library-review-run" type="button">تحليل المصدر بالكامل</button>
@@ -243,9 +325,34 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <tbody id="library-review-suggestions"></tbody></table></div>
 <div id="library-review-duplicates" class="muted"></div>
 </div>
+<div class="panel" id="library-ai-chat-panel">
+<h3>✦ BLOFY AI — اكتب طلبك للمكتبة</h3>
+<p class="muted">ترتيب الأقسام تديره الآن من لوحة Xtream، وليس Gemini. استخدم AI لفحص الأسماء واقتراح تصنيف العناصر بعد المعاينة. التعديلات لا تُنشر إلا بعد موافقتك.</p>
+<label for="library-ai-command">وش تبي يسوي AI؟</label>
+<textarea id="library-ai-command" rows="3" maxlength="480" style="width:100%;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--font);font:inherit" placeholder="مثلاً: حلل أسماء الأفلام واقترح تصحيح التصنيفات دون تغيير ترتيب Xtream"></textarea>
+<div class="actions">
+<button class="btn" type="button" id="library-ai-chat-send">ارسل إلى AI</button>
+<button class="btn secondary" type="button" id="library-ai-item-next" disabled>تصنيف الدفعة التالية (12 عنصرًا)</button>
+<button class="btn secondary" type="button" id="library-ai-chat-apply" disabled>اعتماد ونشر التعديلات المحددة</button>
+</div>
+<p id="library-ai-chat-status" class="muted" role="status" aria-live="polite">لن يُعدّل شيء حتى توافق على الخطة.</p>
+<div id="library-ai-chat-preview" class="muted" style="white-space:pre-wrap"></div>
+<div id="library-ai-chat-history" class="log" aria-label="سجل المحادثة" style="white-space:pre-wrap"></div>
+<div class="actions" style="margin-top:12px">
+<button class="btn secondary" type="button" id="library-ai-history-refresh">سجل نشر AI والتراجع</button>
+</div>
+<div class="actions"><button class="btn secondary" type="button" id="library-ai-progress-refresh">تقدّم تحليل المكتبة</button></div>
+<p id="library-ai-scan-progress" class="muted" role="status" aria-live="polite">لم تُقرأ نسبة التحليل بعد.</p>
+<progress id="library-ai-progress-bar" max="100" value="0" style="width:100%" aria-label="نسبة العناصر التي حللها Gemini"></progress>
+<p id="library-ai-revision" class="muted" role="status" aria-live="polite">لم يتم فحص إصدار المكتبة بعد.</p>
+<div id="library-ai-history" class="log" aria-label="آخر تعديلات الذكاء الاصطناعي"></div>
+</div>
 <div class="panel" id="library-ai-panel">
 <div class="controls"><h3>مساعد AI لتصنيف العناوين — مراجعة فقط</h3>
-<button class="btn secondary" type="button" id="library-ai-run" disabled>اقترح تصنيف 12 عنوانًا باستخدام AI</button></div>
+<label class="inline">مصدر AI
+<select id="library-ai-source" aria-label="اختر مصدرًا لتحليل Gemini"><option value="">اختر مصدرًا</option></select></label>
+<button class="btn secondary" type="button" id="library-ai-check">فحص Gemini</button>
+<button class="btn secondary" type="button" id="library-ai-run">اقترح تصنيف 12 عنوانًا باستخدام Gemini</button></div>
 <p class="muted" id="library-ai-status">جار فحص إعدادات الذكاء الاصطناعي...</p>
 <p class="muted">ميزة اختيارية ومدفوعة حسب استخدام API. لا ترسل كلمات المرور أو روابط البث أو بيانات العملاء. لا تُطبّق اقتراحات AI تلقائيًا.</p>
 <div class="tablewrap"><table><thead><tr>
@@ -277,13 +384,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
 <select id="account-status-filter" aria-label="الحالة" style="max-width:150px"><option value="">جميع الحالات</option>
 <option value="active">ساري</option><option value="expired">منتهي</option><option value="disabled">موقوف</option></select>
 <button class="btn secondary sm" id="reload-accounts">↻ تحديث</button></div></div>
-<p class="muted">الهوست: <strong class="num">https://blofyplayer.com</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
+<p class="muted">الهوست: <strong class="num">https://bfy.up.railway.app</strong> · كلمات المرور السابقة محفوظة كبصمات آمنة، ولا يمكن عرضها. إعادة الضبط تولّد كلمة جديدة وتوقف القديمة.</p>
 <div class="tablewrap"><table><thead><tr><th>المشترك واليوزر</th><th>المصدر</th><th>الحالة / المدة</th><th>تاريخ التفعيل والانتهاء</th><th>الهوست / M3U</th><th>التحكم</th></tr></thead><tbody id="account-list"></tbody></table></div>
 <div class="inline" style="justify-content:space-between;margin-top:13px"><span id="accounts-pagination" class="muted">—</span>
 <button class="btn secondary sm" id="accounts-next" type="button" hidden>المزيد من المشتركين</button></div>
 <div id="account-detail" class="accountsecret" hidden style="margin-top:15px"></div></div></section>
 <section class="view" id="page-codes">
-<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div></div>
+<div class="heading"><div><h2>أكواد الاشتراكات</h2><p>أكواد التطبيق تُفعّل داخل BLOFY STREAM فقط: خانة كود واحدة والهوست داخلي، ولا يستطيع العميل استخراج حساب Xtream من صفحة الويب. المدة تبدأ عند أول تفعيل.</p></div>
+<a class="btn secondary sm" href="https://blofyplayer.com/sources-admin#xtream" target="_blank" rel="noopener noreferrer">إدارة وتجديد الكود من الموقع الرئيسي ↗</a></div>
+<p class="muted" id="codes-load-state" role="status" aria-live="polite" hidden></p>
 <div class="cards" style="margin-bottom:15px">
 <div class="stat"><small>إجمالي الأكواد</small><strong id="codes-total">—</strong></div>
 <div class="stat"><small>بانتظار التفعيل</small><strong id="codes-unused">—</strong></div>
@@ -448,6 +557,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
         id==="library-source"?"جميع المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
+    // AI works against exactly one source. Populate a nearby selector so
+    // the operator does not have to scroll back to the catalog filters.
+    select("library-ai-source",sources,"اختر مصدرًا");
+    var aiSource=$("library-ai-source");
+    if(!aiSource.value&&sources.length===1)aiSource.value=sources[0].id;
     var tb=$("source-list");tb.replaceChildren();
     if(!sources.length){var r=node("tr");var c=cell(r,"لا توجد مصادر مسجلة");c.colSpan=4;tb.appendChild(r);return}
     sources.forEach(function(s){
@@ -502,7 +616,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     catch(err){show("تعذر إضافة المصدر: "+err.message,false)}
     finally{b.disabled=false}
   });
-  var smartLibraryOn=true;
+  var smartLibraryOn=false;
   function smartGroup(item){
     var t=String((item.categoryName||"")+" "+(item.name||"")).toLowerCase();
     if(/sport|sports|ssc|bein|رياض|مباريات|كرة|match/.test(t))return "رياضة";
@@ -514,7 +628,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   }
   $("library-smart-toggle").addEventListener("click",function(){
     smartLibraryOn=!smartLibraryOn;
-    this.textContent="تنظيم ذكي: "+(smartLibraryOn?"تشغيل":"إيقاف");
+    this.textContent="عرض تجميعي اختياري: "+(smartLibraryOn?"تشغيل":"إيقاف");
+    this.setAttribute("aria-pressed",String(smartLibraryOn));
     loadCatalog(false);
   });
   async function loadCatalog(more){
@@ -531,7 +646,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           .sort(function(a,b){return ranks.indexOf(a.group)-ranks.indexOf(b.group)||a.index-b.index})
           .map(function(row){return row.item});
         $("library-smart-summary").textContent="تنظيم تلقائي للقائمة المعروضة (حتى 40 عنصرًا في الصفحة) • رياضة، أخبار، أطفال، أفلام، مسلسلات • لا يعدّل فئات المصدر ولا يستخدم نموذج AI خارجي.";
-      }else $("library-smart-summary").textContent="ترتيب المصدر الأصلي؛ لم يُعد ترتيب النتائج.";
+      }else $("library-smart-summary").textContent="عرض المصدر بترتيب Xtream بعد آخر مزامنة؛ لم يُطبّق أي ترتيب ذكي على النتائج.";
 
       if(!more&&items.length===0){var tr=node("tr");var td=cell(tr,"لا يوجد محتوى مطابق");td.colSpan=5;$("library-results").appendChild(tr)}
       items.forEach(function(item){var tr=node("tr");cell(tr,item.name);
@@ -629,27 +744,332 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     link.href=url;link.download="blofy-library-review.csv";link.click();
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
   });
-  var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="";
+  var libraryAIReady=false,libraryAIOffset=0,libraryAISelection="",libraryAIProvider="gemini";
+  var libraryAIProposedPlan=null,libraryAIChatBusy=false,libraryAIUserHistory=[];
+  async function refreshAiScanProgress(){
+    var sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    var label=$("library-ai-scan-progress");
+    if(!sourceId){label.textContent="اختر مصدر AI لعرض تقدّم التحليل.";return;}
+    label.textContent="جاري قراءة تقدّم التحليل...";
+    try{
+      var result=await api("library-ai/scan-progress?"+
+        new URLSearchParams({sourceId,type}));
+      $("library-ai-progress-bar").value=Math.min(100,Math.max(0,result.estimatedPercent||0));
+      label.textContent="Gemini حلّل "+count(result.analyzedItems||0)+
+        " من "+count(result.totalItems||0)+" عنصرًا — "+count(result.estimatedPercent||0)+
+        "% تقريبًا، "+count(result.analyzedBatches||0)+" دفعة، "+
+        count(result.suggestedMoves||0)+" اقتراحًا عالي الثقة. التحليل لا يعني اعتماد التغييرات أو وصولها للعملاء.";
+    }catch(e){
+      label.textContent="⚠ تعذر قراءة تقدّم تحليل AI: "+e.message;
+    }
+  }
+  $("library-ai-progress-refresh").addEventListener("click",function(){void refreshAiScanProgress();});
+
+  async function refreshAiPublishJournal(){
+    var sourceId=$("library-ai-source").value||$("library-source").value;
+    var area=$("library-ai-history");
+    area.replaceChildren();
+    if(!sourceId){
+      $("library-ai-revision").textContent="حدد مصدر AI حتى تشوف إصدارات المكتبة وسجل نشر التعديلات.";
+      return;
+    }
+    $("library-ai-revision").textContent="جاري قراءة سجل التغييرات المعتمدة...";
+    try{
+      var journal=await api("library-ai/publish-status?"+new URLSearchParams({sourceId}));
+      $("library-ai-revision").textContent="إصدار التغييرات المعتمدة من AI: "+
+        count(journal.revision||0)+". حفظ الإصدار لا يعني وصوله لأجهزة العملاء؛ يحتاجون جلب المحتوى من جديد.";
+      var edits=Array.isArray(journal.changes)?journal.changes:[];
+      if(!edits.length){
+        var empty=document.createElement("p");
+        empty.textContent="ما فيه تعديلات AI مسجلة لهذا المصدر إلى الآن.";
+        area.appendChild(empty);
+      }
+      edits.slice(0,20).forEach(function(x){
+        var line=document.createElement("div");
+        line.style.margin="8px 0";
+        var label=document.createElement("span");
+        label.textContent=(x.operation==="classify_items"?"تصنيف عناصر":x.operation||"تعديل")+
+          " — "+count(x.moved||0)+" عنصرًا — "+
+          (x.reverted?"تم التراجع": "منشور")+" — "+
+          (x.createdAt?new Date(x.createdAt).toLocaleString("ar-SA"):"");
+        line.appendChild(label);
+        if(x.operation==="classify_items"&&!x.reverted){
+          var undo=document.createElement("button");
+          undo.className="btn secondary";undo.type="button";
+          undo.style.marginInlineStart="12px";undo.textContent="تراجع عن هذا النشر";
+          undo.addEventListener("click",async function(){
+            if(!confirm("تأكيد التراجع عن تصنيف هذه الدفعة فقط؟ سيتم التحقق من عدم تغيير العناصر بعدها. قد يحتاج العملاء تحديث المحتوى."))return;
+            this.disabled=true;
+            try{
+              var r=await action("library-ai/rollback","library-ai-rollback",{
+                sourceId,planId:x.planId
+              });
+              $("library-ai-chat-status").textContent="✅ تم إرجاع "+count(r.restored||0)+
+                " عناصر إلى تصنيفاتها السابقة. إصدار التغييرات: "+count(r.revision||0)+
+                ". لم يتم إرسال تحديث تلقائي إلى الأجهزة.";
+              await refreshAiPublishJournal();
+            }catch(e){
+              $("library-ai-chat-status").textContent="⚠ لم يتم التراجع: "+e.message+
+                ". لن يتم تغيير العناصر التي تغيّرت بعد النشر.";
+              this.disabled=false;
+            }
+          });
+          line.appendChild(undo);
+        }
+        area.appendChild(line);
+      });
+    }catch(e){
+      $("library-ai-revision").textContent="تعذّر قراءة سجل تغييرات AI: "+e.message;
+    }
+  }
+  $("library-ai-history-refresh").addEventListener("click",function(){void refreshAiPublishJournal();});
+
+  var libraryAIItemOffset=0,libraryAIItemNextOffset=null,libraryAILastItemPrompt='';
+  function libraryChatLine(who,text){
+    var box=$("library-ai-chat-history");
+    var line=node("p",(who==="me"?"أنت: ":"BLOFY AI: ")+String(text||"").slice(0,650));
+    box.appendChild(line);
+    if(box.childNodes.length>24)box.firstChild.remove();
+  }
+  $("library-ai-chat-send").addEventListener("click",async function(){
+    if(libraryAIChatBusy)return;
+    var message=$("library-ai-command").value.trim(),
+      sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    // Conversational "ارسله للسيرفر" confirms ONLY the already-reviewed plan.
+    // Approval still requires an explicit browser confirmation dialog.
+    if(libraryAIProposedPlan&&/^(?:اعتمد(?: الخطة)?|انشر(?:ها)?(?: الآن)?|ارسل(?:ه|ها)?(?: للسيرفر)?|طبّق(?:ها)?(?: الآن)?)\.?$/u.test(message)){
+      libraryChatLine("me",message);
+      $("library-ai-chat-apply").click();return;
+    }
+    libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+    $("library-ai-chat-preview").replaceChildren();
+    if(message!==libraryAILastItemPrompt){libraryAIItemOffset=0;libraryAIItemNextOffset=null;}
+    $("library-ai-item-next").disabled=true;
+    if(message.length<4||message.length>480){
+      $("library-ai-chat-status").textContent="اكتب طلبًا واضحًا من 4 إلى 480 حرفًا.";return;
+    }
+    if(!sourceId){
+      $("library-ai-chat-status").textContent="اختر «مصدر AI» أولاً، ثم اكتب طلبك.";$("library-ai-source").focus();return;
+    }
+    libraryAIChatBusy=true;this.disabled=true;
+    $("library-ai-chat-status").textContent="Gemini يجهّز خطة للمراجعة، ولا يغيّر شيئًا الآن...";
+    libraryChatLine("me",message);
+    try{
+      var result=await action("library-ai/chat","library-ai-chat",{
+        sourceId,type,message,history:libraryAIUserHistory.slice(-4),
+        offset:libraryAIItemOffset});
+      libraryAIUserHistory.push(message);
+      if(libraryAIUserHistory.length>4)libraryAIUserHistory.shift();
+      libraryChatLine("ai",result.reply||"تم تحليل الطلب.");
+      if(result.action==="classify_items")void refreshAiScanProgress();
+      if(result.action==="classify_items"){
+        libraryAILastItemPrompt=message;
+        libraryAIItemNextOffset=Number.isInteger(result.nextOffset)?result.nextOffset:null;
+        $("library-ai-item-next").disabled=libraryAIItemNextOffset===null;
+      }else{
+        libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+        $("library-ai-item-next").disabled=true;
+      }
+      if(result.requiresApproval&&result.planId){
+        libraryAIProposedPlan={id:result.planId,sourceId,type,summary:result.summary};
+        $("library-ai-chat-apply").disabled=false;
+        var review=$("library-ai-chat-preview");review.replaceChildren();
+        var assignments=Array.isArray(result.itemAssignments)?result.itemAssignments:[];
+        if(assignments.length){
+          var heading=document.createElement("strong");
+          heading.textContent="مراجعة نقل العناصر إلى فئات موجودة، ثقة مرتفعة فقط:";
+          review.appendChild(heading);
+          assignments.slice(0,12).forEach(function(x){
+            var item=document.createElement("p");
+            item.textContent=String(x.title||"")+" ← "+String(x.newCategoryName||"")+
+              " · "+String(x.reason||"");
+            review.appendChild(item);
+          });
+        }
+        var beforeAfter=Array.isArray(result.proposedChanges)?result.proposedChanges:[];
+        var categories=Array.isArray(result.categoryPreview)?result.categoryPreview:[];
+        var complete=Array.isArray(result.fullCatalogPreview)?result.fullCatalogPreview:[];
+        if(assignments.length){
+          // Moves are displayed above; do not display any unrelated sorting preview.
+        }else if(complete.length){
+          var head=document.createElement("strong");
+          head.textContent="معاينة ترتيب الأقسام لجميع الأنواع الثلاثة:";
+          review.appendChild(head);
+          complete.forEach(function(section){
+            var mediaName=section.type==="live"?"القنوات":
+              section.type==="movie"?"الأفلام":"المسلسلات";
+            var heading=document.createElement("p");
+            heading.textContent=mediaName+" — "+String(section.coverage?.categories||0)+
+              " قسمًا، "+String(section.coverage?.arabicCategories||0)+
+              " أقسام عربية، "+String(section.coverage?.datedAtLeast2026||0)+
+              " بأسماء تحتوي على سنة 2026 فما فوق.";
+            review.appendChild(heading);
+            (section.categoriesFirst||[]).slice(0,8).forEach(function(name,index){
+              var item=document.createElement("p");
+              item.textContent=(index+1)+" — "+String(name||"");
+              review.appendChild(item);
+            });
+          });
+          var warning=document.createElement("p");
+          warning.textContent="فرز الأقسام الحالية فقط؛ لم يتم نقل كل فيلم أو مسلسل لفئة جديدة، أو التحقق من سنوات الإنتاج للعناوين.";
+          review.appendChild(warning);
+        }else if(beforeAfter.length){
+          var title=document.createElement("strong");title.textContent="الأسماء قبل ← بعد:";
+          review.appendChild(title);
+          beforeAfter.slice(0,12).forEach(function(x){
+            var line=document.createElement("p");
+            line.textContent=String(x.before||"")+"  ←  "+String(x.after||"");
+            review.appendChild(line);
+          });
+        }else if(categories.length){
+          var head=document.createElement("strong");head.textContent="أول 12 قسمًا بعد الترتيب:";
+          review.appendChild(head);
+          categories.slice(0,12).forEach(function(x,index){
+            var line=document.createElement("p");line.textContent=(index+1)+" — "+String(x.name||"");
+            review.appendChild(line);
+          });
+        }
+        $("library-ai-chat-status").textContent="خطة جاهزة للمراجعة: "+result.summary+
+          ". لن تنشر إلا بعد الضغط على زر الاعتماد.";
+      }else{
+        $("library-ai-chat-status").textContent=result.reply||"تمت مراجعة الطلب؛ لا يوجد تغيير معتمد للنشر.";
+      }
+    }catch(e){
+      $("library-ai-chat-status").textContent="تعذر تحليل الطلب: "+e.message;
+    }finally{libraryAIChatBusy=false;this.disabled=false;}
+  });
+  $("library-ai-item-next").addEventListener("click",function(){
+    if(libraryAIChatBusy||libraryAIItemNextOffset===null)return;
+    libraryAIItemOffset=libraryAIItemNextOffset;
+    $("library-ai-command").value=libraryAILastItemPrompt;
+    $("library-ai-chat-send").click();
+  });
+  $("library-ai-chat-apply").addEventListener("click",async function(){
+    if(!libraryAIProposedPlan||libraryAIChatBusy)return;
+    var plan=libraryAIProposedPlan;
+    if(plan.sourceId!==($("library-ai-source").value||$("library-source").value)||
+       plan.type!==$("library-type").value){
+      this.disabled=true;libraryAIProposedPlan=null;
+      $("library-ai-chat-status").textContent="تغير المصدر أو نوع المحتوى. أعد إنشاء الخطة.";return;
+    }
+    if(!confirm("هل تعتمد تغيير ترتيب الأقسام في مصدر BLOFY المحدد؟\\n"+
+      plan.summary+"\\nقد تظهر النتيجة للعملاء بعد تحديث مكتبتهم. لن نعدل اشتراكاتهم أو وسائط التشغيل."))return;
+    this.disabled=true;libraryAIChatBusy=true;libraryAIProposedPlan=null;
+    $("library-ai-chat-status").textContent="جاري حفظ ترتيب الأقسام في السيرفر...";
+    try{
+      var r=await action("library-ai/apply","library-ai-apply",{planId:plan.id,approve:true});
+      if(r.catalogRevision!=null)void refreshAiPublishJournal();
+      libraryChatLine("ai","تم تطبيق الترتيب في السيرفر. تحديث القوائم عند العملاء يحتاج إعادة جلبها من التطبيق؛ لم تُرسل إشعارات دفع للأجهزة.");
+      $("library-ai-chat-status").textContent=r.changedOnServer?
+        "✅ تم حفظ تغييرات المكتبة على السيرفر. العملاء يحتاجون تحديث المكتبة. عناصر نقلت: "+count(r.movedItems||0)+"، عناوين نظفت: "+count(r.changedTitles||0)+"، فئات مرتبة: "+count(r.updatedCategories||0):
+        "تعذر إثبات حفظ التغيير.";
+    }catch(e){
+      $("library-ai-chat-status").textContent="لم يُنشر التغيير: "+e.message;
+    }finally{libraryAIChatBusy=false;}
+  });
+  $("library-ai-source").addEventListener("change",function(){
+    libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+    $("library-ai-item-next").disabled=true;
+    libraryAIProposedPlan=null;libraryAIUserHistory=[];
+    $("library-ai-chat-apply").disabled=true;
+    $("library-ai-history").replaceChildren();
+    $("library-ai-revision").textContent="اختر «سجل نشر AI والتراجع» لعرض إصدار المصدر.";
+    $("library-ai-scan-progress").textContent="اختر «تقدّم تحليل المكتبة» لقراءة إحصاءات المصدر.";
+    $("library-ai-progress-bar").value=0;
+    $("library-ai-chat-preview").replaceChildren();
+  });
+  $("library-type").addEventListener("change",function(){
+    libraryAIItemOffset=0;libraryAIItemNextOffset=null;libraryAILastItemPrompt="";
+    $("library-ai-item-next").disabled=true;
+    libraryAIProposedPlan=null;$("library-ai-chat-apply").disabled=true;
+  });
+
   async function updateLibraryAIStatus(){
+    $("library-ai-status").textContent="جارٍ التحقق من حالة Gemini...";
     try{
       var result=await api("library-ai/status");
       libraryAIReady=result.configured===true;
-      $("library-ai-run").disabled=!libraryAIReady;
+      libraryAIProvider=result.provider||"غير معروف";
+      $("library-ai-run").disabled=false;
       $("library-ai-status").textContent=libraryAIReady?
-        "AI متاح. اضغط لتحليل دفعة صغيرة من 12 عنوانًا بعد الموافقة على إرسال بياناتها.":
-        "AI غير مفعّل: أضف BLOFY_LIBRARY_AI_API_KEY في خدمة بوابة التفعيل عبر Railway. يبقى تحليل المكتبة المحلي يعمل دون مفتاح.";
+        "✅ "+(libraryAIProvider==="gemini"?"Gemini":"AI "+libraryAIProvider)+
+        " مهيأ في خدمة التفعيل. اضغط اقتراح تصنيف 12 عنوانًا لاختبار أول طلب فعلي. الحالة لا تثبت صلاحية المفتاح.":
+        "⚠ الذكاء الاصطناعي غير مهيأ في خدمة التفعيل؛ مزود الخدمة: "+
+        libraryAIProvider+". تحقّق من BLOFY_LIBRARY_AI_PROVIDER وBLOFY_LIBRARY_GEMINI_API_KEY في Railway.";
+      return result;
     }catch(e){
-      libraryAIReady=false;$("library-ai-run").disabled=true;
-      $("library-ai-status").textContent="تعذر التحقق من إعدادات AI: "+e.message;
+      libraryAIReady=false;$("library-ai-run").disabled=false;
+      $("library-ai-status").textContent="⚠ فشل فحص إعدادات Gemini: "+e.message+
+        ". الزر متاح لإظهار حالة المشكلة بدل تعطيله بصمت.";
+      return null;
     }
   }
+  $("library-ai-source").addEventListener("change",function(){
+    libraryAIOffset=0;libraryAISelection="";
+    $("library-ai-results").replaceChildren();
+    $("library-ai-status").textContent=this.value?
+      "المصدر محدد. اضغط «اقترح تصنيف 12 عنوانًا» لطلب اقتراحات Gemini.":
+      "اختر مصدرًا محددًا من القائمة القريبة لتفعيل اقتراحات Gemini.";
+  });
+  $("library-ai-check").addEventListener("click",async function(){
+    this.disabled=true;
+    $("library-ai-status").textContent="جارٍ إرسال مثال آمن وصغير إلى Gemini للتحقق من المفتاح والنموذج...";
+    try{
+      var statusResult=await updateLibraryAIStatus();
+      if(!statusResult?.configured){
+        $("library-ai-status").textContent="⚠ Gemini غير مهيأ في Railway؛ افحص مزود AI والمفتاح في بوابة التفعيل.";
+        return;
+      }
+      if(statusResult.provider!=="gemini"){
+        $("library-ai-status").textContent="⚠ المزود النشط ليس Gemini: "+statusResult.provider;
+        return;
+      }
+      var result=await action("library-ai/test","library-ai-test",{});
+      $("library-ai-status").textContent=result.ok?
+        "✅ اتصال Gemini ناجح بالمفتاح والنموذج الحالي. الاقتراحات التجريبية: "+
+          count(result.suggestionsReturned||0)+" (لم يتغير أي محتوى).":
+        "⚠ اختبار Gemini لم ينجح: "+(result.code||"unknown");
+    }catch(e){
+      var messages={
+        stream_ai_provider_auth_failed:"المفتاح غير صالح أو لا يملك تصريحًا.",
+        stream_ai_provider_quota:"انتهت الحصة أو تم تجاوز حدود Gemini.",
+        stream_ai_provider_model_missing:"النموذج المختار غير متاح للمفتاح.",
+        stream_ai_provider_bad_request:"Gemini رفض تنسيق الطلب؛ يلزم تصحيح البرمجة.",
+        stream_ai_model_not_allowed:"النموذج غير مسموح في إعدادات BLOFY.",
+        stream_ai_incomplete:"النموذج لم يكمل الرد.",
+        stream_ai_invalid_output:"رد Gemini لا يطابق الصيغة المطلوبة.",
+        stream_ai_request_failed:"تعذّر اتصال بوابة التفعيل بـ Gemini أو انتهت المهلة.",
+        gemini_connection_test_cooldown:"الفحص محدود: مرة كل دقيقة وخمس مرات بالساعة.",
+        unified_bridge_unreachable:"بوابة التفعيل لا تستجيب عبر الربط المحمي.",
+        unified_bridge_not_configured:"الربط الداخلي بين الخدمات غير مهيأ."
+      };
+      $("library-ai-status").textContent="⚠ فشل اختبار Gemini: "+(messages[e.message]||e.message);
+    }finally{this.disabled=false;}
+  });
   $("library-ai-run").addEventListener("click",async function(){
-    if(!libraryAIReady){show("AI غير مهيأ بعد؛ استخدم التحليل المحلي.",false);return}
-    var sourceId=$("library-source").value,type=$("library-type").value;
-    if(!sourceId){show("حدد مصدرًا قبل إرسال طلب AI.",false);return}
+    if(!libraryAIReady){
+      await updateLibraryAIStatus();
+      if(!libraryAIReady){show("Gemini غير مهيأ أو خدمة الربط لا تستجيب. راجع الرسالة داخل قسم AI.",false);return}
+    }
+    var sourceId=$("library-ai-source").value||$("library-source").value,
+      type=$("library-type").value;
+    if(!sourceId){
+      var sources=(state.overview&&state.overview.sources)||[];
+      if(sources.length===1){sourceId=sources[0].id;$("library-ai-source").value=sourceId;}
+    }
+    if(!sourceId){
+      $("library-ai-status").textContent="⚠ اختر مصدر Xtream من قائمة «مصدر AI» الموجودة هنا أولًا، لأن «جميع المصادر» لا يصلح لاقتراح 12 عنوانًا.";
+      $("library-ai-source").focus();
+      return;
+    }
+    $("library-ai-status").textContent="تم اختيار المصدر: "+
+      ($("library-ai-source").selectedOptions[0]?.textContent||sourceId.slice(0,8));
     var selection=sourceId+":"+type;
     if(libraryAISelection!==selection){libraryAIOffset=0;libraryAISelection=selection}
-    if(!confirm("سيُرسل إلى خدمة OpenAI ما يصل إلى 12 اسم محتوى وفئتها فقط. قد تُحسب تكلفة API. لن تُرسل بيانات المشتركين أو المصدر، ولن يُعدّل شيء تلقائيًا. هل تتابع؟"))return;
+    if(!confirm("سيُرسل إلى "+(libraryAIProvider==="gemini"?"Google Gemini":"مزود الذكاء الاصطناعي")+
+        " ما يصل إلى 12 اسم محتوى وفئتها فقط. قد تُحسب تكلفة API. لا توجد تعديلات تلقائية. هل تتابع؟"))return;
     this.disabled=true;$("library-ai-status").textContent="جارٍ طلب توصيات AI للدفعة "+(libraryAIOffset/12+1)+"...";
     try{
       var result=await action("library-ai","library-ai",{sourceId,type,offset:libraryAIOffset});
@@ -671,7 +1091,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       $("library-ai-status").textContent="لم تنجح توصيات AI: "+e.message+
         ". تحليل المكتبة المحلي يبقى متاحًا.";
       show("تعذر تحليل AI: "+e.message,false);
-    }finally{this.disabled=!libraryAIReady}
+    }finally{this.disabled=false}
   });
   async function prepareVod(item){
     state.vodSelected=item;
@@ -730,10 +1150,215 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     this.disabled=true;
     try{
       var result=await action("source/"+source+"/sync","source-sync",{types:[typ]});
-      show("تم إرسال طلب تحديث محتوى المصدر. قد يستغرق الفهرس وقتًا حتى يكتمل.",true);
+      show("تم إرسال طلب مزامنة Xtream. بعد اكتماله اضغط بحث لتظهر نفس قائمة المصدر وترتيبه.",true);
       await refresh();await loadCatalog(false);
     }catch(e){show("تعذر تحديث المحتوى: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("library-codes-sync-all").addEventListener("click",async function(){
+    var sourceId=$("library-source").value;
+    var status=$("library-codes-sync-status");
+    if(!sourceId){
+      status.textContent="⚠ اختر مصدر Xtream محددًا (مثل saleh) أولًا. لن نزامن جميع المصادر بدون تحديد.";
+      $("library-source").focus();return;
+    }
+    var original=(state.overview?.sources||[]).find(function(x){return x.id===sourceId;});
+    if(!original){status.textContent="المصدر المحدد غير موجود في قائمة BLOFY.";return;}
+    if(!original.enabled||!original.publishCatalog){
+      status.textContent="المصدر غير مفعل أو غير منشور. لن نغيّر إعداداته أو اشتراكات العملاء.";
+      return;
+    }
+    if(original.syncing||original.queued){
+      status.textContent="المصدر يتزامن بالفعل. ننتظر اكتمال المزامنة الحالية.";return;
+    }
+    if(!confirm("هل أقرأ الترتيب والمحتوى الحالي من لوحة Xtream لمصدر "+
+      original.name+" للقنوات والأفلام والمسلسلات؟ سيظهر للأكواد المرتبطة بعد اكتمال المزامنة وتحديث العملاء للمحتوى، حسب ما ترجعه واجهة المصدر. لا نغيّر الاشتراكات."))return;
+    this.disabled=true;
+    var button=this,lastSync=Number(original.lastSyncAt)||0;
+    status.textContent="جاري إرسال مزامنة الأنواع الثلاثة لمصدر "+original.name+"...";
+    try{
+      var sent=await action("source/"+sourceId+"/sync","source-sync",{
+        types:["live","movie","series"]
+      });
+      status.textContent=sent.queued?
+        "✅ أُضيفت مزامنة المصدر إلى الانتظار. لم تكتمل بعد.":
+        "✅ تم قبول الطلب وبدأت المزامنة. متابعة القنوات والأفلام والمسلسلات...";
+      var attempt=0,maxAttempts=36;
+      async function check(){
+        if(++attempt>maxAttempts){
+          status.textContent="المزامنة استغرقت أكثر من مدة المتابعة. راجع حالة المصدر من لوحة المصادر؛ لا يمكن تأكيد وصول الترتيب للأكواد بعد.";
+          button.disabled=false;return;
+        }
+        try{
+          var response=await api("overview");
+          var updated=(response.sources||[]).find(function(x){return x.id===sourceId;});
+          if(!updated){
+            status.textContent="تعذر العثور على المصدر بعد طلب المزامنة.";
+            button.disabled=false;return;
+          }
+          if(updated.status==="error"&&!updated.syncing&&!updated.queued){
+            status.textContent="⚠ فشلت مزامنة Xtream. راجع المصدر وسجلات الخطأ، ولا تعتمد أن الأكواد تحدثت.";
+            button.disabled=false;return;
+          }
+          if(updated.status==="online"&&Number(updated.lastSyncAt)>lastSync){
+            status.textContent="✅ اكتملت مزامنة المصدر حسب حالة السيرفر. الأكواد المرتبطة تستخدم نفس الفهرس الآن عند إعادة جلب المحتوى. تأكد من ترتيب عينة على كود تجريبي؛ واجهة 8K قد لا تنقل ترتيب الباقات نفسه.";
+            button.disabled=false;
+            await refresh();await loadCatalog(false);return;
+          }
+          status.textContent="جار المزامنة... "+(updated.queued?
+            "بانتظار دور المصدر":"حالة المصدر: "+stateLabel(updated))+
+            " (فحص "+count(attempt)+" من "+count(maxAttempts)+").";
+        }catch(e){
+          status.textContent="متابعة المزامنة غير متاحة مؤقتًا: "+e.message+
+            ". سأعيد الفحص؛ لا نعتبرها مكتملة.";
+        }
+        window.setTimeout(check,5000);
+      }
+      window.setTimeout(check,5000);
+    }catch(e){
+      status.textContent="⚠ لم يبدأ نقل تحديثات Xtream: "+e.message;
+      this.disabled=false;
+    }
+  });
+  function selectedOpsSource(){
+    var id=$("library-source").value;
+    if(!id){$("library-auto-status").textContent="اختر مصدرًا واحدًا أولًا؛ لن نغيّر إعدادات جميع المصادر دفعة واحدة.";}
+    return id;
+  }
+  async function refreshSourceOps(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    $("library-auto-status").textContent="جاري قراءة إعدادات المزامنة التلقائية...";
+    try{
+      var results=await Promise.allSettled([
+        api("ops/schedule?"+new URLSearchParams({sourceId})),
+        api("ops/source-stats?"+new URLSearchParams({sourceId}))
+      ]);
+      if(sourceId!==$("library-source").value)return;
+      if(results[0].status==="fulfilled"){
+        var cfg=results[0].value;
+        $("library-auto-hours").value=String(cfg.intervalHours||24);
+        $("library-auto-status").textContent=cfg.enabled?
+          "✅ المزامنة التلقائية مفعلة كل "+count(cfg.intervalHours)+" ساعة. التشغيل القادم: "+
+            (cfg.nextRunAt?new Date(cfg.nextRunAt).toLocaleString("ar-SA"):"غير محدد"):
+          "المزامنة التلقائية متوقفة لهذا المصدر. اضغط تفعيل لجدولتها؛ لا يبدأ النقل فورًا.";
+      }else $("library-auto-status").textContent="⚠ تعذر قراءة جدول المزامنة: "+results[0].reason.message;
+      if(results[1].status==="fulfilled"){
+        var stats=results[1].value;
+        $("library-ops-stats").textContent=
+          "حالة المصدر: "+String(stats.status||"غير معروفة")+
+          " | آخر مزامنة: "+(stats.lastSyncAt?new Date(stats.lastSyncAt).toLocaleString("ar-SA"):"لا يوجد")+
+          " | إصدار المكتبة: "+count(stats.catalogRevision||0)+
+          " | أكواد: "+count(stats.codes?.total||0)+
+          " (مفعّلة سابقًا: "+count(stats.codes?.redeemed||0)+")"+
+          " | حسابات نشطة: "+count(stats.accounts?.active||0)+
+          " | مشاهدون حاليون: غير مقاس من هذا التقرير.";
+        var upstream=stats.liveSourceCapacity||{},observed=stats.livePlayback||{};
+        var warnings=Array.isArray(upstream.warningCodes)?upstream.warningCodes:[];
+        var notice=warnings.includes("source_single_upstream_connection")?
+          "⚠ مصدر Xtream نفسه يعلن اتصالًا متزامنًا واحدًا؛ إنشاء كودين BLOFY لا يضاعف سعة المصدر. يمكن أن يفصل أحد المشاهدين عند فتح الثاني. راجع حدود وصلاحية البث من صاحب المصدر.":
+          warnings.includes("source_no_upstream_connections")?
+          "⚠ المصدر الأصلي يعلن عدم إتاحة اتصالات مشاهدة.":
+          warnings.includes("source_upstream_limit_unknown")?
+          "حد الاتصالات المسموح من Xtream غير معروف بعد؛ لا يمكن ضمان تشغيل كودين في الوقت نفسه.":
+          "الحد المعلن من Xtream: "+count(upstream.maxConnections)+" اتصالًا متزامنًا لحساب المصدر كله، وليس لكل كود BLOFY.";
+        if(warnings.includes("source_restream_not_authorized"))
+          notice+=" لا يظهر إذن إعادة بث على المصدر؛ لن نفعّل مشاركة القنوات دون تصريح.";
+        var licensed=stats.licensedLiveFanout||{},shared=stats.sharedMediaHealth||{};
+        if(licensed.enabledForSource===true){
+          notice+=" ✅ التوزيع المرخّص مهيأ للقناة نفسها: اتصال مصدر واحد ومشاركة بيانات TS لغاية "+
+            count(licensed.maxSharedViewersPerChannelDesign||128)+
+            " مشاهدًا في التصميم، وليس ضمانًا فعليًا قبل اختبار الضغط.";
+          if(shared.ok===true)
+            notice+=" | مشتركون متصلون بمنفذ المشاركة الآن (جميع مصادر هذه العملية): "+
+              count(shared.activeSharedViewers||0)+
+              " | قنوات مشتركة: "+count(shared.activeSharedChannels||0)+
+              " | إعادة وصل المصدر: "+count(shared.upstreamReconnects||0);
+          else notice+=" | قياسات المشاركة المباشرة غير متاحة.";
+        }else if(licensed.upstreamRestreamerPermitted!==true){
+          notice+=" مشاركة بث القناة لأكثر من 100 جهاز تحتاج إذنًا صريحًا من مزود Xtream (إعادة بث). التفعيل غير متاح لهذا المصدر حتى تثبت الصلاحية.";
+        }else{
+          notice+=" المصدر يعلن صلاحية إعادة البث؛ ميزة مشاركة أكثر من 100 مشاهد أُعدت لكنها غير مفعلة حتى يتم التأكد من الإذن المكتوب والتشغيل التجريبي.";
+        }
+        $("library-live-capacity-status").textContent=notice+
+          " | الاتصالات في آخر تقرير Xtream: "+
+          (upstream.activeConnections===null||upstream.activeConnections===undefined?
+           "غير متاحة":count(upstream.activeConnections))+
+          " | بث مباشر انتهى من المصدر: "+count(observed.upstreamEnded||0)+
+          " | انقطاعات 5–35 ثانية مرصودة: "+count(observed.shortLiveUpstreamEnds||0)+
+          " | إغلاق من العميل/الوسيط: "+count(observed.clientOrProxyClosed||0)+
+          ". هذه مؤشرات من عملية السيرفر الحالية، وليست عدد المشاهدين الحقيقي.";
+      }else {
+        $("library-ops-stats").textContent="⚠ تعذر قراءة إحصائيات الأكواد: "+results[1].reason.message;
+        $("library-live-capacity-status").textContent="لا يمكن تحديد حد اتصالات Xtream من هذه القراءة.";
+      }
+    }catch(e){$("library-auto-status").textContent="خطأ فحص المصدر: "+e.message;}
+  }
+  async function configureAutoSync(enabled,button){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    var hours=Number($("library-auto-hours").value);
+    if(![12,24,48,168].includes(hours))return;
+    var desc=enabled?"تفعيل المزامنة التلقائية كل "+hours+
+      " ساعة لهذا المصدر فقط (القنوات والأفلام والمسلسلات)":
+      "إيقاف المزامنة التلقائية لهذا المصدر";
+    if(!confirm(desc+"؟ لن تتغير أكواد المشتركين أو مددها."))return;
+    button.disabled=true;
+    try{
+      var cfg=await action("ops/schedule","ops-schedule",{sourceId,enabled,intervalHours:hours});
+      $("library-auto-status").textContent=cfg.enabled?
+        "✅ تم حفظ الجدول. أول فحص مجدول بعد "+count(hours)+
+        " ساعة؛ لم تبدأ مزامنة فورية.":"✅ أوقفت المزامنة التلقائية لهذا المصدر.";
+      await refreshSourceOps();
+    }catch(e){$("library-auto-status").textContent="⚠ تعذّر حفظ جدول المزامنة: "+e.message;}
+    finally{button.disabled=false;}
+  }
+  $("library-auto-enable").addEventListener("click",function(){void configureAutoSync(true,this);});
+  $("library-auto-disable").addEventListener("click",function(){void configureAutoSync(false,this);});
+  $("library-ops-refresh").addEventListener("click",function(){void refreshSourceOps();});
+  $("library-source").addEventListener("change",function(){
+    $("library-auto-status").textContent="اختر «فحص حالة المصدر والأكواد» لقراءة الحالة.";
+    $("library-ops-stats").textContent="اختر مصدرًا للتحقق من الأكواد وإصدار المحتوى.";
+    $("library-live-capacity-status").textContent="اختر مصدرًا واضغط فحص حالة المصدر والأكواد للتحقق من عدد الاتصالات الأصلي.";
+    $("library-snapshots-status").replaceChildren();
+  });
+  $("library-snapshots-refresh").addEventListener("click",async function(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    var box=$("library-snapshots-status");
+    box.replaceChildren();box.textContent="جار فحص نسخ التخصيصات...";
+    this.disabled=true;
+    try{
+      var result=await api("ops/snapshots?"+new URLSearchParams({sourceId}));
+      box.replaceChildren();
+      var items=Array.isArray(result.snapshots)?result.snapshots:[];
+      if(!items.length){box.textContent="لا توجد نسخ من تخصيصات هذا المصدر.";return;}
+      items.slice(0,15).forEach(function(x){
+        var line=document.createElement("p");
+        line.textContent=String(x.label||"نسخة")+" — "+
+          (x.createdAt?new Date(x.createdAt).toLocaleString("ar-SA"):"")+
+          " | أقسام: "+count(x.categories||0)+" | تعديلات عناصر: "+count(x.items||0);
+        box.appendChild(line);
+      });
+    }catch(e){box.textContent="⚠ تعذر عرض نسخ التخصيصات: "+e.message;}
+    finally{this.disabled=false;}
+  });
+  $("library-snapshot-create").addEventListener("click",async function(){
+    var sourceId=selectedOpsSource();
+    if(!sourceId)return;
+    if(!confirm("هل تريد حفظ نسخة من تخصيصات هذا المصدر؟ ليست نسخة احتياطية كاملة من محتوى Xtream أو قاعدة البيانات."))return;
+    this.disabled=true;
+    $("library-snapshots-status").textContent="جاري حفظ تخصيصات المصدر...";
+    try{
+      var stamp=new Date().toISOString().slice(0,16).replace("T"," ");
+      var result=await action("ops/snapshot","ops-snapshot",{
+        sourceId,label:"BLOFY before sync "+stamp,confirmed:true
+      });
+      $("library-snapshots-status").textContent="✅ حُفظت تخصيصات "+
+        count(result.categories||0)+" قسمًا و"+count(result.items||0)+
+        " عنصرًا. لا تشمل النسخة محتوى Xtream كاملًا.";
+    }catch(e){$("library-snapshots-status").textContent="⚠ فشل حفظ التخصيصات: "+e.message;}
+    finally{this.disabled=false;}
   });
   $("library-more").addEventListener("click",function(){loadCatalog(true)});
   $("library-search").addEventListener("keydown",function(e){if(e.key==="Enter")loadCatalog(false)});
@@ -755,7 +1380,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
   function showCredentials(target,creds,label){
     target.hidden=false;target.replaceChildren();
     target.appendChild(node("strong",label||"بيانات الاشتراك — احفظها الآن"));
-    var host=creds.serverUrl||"https://blofyplayer.com";
+    var host=creds.serverUrl||"https://bfy.up.railway.app";
     var m3u=creds.m3uUrl||(
       host+"/get.php?"+new URLSearchParams({username:creds.username||"",
       password:creds.password||"",type:"m3u_plus",output:"ts"}).toString());
@@ -790,10 +1415,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       if(a.lastUsedAt)dates.appendChild(node("div","آخر استخدام: "+dateTime(a.lastUsedAt),"meta"));
       cell(tr,dates);
       var urls=node("div");
-      urls.appendChild(node("div","https://blofyplayer.com","meta num"));
+      urls.appendChild(node("div",state.accountHost||"https://bfy.up.railway.app","meta num"));
       urls.appendChild(node("div","M3U: يحتاج كلمة المرور","meta"));
       urls.appendChild(button("نسخ الهوست",function(){
-        navigator.clipboard.writeText("https://blofyplayer.com")
+        navigator.clipboard.writeText(state.accountHost||"https://bfy.up.railway.app")
           .then(function(){show("تم نسخ الهوست.",true)})
           .catch(function(){show("حدد الهوست وانسخه يدويًا.",false)});
       }));
@@ -817,6 +1442,49 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
           "تعذر عرض البيانات: "+e.message:
           "هذا الحساب قديم ولم تُحفظ كلمة مروره. استخدم إعادة تعيين الباسورد إذا رغبت في بيانات جديدة.",false)}
       }));
+      ctl.appendChild(button("فحص Xtream",async function(){
+        try{
+          var d=await api("account/"+a.id+"/compatibility");
+          var reasons={
+            xtream_login_compatible:"تم قبول الحساب وعنوان الخادم الجديد متطابق.",
+            account_auth_denied:"الخادم رفض اسم المستخدم أو كلمة المرور.",
+            server_info_origin_mismatch:"عنوان السيرفر الذي يعلن عنه Xtream لا يطابق الهوست الجديد.",
+            account_password_not_recoverable:"هذا حساب قديم لا يمكن فحصه بدون إعادة إصدار بيانات الدخول.",
+            account_disabled:"الحساب موقوف.",
+            account_expired:"الحساب منتهي.",
+            edge_unreachable_or_timeout:"تعذر الوصول للهوست الجديد أو انتهت مهلة الاتصال.",
+            edge_not_configured:"هوست Xtream الجديد غير مضبوط على الخدمة.",
+            xtream_catalog_empty:"تسجيل الدخول ناجح لكن تصنيفات القنوات والأفلام والمسلسلات فارغة.",
+            xtream_flow_failure:"تسجيل الدخول الأساسي ناجح، لكن أحد اختبارات توافق التطبيقات فشل."
+          };
+          var names={postLogin:"تسجيل الدخول POST",panelLogin:"Panel API",
+            live:"تصنيفات القنوات",movie:"تصنيفات الأفلام",series:"تصنيفات المسلسلات"};
+          var status=(reasons[d.code]||("نتيجة الفحص: "+String(d.code||"غير معروفة")));
+          if(d.failedStep)status+=" — المشكلة في "+(names[d.failedStep]||d.failedStep)+
+            " ("+String(d.reason||"غير معروف")+")";
+          show((d.ok?"✅ ":"⚠ ")+status,!!d.ok);
+          var detail=$("account-detail");
+          detail.replaceChildren();
+          detail.appendChild(node("strong","فحص حساب "+a.username,"name"));
+          detail.appendChild(node("div",status,"meta"));
+          if(d.auth===1){
+            detail.appendChild(node("div","المصادقة: ناجحة · عنوان الهوست: "+
+              (d.advertisedHostMatches?"متطابق":"غير متطابق"),"meta"));
+          }
+          if(d.checks){
+            ["postLogin","panelLogin","live","movie","series"].forEach(function(key){
+              var check=d.checks[key];
+              if(!check)return;
+              var txt=(names[key]||key)+": "+(check.ok?"ناجح":"فشل")+
+                (Number.isInteger(check.count)?" — "+count(check.count)+" تصنيفًا":"")+
+                (!check.ok&&check.code?" ("+check.code+")":"");
+              detail.appendChild(node("div",txt,"meta"));
+            });
+          }
+          detail.hidden=false;
+          detail.scrollIntoView({behavior:"smooth",block:"center"});
+        }catch(e){show("تعذر فحص Xtream: "+e.message,false)}
+      },"secondary"));
       ctl.appendChild(button("إعادة تعيين الباسورد",async function(){
         if(!confirm("سيتم إلغاء كلمة المرور القديمة فورًا! هل أنت متأكد؟"))return;
         try{var d=await action("account/"+a.id+"/reset","account-reset",{});
@@ -839,6 +1507,7 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       state.accounts=more?state.accounts.concat(d.items||[]):d.items||[];
       state.accountsNext=d.nextOffset===undefined?null:d.nextOffset;
       state.accountsTotal=d.total;
+      state.accountHost=d.serverUrl||state.accountHost||"https://bfy.up.railway.app";
       renderAccounts();
     }catch(e){show("تعذر تحميل المشتركين: "+e.message,false)}
   }
@@ -881,6 +1550,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }catch(e){show("تعذر نسخ الكود: "+e.message,false)}
   }
   async function loadCodes(more){
+    var indicator=$("codes-load-state");
+    if(indicator){indicator.hidden=false;indicator.textContent="جارٍ جلب أكواد الاشتراكات من النظام الرئيسي…"}
     try{
       var offset=more?state.codesNext||0:0;
       var d=await api("codes?offset="+offset);
@@ -890,6 +1561,10 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       value("codes-total",count(totals.total));value("codes-unused",count(totals.unused));
       value("codes-redeemed",count(totals.redeemed));value("codes-revoked",count(totals.revoked));
       renderCodes();
+      if(indicator){
+        indicator.textContent="تم تحميل "+count(state.codes.length)+" كودًا. يمكنك عرض بقية الأكواد من زر المزيد.";
+        indicator.hidden=false;
+      }
       void api("sales-summary").then(function(summary){
         value("codes-sold-count",count(summary.sold));
         value("codes-sales-sar",
@@ -898,7 +1573,15 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         value("codes-expiring",count(summary.expiring_soon));
         value("codes-transfers",count(summary.transfers));
       }).catch(function(){ /* code ledger remains available if sales summary fails */ });
-    }catch(e){show("تعذر تحميل الأكواد: "+e.message,false)}
+    }catch(e){
+      if(indicator){
+        indicator.hidden=false;
+        indicator.textContent="تعذر تحميل قائمة الأكواد من السيرفر الرئيسي ("+
+          String(e?.message||"خطأ غير معروف").slice(0,65)+
+          "). هذا لا يعني حذف الأكواد. اضغط تحديث، أو افتح إدارة وتجديد الكود من الموقع الرئيسي.";
+      }
+      show("تعذر تحميل الأكواد: "+e.message,false);
+    }
   }
   function renderCodes(){
     var tb=$("codes-list");tb.replaceChildren();
@@ -1126,8 +1809,11 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
       var tr=node("tr");cell(tr,item.title||item.channelId);
       cell(tr,item.path+(item.backupConfigured?" · بديل مفعل":""));
       var mt=byPath.get(item.path);
-      cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?String(mt.hlsViewers):"غير متاح");
-      var status=String(item.connections||0)+" سحب مباشر"+(item.failovers?" · تبديلات: "+item.failovers:"");
+      cell(tr,mt&&mt.hlsViewers!==null&&mt.hlsViewers!==undefined?
+        String(mt.hlsViewers):"لم يبدأ HLS");
+      var status=item.connections>0?String(item.connections)+" اتصال بالمصدر":
+        "جاهز عند الطلب · لا يوجد سحب حالي";
+      if(item.failovers)status+=" · تبديلات: "+item.failovers;
       if(item.probePending)status+=" · فحص HLS جار";
       else if(item.lastProbe){
         var reason=String(item.lastProbe.code||"");
@@ -1178,6 +1864,108 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     });
   }
   var liveProbeRefresh=null;
+  async function loadAutoHealth(){
+    try{
+      var d=await api("auto-health");
+      value("auto-health-status",d.ok?(d.checkedAt?"المراقبة تعمل":"جار بدء المراقبة"):"الحالة غير متاحة");
+      value("auto-health-total",count(d.totals?.paths));
+      value("auto-health-good",count(d.totals?.healthy));
+      value("auto-health-bad",count(d.totals?.failed));
+      value("auto-health-unknown",count((d.totals?.untested||0)+(d.totals?.stale||0)+(d.totals?.warning||0)));
+      value("auto-health-mode",d.recoveryProbeEnabled?
+        "مسموح بإعادة فحص مسار واحد عند تكرر فشل عينة HLS، بشرط وجود مصدر احتياطي، وبدون تغيير تشغيل العملاء.":
+        "مراقبة دورية للبيانات فقط؛ بدون اتصالات مصدر جديدة أو تعديل اشتراكات العملاء.");
+      var l=$("auto-health-paths");l.replaceChildren();
+      var statuses={healthy:"نجحت عينة HLS",failed:"فشلت عينة HLS",checking:"الفحص جار",
+        stale:"نتيجة قديمة",untested:"لم يُختبر",warning:"تعثر سحب المصدر"};
+      (d.paths||[]).forEach(function(item){
+        var tr=node("tr"),description=node("div");
+        description.appendChild(node("div",item.title||item.path,"name"));
+        description.appendChild(node("small",item.path,"meta"));
+        cell(tr,description);
+        cell(tr,node("span",statuses[item.status]||"غير معروف",
+          item.status==="healthy"?"ok":item.status==="failed"?"fail":"warn"));
+        cell(tr,item.backupConfigured?"متوفر":"غير محدد");l.appendChild(tr);
+      });
+      if(!(d.paths||[]).length){var tr=node("tr"),td=cell(tr,"لا توجد مسارات مراقبة حتى الآن.");td.colSpan=3;l.appendChild(tr);}
+      var log=$("auto-health-events");log.replaceChildren();
+      var kinds={transport_failure:"تعثر النقل",transport_restored:"استعادة عينة HLS",
+        controlled_reprobe_requested:"إعادة فحص محدودة",reprobe_unavailable:"فشل إعادة الفحص"};
+      (d.events||[]).slice(0,24).forEach(function(ev){
+        var tr=node("tr");
+        cell(tr,Number.isFinite(ev.at)?new Date(ev.at).toLocaleTimeString("en-GB",{timeZone:"Asia/Riyadh"}):"—");
+        cell(tr,ev.path);cell(tr,kinds[ev.kind]||"تحديث الحالة");log.appendChild(tr);
+      });
+      if(!(d.events||[]).length){var tr=node("tr"),td=cell(tr,"لا توجد أحداث خلال عمر هذه النسخة.");td.colSpan=3;log.appendChild(tr);}
+    }catch(e){value("auto-health-status","غير متاح");value("auto-health-mode","تعذر قراءة التقرير: "+e.message)}
+  }
+  async function loadSecurity(){
+    try{
+      var d=await api("security");
+      value("security-status",d.ok&&d.protection?.operatorBruteForce?"الحماية تعمل":"الحالة غير متاحة");
+      value("security-auth-failures",count(d.operator?.failedAuthAttempts));
+      value("security-auth-throttled",count(d.operator?.throttledAuthAttempts));
+      value("security-grants-issued",count(d.relay?.grantsIssued));
+      value("security-grants-throttled",count(d.relay?.issuanceThrottled));
+      value("security-active-tickets",count(d.relay?.activeTickets));
+      value("security-provider-errors",count(d.media?.providerFailures));
+      value("security-active-feeds",count(d.media?.activeFeeds));
+      value("security-viewers",count(d.media?.viewers));
+      value("security-source-sessions",count(d.media?.upstreamSessionsOpened));
+      value("security-initial-retries",count(d.media?.initialRetries));
+      value("security-reconnect-recovered",count(d.media?.reconnectRecovered));
+      value("security-source-outages",count(d.media?.sourceOutages));
+      var toMb=function(v){return (Math.max(0,Number(v)||0)/1048576).toFixed(1)+" MiB";};
+      value("security-ingress-mb",toMb(d.media?.sourceBytesReceived));
+      value("security-egress-mb",toMb(d.media?.viewerBytesQueued));
+      value("security-cooldown-rejections",count(d.media?.cooldownRejections));
+      var channelRows=$("security-channel-health");
+      channelRows.replaceChildren();
+      var channelStates={ready:"✅ يبث",starting:"جاري الاتصال",
+        reconnecting:"🔄 يعيد الاتصال"};
+      (d.media?.channels||[]).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,"#"+count(item.channel));
+        cell(tr,channelStates[item.state]||"غير متاح");
+        cell(tr,count(item.viewers));
+        var age=item.lastMediaAgeMs;
+        cell(tr,age===null||age===undefined?"لم يصل بث":
+          (Math.floor(Number(age)/1000)+" ث"));
+        cell(tr,count(item.reconnects));
+        channelRows.appendChild(tr);
+      });
+      if(!(d.media?.channels||[]).length){
+        var empty=node("tr"),td=cell(empty,"لا توجد قنوات مشتركة قيد المشاهدة.");
+        td.colSpan=5;channelRows.appendChild(empty);
+      }
+      var eventsRows=$("security-channel-events");
+      eventsRows.replaceChildren();
+      var eventLabels={connected:"بدأ البث",reconnecting:"🔄 تعثر وجار الاستعادة",
+        recovered:"✅ عاد البث",failed:"⚠️ انقطع المصدر",idle:"توقف لعدم وجود مشاهدين"};
+      (d.media?.events||[]).slice(0,32).forEach(function(item){
+        var tr=node("tr");
+        cell(tr,Number.isFinite(item.at)?new Date(item.at)
+          .toLocaleTimeString("en-GB",{timeZone:"Asia/Riyadh"}):"—");
+        cell(tr,"#"+count(item.channel));
+        cell(tr,(eventLabels[item.kind]||"تغيير الحالة")+
+          (item.reason?" · "+item.reason:""));
+        eventsRows.appendChild(tr);
+      });
+      if(!(d.media?.events||[]).length){
+        var emptyEvent=node("tr"),tdEvent=cell(emptyEvent,"لا توجد أحداث مسجلة بعد.");
+        tdEvent.colSpan=3;eventsRows.appendChild(emptyEvent);
+      }
+      var status=Number(d.media?.activeFeeds||0)>0?
+        (Number(d.media?.sourceOutages||0)>0?"مشاركة تعمل مع انقطاعات مسجلة":
+          "قنوات مشتركة نشطة"):
+        "لا توجد قناة مشتركة نشطة الآن (ليس خطأ)";
+      value("security-note",status+". الحماية تعمل، والتصاريح القصيرة مفعلة. "+
+        "المقاييس إجمالية منذ آخر تشغيل؛ ليست ضمانًا لجودة الصوت والصورة.");
+    }catch(e){value("security-status","غير متاح");
+      value("security-note","تعذر قراءة حالة الأمان: "+e.message);}
+  }
+  $("security-refresh").addEventListener("click",loadSecurity);
+  $("auto-health-refresh").addEventListener("click",loadAutoHealth);
   async function loadLive(){
     if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
     try{
@@ -1193,6 +1981,86 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
   $("live-reload").addEventListener("click",loadLive);
+  function sharedFailureText(code){
+    var labels={
+      pilot_source_not_found:"لم يوجد مصدر مرخّص باسم saleh",
+      pilot_source_ambiguous:"تكرر اسم المصدر؛ يلزم اختيار مصدر واحد",
+      pilot_source_not_enabled:"المصدر غير مفعل أو غير منشور",
+      pilot_channel_not_found:"لم يتم العثور على قناة 4K V SPORT المطابقة",
+      pilot_channel_ambiguous:"وجدت عدة قنوات متشابهة؛ يلزم الاختيار اليدوي",
+      pilot_media_http_failure:"المصدر لم يعطِ استجابة TS ناجحة",
+      pilot_source_unavailable:"المصدر لم يستجب لمسار القناة",
+      pilot_source_auth_denied:"المصدر رفض طلب الوسائط أو صلاحية الحساب",
+      pilot_media_stalled:"البث توقف عن إرسال بيانات الفيديو",
+      pilot_stream_ended:"توقف تدفق القناة قبل اكتمال الفحص",
+      pilot_source_not_ts:"البيانات ليست MPEG-TS صالحًا للتوزيع",
+      pilot_transport_unavailable:"تعذر النقل أو الاتصال الآمن بالمصدر",
+      pilot_bridge_unavailable:"بوابة الاتصال بالمصدر غير متاحة",
+      pilot_catalog_unavailable:"تعذر تحميل فهرس القنوات",
+      pilot_requires_live_ts:"القناة أو صيغتها غير ملائمة لفحص TS",
+      pilot_rate_limited:"الفحص مقيد لمدة دقيقة لحماية المصدر",
+      pilot_in_progress:"هناك فحص مشاركة جار الآن",
+      shared_with_sequential_reconnect:"وصلت البيانات للمشاهدين مع إعادة اتصال متسلسلة",
+      shared_single_upstream_verified:"نجح وصول TS إلى مشاهدين من اتصال مصدر واحد"
+    };
+    return labels[String(code||"")]||String(code||"لم يتم الاختبار");
+  }
+  async function loadSharedReadiness(){
+    try{
+      var d=await api("shared-live/status"),last=d.last;
+      if(d.state==="running"){
+        value("shared-live-readiness-state","الفحص جار الآن");
+        value("shared-live-readiness-note","الفحص محدد بمصدر واحد ومشاهدين تجريبيين؛ لا يؤثر على أكواد العملاء.");
+        return;
+      }
+      if(!last){
+        value("shared-live-readiness-state","لم يُفحص البث المشترك بعد");
+        value("shared-live-readiness-note","البث المشترك للعملاء غير مفعل. استخدم الاختبار لتأكيد النقل.");
+        return;
+      }
+      value("shared-live-readiness-state",last.ok?"✅ نجح فحص النقل":"⚠️ "+sharedFailureText(last.code));
+      value("shared-live-readiness-upstreams",count(last.upstreamSessions));
+      value("shared-live-readiness-viewers",count(last.viewerSamples));
+      var detail=last.checkedAt?new Date(last.checkedAt).toLocaleString("ar-SA",{timeZone:"Asia/Riyadh"}):"—";
+      value("shared-live-readiness-note","آخر فحص: "+detail+" · "+
+        (last.mode==="boot"?"تلقائي محدود":"يدوي")+
+        " · إعادة اتصال: "+count(last.reconnects)+
+        (last.failureCodes&&last.failureCodes.length?
+          " · رموز التشخيص: "+last.failureCodes.join("، "):"")+
+        " · فحص نقل فقط، لم يتم التحقق من فك الصوت والصورة.");
+    }catch(e){value("shared-live-readiness-state","تعذر قراءة حالة المشاركة")}
+  }
+  $("shared-live-readiness-refresh").addEventListener("click",loadSharedReadiness);
+  $("shared-live-probe").addEventListener("click",async function(){
+    var sourceId=$("live-source").value,channelId=$("live-channel").value;
+    if(!sourceId||!channelId){show("اختر مصدرًا وقناة لفحص المشاركة.",false);return}
+    if(!$("live-rights").checked){show("يلزم تأكيد صلاحية إعادة بث هذه القناة.",false);return}
+    this.disabled=true;
+    value("shared-live-probe-result","جار التحقق من سحب المصدر وتوزيعه على قارئين خلال 26 ثانية...");
+    try{
+      // This diagnostic intentionally renders a sanitized JSON body even
+      // when ok:false; the general action() helper throws that evidence away.
+      var response=await fetch("/operator/api/shared-live/probe",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"application/json",
+          "x-blofy-operator-action":"shared-live-probe"},
+        body:JSON.stringify({sourceId:sourceId,channelId:channelId,
+          rightsConfirmed:true})
+      });
+      var report=await response.json();
+      value("shared-live-probe-result",JSON.stringify(report,null,2));
+      if(!response.ok||!report.ok){
+        show("فشل فحص المشاركة: "+sharedFailureText(report.code)+
+          ". قنوات المشتركين بقيت على المسار السابق.",false);
+      }else{
+        show("نجح النقل المشترك التجريبي، لكن جودة الصورة والصوت تحتاج تأكيدًا.",true);
+      }
+      await loadSharedReadiness();
+    }catch(e){
+      value("shared-live-probe-result","تعذر الفحص: "+e.message);
+      show("فشل الفحص بدون تغيير قنوات المشتركين.",false);
+    }finally{this.disabled=false;await loadSharedReadiness()}
+  });
   $("live-start").addEventListener("click",async function(){
     var sourceId=$("live-source").value,channelId=$("live-channel").value;
     if(!sourceId||!channelId){show("اختر مصدرًا وقناة أولًا.",false);return}
@@ -1209,11 +2077,14 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
         rightsConfirmed:true
       });
-      $("live-result").textContent=JSON.stringify({
-        ok:result.ok,title:result.title,path:result.path,
-        playlist:result.playlist,onDemand:result.onDemand
-      },null,2);
-      show("تم إنشاء مسار القناة على المحرك. اضغط فحص HLS أو معاينة للتحقق من الفيديو.",true);
+      $("live-result").textContent=
+        "✅ تم تجهيز مسار القناة: "+String(result.title||"")+
+        "\nالحالة: جاهز عند الطلب (On-Demand)."+
+        "\nتنبيه: لم يبدأ سحب المصدر بعد، ولا يعني إنشاء المسار أن الصورة والصوت يعملان."+
+        "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
+        "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
+        "\nالمسار: "+String(result.path||"");
+      show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);
       await loadLive();
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
@@ -1239,8 +2110,8 @@ body.compact td{padding:7px 10px}body.compact .stat{padding:14px}body.compact .s
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
-  refresh();loadLive();loadFailures();
-  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures()}},60000);
+  refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();
+  setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness()}},60000);
 })();
 </script>
 </body></html>`;
