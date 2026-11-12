@@ -207,7 +207,21 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     headers:{'content-type':'application/json','x-blofy-distributor-action':method},
     body:JSON.stringify(data||{})});
   let result;try{result=await response.json()}catch{throw Error('استجابة الخادم غير صالحة')}
-  if(!response.ok||result.ok===false)throw Error(result.code||result.error||'HTTP '+response.status);
+  if(!response.ok||result.ok===false){
+   const codes={
+    distributor_no_credits:'الرصيد غير كافٍ',
+    distributor_issue_daily_limit:'بلغت حد الاستخراج اليومي',
+    distributor_trial_daily_limit:'بلغت حد التجارب اليومية',
+    distributor_trial_already_used:'سبق استخدام التجربة لهذا الجوال',
+    distributor_saleh_source_unavailable:'المصدر غير متاح حاليًا',
+    distributor_issuance_needs_review:'الإصدار يحتاج مراجعة، لا تكرر الطلب',
+    distributor_request_already_processing:'الإصدار قيد التنفيذ',
+    distributor_export_too_large:'عدد الاشتراكات كبير جدًا للتصدير',
+    distributor_session_expired:'انتهت الجلسة',
+    distributor_relogin_unavailable:'إعادة الدخول غير متاحة لهذا الاشتراك'
+   };
+   throw Error(codes[result.code]||result.code||result.error||'HTTP '+response.status);
+  }
   return result;
  }
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
@@ -215,6 +229,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const d=await request('me');
   setLogged(true);text("credits",d.item.credits);text("used",d.item.used);
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
+  const credits=Number(d.item.credits)||0;
+  $('balance-alert').hidden=credits>3;
+  $('balance-alert').textContent=credits===0?'الرصيد انتهى':'الرصيد منخفض: '+credits;
  }
  function copy(value){navigator.clipboard.writeText(String(value)).then(()=>msg("تم النسخ",true))
    .catch(()=>msg("لم يتم النسخ؛ اختر النص وانسخه يدويًا",false));}
@@ -446,6 +463,82 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }catch(err){msg('تعذر الحفظ: '+err.message,false)}
   finally{btn.disabled=false}
  });
+
+ async function loadAnalytics(){
+  const data=await request('analytics');const x=data.stats||{};
+  text('stat-today',x.today||0);text('stat-month',x.month||0);
+  text('stat-trials',x.trialsTotal||0);text('stat-renewals',x.renewalsMonth||0);
+  text('stat-converted',x.convertedTrials||0);
+  text('stat-quota',(x.issued24h||0)+' / '+(x.dailyLimit||100));
+  const credits=Number($('credits').textContent)||0;
+  $('balance-alert').hidden=credits>3;
+  $('balance-alert').textContent=credits===0?'الرصيد انتهى':'الرصيد منخفض: '+credits;
+ }
+ function renderActivity(){
+  const body=$('activity-rows');body.replaceChildren();
+  const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
+    refund:'استرجاع',renew:'تجديد'};
+  for(const item of activityRows){
+   const tr=document.createElement('tr');
+   tableCell(tr,types[item.type]||item.type);
+   tableCell(tr,(item.delta>0?'+':'')+item.delta);
+   tableCell(tr,item.balanceAfter);
+   tableCell(tr,dateOnly(item.date));
+   body.appendChild(tr);
+  }
+  if(!activityRows.length){
+   const tr=document.createElement('tr');
+   const td=tableCell(tr,'لا توجد حركات حديثة');td.colSpan=4;body.appendChild(tr);
+  }
+  text('activity-count','المعروض: '+activityRows.length);
+  $('activity-more').hidden=activityNext==null;
+ }
+ async function loadActivity(more=false){
+  const offset=more?activityNext:0;if(more&&offset==null)return;
+  const d=await request('activity',{offset});
+  activityRows=more?activityRows.concat(d.items||[]):(d.items||[]);
+  activityNext=d.nextOffset;
+  renderActivity();
+ }
+ $('activity-refresh').addEventListener('click',()=>loadActivity().catch(e=>msg('تعذر تحميل الحركة: '+e.message,false)));
+ $('activity-more').addEventListener('click',()=>loadActivity(true).catch(e=>msg(e.message,false)));
+ function csvField(raw){
+  // Guard against formulas executing when CSV is opened in Excel.
+  let value=String(raw??'').replace(/[\r\n\t]/g,' ').slice(0,300);
+  if(/^\s*[=+\-@]/.test(value))value="'"+value;
+  return '"'+value.replace(/"/g,'""')+'"';
+ }
+ async function exportCsv(){
+  const button=$('export-csv');button.disabled=true;
+  try{
+   const result=await request('export');
+   const head=['النوع','العميل','الجوال','الحالة','الإصدار','الانتهاء','المدة','الخصم','إعادة الدخول'];
+   const rows=[head,...(result.items||[]).map(x=>[
+     x.type==='app'?'كود':'Xtream',x.customerName,x.customerPhone,
+     outcomeStatus(x),dateOnly(x.createdAt),dateOnly(x.expiresAt),
+     x.days,x.chargedCredits,x.reloginCount
+   ])];
+   const csv='\ufeff'+rows.map(r=>r.map(csvField).join(',')).join('\r\n');
+   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+   const a=document.createElement('a');
+   a.href=url;a.download='distribution-'+new Date().toISOString().slice(0,10)+'.csv';
+   document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   msg('تم تصدير '+(rows.length-1)+' اشتراك',true);
+  }catch(e){msg('تعذر التصدير: '+e.message,false)}
+  finally{button.disabled=false}
+ }
+ $('export-csv').addEventListener('click',exportCsv);
+ function loadTheme(){
+  try{if(localStorage.getItem('distributor_theme')==='light')
+    document.body.dataset.theme='light';}catch{}
+ }
+ $('theme-toggle').addEventListener('click',()=>{
+  const mode=document.body.dataset.theme==='light'?'dark':'light';
+  document.body.dataset.theme=mode;
+  try{localStorage.setItem('distributor_theme',mode)}catch{}
+ });
+ loadTheme();
  async function refresh(){
   try{await profile()}
   catch(e){
@@ -455,12 +548,14 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    return;
   }
   // An optional list failure must never log out an authenticated reseller.
-  const results=await Promise.allSettled([loadItems(false),loadClients()]);
+  const results=await Promise.allSettled([loadItems(false),loadClients(),
+    loadActivity(false),loadAnalytics()]);
   const failed=results.find(r=>r.status==='rejected');
   if(failed)msg("تعذر تحديث بعض البيانات: "+failed.reason.message,false);
  }
  async function refreshViews(){
-  const results=await Promise.allSettled([profile(),loadItems(false),loadClients()]);
+  const results=await Promise.allSettled([profile(),loadItems(false),loadClients(),
+    loadActivity(false),loadAnalytics()]);
   const failed=results.find(r=>r.status==='rejected');
   if(failed)msg("تم حفظ العملية، لكن تعذر تحديث العرض: "+failed.reason.message,false);
  }
@@ -621,6 +716,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
      action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
      action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
      action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
+     action==='activity'?{offset:data.offset}:
      action==='library'?{type:data.type,q:data.q,offset:data.offset}:
      action==='organize'?{type:data.type,itemId:data.itemId,group:data.group,
        title:data.title,sortOrder:data.sortOrder,hidden:data.hidden}:{};
