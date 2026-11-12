@@ -163,7 +163,33 @@ export function createPlatformSystemAudit({
         const item=await Promise.allSettled([portal.opsSourceStats({sourceId:selected.id})]);
         const sourceStats=item[0].status==='fulfilled'?item[0].value:null;
         checks.push(checked(sourceStats,'playback',safePlayback));
-      }else checks.push(check('playback','unknown','source_not_selected'));
+        checks.push(checked(sourceStats,'sourceCapacity',body=>{
+          const capacity=body.liveSourceCapacity;
+          if(!capacity||typeof capacity!=='object')
+            return check('sourceCapacity','unknown','source_capacity_unavailable');
+          const max=capacity.maxConnections,active=capacity.activeConnections;
+          const hasMax=Number.isInteger(max)&&max>=0&&max<=1000000;
+          const hasActive=Number.isInteger(active)&&active>=0&&active<=1000000;
+          const prohibited=capacity.restreamer===false||max===0;
+          const atLimit=hasMax&&hasActive&&max>0&&active>=max;
+          const constrained=hasMax&&max===1;
+          const status=prohibited||atLimit||constrained?'warning':'unknown';
+          return check('sourceCapacity',status,
+            prohibited?'source_restream_or_capacity_denied':
+            atLimit?'source_upstream_at_limit':
+            constrained?'source_single_connection_only':
+            hasMax?'source_capacity_reported_not_load_tested':
+            'source_upstream_capacity_unknown',
+            {maxConnections:hasMax?max:null,
+             activeConnections:hasActive?active:null,
+             restreamer:capacity.restreamer===true,
+             sharedUpstreamForCodes:capacity.sourceAccountSharedByCodes===true,
+             productionViewersVerified:false});
+        }));
+      }else{
+        checks.push(check('playback','unknown','source_not_selected'));
+        checks.push(check('sourceCapacity','unknown','source_not_selected'));
+      }
       const releaseResult=get(7);
       const release=releaseResult&&typeof releaseResult==='object'?releaseResult:null;
       checks.push(check('appUpdates',release?.ok&&release.metadataConsistent===false?
