@@ -148,8 +148,10 @@ export function createStreamServer({
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const streamOps=createStreamOpsObservatory({
     relayStats:()=>relayBroker.stats(),autoHealth:()=>autoHealth.snapshot()});
+  let replicaBootProof=null;
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,sharedReadiness,streamOps:()=>streamOps.snapshot(),
+    getReplicaSynthetic:()=>replicaBootProof,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
     adminToken,engineOrigin:cfg.origin,fetchImpl,
@@ -288,6 +290,14 @@ export function createStreamServer({
     timer.unref?.();
   }
   return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
+    recordReplicaProof:proof=>{replicaBootProof={
+      ok:proof?.ok===true,code:String(proof?.code||'replica_probe_failed').slice(0,65),
+      stage:String(proof?.stage||'unknown').slice(0,32),
+      transportVerified:proof?.transportVerified===true,
+      bytesVerified:Number.isSafeInteger(proof?.bytesVerified)?proof.bytesVerified:0,
+      elapsedMs:Number.isSafeInteger(proof?.elapsedMs)?proof.elapsedMs:null,
+      checkedAt:new Date().toISOString(),realSalehVerified:false
+    }},
     liveSupervisor,autoHealth,streamOps,operatorDashboard,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
@@ -328,6 +338,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     if(process.env.BLOFY_STREAM_REPLICA_SYNTHETIC_ON_BOOT==='1'){
       const smokeTimer=setTimeout(()=>{
         void verifyReadReplicaSynthetic({timeoutMs:20000}).then(proof=>{
+          service.recordReplicaProof(proof);
           console.info('BLOFY_STREAM_READ_REPLICA_SYNTHETIC',JSON.stringify({
             ok:proof.ok,code:proof.code,stage:proof.stage,
             bytesVerified:proof.bytesVerified||0,httpStatus:proof.httpStatus,
