@@ -10,7 +10,7 @@ import {timingSafeEqual} from 'node:crypto';
 
 const PRODUCTION_ORIGIN='http://blofy-stream-media.railway.internal:8888';
 const ALLOWED_QUERY=new Set(['session','cookieCheck','_HLS_msn','_HLS_part','_HLS_skip']);
-const PLAYABLE=/^(?:index|stream|video[0-9]+_stream|audio[0-9]+_stream)\.m3u8$|^[a-zA-Z0-9_-]{1,110}\.(?:ts|m4s|mp4|aac)$/;
+const PLAYABLE=/^[a-zA-Z0-9_-]{1,110}\.(?:m3u8|ts|m4s|mp4|aac)$/;
 const LIVE=/^live-[a-f0-9]{12}$/;
 
 function safeRoute(raw){
