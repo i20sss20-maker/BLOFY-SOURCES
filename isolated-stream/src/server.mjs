@@ -330,7 +330,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
         void verifyReadReplicaSynthetic({timeoutMs:20000}).then(proof=>{
           console.info('BLOFY_STREAM_READ_REPLICA_SYNTHETIC',JSON.stringify({
             ok:proof.ok,code:proof.code,stage:proof.stage,
-            bytesVerified:proof.bytesVerified||0,
+            bytesVerified:proof.bytesVerified||0,httpStatus:proof.httpStatus,
             elapsedMs:proof.elapsedMs,requestCount:proof.requests,
             realSalehVerified:false,customerTrafficChanged:false
           }));
