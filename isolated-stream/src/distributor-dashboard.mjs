@@ -40,10 +40,15 @@ function renderPage(nonce){
 <title>لوحة توزيع</title>
 <style>
 :root{--bg:#0f1420;--card:#171e2c;--stroke:#343e51;--white:#f2f5fb;--muted:#a8b4c6;--purple:#c2cbdc;--mint:#68dab0;--red:#ff9aa6}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:#0f1420}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:radial-gradient(ellipse 1100px 500px at 75% -170px,#14374b 0%,transparent 65%),var(--bg)}
+html{scroll-behavior:smooth;scroll-padding-top:118px}
 main{max-width:1120px;margin:auto;padding:28px 19px 60px}
-header{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--stroke);padding-bottom:16px}
-.page-title{margin:0;font-size:24px;font-weight:750;letter-spacing:0}
+header{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--stroke);padding:14px 0 16px;position:sticky;top:0;z-index:8;background:#0f1420e8;backdrop-filter:blur(14px)}
+.page-title{margin:0;font-size:24px;font-weight:750;letter-spacing:-.35px;color:#f6f9ff}
+.quicknav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.quicknav a{color:#d5e5f9;text-decoration:none;background:#1b2d41;border:1px solid #355675;border-radius:30px;padding:8px 14px;font-weight:700;font-size:13px}
+.quicknav a:hover,.quicknav a:focus-visible{color:white;background:#2d4a65;outline:2px solid #6adab4;outline-offset:2px}
+.card{scroll-margin-top:122px}
 .card{border-radius:18px;border:1px solid var(--stroke);background:var(--card);padding:clamp(16px,2vw,24px);margin-bottom:14px;box-shadow:0 10px 35px #02061233}
 h1,h2{margin:0 0 12px;line-height:1.3}h1{font-size:27px}h2{font-size:19px}.muted{color:var(--muted)}
 .row{display:flex;align-items:center;gap:11px;justify-content:space-between;flex-wrap:wrap}
@@ -119,6 +124,14 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="field"><label>&nbsp;</label><button class="btn" type="submit">تسجيل الدخول</button></div>
 </form></section>
 <section id="workspace" hidden>
+<nav class="quicknav" aria-label="أقسام لوحة التوزيع">
+ <a href="#account-card">حسابي</a>
+ <a href="#issue-card">استخراج</a>
+ <a href="#issues-card">اشتراكاتي</a>
+ <a href="#library-panel">المكتبة</a>
+ <a href="#clients-card">العملاء</a>
+ <a href="#activity-card">الرصيد</a>
+</nav>
 <div class="card" id="account-card">
  <div class="row"><div><h2>حساب التاجر</h2><p class="muted" style="margin:0">بيانات دخول لوحتك آمنة. كلمة مرور اللوحة القديمة لا يمكن عرضها، ويمكن تغييرها بعد التحقق منها.</p></div>
  <span class="badge">BLOFY DISTRIBUTOR</span></div>
@@ -146,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
 <div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
-<div class="card"><h2>استخراج اشتراك</h2>
+<div class="card" id="issue-card"><h2>استخراج اشتراك</h2>
 
 <div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
@@ -160,7 +173,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 <button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
-<div class="card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
+<div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
 <button class="btn secondary mini" id="refresh" type="button">تحديث</button></div></div>
 <div class="searchbar"><input id="issue-search" type="search" maxlength="80" placeholder="بحث بالكود أو العميل أو الجوال" aria-label="بحث الاشتراكات">
@@ -172,12 +185,12 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
-<div class="card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
+<div class="card" id="activity-card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
 <div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
 <tbody id="activity-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
 <button id="activity-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
-<div class="card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
+<div class="card" id="clients-card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
 <div class="searchbar"><input type="search" id="clients-search" maxlength="80" placeholder="بحث بالاسم أو الجوال" aria-label="بحث العملاء"></div>
 <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
 <tbody id="clients-rows"></tbody></table></div></div>
