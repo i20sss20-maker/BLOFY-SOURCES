@@ -49,7 +49,8 @@ test('no Groq key returns explicitly unconfigured, never fabricates AI results',
  await withServer({},async base=>{
   const response=await fetch(base+'/operator/api/full-audit/ai',{
    method:'POST',headers:{authorization:auth,
-    'x-blofy-operator-action':'full-audit-ai-explain'}});
+    'x-blofy-operator-action':'full-audit-ai-explain','content-type':'application/json'},
+   body:'{}'});
   assert.equal(response.status,503);
   const data=await response.json();
   assert.equal(data.ok,false);
