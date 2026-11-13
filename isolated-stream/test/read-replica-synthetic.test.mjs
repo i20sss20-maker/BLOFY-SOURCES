@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyReadReplicaSynthetic} from '../src/read-replica-synthetic.mjs';
+import {createStreamServer} from '../src/server.mjs';
+import {once} from 'node:events';
 const packets=Buffer.alloc(188*12,0x33);
 for(let i=0;i<packets.length;i+=188)packets[i]=0x47;
 const playlist='#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:3.000,\nseg1.ts\n';
@@ -42,4 +44,28 @@ test('missing replica media does not claim channel or code readiness',async()=>{
  assert.equal(report.realSalehVerified,false);
  assert.equal(report.audioVideoDecoded,false);
  assert.equal(report.customerTrafficChanged,false);
+});
+
+test('synthetic probe requires operator credentials and action, never accepts source input',async()=>{
+ const key='operator-read-replica-test-password-very-long-2026';
+ const {app}=createStreamServer({adminToken:key});
+ app.listen(0,'127.0.0.1');await once(app,'listening');
+ const url='http://127.0.0.1:'+app.address().port+
+   '/operator/api/read-replica/synthetic-probe';
+ const auth='Basic '+Buffer.from('operator:'+key).toString('base64');
+ try{
+  const unauth=await fetch(url,{method:'POST',headers:{
+   'content-type':'application/json','x-blofy-operator-action':'replica-synthetic-probe'},
+   body:'{}'});
+  assert.equal(unauth.status,401);
+  const noAction=await fetch(url,{method:'POST',headers:{
+   authorization:auth,'content-type':'application/json'},body:'{}'});
+  assert.equal(noAction.status,403);
+  const arbitrary=await fetch(url,{method:'POST',headers:{
+   authorization:auth,'content-type':'application/json',
+   'x-blofy-operator-action':'replica-synthetic-probe'},
+   body:JSON.stringify({sourceUrl:'https://untrusted.example/live.ts'})});
+  assert.equal(arbitrary.status,400);
+  assert.equal((await arbitrary.json()).code,'replica_probe_no_inputs');
+ }finally{await new Promise(resolve=>app.close(resolve))}
 });
