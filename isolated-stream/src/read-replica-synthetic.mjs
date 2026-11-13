@@ -98,32 +98,61 @@ export async function verifyReadReplicaSynthetic({
    }
    throw Error('replica_probe_failed');
  }
+ function mediaChild(reference,base,{segment=false}={}){
+   const raw=String(reference||'').trim();
+   // Only fixed synthetic relative paths; no provider URLs, ports, scheme,
+   // encoded traversal, absolute paths, or unsafe query keys.
+   if(!raw||raw.length>240||raw.startsWith('/')||raw.includes('%')||
+     /[\\\\\r\n]/.test(raw))throw Error('replica_invalid_segment');
+   let url;try{url=new URL(raw,PRIVATE+base)}catch{
+     throw Error('replica_invalid_segment');
+   }
+   if(url.origin!==PRIVATE||!url.pathname.startsWith(PREFIX)||
+     url.username||url.password||url.hash||
+     /\/\.\.?\//.test(url.pathname))throw Error('replica_invalid_segment');
+   const file=url.pathname.slice(PREFIX.length);
+   const valid=segment?/^[a-zA-Z0-9_-]{1,110}\.ts$/.test(file):
+     /^(?:stream|video[0-9]+_stream|audio[0-9]+_stream)\.m3u8$/.test(file);
+   if(!valid)throw Error('replica_invalid_segment');
+   for(const [key,value] of url.searchParams){
+     if(!['session','cookieCheck'].includes(key)||value.length>150)
+       throw Error('replica_invalid_segment');
+   }
+   return url.pathname+url.search;
+ }
  try{
-   const url='/smoke/index.m3u8';
-   let playlist=await getWarmPlaylist(url);
+   let playlistPath='/smoke/index.m3u8';
+   let playlist=await getWarmPlaylist(playlistPath);
+   if(!playlist.startsWith('#EXTM3U'))throw Error('replica_invalid_manifest');
+   // MediaMTX generally serves a master playlist followed by a session-
+   // scoped child playlist. Do not look for EXTINF in the master indefinitely.
+   if(playlist.includes('#EXT-X-STREAM-INF')){
+     const variant=playlist.split(/\r?\n/).map(x=>x.trim())
+       .find(x=>x&&!x.startsWith('#'));
+     if(!variant)throw Error('replica_invalid_manifest');
+     playlistPath=mediaChild(variant,PRIVATE+playlistPath);
+     stage='variant';
+     playlist=await getWarmPlaylist(playlistPath);
+   }
    for(let attempt=0;attempt<5;attempt++){
      if(!playlist.startsWith('#EXTM3U'))throw Error('replica_invalid_manifest');
      const match=/#EXTINF:[^\r\n]*\r?\n([^#\r\n]+)/.exec(playlist);
      if(match){
-       const file=match[1].trim();
-       // The replica may only serve a local segment within its synthetic
-       // path. Absolutely no redirects, external hosts or relative ../.
-       if(!/^[a-zA-Z0-9_-]{1,90}\.ts$/.test(file))
-         throw Error('replica_invalid_segment');
+       const path=mediaChild(match[1],playlistPath,{segment:true});
        stage='segment';
-       const bytes=await get(PREFIX+file,188*4,{firstOnly:true});
+       const bytes=await get(path,188*4,{firstOnly:true});
        if(bytes.length<188*2||bytes[0]!==0x47||bytes[188]!==0x47)
          throw Error('replica_invalid_ts');
        return {ok:true,code:'private_replica_synthetic_ts_verified',
          stage:'segment',transportVerified:true,bytesVerified:bytes.length,httpStatus:200,
-         redirectCount,
-         requests,elapsedMs:Date.now()-started,mediaSource:'synthetic_only',
+         redirectCount,requests,elapsedMs:Date.now()-started,
+         mediaSource:'synthetic_only',deliveryMode:'private_hls_read_through',
          realSalehVerified:false,audioVideoDecoded:false,
          originUpstreamConnectionVerified:false,customerTrafficChanged:false};
      }
      if(attempt===4)break;
      await wait(1100);
-     playlist=await getWarmPlaylist(url);
+     playlist=await getWarmPlaylist(playlistPath);
    }
    throw Error('replica_segment_not_ready');
  }catch(err){
