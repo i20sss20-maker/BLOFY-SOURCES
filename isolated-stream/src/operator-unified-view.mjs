@@ -397,8 +397,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p id="saleh-origin-note" class="diag-inline-note" role="status" aria-live="polite">يظل البث الحالي والاشتراكات كما هي إلى أن ينجح اختبار أصل البث والتوزيع.</p>
 </div>
 <div class="panel" id="blofy-read-replica-panel">
- <div class="controls"><div><h3>🌐 BLOFY READ REPLICA — خادم توزيع مستقل</h3>
- <p class="muted">خادم MediaMTX جديد على شبكة Railway الخاصة. يستقبل قنوات Origin المصرح بها عند الطلب فقط، ولا يتصل بـXtream saleh مباشرة.</p></div>
+ <div class="controls"><div><h3>🌐 BLOFY PRIVATE HLS EDGE — خادم توزيع مستقل</h3>
+ <p class="muted">خادم HLS خاص على شبكة Railway الداخلية يمرّر قوائم ومقاطع Origin دون إعادة ترميز أو اتصال جديد بمصدر Xtream. لا يتيح مشاهدة قنوات المشتركين دون تفويض.</p></div>
  <span class="pill" id="read-replica-status" role="status">لم يُفحص بعد</span></div>
  <div class="inline">
  <span class="pill">اتصال الشبكة الخاصة: <strong id="read-replica-link">—</strong></span>
@@ -1023,11 +1023,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("read-replica-status",edgeText);
       value("read-replica-link",replica.httpStatus===null||replica.httpStatus===undefined?
         "لم تستجب الخدمة":"HTTP "+replica.httpStatus);
-      value("read-replica-video","لم يُختبر");
+      var proof=e.readReplicaSynthetic||{};
+      var didPass=proof.ok===true&&proof.transportVerified===true;
+      value("read-replica-video",didPass?
+        "✓ نجحت العينة التجريبية ("+count(proof.bytesVerified)+" بايت)":
+        proof.code?"لم ينجح فحص العينة":"لم يُختبر");
       value("read-replica-cutover",replica.customersRouted?"مفعّل":"غير مفعّل");
-      value("read-replica-note",replica.reachable===true?
-        "اتصال الشبكة الخاصة يعمل. لم نفتح أي مسار فيديو، ولم نختبر وصول بث saleh من Origin، ولا تزال أكواد العملاء على مساراتها السابقة.":
-        "تعذر التأكد من الاتصال بخادم التوزيع الجديد. هذا لا يعني أن القنوات القديمة متوقفة.");
+      value("read-replica-note",didPass?
+        "نجح وصول MPEG-TS عبر Edge من Origin على شبكة خاصة. هذه عينة اصطناعية فقط؛ لم يُختبر saleh ولم تُنقل أكواد أو مشتركين.":
+        replica.reachable===true?
+        "الخادم متصل بالشبكة الخاصة، لكن اختبار انتقال الفيديو لم ينجح بعد. لا يؤثر ذلك على البث القديم.":
+        "تعذر التأكد من الاتصال بخادم HLS الخاص. هذا لا يعني تعطل القنوات القديمة.");
       value("stream-note",m.controlAvailable?"المحرك متصل. المسارات النشطة تخص MediaMTX فقط، ولا تعني تحويل المشتركين إليه.":"واجهة محرك البث غير متاحة. الحالة غير مؤكدة.");
     }
   }
