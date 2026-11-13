@@ -51,9 +51,14 @@ controls. Do not enable all subscribers at once.
    Android 9/TV and Windows, and subscriber expiry. No unbounded retries.
 5. Measure 2, 10, 25, 50, 100 viewers on a permitted source and record
    p50/p95 startup, 5xx, stalls, upstream sessions, CPU, RAM and network TX.
-6. Introduce a *read-only* MediaMTX edge replica only when the single origin
-   is stable. HLS reader sessions require consistent L7 routing/stickiness.
-   An edge must NEVER pull the provider Xtream source directly.
+6. A private HLS read-through Edge is now deployed on Railway. It forwards
+   MediaMTX Origin playlists and TS bytes without a second remux and without
+   contacting the provider. It has no public domain. Live channel paths require
+   a separately configured bearer token and are NOT routed to customers.
+   The synthetic Origin -> Edge -> MPEG-TS test passed on Nov 13, 2026.
+   Customer sessions are NOT covered by this proof.
+   For broad rollout, add an authenticated client-facing proxy and verify
+   consistent per-viewer HLS session handling, bounded requests, and resources.
 7. Before a second Origin writer, implement durable leases, fencing tokens
    and crash tests. Never add Railway replicas blindly.
 8. Enable optional new-code saleh-only flag after source uniqueness tests.
@@ -69,3 +74,28 @@ deletion, account changes or code expiry updates were performed by deployment.
 
 Official reference: MediaMTX scaling documentation
 https://github.com/bluenviron/mediamtx/blob/main/docs/2-features/19-scalability.md
+
+## Verified synthetic distribution status (2026-11-13)
+
+The initial second MediaMTX remux approach returned 500 or stalled on the
+synthetic MediaMTX HLS source. BLOFY replaced that failing second remux
+with a private Node HLS read-through edge on the existing read-replica service,
+still listening only on Railway private port 8888. It forwards fixed-origin
+HLS master, variant, TS segment and HLS session redirects/cookies.
+No Xtream source URL/credentials are accepted by this service.
+
+The private transport check returned:
+  ok=true, stage=segment, 752 synthetic TS bytes verified, HTTP 200,
+  four internal requests, no real saleh source verified, no code cutover.
+This verifies media transport only, NOT decoded audio, playback stability or
+simultaneous independent source-channel capacity.
+
+The deployment has a /health readiness check on port 8888. Railway checks
+this endpoint at deploy time; it does not continuously verify video delivery.
+An operator can trigger an authenticated, rate-limited synthetic HLS test
+from the Restream dashboard. Source-origin and code issuance feature flags
+remain off until a strictly limited real-source canary is approved and tested.
+
+Do not expose the private Edge publicly without per-subscriber authentication,
+short-lived access and a bounded proxy. The Edge intentionally rejects any
+live-* path when BLOFY_EDGE_READ_TOKEN is not configured.
