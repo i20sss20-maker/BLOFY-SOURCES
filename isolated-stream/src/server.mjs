@@ -24,6 +24,7 @@ import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catal
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
 import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-profile-diagnostic.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
+import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -322,6 +323,23 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     )).catch(()=>console.warn('BLOFY_STREAM_PRIVATE_READ_REPLICA',
       JSON.stringify({reachable:false,code:'probe_exception',
         customerTrafficChanged:false,providerRequests:0})));
+    // Optional one-shot QA: ONLY /smoke HLS via the private MediaMTX edge.
+    // No saleh provider request, channel IDs or client playback path.
+    if(process.env.BLOFY_STREAM_REPLICA_SYNTHETIC_ON_BOOT==='1'){
+      const smokeTimer=setTimeout(()=>{
+        void verifyReadReplicaSynthetic({timeoutMs:20000}).then(proof=>{
+          console.info('BLOFY_STREAM_READ_REPLICA_SYNTHETIC',JSON.stringify({
+            ok:proof.ok,code:proof.code,stage:proof.stage,
+            bytesVerified:proof.bytesVerified||0,
+            elapsedMs:proof.elapsedMs,requestCount:proof.requests,
+            realSalehVerified:false,customerTrafficChanged:false
+          }));
+        }).catch(()=>console.warn('BLOFY_STREAM_READ_REPLICA_SYNTHETIC',
+          JSON.stringify({ok:false,code:'replica_probe_failed',
+            customerTrafficChanged:false})));
+      },5500);
+      smokeTimer.unref?.();
+    }
     // Passive in-memory snapshots continue while the admin page is closed.
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
