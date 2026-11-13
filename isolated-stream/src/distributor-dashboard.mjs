@@ -264,7 +264,16 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     distributor_request_already_processing:'الإصدار قيد التنفيذ',
     distributor_export_too_large:'عدد الاشتراكات كبير جدًا للتصدير',
     distributor_session_expired:'انتهت الجلسة',
-    distributor_relogin_unavailable:'إعادة الدخول غير متاحة لهذا الاشتراك'
+    distributor_relogin_unavailable:'إعادة الدخول غير متاحة لهذا الاشتراك',
+    distributor_password_strength_invalid:'استخدم 14 رمزًا على الأقل تتضمن حرفًا كبيرًا وصغيرًا ورقمًا دون مسافات',
+    distributor_password_current_invalid:'كلمة المرور الحالية غير صحيحة',
+    distributor_password_reused:'اختر كلمة مرور جديدة مختلفة',
+    distributor_rotation_requires_confirmation:'وافق على توقف بيانات Xtream القديمة أولًا',
+    distributor_rotation_cooldown:'تغيير بيانات Xtream متاح مرة كل 15 دقيقة',
+    distributor_rotation_not_eligible:'يمكن تغيير بيانات Xtream الصادرة فقط',
+    distributor_rotation_unavailable:'تعذر إنشاء بيانات Xtream الجديدة',
+    distributor_bulk_selection_invalid:'حدد حتى 100 عنصر في كل عملية',
+    distributor_bulk_action_required:'اختر عملية تنظيم جماعية'
    };
    throw Error(codes[result.code]||result.code||result.error||'HTTP '+response.status);
   }
@@ -274,6 +283,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  async function profile(){
   const d=await request('me');
   setLogged(true);text("credits",d.item.credits);text("used",d.item.used);
+  text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
   const credits=Number(d.item.credits)||0;
   $('balance-alert').hidden=credits>3;
@@ -389,6 +399,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }
   const canEdit=item.status==='done';
   $('manage-copy').hidden=!canEdit;
+  $('manage-rotate').hidden=!canEdit||item.type!=='xtream';
   $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
   $('manage-relogin').hidden=!item.canRelogin;
   $('manage-customer').hidden=false;
@@ -404,7 +415,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }catch(e){msg('تعذر نسخ الاشتراك: '+e.message,false)}
   finally{btn.disabled=false}
  });
- $('manage-renew').addEventListener('click',()=>activeIssue&&openRenew(activeIssue));
+ $('manage-rotate').addEventListener('click',async()=>{
+    if(!activeIssue||activeIssue.type!=='xtream'||activeIssue.status!=='done')return;
+    if(!confirm('سيتم إنشاء اسم مستخدم وكلمة مرور Xtream جديدين؛ ستتوقف بيانات الدخول القديمة فورًا. هل توافق على إيقاف الجلسات القديمة وإرسال الجديدة إلى العميل؟'))return;
+    const issue=activeIssue,btn=$('manage-rotate');btn.disabled=true;
+    const id=actionId('rotate-xtream',issue.id);
+    try{
+      const result=await request('rotate-xtream',{issueId:issue.id,
+        requestId:id.id,acknowledgeDisconnect:true});
+      retryActions.delete(id.key);
+      if($('manage-dialog').open)$('manage-dialog').close();
+      showIssue(result);
+      msg(result.repeated?'تم استرجاع البيانات الجديدة دون تغيير إضافي':
+        'تم تغيير بيانات Xtream بنجاح. انسخ الجديدة للعميل؛ القديمة لم تعد صالحة.',true);
+      await refreshViews();
+    }catch(e){msg('تعذر تغيير بيانات Xtream: '+e.message,false)}
+    finally{btn.disabled=false}
+  });
+  $('manage-renew').addEventListener('click',()=>activeIssue&&openRenew(activeIssue));
  $('manage-relogin').addEventListener('click',async()=>{
   if(!activeIssue)return;
   const btn=$('manage-relogin');btn.disabled=true;
@@ -620,7 +648,25 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   kindButtons.forEach(x=>x.classList.toggle("active",x===btn));
   text('issue-button',currentKind==='app'?"استخراج كود":"استخراج Xtream");
  }));
- $('login-form').addEventListener('submit',async e=>{
+ $('merchant-copy-username').addEventListener('click',()=>copy($('merchant-username').textContent));
+  $('merchant-password-open').addEventListener('click',()=>{
+    $('merchant-password-form').reset();$('merchant-password-dialog').showModal();
+  });
+  $('merchant-password-form').addEventListener('submit',async e=>{
+    e.preventDefault();const next=$('merchant-new-password').value;
+    if(next!==$('merchant-password-confirm').value){
+      msg('تأكيد كلمة المرور لا يطابق الجديدة',false);return;
+    }
+    const btn=$('merchant-password-save');btn.disabled=true;
+    try{
+      await request('change-password',{
+        currentPassword:$('merchant-current-password').value,newPassword:next});
+      $('merchant-password-dialog').close();
+      msg('تم تغيير كلمة مرور التاجر وإغلاق الجلسات الأخرى.',true);
+    }catch(e){msg('تعذر تغيير كلمة المرور: '+e.message,false)}
+    finally{$('merchant-password-form').reset();btn.disabled=false}
+  });
+  $('login-form').addEventListener('submit',async e=>{
   e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;
   try{await request('login',{username:$('username').value,password:$('password').value});
     $('password').value='';msg('تم تسجيل الدخول',true);await refresh();}
