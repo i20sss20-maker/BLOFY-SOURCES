@@ -57,3 +57,25 @@ test('no Groq key returns explicitly unconfigured, never fabricates AI results',
   assert.equal(data.code,'playback_ai_not_configured');
  });
 });
+
+
+test('404 items and manual recheck are protected and cannot start without confirmation',async()=>{
+ await withServer({},async base=>{
+  const anonymous=await fetch(base+'/operator/api/media-failure-items');
+  assert.equal(anonymous.status,401);
+  const anonymousRun=await fetch(base+'/operator/api/media-failures/recheck-now',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',confirmed:true})});
+  assert.equal(anonymousRun.status,401);
+  const withoutHeader=await fetch(base+'/operator/api/media-failures/recheck-now',{
+    method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+    body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111',confirmed:true})});
+  assert.equal(withoutHeader.status,403);
+  const withoutConfirmation=await fetch(base+'/operator/api/media-failures/recheck-now',{
+    method:'POST',headers:{authorization:auth,'content-type':'application/json',
+      'x-blofy-operator-action':'media-failures-recheck-now'},
+    body:JSON.stringify({sourceId:'11111111-1111-4111-8111-111111111111'})});
+  assert.equal(withoutConfirmation.status,400);
+  assert.equal((await withoutConfirmation.json()).code,'operator_confirmation_required');
+ });
+});
