@@ -38,7 +38,7 @@ export async function verifyReadReplicaSynthetic({
  if(!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>30000)
    throw Error('replica_probe_timeout_invalid');
  const started=Date.now();
- let requests=0,stage='playlist',httpStatus=null;
+ let requests=0,stage='playlist',httpStatus=null,lastSafePath=null,redirectCount=0;
  let cookie='';
  async function get(path,max,{firstOnly=false}={}){
    let target=new URL(path,PRIVATE);
@@ -50,6 +50,7 @@ export async function verifyReadReplicaSynthetic({
    if(!allowed(target))throw Error('replica_invalid_segment');
    for(let redirects=0;redirects<=3;redirects++){
      requests++;
+     lastSafePath=target.pathname;
      let response;
      try{
        response=await fetchImpl(target,{
@@ -69,7 +70,7 @@ export async function verifyReadReplicaSynthetic({
        let next;
        try{next=new URL(location,target)}catch{throw Error('replica_redirect_invalid')}
        if(!allowed(next))throw Error('replica_redirect_invalid');
-       target=next;
+       target=next;redirectCount++;
        continue;
      }
      if(!response.ok){
@@ -100,6 +101,7 @@ export async function verifyReadReplicaSynthetic({
          throw Error('replica_invalid_ts');
        return {ok:true,code:'private_replica_synthetic_ts_verified',
          stage:'segment',transportVerified:true,bytesVerified:bytes.length,httpStatus:200,
+         redirectCount,
          requests,elapsedMs:Date.now()-started,mediaSource:'synthetic_only',
          realSalehVerified:false,audioVideoDecoded:false,
          originUpstreamConnectionVerified:false,customerTrafficChanged:false};
@@ -116,6 +118,7 @@ export async function verifyReadReplicaSynthetic({
      'replica_invalid_ts','replica_segment_not_ready']);
    const code=allowed.has(err?.message)?err.message:'replica_probe_failed';
    return {ok:false,code,stage,transportVerified:false,httpStatus,
+     lastSafePath,redirectCount,
      requests,elapsedMs:Date.now()-started,realSalehVerified:false,
      audioVideoDecoded:false,originUpstreamConnectionVerified:false,
      customerTrafficChanged:false};
