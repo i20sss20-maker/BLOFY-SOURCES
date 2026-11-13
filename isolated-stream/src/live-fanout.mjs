@@ -336,7 +336,16 @@ export function createLiveFanout({
     // Different signed provider-redirect scopes must NOT merge into the
     // same feed, even when their upstream URL is identical. Two granted
     // viewers still share exactly one feed under the same licensed scope.
-    const key=keyOf(url.href+'\\0'+(allowProviderCdn?'licensed':'ordinary'));
+    const sourceScope=typeof licensedSourceId==='string'&&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(licensedSourceId)&&
+      Number.isSafeInteger(providerMaxConcurrentFeeds)&&
+      providerMaxConcurrentFeeds>=1&&providerMaxConcurrentFeeds<=64
+      ?licensedSourceId.toLowerCase():null;
+    const sourceQuota=sourceScope?providerMaxConcurrentFeeds:null;
+    // Channel identity includes source authorization scope, so unrelated
+    // distributors can never accidentally merge on the same provider URL.
+    const key=keyOf(url.href+'\\0'+(allowProviderCdn?'licensed':'ordinary')+
+      (sourceScope?'\\0'+sourceScope:''));
     let row=feeds.get(key);
     // Existing healthy readers are never affected by a cool-down
     // recorded for a previous failed feed.
@@ -351,19 +360,19 @@ export function createLiveFanout({
         return;
       }
     }
-    if(!row&&providerMaxConcurrentFeeds===1&&
-       typeof licensedSourceId==='string'&&
-       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(licensedSourceId)){
+    if(!row&&sourceScope){
       // A single-upstream Xtream subscription can share the SAME channel
       // across licensed viewers, but cannot promise a different live channel
       // concurrently. Protect the already playing channel: never evict it or
       // open a second connection using this known one-connection account.
       // The scope is trusted backend metadata; it is not read from clients.
-      const existing=[...feeds.values()].some(other=>
-        other.licensedSourceId===licensedSourceId&&
-        other.providerMaxConcurrentFeeds===1&&
-        other.key!==key);
-      if(existing){
+      const existing=[...feeds.values()].filter(other=>
+        other.licensedSourceId===sourceScope&&other.key!==key);
+      // A cap that changes during a running session must never silently
+      // expand older allocations. The stricter known cap wins until drained.
+      const effectiveQuota=Math.min(sourceQuota,
+        ...existing.map(other=>other.providerMaxConcurrentFeeds||sourceQuota));
+      if(existing.length>=effectiveQuota){
         counters.sourceLimitRejections++;
         res.writeHead(503,{'retry-after':'2','cache-control':'no-store',
           'content-type':'application/json',
@@ -389,9 +398,8 @@ export function createLiveFanout({
       }
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
         allowProviderCdn:allowProviderCdn===true,
-        licensedSourceId:providerMaxConcurrentFeeds===1&&
-          typeof licensedSourceId==='string'?licensedSourceId:null,
-        providerMaxConcurrentFeeds:providerMaxConcurrentFeeds===1?1:null,
+        licensedSourceId:sourceScope,
+        providerMaxConcurrentFeeds:sourceQuota,
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
