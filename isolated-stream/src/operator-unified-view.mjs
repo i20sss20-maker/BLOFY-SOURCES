@@ -385,7 +385,18 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="stat"><small>مسارات جاهزة</small><strong id="stream-paths">—</strong></div>
 <div class="stat"><small>جلسات HLS</small><strong id="stream-sessions">—</strong></div>
 <div class="stat"><small>مصادر متصلة</small><strong id="stream-online">—</strong></div></div>
-<div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">طلبات قناة إضافية حُجبت لحماية حد المصدر: <strong id="fanout-source-limit">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
+<div class="panel" id="saleh-origin-panel">
+<div class="controls"><div><h3>📺 BLOFY Origin — مصدر saleh فقط</h3>
+<p class="muted">مسار تشغيل تجريبي مقيّد: قناة مصدر واحدة تُوزَّع على عدة مشاهدين مرخّص لهم. لا يزيد عدد القنوات المتزامنة المسموح بها من المزود، ولا ينقل اشتراكات العملاء تلقائيًا.</p></div>
+<span class="pill" id="saleh-origin-mode" role="status">جار قراءة السياسة...</span></div>
+<div class="inline">
+<span class="pill">مسارات Origin المسجلة: <strong id="saleh-origin-active">—</strong></span>
+<span class="pill">الحد الوقائي للقنوات المختلفة: <strong id="saleh-origin-quota">—</strong></span>
+<span class="pill">تعميم على الأكواد: <strong id="saleh-origin-customers">غير مفعّل</strong></span>
+</div>
+<p id="saleh-origin-note" class="diag-inline-note" role="status" aria-live="polite">يظل البث الحالي والاشتراكات كما هي إلى أن ينجح اختبار أصل البث والتوزيع.</p>
+</div>
+<div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">مشاهدون جدد استفادوا من تهيئة TS: <strong id="fanout-warm-joins">—</strong></span><span class="pill">ذاكرة التهيئة المؤقتة: <strong id="fanout-replay-buffer">—</strong> KiB</span><span class="pill">طلبات قناة إضافية حُجبت لحماية حد المصدر: <strong id="fanout-source-limit">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
 <div class="panel" id="smart-ops-panel">
 <div class="controls"><div><h3>📡 Smart Ops 2.0 — إدارة الثبات والاتصالات</h3>
 <p class="muted">بيانات مباشرة لمسارات المشاركة المفعّلة ومسارات HLS التابعة للمشرف فقط؛ لا تشمل جميع المشتركين أو كل قنوات Xtream. هذا النظام للقراءة ولا يعيد البث أو يغير الاشتراكات.</p></div>
@@ -973,6 +984,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("shared-feeds",shared.sharedLiveEnabled?count(fanout.activeFeeds):"—");
       value("shared-viewers",shared.sharedLiveEnabled?count(fanout.viewers):"—");
       value("fanout-cooldowns",shared.sharedLiveEnabled?count(fanout.cooldownFeeds):"—");
+      value("fanout-warm-joins",shared.sharedLiveEnabled?count(fanout.lateJoinReplays):"—");
+      value("fanout-replay-buffer",shared.sharedLiveEnabled?count(Math.ceil((fanout.bufferedBootstrapBytes||0)/1024)):"—");
       value("fanout-source-limit",shared.sharedLiveEnabled?count(fanout.sourceLimitRejections):"—");
       value("fanout-provider-failures",shared.sharedLiveEnabled?count(fanout.providerFailures):"—");
       value("fanout-slow-disconnects",shared.sharedLiveEnabled?count(fanout.slowViewerDisconnects):"—");
@@ -3601,6 +3614,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var d=results[0].value;
       var media=results[1].status==="fulfilled"?results[1].value.mediaControl:null;
       renderLive(d.items||[],media&&media.paths||[]);
+      var pilot=d.salehOrigin;
+      if(pilot){
+        value("saleh-origin-mode",pilot.enabled?"وضع saleh التجريبي مفعل":"مجهز · غير مفعل");
+        value("saleh-origin-active",count(pilot.sourceActivePaths));
+        value("saleh-origin-quota",count(pilot.sourceChannelLimit));
+        value("saleh-origin-customers",pilot.customerCutoverEnabled?"محدود":"غير مفعّل");
+        value("saleh-origin-note",pilot.enabled?
+          "حماية Origin تعمل لقنوات saleh في وضع المشرف. أي قناة مختلفة فوق الحد تُرفض لحماية القناة العاملة؛ توسيع التوزيع لكل المشتركين يحتاج اختبارات فعلية.":
+          "بُني نظام الحماية للمصدر saleh في الكود، ولم يُفعّل تحويل المشتركين أو تغيير مصادر أكوادهم. تفعيل وضع Origin يحتاج إعدادًا تشغيليًا صريحًا.");
+      }
       if((d.items||[]).some(function(item){return item.probePending;})){
         liveProbeRefresh=setTimeout(loadLive,4000);
       }
