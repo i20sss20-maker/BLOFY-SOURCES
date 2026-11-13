@@ -23,6 +23,7 @@ import {createCrossProjectSourceDiagnostic} from './xtream-account-diagnostic.mj
 import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catalog-relay.mjs';
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
 import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-profile-diagnostic.mjs';
+import {createReadReplicaObserver} from './read-replica-observer.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const startedAt=new Date().toISOString();
@@ -308,6 +309,19 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     service.startBootCanary();
     service.startBootSourceReadiness();
     service.autoHealth.start();
+    // Contact only the MediaMTX replica's private, non-media HLS root.
+    // 404 is expected and means transport is reachable. No source stream
+    // path, Xtream credential, subscriber or public media URL is requested.
+    const edgeObserver=createReadReplicaObserver();
+    void edgeObserver.check().then(report=>console.info(
+      'BLOFY_STREAM_PRIVATE_READ_REPLICA',JSON.stringify({
+        reachable:report.reachable,code:report.code,
+        httpStatus:report.httpStatus,providerRequests:0,
+        customerTrafficChanged:false,mediaVerified:false
+      })
+    )).catch(()=>console.warn('BLOFY_STREAM_PRIVATE_READ_REPLICA',
+      JSON.stringify({reachable:false,code:'probe_exception',
+        customerTrafficChanged:false,providerRequests:0})));
     // Passive in-memory snapshots continue while the admin page is closed.
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
