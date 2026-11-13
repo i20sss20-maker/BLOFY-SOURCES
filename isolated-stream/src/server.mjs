@@ -331,6 +331,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
           console.info('BLOFY_STREAM_READ_REPLICA_SYNTHETIC',JSON.stringify({
             ok:proof.ok,code:proof.code,stage:proof.stage,
             bytesVerified:proof.bytesVerified||0,httpStatus:proof.httpStatus,
+            lastSafePath:proof.lastSafePath,redirectCount:proof.redirectCount,
             elapsedMs:proof.elapsedMs,requestCount:proof.requests,
             realSalehVerified:false,customerTrafficChanged:false
           }));
