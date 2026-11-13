@@ -38,7 +38,7 @@ export async function verifyReadReplicaSynthetic({
  if(!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>30000)
    throw Error('replica_probe_timeout_invalid');
  const started=Date.now();
- let requests=0,stage='playlist';
+ let requests=0,stage='playlist',httpStatus=null;
  async function get(path,max,{firstOnly=false}={}){
    const url=new URL(path,PRIVATE);
    if(url.origin!==PRIVATE||!url.pathname.startsWith(PREFIX)||
@@ -54,8 +54,9 @@ export async function verifyReadReplicaSynthetic({
      });
    }catch{throw Error('replica_private_unreachable')}
    if(!response.ok){
+     httpStatus=response.status;
      try{await response.body?.cancel?.()}catch{}
-     throw Error(response.status===403?'replica_auth_denied':
+     throw Error([401,403].includes(response.status)?'replica_auth_denied':
        response.status===404?'replica_path_not_ready':'replica_http_error');
    }
    return bounded(response,max,{firstOnly});
@@ -77,7 +78,7 @@ export async function verifyReadReplicaSynthetic({
        if(bytes.length<188*2||bytes[0]!==0x47||bytes[188]!==0x47)
          throw Error('replica_invalid_ts');
        return {ok:true,code:'private_replica_synthetic_ts_verified',
-         stage:'segment',transportVerified:true,bytesVerified:bytes.length,
+         stage:'segment',transportVerified:true,bytesVerified:bytes.length,httpStatus:200,
          requests,elapsedMs:Date.now()-started,mediaSource:'synthetic_only',
          realSalehVerified:false,audioVideoDecoded:false,
          originUpstreamConnectionVerified:false,customerTrafficChanged:false};
@@ -93,7 +94,7 @@ export async function verifyReadReplicaSynthetic({
      'replica_path_not_ready','replica_http_error','replica_invalid_manifest',
      'replica_invalid_ts','replica_segment_not_ready']);
    const code=allowed.has(err?.message)?err.message:'replica_probe_failed';
-   return {ok:false,code,stage,transportVerified:false,
+   return {ok:false,code,stage,transportVerified:false,httpStatus,
      requests,elapsedMs:Date.now()-started,realSalehVerified:false,
      audioVideoDecoded:false,originUpstreamConnectionVerified:false,
      customerTrafficChanged:false};
