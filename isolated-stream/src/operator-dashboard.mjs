@@ -12,6 +12,7 @@ import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
+import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -68,6 +69,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
   const readReplica=createReadReplicaObserver({fetchImpl});
+  const replicaProbe={running:false,lastAt:0};
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -272,6 +274,28 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
             relay.fanout.events.slice(0,32):[],
           failureReasons:relay.fanout?.failureReasons||{}}
       });return true;
+    }
+    if(req.method==='POST'&&path==='/operator/api/read-replica/synthetic-probe'){
+      if(req.headers['x-blofy-operator-action']!=='replica-synthetic-probe'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      void readAdminJson(req).then(async body=>{
+        // No source IDs, provider URLs or client stream paths are accepted.
+        if(Object.keys(body).length!==0)
+          return {status:400,body:{ok:false,code:'replica_probe_no_inputs'}};
+        const now=Date.now();
+        if(replicaProbe.running||now-replicaProbe.lastAt<120000)
+          return {status:429,body:{ok:false,code:'replica_probe_cooldown'}};
+        replicaProbe.running=true;replicaProbe.lastAt=now;
+        try{
+          const proof=await verifyReadReplicaSynthetic({fetchImpl,timeoutMs:20000});
+          return {status:200,body:{ok:true,probe:proof}};
+        }finally{replicaProbe.running=false}
+      }).then(result=>json(res,result.status,result.body))
+        .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,{
+          ok:false,code:[400,413,415].includes(error?.status)?
+            error.message:'replica_probe_unavailable'}));
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){
       void Promise.all([engineStatus(),control.overview(),readReplica.check()])
