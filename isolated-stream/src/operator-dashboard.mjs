@@ -398,6 +398,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       // Operator Basic auth enforced above; portal Bearer key never returned
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
+      '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
+      '/operator/api/content-hub/preflight':()=>portal.contentHubPreflight(),
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
@@ -455,6 +457,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
+      const action=path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
       const action=path==='/operator/api/ops/schedule'?'ops-schedule':
         path==='/operator/api/ops/snapshot'?'ops-snapshot':
         path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
@@ -473,6 +476,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='content-hub-batch-next')return portal.contentHubNextBatch(data);
         if(action==='ops-schedule')return portal.opsSchedule(data);
         if(action==='ops-snapshot')return portal.opsSnapshot(data);
         if(action==='library-ai-rollback')return portal.libraryAIRollback(data);
