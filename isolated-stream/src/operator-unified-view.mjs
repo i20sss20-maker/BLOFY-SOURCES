@@ -396,6 +396,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </div>
 <p id="saleh-origin-note" class="diag-inline-note" role="status" aria-live="polite">يظل البث الحالي والاشتراكات كما هي إلى أن ينجح اختبار أصل البث والتوزيع.</p>
 </div>
+<div class="panel" id="blofy-read-replica-panel">
+ <div class="controls"><div><h3>🌐 BLOFY READ REPLICA — خادم توزيع مستقل</h3>
+ <p class="muted">خادم MediaMTX جديد على شبكة Railway الخاصة. يستقبل قنوات Origin المصرح بها عند الطلب فقط، ولا يتصل بـXtream saleh مباشرة.</p></div>
+ <span class="pill" id="read-replica-status" role="status">لم يُفحص بعد</span></div>
+ <div class="inline">
+ <span class="pill">اتصال الشبكة الخاصة: <strong id="read-replica-link">—</strong></span>
+ <span class="pill">فحص فيديو فعلي: <strong id="read-replica-video">لم يُختبر</strong></span>
+ <span class="pill">نقل المشتركين: <strong id="read-replica-cutover">غير مفعّل</strong></span>
+ </div>
+ <p class="muted" id="read-replica-note" role="status" aria-live="polite">فحص الاتصال لا يفتح قناة من saleh ولا يثبت أن الصوت أو الصورة يعملان.</p>
+ </div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">مشاهدون جدد استفادوا من تهيئة TS: <strong id="fanout-warm-joins">—</strong></span><span class="pill">ذاكرة التهيئة المؤقتة: <strong id="fanout-replay-buffer">—</strong> KiB</span><span class="pill">طلبات قناة إضافية حُجبت لحماية حد المصدر: <strong id="fanout-source-limit">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
 <div class="panel" id="smart-ops-panel">
 <div class="controls"><div><h3>📡 Smart Ops 2.0 — إدارة الثبات والاتصالات</h3>
@@ -1002,6 +1013,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("stream-engine",state.live.engine?(ready?"ONLINE":"غير متصل"):"غير مؤكد");
       value("stream-paths",count(m.activePaths));
       value("stream-sessions",count(m.hlsSessions));
+      var replica=e.readReplica||{};
+      var edgeText=replica.reachable===true?"متصل على الشبكة الخاصة":
+        replica.reachable===false?"غير متصل":"غير معروف";
+      value("read-replica-status",edgeText);
+      value("read-replica-link",replica.httpStatus===null||replica.httpStatus===undefined?
+        "لم تستجب الخدمة":"HTTP "+replica.httpStatus);
+      value("read-replica-video","لم يُختبر");
+      value("read-replica-cutover",replica.customersRouted?"مفعّل":"غير مفعّل");
+      value("read-replica-note",replica.reachable===true?
+        "اتصال الشبكة الخاصة يعمل. لم نفتح أي مسار فيديو، ولم نختبر وصول بث saleh من Origin، ولا تزال أكواد العملاء على مساراتها السابقة.":
+        "تعذر التأكد من الاتصال بخادم التوزيع الجديد. هذا لا يعني أن القنوات القديمة متوقفة.");
       value("stream-note",m.controlAvailable?"المحرك متصل. المسارات النشطة تخص MediaMTX فقط، ولا تعني تحويل المشتركين إليه.":"واجهة محرك البث غير متاحة. الحالة غير مؤكدة.");
     }
   }
