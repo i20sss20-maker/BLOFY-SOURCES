@@ -86,3 +86,29 @@ test('on-demand replica HLS startup can recover from transient 500 without a pro
  assert.equal(report.transportVerified,true);
  assert.equal(hits,5);
 });
+
+test('synthetic verifier follows MediaMTX master and private session-scoped variant',async()=>{
+ const seen=[];
+ const master='#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1800000\\nstream.m3u8?session=abcd\\n';
+ const variant='#EXTM3U\\n#EXTINF:2.0,\\nseg2.ts?session=abcd\\n';
+ const reply=await verifyReadReplicaSynthetic({fetchImpl:async url=>{
+   seen.push(url.pathname+url.search);
+   if(url.pathname.endsWith('/index.m3u8'))return new Response(master,{status:200});
+   if(url.pathname.endsWith('/stream.m3u8'))return new Response(variant,{status:200});
+   return new Response(packets,{status:200});
+ }});
+ assert.equal(reply.ok,true,JSON.stringify(reply));
+ assert.equal(reply.deliveryMode,'private_hls_read_through');
+ assert.equal(reply.requestCount,undefined);
+ assert.deepEqual(seen,['/smoke/index.m3u8',
+  '/smoke/stream.m3u8?session=abcd',
+  '/smoke/seg2.ts?session=abcd']);
+});
+test('synthetic verifier blocks child playlist from another host',async()=>{
+ const reply=await verifyReadReplicaSynthetic({fetchImpl:async()=>new Response(
+  '#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\nhttps://outside.example/bad.m3u8\\n',
+  {status:200})});
+ assert.equal(reply.ok,false);
+ assert.equal(reply.code,'replica_invalid_segment');
+ assert.equal(reply.realSalehVerified,false);
+});
