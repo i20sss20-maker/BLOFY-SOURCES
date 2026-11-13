@@ -614,9 +614,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="actions">
 <button class="btn secondary" id="content-hub-refresh" type="button">↻ تحديث حالة النقل</button>
 <button class="btn secondary" id="content-hub-preflight" type="button">فحص مصدر الفيلم بدون تحميل</button>
-<button class="btn" id="content-hub-next-batch" type="button" aria-describedby="content-hub-notice">ℹ فحص جاهزية النقل (8 MB)</button>
+<button class="btn" id="content-hub-start-copy" type="button" aria-describedby="content-hub-notice">▶ بدء / استكمال تنزيل الفيلم</button>
+<button class="btn secondary" id="content-hub-pause-copy" type="button" disabled>⏸ إيقاف التنزيل</button>
+<button class="btn secondary" id="content-hub-next-batch" type="button" aria-describedby="content-hub-notice">تنزيل جزء واحد (8 MB)</button>
 </div>
 <p class="muted" role="status" id="content-hub-summary">جار التحقق من التخزين الخاص...</p>
+<progress id="content-hub-progress" value="0" max="100" aria-label="نسبة نقل الفيلم" style="width:100%;height:22px;accent-color:#60a5fa"></progress>
+<p class="muted" id="content-hub-percent">0% · بانتظار النقل</p>
 <div id="content-hub-runs" class="muted" aria-live="polite"></div>
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
 </div>
@@ -1027,15 +1031,32 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     try{
       var data=await api("content-hub/status");
       hubState=data;
-      $("content-hub-next-batch").disabled=false;
+      var job=data.continuousCopy||{};
+      var running=data.pilotRunning===true||job.active===true;
+      $("content-hub-start-copy").disabled=running||data.chunkedBatchEnabled!==true;
+      $("content-hub-start-copy").textContent=job.state==="paused"||job.state==="failed"?
+        "▶ استكمال تنزيل الفيلم":"▶ بدء / استكمال تنزيل الفيلم";
+      $("content-hub-pause-copy").disabled=!running;
+      $("content-hub-next-batch").disabled=running;
       $("content-hub-next-batch").textContent=data.chunkedBatchEnabled===true?
-        "⬇ نقل الدفعة التالية (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
+        "تنزيل جزء واحد (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
       var summary=data.accounting||{};
+      var chunked=Array.isArray(data.runs)?
+        data.runs.find(function(item){return item.format==="private_chunks"}):null;
+      var progress=chunked?Math.min(100,Math.max(0,
+        Number(chunked.bytesCopied||0)/Math.max(1,Number(chunked.expectedBytes||1))*100)):0;
+      $("content-hub-progress").value=progress;
+      $("content-hub-percent").textContent=progress.toFixed(2)+"% · "+
+        hubBytes(chunked?.bytesCopied||0)+" من "+hubBytes(chunked?.expectedBytes||0)+
+        " · الحالة: "+(job.active?"جارٍ النقل":
+          job.state==="failed"?"توقف بسبب خطأ":
+          job.state==="paused"?"متوقف ويمكن استكماله":
+          job.state==="completed"?"اكتمل":chunked?"محفوظ جزئيًا":"لم يبدأ");
       $("content-hub-summary").textContent=
         "أفلام مكتملة: "+count(summary.verifiedCount||0)+
         " · حجم الملفات المؤكدة: "+hubBytes(summary.verifiedBytes)+
         " · أجزاء محفوظة: "+hubBytes(summary.stagedChunkBytes||0)+
-        " · النقل الآن: "+(data.pilotRunning?"جارٍ":"متوقف");
+        " · النقل الآن: "+(running?"جارٍ":"متوقف");
       var box=$("content-hub-runs");box.replaceChildren();
       var runs=Array.isArray(data.runs)?data.runs:[];
       if(!runs.length)box.textContent="ما فيه عمليات نسخ حقيقية محفوظة حتى الآن.";
@@ -1050,12 +1071,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
            run.state==="failed"?"فشل":"جارٍ");
         box.append(row);
       });
-      $("content-hub-notice").textContent=data.pilotRunning?
-        "عملية نقل قيد التنفيذ. يمكنك تحديث الحالة لمتابعة التقدم.":data.chunkedBatchEnabled?
-        "النقل الجزئي جاهز من حيث الإعدادات. تحقق فعليًا من خمول المصدر قبل كل طلب.":
+      $("content-hub-notice").textContent=running?
+        "الفيلم يُنقل تلقائيًا على دفعات 8 MB. يظهر التقدم أعلاه كل عدة ثوانٍ.":
+        job.state==="failed"?"توقف النقل بسبب: "+String(job.code||"خطأ غير معروف")+
+        " · يمكنك استكمال النقل من آخر جزء محفوظ بعد حل المشكلة.":data.chunkedBatchEnabled?
+        "النقل جاهز. اضغط بدء تنزيل الفيلم مرة واحدة، أو حمّل جزءًا تجريبيًا.":
         hubBlockerMessage(data);
     }catch(e){
       hubState=null;
+      $("content-hub-start-copy").disabled=true;
+      $("content-hub-pause-copy").disabled=true;
       $("content-hub-next-batch").disabled=false;
       $("content-hub-next-batch").textContent="ℹ لماذا لا يبدأ النقل؟";
       $("content-hub-notice").textContent=
@@ -1078,6 +1103,27 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
     }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("content-hub-start-copy").addEventListener("click",async function(){
+    if(!hubState||hubState.chunkedBatchEnabled!==true){
+      show(hubBlockerMessage(hubState),false);return;
+    }
+    if(!confirm("تأكيد نقل الفيلم المحدد إلى تخزين BLOFY على دفعات 8 MB؟ تأكد من عدم وجود مشتركين على المصدر وأن لديك حق تخزين الفيلم."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/batch/start","content-hub-copy-start",{confirmed:true});
+      show("بدأ نقل الفيلم تلقائيًا على دفعات. تقدر توقفه من زر الإيقاف.",true);
+    }catch(e){show("تعذر بدء التنزيل: "+e.message,false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-pause-copy").addEventListener("click",async function(){
+    if(!confirm("إيقاف نقل الفيلم؟ الأجزاء المحفوظة ستبقى ويمكن استكمالها."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/batch/pause","content-hub-copy-pause",{confirmed:true});
+      show("طلب الإيقاف وصل. الأجزاء السابقة محفوظة.",true);
+    }catch(e){show("تعذر الإيقاف: "+e.message,false)}
+    finally{await loadContentHub()}
   });
   $("content-hub-next-batch").addEventListener("click",async function(){
     if(!hubState){
@@ -1105,6 +1151,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{this.disabled=false;await loadContentHub();}
   });
   loadContentHub();
+  setInterval(function(){
+    var page=$("page-library");
+    if(!document.hidden&&page?.classList.contains("active"))loadContentHub();
+  },8000);
   function stateLabel(s){if(s.status==="online")return "متصل";if(s.status==="offline")return "متوقف";if(s.status==="syncing"||s.syncing)return "جار المزامنة";return s.status||"غير معروف"}
   function renderHome(){
     var d=state.overview,e=state.engine;
