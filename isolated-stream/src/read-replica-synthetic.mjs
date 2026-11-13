@@ -39,6 +39,7 @@ export async function verifyReadReplicaSynthetic({
    throw Error('replica_probe_timeout_invalid');
  const started=Date.now();
  let requests=0,stage='playlist',httpStatus=null,lastSafePath=null,redirectCount=0;
+ let childRefDiagnostic=null;
  let cookie='';
  async function get(path,max,{firstOnly=false}={}){
    let target=new URL(path,PRIVATE);
@@ -100,23 +101,22 @@ export async function verifyReadReplicaSynthetic({
  }
  function mediaChild(reference,base,{segment=false}={}){
    const raw=String(reference||'').trim();
-   // Only fixed synthetic relative paths; no provider URLs, ports, scheme,
-   // encoded traversal, absolute paths, or unsafe query keys.
-   if(!raw||raw.length>240||raw.startsWith('/')||raw.includes('%')||
-     /[\\\\\r\n]/.test(raw))throw Error('replica_invalid_segment');
-   let url;try{url=new URL(raw,PRIVATE+base)}catch{
-     throw Error('replica_invalid_segment');
-   }
+   const reject=reason=>{childRefDiagnostic=reason;throw Error('replica_invalid_segment')};
+   // Only synthetically scoped HLS references. Never accept an absolute URL,
+   // external host, traversal, or media references outside /smoke/.
+   if(!raw||raw.length>350||/^\w[\w+.-]*:/.test(raw)||raw.startsWith('//')||
+     /[\\\\\r\n]/.test(raw))reject('nonrelative_reference');
+   let url;try{url=new URL(raw,PRIVATE+base)}catch{reject('invalid_url')}
    if(url.origin!==PRIVATE||!url.pathname.startsWith(PREFIX)||
-     url.username||url.password||url.hash||
-     /\/\.\.?\//.test(url.pathname))throw Error('replica_invalid_segment');
+     url.username||url.password||url.hash||/\/\.\.?\//.test(url.pathname)||
+     url.pathname.includes('%'))reject('scope_or_traversal');
    const file=url.pathname.slice(PREFIX.length);
    const valid=segment?/^[a-zA-Z0-9_-]{1,110}\.ts$/.test(file):
-     /^(?:stream|video[0-9]+_stream|audio[0-9]+_stream)\.m3u8$/.test(file);
-   if(!valid)throw Error('replica_invalid_segment');
+     /^[a-zA-Z0-9_-]{1,110}\.m3u8$/.test(file);
+   if(!valid)reject(segment?'segment_filename':'playlist_filename');
    for(const [key,value] of url.searchParams){
-     if(!['session','cookieCheck'].includes(key)||value.length>150)
-       throw Error('replica_invalid_segment');
+     if(!['session','cookieCheck','_HLS_msn','_HLS_part','_HLS_skip'].includes(key)||
+       value.length>150)reject('query_key_or_size');
    }
    return url.pathname+url.search;
  }
@@ -162,7 +162,7 @@ export async function verifyReadReplicaSynthetic({
      'replica_invalid_ts','replica_segment_not_ready']);
    const code=allowed.has(err?.message)?err.message:'replica_probe_failed';
    return {ok:false,code,stage,transportVerified:false,httpStatus,
-     lastSafePath,redirectCount,
+     lastSafePath,redirectCount,childRefDiagnostic,
      requests,elapsedMs:Date.now()-started,realSalehVerified:false,
      audioVideoDecoded:false,originUpstreamConnectionVerified:false,
      customerTrafficChanged:false};
