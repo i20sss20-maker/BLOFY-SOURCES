@@ -38,7 +38,7 @@ test('malicious HLS segment cannot escape isolated synthetic path',async()=>{
 });
 test('missing replica media does not claim channel or code readiness',async()=>{
  const report=await verifyReadReplicaSynthetic({fetchImpl:async()=>
-   new Response('not found',{status:404})});
+   new Response('not found',{status:404}),wait:async()=>{}});
  assert.equal(report.ok,false);
  assert.equal(report.code,'replica_path_not_ready');
  assert.equal(report.realSalehVerified,false);
@@ -68,4 +68,21 @@ test('synthetic probe requires operator credentials and action, never accepts so
   assert.equal(arbitrary.status,400);
   assert.equal((await arbitrary.json()).code,'replica_probe_no_inputs');
  }finally{await new Promise(resolve=>app.close(resolve))}
+});
+
+test('on-demand replica HLS startup can recover from transient 500 without a provider GET',async()=>{
+ let hits=0;
+ const report=await verifyReadReplicaSynthetic({wait:async()=>{},
+  fetchImpl:async(url)=>{
+   hits++;
+   if(url.pathname.endsWith('.m3u8')&&hits<4)
+     return new Response('muxer warming',{status:500});
+   if(url.pathname.endsWith('.m3u8'))
+     return new Response(playlist,{status:200});
+   return new Response(packets,{status:200});
+  }});
+ assert.equal(report.ok,true);
+ assert.equal(report.realSalehVerified,false);
+ assert.equal(report.transportVerified,true);
+ assert.equal(hits,5);
 });
