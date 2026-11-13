@@ -4,9 +4,9 @@
 // Output is a bounded aggregate, never media bytes or client information.
 const PRIVATE='http://blofy-stream-read-replica.railway.internal:8888';
 const PREFIX='/smoke/';
-async function bounded(response,max){
+async function bounded(response,max,{firstOnly=false}={}){
  if(!response.body)throw Error('replica_empty_body');
- if(Number(response.headers.get('content-length')||0)>max)
+ if(!firstOnly&&Number(response.headers.get('content-length')||0)>max)
    throw Error('replica_response_too_large');
  const reader=response.body.getReader(),chunks=[];
  let total=0,done=false;
@@ -15,9 +15,15 @@ async function bounded(response,max){
      const part=await reader.read();
      if(part.done){done=true;break}
      const bytes=Buffer.from(part.value||[]);
-     total+=bytes.length;
-     if(total>max)throw Error('replica_response_too_large');
-     chunks.push(bytes);
+     if(firstOnly){
+       const take=Math.min(bytes.length,max-total);
+       if(take>0){chunks.push(bytes.subarray(0,take));total+=take}
+       if(total>=max)break;
+     }else{
+       total+=bytes.length;
+       if(total>max)throw Error('replica_response_too_large');
+       chunks.push(bytes);
+     }
    }
    return Buffer.concat(chunks,total);
  }finally{
@@ -33,7 +39,7 @@ export async function verifyReadReplicaSynthetic({
    throw Error('replica_probe_timeout_invalid');
  const started=Date.now();
  let requests=0,stage='playlist';
- async function get(path,max){
+ async function get(path,max,{firstOnly=false}={}){
    const url=new URL(path,PRIVATE);
    if(url.origin!==PRIVATE||!url.pathname.startsWith(PREFIX)||
       url.search||url.hash||url.username||url.password)
@@ -52,7 +58,7 @@ export async function verifyReadReplicaSynthetic({
      throw Error(response.status===403?'replica_auth_denied':
        response.status===404?'replica_path_not_ready':'replica_http_error');
    }
-   return bounded(response,max);
+   return bounded(response,max,{firstOnly});
  }
  try{
    const url='/smoke/index.m3u8';
@@ -67,7 +73,7 @@ export async function verifyReadReplicaSynthetic({
        if(!/^[a-zA-Z0-9_-]{1,90}\.ts$/.test(file))
          throw Error('replica_invalid_segment');
        stage='segment';
-       const bytes=await get(PREFIX+file,188*4);
+       const bytes=await get(PREFIX+file,188*4,{firstOnly:true});
        if(bytes.length<188*2||bytes[0]!==0x47||bytes[188]!==0x47)
          throw Error('replica_invalid_ts');
        return {ok:true,code:'private_replica_synthetic_ts_verified',
