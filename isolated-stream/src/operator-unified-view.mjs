@@ -608,6 +608,18 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
+<div class="panel" id="content-hub-batches">
+<h3>⬇ تنزيل أفلام BLOFY على دفعات آمنة</h3>
+<p class="muted">ينقل كل طلب جزءًا واحدًا فقط (8 ميجابايت)، ويحفظه في التخزين الخاص مع التحقق من سلامته. يمكن استكمال الأجزاء المحفوظة دون تنزيلها مجددًا. لا يتم تحويل تشغيل المشتركين تلقائيًا.</p>
+<div class="actions">
+<button class="btn secondary" id="content-hub-refresh" type="button">↻ تحديث حالة النقل</button>
+<button class="btn secondary" id="content-hub-preflight" type="button">فحص مصدر الفيلم بدون تحميل</button>
+<button class="btn" id="content-hub-next-batch" type="button" disabled>⬇ نقل الدفعة التالية (8 MB)</button>
+</div>
+<p class="muted" role="status" id="content-hub-summary">جار التحقق من التخزين الخاص...</p>
+<div id="content-hub-runs" class="muted" aria-live="polite"></div>
+<p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
+</div>
 <div class="panel"><div class="controls"><div class="inline">
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
@@ -980,6 +992,77 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
       headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
     var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+  var hubState=null,hubLoading=false;
+  var hubBytes=function(n){
+    var val=Number(n||0);
+    if(!Number.isFinite(val)||val<0)return "—";
+    return val>=1073741824?(val/1073741824).toFixed(2)+" GB":
+      val>=1048576?(val/1048576).toFixed(1)+" MB":
+      val.toLocaleString("en-US")+" B";
+  };
+  async function loadContentHub(){
+    if(hubLoading)return;hubLoading=true;
+    try{
+      var data=await api("content-hub/status");
+      hubState=data;
+      $("content-hub-next-batch").disabled=
+        data.chunkedBatchEnabled!==true||data.pilotRunning===true;
+      var summary=data.accounting||{};
+      $("content-hub-summary").textContent=
+        "أفلام مكتملة: "+count(summary.verifiedCount||0)+
+        " · حجم الملفات المؤكدة: "+hubBytes(summary.verifiedBytes)+
+        " · أجزاء محفوظة: "+hubBytes(summary.stagedChunkBytes||0)+
+        " · النقل الآن: "+(data.pilotRunning?"جارٍ":"متوقف");
+      var box=$("content-hub-runs");box.replaceChildren();
+      var runs=Array.isArray(data.runs)?data.runs:[];
+      if(!runs.length)box.textContent="ما فيه عمليات نسخ حقيقية محفوظة حتى الآن.";
+      runs.slice(0,10).forEach(function(run){
+        var row=document.createElement("p");row.className="muted";
+        var pct=Math.min(100,Math.max(0,Number(run.percent||0)));
+        row.textContent=String(run.runId||"نسخ تجريبي")+
+          " — "+pct+"% ("+hubBytes(run.bytesCopied)+
+          " من "+hubBytes(run.expectedBytes)+") · "+
+          (run.state==="verified"?"مكتمل ومتحقق منه":
+           run.state==="staged"?"محفوظ وقابل للاستكمال":
+           run.state==="failed"?"فشل":"جارٍ");
+        box.append(row);
+      });
+      $("content-hub-notice").textContent=data.chunkedBatchEnabled?
+        "النقل الجزئي مصرح من إعدادات الخادم. تأكد من خمول المصدر قبل بدء كل دفعة.":
+        "نقل الأفلام متوقف حالياً؛ لا يتم سحب أي فيلم أو التأثير على أكواد المشتركين.";
+    }catch(e){
+      $("content-hub-next-batch").disabled=true;
+      $("content-hub-summary").textContent=
+        "تعذر الاتصال بالتخزين الخاص: "+String(e.message||"غير متاح").slice(0,70);
+    }finally{hubLoading=false}
+  }
+  $("content-hub-refresh").addEventListener("click",loadContentHub);
+  $("content-hub-preflight").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var x=await api("content-hub/preflight");
+      $("content-hub-notice").textContent=
+        "المصدر: "+String(x.sourceName||"غير معروف")+
+        " · الفيلم #"+String(x.gatewayId||"غير محدد")+
+        " · نسخة محفوظة مصرح بها: "+(x.storageRightsDeclared?"نعم":"غير مؤكدة")+
+        " · خمول المصدر: "+(x.sourceIdleDeclared?"معلن":"غير مؤكد")+
+        " · توافق الفيلم المحدد: "+(x.approvedMovieMatches?"نعم":"لا")+
+        " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
+    }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
+    finally{this.disabled=false}
+  });
+  $("content-hub-next-batch").addEventListener("click",async function(){
+    if(!hubState||hubState.chunkedBatchEnabled!==true)return;
+    if(!confirm("تأكيد نقل دفعة واحدة بحجم 8 MB من فيلم saleh المحدد؟ يجب ألا يستخدم المشتركون مصدر الفيلم الآن، وأن تكون حقوق التخزين معتمدة."))return;
+    this.disabled=true;
+    try{
+      var response=await action("content-hub/batch/next",
+        "content-hub-batch-next",{confirmed:true});
+      show("قُبلت دفعة واحدة. اضغط تحديث الحالة لمتابعة تقدمها.",true);
+    }catch(e){show("تعذّر بدء الدفعة: "+e.message,false)}
+    await loadContentHub();
+  });
+  loadContentHub();
   function stateLabel(s){if(s.status==="online")return "متصل";if(s.status==="offline")return "متوقف";if(s.status==="syncing"||s.syncing)return "جار المزامنة";return s.status||"غير معروف"}
   function renderHome(){
     var d=state.overview,e=state.engine;
