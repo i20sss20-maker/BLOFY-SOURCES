@@ -11,6 +11,7 @@ import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
+import {createReadReplicaObserver} from './read-replica-observer.mjs';
 
 const json=(res,status,payload)=>{
   const body=Buffer.from(JSON.stringify(payload));
@@ -66,6 +67,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   const smartPlayback=createSmartPlaybackMonitor({
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
+  const readReplica=createReadReplicaObserver({fetchImpl});
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -272,11 +274,11 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       });return true;
     }
     if(req.method==='GET'&&path==='/operator/api/state'){
-      void Promise.all([engineStatus(),control.overview()])
-        .then(([engine,mediaControl])=>json(res,200,{
+      void Promise.all([engineStatus(),control.overview(),readReplica.check()])
+        .then(([engine,mediaControl,readReplicaState])=>json(res,200,{
           ok:true,service:'BLOFY-STREAM',role:'independent-control',
           customerTrafficEnabled:false,realSourceMediaVerified:false,
-          engine,sharedRelay:sharedRelayStats(),mediaControl:{
+          engine,sharedRelay:sharedRelayStats(),readReplica:readReplicaState,mediaControl:{
             controlAvailable:mediaControl.online,activePaths:mediaControl.readyPaths,
             hlsSessions:mediaControl.hlsSessions,diagnostics:mediaControl.diagnostics,
             paths:mediaControl.paths||[]
