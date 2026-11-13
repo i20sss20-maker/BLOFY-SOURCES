@@ -38,7 +38,8 @@ test('merchant page contains complete scoped account, credential and category ba
     'merchant-current-password','merchant-new-password','merchant-password-confirm',
     'manage-copy','manage-rotate','manage-relogin','library-category','library-total',
     'library-select-all','library-select-clear','library-bulk-show',
-    'library-bulk-hide','library-bulk-group','library-bulk-group-save'])
+    'library-bulk-hide','library-bulk-group','library-bulk-group-save',
+    'library-preview','library-preview-result'])
     assert.match(html,new RegExp('id="'+id+'"'),id);
   assert.match(html,/href="#library-panel"/);
   assert.match(html,/request\('rotate-xtream'/);
@@ -55,7 +56,7 @@ test('merchant page contains complete scoped account, credential and category ba
 
 test('new merchant routes reject unauthorized and cross-origin access before reaching portal',async()=>{
  await withMerchant(async({base,action,calls,headers,origin})=>{
-  for(const name of ['rotate-xtream','change-password','organize-bulk','library-categories']){
+  for(const name of ['rotate-xtream','change-password','organize-bulk','library-categories','library-preview']){
     const unauth=await action(name,{issueId:'x'});
     assert.equal(unauth.status,401,name);
     const csrf=await fetch(base+'/distributor/api/'+name,{method:'POST',
