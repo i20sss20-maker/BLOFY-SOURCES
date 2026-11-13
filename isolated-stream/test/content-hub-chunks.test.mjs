@@ -8,10 +8,16 @@ const secret='testing-stream-to-portal-secret-longer-than-forty-characters';
 test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',()=>{
  const html=renderOperatorDashboard('safe-nonce');
  for(const id of ['content-hub-batches','content-hub-next-batch',
-   'content-hub-preflight','content-hub-summary','content-hub-runs'])
+   'content-hub-preflight','content-hub-summary','content-hub-runs',
+   'content-hub-start-copy','content-hub-pause-copy','content-hub-progress',
+   'content-hub-percent'])
    assert.ok(html.includes('id="'+id+'"'),id);
  assert.ok(html.includes('content-hub/status'));
  assert.ok(html.includes('content-hub/batch/next'));
+ assert.ok(html.includes('content-hub/batch/start'));
+ assert.ok(html.includes('content-hub/batch/pause'));
+ assert.ok(html.includes('setInterval(function()'));
+ assert.ok(html.includes('data.continuousCopy'));
  assert.match(html,/id="content-hub-next-batch" type="button" aria-describedby=/);
  assert.doesNotMatch(html,/id="content-hub-next-batch" type="button" disabled/);
  assert.match(html,/hubBlockerLabels/);
@@ -41,11 +47,20 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  await client.contentHubPreflight();
  const approved=await client.contentHubNextBatch({confirmed:true});
  assert.equal(approved.status,202);
+ const noStart=await client.contentHubStartCopy({confirmed:false});
+ assert.equal(noStart.status,400);
+ const start=await client.contentHubStartCopy({confirmed:true});
+ assert.equal(start.status,202);
+ const pause=await client.contentHubPauseCopy();
+ assert.equal(pause.status,202);
  assert.deepEqual(calls.map(x=>x.path),[
   '/internal/blofy-stream/content-hub/status',
   '/internal/blofy-stream/content-hub/preflight',
-  '/internal/blofy-stream/content-hub/batch/next']);
+  '/internal/blofy-stream/content-hub/batch/next',
+  '/internal/blofy-stream/content-hub/batch/start',
+  '/internal/blofy-stream/content-hub/batch/pause']);
  assert.equal(calls[2].method,'POST');
  assert.deepEqual(calls[2].body,{confirmed:true});
+ assert.deepEqual(calls[3].body,{confirmed:true});
  assert.ok(calls.every(x=>x.auth==='Bearer '+secret));
 });
