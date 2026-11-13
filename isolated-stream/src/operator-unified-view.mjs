@@ -838,8 +838,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted">سجل تاريخي من الفحوص الفعلية؛ لا يعني أن العناصر ما زالت معطلة الآن.</p></div>
 <div class="diag-actions"><label for="diagnostic-failures-source">المصدر
 <select id="diagnostic-failures-source" aria-label="تصفية أخطاء 404 حسب المصدر"><option value="">كل المصادر</option></select></label>
-<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث السجل</button></div></div>
+<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث السجل</button>
+<button id="diagnostic-failures-recheck" class="btn secondary sm" type="button" disabled>🧪 فحص 404 المحدود</button></div></div>
 <p id="diagnostic-failures-summary" class="diag-inline-note" role="status">لم تُقرأ بيانات الأخطاء بعد.</p>
+<p class="muted" id="diagnostic-failures-recheck-result" role="status" aria-live="polite">اختر مصدرًا محددًا للمراجعة. فحص 404 يحتاج موافقتك لأنه قد يستهلك اتصالًا لدى المزود؛ لا يُشغَّل تلقائيًا.</p>
 <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>النوع</th><th>الحالة</th><th>العناصر</th><th>تستحق إعادة الفحص</th></tr></thead>
 <tbody id="diagnostic-failures"></tbody></table></div>
 <h4 style="margin:20px 0 8px">تفاصيل العناصر المسجلة</h4>
@@ -3749,6 +3751,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function loadFailures(){
     var tbody=$("diagnostic-failures"),summary=$("diagnostic-failures-summary");
     var sourceId=$("diagnostic-failures-source").value||"";
+    $("diagnostic-failures-recheck").disabled=!sourceId;
     void loadFailureItems(sourceId);
     tbody.replaceChildren();summary.textContent="جار قراءة السجل المحفوظ؛ لا يبدأ فحص تشغيل جديد.";
     try{
@@ -3786,6 +3789,33 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
   $("diagnostic-failures-source").addEventListener("change",loadFailures);
+  $("diagnostic-failures-recheck").addEventListener("click",async function(){
+    var sourceId=$("diagnostic-failures-source").value||"";
+    if(!sourceId){value("diagnostic-failures-recheck-result","اختر مصدرًا محددًا أولًا.");return}
+    var source=(state.overview?.sources||[]).find(function(s){return s.id===sourceId});
+    var name=String(source?.name||"المصدر المحدد");
+    var msg="فحص 404 سيختبر أول بيانات لحد أقصى 3 عناصر سبق أن أعاد مزودها 404 من المصدر: "+name+
+      ". قد يستهلك اتصال مزود إضافيًا، خاصة إذا كان حد الاتصال واحدًا. لا يُعدّل الفهرس أو الأكواد. هل تؤكد؟";
+    if(!confirm(msg))return;
+    var btn=this;btn.disabled=true;
+    value("diagnostic-failures-recheck-result","جار اختبار عناصر 404 المسجلة لهذا المصدر فقط...");
+    try{
+      var report=await action("media-failures/recheck-now","media-failures-recheck-now",{sourceId,confirmed:true});
+      value("diagnostic-failures-recheck-result",
+        (report.busy?"فحص آخر قيد التنفيذ. ":"")+"عناصر فُحصت: "+count(report.checked)+
+        " • تعافت: "+count(report.recovered)+" • ما زالت مفقودة: "+count(report.stillMissing)+
+        " • نتائج غير مؤكدة: "+count(report.transient)+
+        " • لم يُحذف أي محتوى أو اشتراك.");
+      await loadFailures();
+    }catch(e){
+      var code=String(e.message||"");
+      var hints={unavailable_recheck_disabled:"فحص التعافي غير مفعّل للمصدر في Railway.",
+        unavailable_source_not_allowed:"المصدر غير مصرّح له بإعادة الفحص.",
+        unified_bridge_unreachable:"تعذر الاتصال ببوابة المصدر.",
+        unavailable_recheck_unavailable:"لم يكتمل فحص 404 المحدود."};
+      value("diagnostic-failures-recheck-result",hints[code]||"تعذر تنفيذ الفحص: "+code.slice(0,80));
+    }finally{btn.disabled=!$("diagnostic-failures-source").value}
+  });
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
   setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);
