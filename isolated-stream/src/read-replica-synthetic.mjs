@@ -39,27 +39,48 @@ export async function verifyReadReplicaSynthetic({
    throw Error('replica_probe_timeout_invalid');
  const started=Date.now();
  let requests=0,stage='playlist',httpStatus=null;
+ let cookie='';
  async function get(path,max,{firstOnly=false}={}){
-   const url=new URL(path,PRIVATE);
-   if(url.origin!==PRIVATE||!url.pathname.startsWith(PREFIX)||
-      url.search||url.hash||url.username||url.password)
-     throw Error('replica_invalid_segment');
-   requests++;
-   let response;
-   try{
-     response=await fetchImpl(url,{
-       method:'GET',redirect:'manual',cache:'no-store',
-       signal:AbortSignal.timeout(timeoutMs),
-       headers:{accept:'application/vnd.apple.mpegurl,video/mp2t'}
-     });
-   }catch{throw Error('replica_private_unreachable')}
-   if(!response.ok){
-     httpStatus=response.status;
-     try{await response.body?.cancel?.()}catch{}
-     throw Error([401,403].includes(response.status)?'replica_auth_denied':
-       response.status===404?'replica_path_not_ready':'replica_http_error');
+   let target=new URL(path,PRIVATE);
+   function allowed(url){
+     return url.origin===PRIVATE&&url.pathname.startsWith(PREFIX)&&
+       !url.username&&!url.password&&!url.hash&&
+       url.search.length<=140&&url.href.length<500;
    }
-   return bounded(response,max,{firstOnly});
+   if(!allowed(target))throw Error('replica_invalid_segment');
+   for(let redirects=0;redirects<=3;redirects++){
+     requests++;
+     let response;
+     try{
+       response=await fetchImpl(target,{
+         method:'GET',redirect:'manual',cache:'no-store',
+         signal:AbortSignal.timeout(timeoutMs),
+         headers:{accept:'application/vnd.apple.mpegurl,video/mp2t',
+           ...(cookie?{cookie}:{})}
+       });
+     }catch{throw Error('replica_private_unreachable')}
+     const setCookie=response.headers.get('set-cookie')||'';
+     const matched=/^([a-zA-Z0-9_-]{1,40}=[a-zA-Z0-9_.-]{1,100})(?:;|$)/.exec(setCookie);
+     if(matched)cookie=matched[1];
+     if([301,302,303,307,308].includes(response.status)){
+       const location=response.headers.get('location');
+       try{await response.body?.cancel?.()}catch{}
+       if(!location||redirects===3)throw Error('replica_redirect_invalid');
+       let next;
+       try{next=new URL(location,target)}catch{throw Error('replica_redirect_invalid')}
+       if(!allowed(next))throw Error('replica_redirect_invalid');
+       target=next;
+       continue;
+     }
+     if(!response.ok){
+       httpStatus=response.status;
+       try{await response.body?.cancel?.()}catch{}
+       throw Error([401,403].includes(response.status)?'replica_auth_denied':
+         response.status===404?'replica_path_not_ready':'replica_http_error');
+     }
+     return bounded(response,max,{firstOnly});
+   }
+   throw Error('replica_redirect_invalid');
  }
  try{
    const url='/smoke/index.m3u8';
@@ -90,7 +111,7 @@ export async function verifyReadReplicaSynthetic({
    throw Error('replica_segment_not_ready');
  }catch(err){
    const allowed=new Set(['replica_empty_body','replica_response_too_large',
-     'replica_invalid_segment','replica_private_unreachable','replica_auth_denied',
+     'replica_invalid_segment','replica_redirect_invalid','replica_private_unreachable','replica_auth_denied',
      'replica_path_not_ready','replica_http_error','replica_invalid_manifest',
      'replica_invalid_ts','replica_segment_not_ready']);
    const code=allowed.has(err?.message)?err.message:'replica_probe_failed';
