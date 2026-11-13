@@ -267,6 +267,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
+ let visibleSecretTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
  function updateCost(){
@@ -327,6 +328,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   box.append(side,btn);parent.appendChild(box);
  }
  function showIssue(d){
+  clearTimeout(visibleSecretTimer);
   const box=$("issued-result");box.replaceChildren();box.hidden=false;
   const head=document.createElement('h2');head.textContent="تم الاستخراج";box.appendChild(head);
   if(d.code)line(box,"الكود",d.code);
@@ -344,6 +346,15 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   if(all){const copyAll=document.createElement('button');copyAll.className='btn secondary mini';
     copyAll.type='button';copyAll.textContent='نسخ الكل';
     copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll)}
+  const hide=document.createElement('button');hide.type='button';
+  hide.className='btn secondary mini';hide.textContent='إخفاء البيانات';
+  hide.addEventListener('click',()=>{clearTimeout(visibleSecretTimer);
+    box.replaceChildren();box.hidden=true});
+  box.appendChild(hide);
+  const note=document.createElement('p');note.className='muted';
+  note.textContent='لحماية بيانات العميل تختفي المعلومات بعد دقيقتين. يمكن عرضها مرة أخرى من الاشتراكات.';
+  box.appendChild(note);
+  visibleSecretTimer=setTimeout(()=>{box.replaceChildren();box.hidden=true},120000);
   box.scrollIntoView({behavior:'smooth',block:'center'});
  }
 
@@ -488,6 +499,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
       const result=await request('reveal',{issueId:item.id});
       showIssue(result);
     });
+   if(item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
    rowButton(actions,'إدارة',()=>showManage(item));
    target.appendChild(row);
   }
@@ -881,7 +893,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
    try{await request('logout')}catch{}
-   inflightRequest=null;setLogged(false);$('issued-result').hidden=true;
+   inflightRequest=null;setLogged(false);
+    clearTimeout(visibleSecretTimer);$('issued-result').replaceChildren();
+    $('issued-result').hidden=true;
    msg('تم تسجيل الخروج',true);
  });
  refresh();
