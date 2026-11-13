@@ -12,6 +12,12 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
    assert.ok(html.includes('id="'+id+'"'),id);
  assert.ok(html.includes('content-hub/status'));
  assert.ok(html.includes('content-hub/batch/next'));
+ assert.match(html,/id="content-hub-next-batch" type="button" aria-describedby=/);
+ assert.doesNotMatch(html,/id="content-hub-next-batch" type="button" disabled/);
+ assert.match(html,/hubBlockerLabels/);
+ assert.match(html,/source_idle_unconfirmed/);
+ assert.match(html,/hubBlockerMessage\(hubState\)/);
+ assert.match(html,/hubState.chunkedBatchEnabled!==true/);
  assert.equal(html.includes('blofy-content-hub.railway.internal'),false);
  assert.equal(html.includes('BLOFY_CONTENT_HUB_ADMIN_TOKEN'),false);
  const source=html.match(/<script nonce="safe-nonce">([\s\S]*?)<\/script>/);
