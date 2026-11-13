@@ -11,7 +11,8 @@ export function createLiveFanout({
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
-  initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{}
+  initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
+  lateJoinReplayBytes=256*1024
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -23,7 +24,9 @@ export function createLiveFanout({
        maxProviderCooldownMs>180000||
      !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5||
      !Number.isInteger(initialTransientRetries)||initialTransientRetries<0||
-       initialTransientRetries>2)
+       initialTransientRetries>2||
+     !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
+       lateJoinReplayBytes>1024*1024)
     throw new Error('fanout_capacity_invalid');
   let approvedRedirectOrigin='';
   try{
@@ -53,7 +56,8 @@ export function createLiveFanout({
     capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
-    initialRetries:0,reconnectRecovered:0,sourceOutages:0};
+    initialRetries:0,reconnectRecovered:0,sourceOutages:0,
+    lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
   // username/password, IP, ticket or exception message in public metrics.
   const failureReasons=Object.create(null);
@@ -107,6 +111,39 @@ export function createLiveFanout({
       if(!viewer.destroyed&&!viewer.writableEnded)viewer.end();
     }
     row.viewers.clear();row.state=reason;
+    row.recentChunks=[];row.recentBytes=0;
+  }
+  // A viewer joining an already running TS feed needs recent transport
+  // packets (often PAT/PMT and a nearby keyframe). Keep only a small in-memory
+  // tail of the CURRENT upstream session, never disk or a separate source GET.
+  function rememberRecent(row,chunk){
+    if(lateJoinReplayBytes===0)return;
+    const value=chunk.length>lateJoinReplayBytes
+      ?Buffer.from(chunk.subarray(chunk.length-lateJoinReplayBytes))
+      :Buffer.from(chunk);
+    row.recentChunks.push(value);
+    row.recentBytes+=value.length;
+    while(row.recentBytes>lateJoinReplayBytes&&row.recentChunks.length>1){
+      row.recentBytes-=row.recentChunks.shift().length;
+    }
+    if(row.recentBytes>lateJoinReplayBytes){
+      row.recentChunks=[Buffer.from(value.subarray(value.length-lateJoinReplayBytes))];
+      row.recentBytes=row.recentChunks[0].length;
+    }
+  }
+  function replayRecent(row,viewer){
+    if(row.state!=='ready'||viewer.destroyed||viewer.writableEnded)return;
+    for(const chunk of row.recentChunks){
+      if(viewer.writableLength+chunk.length>512*1024){
+        counters.slowViewerDisconnects++;
+        if(!viewer.destroyed)viewer.destroy();
+        return;
+      }
+      viewer.write(chunk);
+      counters.viewerBytesQueued+=chunk.length;
+      counters.lateJoinReplayBytes+=chunk.length;
+    }
+    if(row.recentChunks.length)counters.lateJoinReplays++;
   }
   function deliver(row,chunk){
     row.lastMediaAt=clock();
@@ -126,6 +163,7 @@ export function createLiveFanout({
     // Aggregate-only bandwidth accounting: counts upstream bytes once,
     // outbound bytes as queued writes (not verified network delivery).
     counters.sourceBytesReceived+=chunk.length;
+    rememberRecent(row,chunk);
     for(const viewer of [...row.viewers]){
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
@@ -239,6 +277,9 @@ export function createLiveFanout({
           row.trackInspector=createTsAudioInspector();
           row.trackInspectedAt=null;
           row.trackBudgetComplete=false;
+          // Never replay bytes from a previous provider session into a new
+          // TS program/codec after reconnect.
+          row.recentChunks=[];row.recentBytes=0;
           if(reopening){
             counters.reconnectRecovered++;reopening=false;
             event(row,'recovered');
@@ -405,7 +446,7 @@ export function createLiveFanout({
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
         state:'starting',idleTimer:null,startedAt:null,providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
-        trackBudgetComplete:false};
+        trackBudgetComplete:false,recentChunks:[],recentBytes:0};
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
@@ -427,6 +468,7 @@ export function createLiveFanout({
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
         'x-content-type-options':'nosniff'});
+      replayRecent(row,res);
     }
     if(row.state==='starting'&&!row.pumpStarted&&
       row.viewers.size>=minViewersToStart){
@@ -450,6 +492,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed}),
+    maxFeeds,maxViewersPerFeed,lateJoinReplayLimitBytes:lateJoinReplayBytes,
+    bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}),
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
