@@ -1,0 +1,36 @@
+# BLOFY STREAM: private, read-only MediaMTX edge replica (pilot).
+# This service MUST NOT have a Railway public domain or read Xtream credentials.
+# It pulls ONLY named operator-live paths from the existing private MediaMTX Origin.
+logLevel: info
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: no
+srt: no
+webrtc: no
+hls: yes
+hlsAddress: :8888
+hlsVariant: mpegts
+api: yes
+apiAddress: 127.0.0.1:9997
+metrics: no
+authMethod: internal
+authInternalUsers:
+  - user: any
+    ips: ["127.0.0.1/8", "::1/128", "fc00::/7"]
+    permissions:
+      - action: read
+        path: "~^live-[a-f0-9]{12}$"
+      - action: playback
+        path: "~^live-[a-f0-9]{12}$"
+      - action: api
+# MediaMTX documented regex read-replica source: $G1 is a validated
+# capture from the pathname. Source is the PRIVATE origin, never the
+# external provider. A new customer cannot publish into this read-only edge.
+paths:
+  "~^(live-[a-f0-9]{12})$":
+    source: rtsp://blofy-stream-media.railway.internal:8554/$G1
+    sourceOnDemand: yes
+    sourceOnDemandStartTimeout: 25s
+    sourceOnDemandCloseAfter: 10s
+    maxReaders: 256
