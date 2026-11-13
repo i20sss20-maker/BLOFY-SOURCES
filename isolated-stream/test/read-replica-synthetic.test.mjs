@@ -89,8 +89,8 @@ test('on-demand replica HLS startup can recover from transient 500 without a pro
 
 test('synthetic verifier follows MediaMTX master and private session-scoped variant',async()=>{
  const seen=[];
- const master='#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1800000\\nstream.m3u8?session=abcd\\n';
- const variant='#EXTM3U\\n#EXTINF:2.0,\\nseg2.ts?session=abcd\\n';
+ const master='#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1800000\nstream.m3u8?session=abcd\n';
+ const variant='#EXTM3U\n#EXTINF:2.0,\nseg2.ts?session=abcd\n';
  const reply=await verifyReadReplicaSynthetic({fetchImpl:async url=>{
    seen.push(url.pathname+url.search);
    if(url.pathname.endsWith('/index.m3u8'))return new Response(master,{status:200});
@@ -106,7 +106,7 @@ test('synthetic verifier follows MediaMTX master and private session-scoped vari
 });
 test('synthetic verifier blocks child playlist from another host',async()=>{
  const reply=await verifyReadReplicaSynthetic({fetchImpl:async()=>new Response(
-  '#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\nhttps://outside.example/bad.m3u8\\n',
+  '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttps://outside.example/bad.m3u8\n',
   {status:200})});
  assert.equal(reply.ok,false);
  assert.equal(reply.code,'replica_invalid_segment');
