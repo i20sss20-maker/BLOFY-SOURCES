@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -745,9 +745,17 @@ export function createDistributorDashboard({bridge,log=console}={}){
      action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
      action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
      action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
+     action==='rotate-xtream'?{issueId:data.issueId,requestId:data.requestId,
+       acknowledgeDisconnect:data.acknowledgeDisconnect===true}:
+     action==='change-password'?{currentPassword:data.currentPassword,
+       newPassword:data.newPassword}:
      action==='activity'?{offset:data.offset}:
      action==='export'?{offset:data.offset}:
-     action==='library'?{type:data.type,q:data.q,offset:data.offset}:
+     action==='library'?{type:data.type,q:data.q,offset:data.offset,
+       categoryId:data.categoryId}:
+     action==='library-categories'?{type:data.type}:
+     action==='organize-bulk'?{type:data.type,itemIds:data.itemIds,
+       group:data.group,hidden:data.hidden}:
      action==='organize'?{type:data.type,itemId:data.itemId,group:data.group,
        title:data.title,sortOrder:data.sortOrder,hidden:data.hidden}:{};
    const result=await bridge.distributorRequest(action,{sessionToken,...allowed});
