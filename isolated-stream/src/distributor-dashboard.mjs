@@ -647,7 +647,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }
   // An optional list failure must never log out an authenticated reseller.
   const results=await Promise.allSettled([loadItems(false),loadClients(),
-    loadActivity(false),loadAnalytics()]);
+    loadActivity(false),loadAnalytics(),
+    loadCategories().then(()=>loadLibrary(false))]);
   const failed=results.find(r=>r.status==='rejected');
   if(failed)msg("تعذر تحديث بعض البيانات: "+failed.reason.message,false);
  }
@@ -841,7 +842,17 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  });
  $('library-go').addEventListener('click',()=>loadLibrary().catch(e=>msg(e.message,false)));
  $('library-more').addEventListener('click',()=>loadLibrary(true).catch(e=>msg(e.message,false)));
- $('library-type').addEventListener('change',()=>loadLibrary().catch(e=>msg(e.message,false)));
+ $('library-type').addEventListener('change',async()=>{
+    $('library-category').value='';
+    try{await loadCategories();await loadLibrary(false)}
+    catch(e){msg('تعذر تحديث المكتبة: '+e.message,false)}
+  });
+  $('library-category').addEventListener('change',()=>loadLibrary(false).catch(e=>msg(e.message,false)));
+  let librarySearchTimer=null;
+  $('library-search').addEventListener('input',()=>{
+    clearTimeout(librarySearchTimer);
+    librarySearchTimer=setTimeout(()=>loadLibrary(false).catch(e=>msg(e.message,false)),400);
+  });
  $('library-search').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();loadLibrary().catch(x=>msg(x.message,false))}
  });
