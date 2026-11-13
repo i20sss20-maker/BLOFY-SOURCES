@@ -614,7 +614,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="actions">
 <button class="btn secondary" id="content-hub-refresh" type="button">↻ تحديث حالة النقل</button>
 <button class="btn secondary" id="content-hub-preflight" type="button">فحص مصدر الفيلم بدون تحميل</button>
-<button class="btn" id="content-hub-next-batch" type="button" disabled>⬇ نقل الدفعة التالية (8 MB)</button>
+<button class="btn" id="content-hub-next-batch" type="button" aria-describedby="content-hub-notice">ℹ فحص جاهزية النقل (8 MB)</button>
 </div>
 <p class="muted" role="status" id="content-hub-summary">جار التحقق من التخزين الخاص...</p>
 <div id="content-hub-runs" class="muted" aria-live="polite"></div>
@@ -1000,13 +1000,36 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       val>=1048576?(val/1048576).toFixed(1)+" MB":
       val.toLocaleString("en-US")+" B";
   };
+  // Display independent server-enforced safety gates instead of a dead
+  // disabled button. A click while blocked never requests video bytes.
+  var hubBlockerLabels={
+    batch_not_enabled:"تفعيل النقل الجزئي في الخادم",
+    storage_upload_disabled:"تفعيل الحفظ في التخزين الخاص",
+    storage_rights_unconfirmed:"تأكيد صلاحية حفظ الفيلم",
+    source_quiet_window_unconfirmed:"تحديد فترة خمول المصدر",
+    source_idle_unconfirmed:"التأكد أن المصدر غير مستخدم الآن",
+    batch_run_id_missing:"تحديد رقم عملية النقل",
+    movie_size_unconfirmed:"تأكيد حجم الفيلم",
+    approved_movie_not_selected:"تحديد الفيلم المراد نقله",
+    source_bridge_not_configured:"تجهيز الاتصال الداخلي بالمصدر",
+    invalid_batch_limit:"تصحيح إعداد عدد الأجزاء"
+  };
+  function hubBlockerMessage(data){
+    var missing=data&&data.batchReadiness&&data.batchReadiness.blockedBy;
+    if(!Array.isArray(missing)||!missing.length)
+      return "التنزيل غير مفعّل في إعدادات Content Hub. استخدم فحص مصدر الفيلم لمعرفة حالته.";
+    return "التحميل متوقف للأسباب التالية: "+missing.map(function(code){
+      return hubBlockerLabels[code]||"إعداد غير مكتمل";
+    }).join("، ")+" . لم يتم تنزيل أي جزء من المصدر.";
+  }
   async function loadContentHub(){
     if(hubLoading)return;hubLoading=true;
     try{
       var data=await api("content-hub/status");
       hubState=data;
-      $("content-hub-next-batch").disabled=
-        data.chunkedBatchEnabled!==true||data.pilotRunning===true;
+      $("content-hub-next-batch").disabled=false;
+      $("content-hub-next-batch").textContent=data.chunkedBatchEnabled===true?
+        "⬇ نقل الدفعة التالية (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
       var summary=data.accounting||{};
       $("content-hub-summary").textContent=
         "أفلام مكتملة: "+count(summary.verifiedCount||0)+
@@ -1027,11 +1050,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
            run.state==="failed"?"فشل":"جارٍ");
         box.append(row);
       });
-      $("content-hub-notice").textContent=data.chunkedBatchEnabled?
-        "النقل الجزئي مصرح من إعدادات الخادم. تأكد من خمول المصدر قبل بدء كل دفعة.":
-        "نقل الأفلام متوقف حالياً؛ لا يتم سحب أي فيلم أو التأثير على أكواد المشتركين.";
+      $("content-hub-notice").textContent=data.pilotRunning?
+        "عملية نقل قيد التنفيذ. يمكنك تحديث الحالة لمتابعة التقدم.":data.chunkedBatchEnabled?
+        "النقل الجزئي جاهز من حيث الإعدادات. تحقق فعليًا من خمول المصدر قبل كل طلب.":
+        hubBlockerMessage(data);
     }catch(e){
-      $("content-hub-next-batch").disabled=true;
+      hubState=null;
+      $("content-hub-next-batch").disabled=false;
+      $("content-hub-next-batch").textContent="ℹ لماذا لا يبدأ النقل؟";
+      $("content-hub-notice").textContent=
+        "التحقق من جاهزية الخادم غير متاح، لم يبدأ أي تنزيل.";
       $("content-hub-summary").textContent=
         "تعذر الاتصال بالتخزين الخاص: "+String(e.message||"غير متاح").slice(0,70);
     }finally{hubLoading=false}
@@ -1052,15 +1080,29 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{this.disabled=false}
   });
   $("content-hub-next-batch").addEventListener("click",async function(){
-    if(!hubState||hubState.chunkedBatchEnabled!==true)return;
+    if(!hubState){
+      $("content-hub-notice").textContent="الاتصال بمركز المحتوى غير متاح حاليًا. لا يمكن بدء التحميل قبل فحصه.";
+      show("مركز التخزين الخاص غير متصل؛ اضغط تحديث حالة النقل وأعد الفحص.",false);
+      return;
+    }
+    if(hubState.pilotRunning===true){
+      show("فيه دفعة قيد النقل الآن. تابع تقدمها من تحديث حالة النقل.",false);
+      return;
+    }
+    if(hubState.chunkedBatchEnabled!==true){
+      var why=hubBlockerMessage(hubState);
+      $("content-hub-notice").textContent=why;
+      show(why,false);
+      return;
+    }
     if(!confirm("تأكيد نقل دفعة واحدة بحجم 8 MB من فيلم saleh المحدد؟ يجب ألا يستخدم المشتركون مصدر الفيلم الآن، وأن تكون حقوق التخزين معتمدة."))return;
     this.disabled=true;
     try{
-      var response=await action("content-hub/batch/next",
+      await action("content-hub/batch/next",
         "content-hub-batch-next",{confirmed:true});
-      show("قُبلت دفعة واحدة. اضغط تحديث الحالة لمتابعة تقدمها.",true);
+      show("تم قبول طلب دفعة واحدة، وليس تأكيد اكتمال نقلها. اضغط تحديث حالة النقل.",true);
     }catch(e){show("تعذّر بدء الدفعة: "+e.message,false)}
-    await loadContentHub();
+    finally{this.disabled=false;await loadContentHub();}
   });
   loadContentHub();
   function stateLabel(s){if(s.status==="online")return "متصل";if(s.status==="offline")return "متوقف";if(s.status==="syncing"||s.syncing)return "جار المزامنة";return s.status||"غير معروف"}
