@@ -21,9 +21,9 @@ authInternalUsers:
     ips: ["127.0.0.1/8", "::1/128", "fc00::/7"]
     permissions:
       - action: read
-        path: "~^live-[a-f0-9]{12}$"
+        path: "~^(live-[a-f0-9]{12}|smoke)$"
       - action: playback
-        path: "~^live-[a-f0-9]{12}$"
+        path: "~^(live-[a-f0-9]{12}|smoke)$"
       - action: api
 # MediaMTX documented regex read-replica source: $G1 is a validated
 # capture from the pathname. Source is the PRIVATE origin, never the
@@ -35,3 +35,10 @@ paths:
     sourceOnDemandStartTimeout: 25s
     sourceOnDemandCloseAfter: 10s
     maxReaders: 256
+  # Private synthetic test channel. Never references saleh/provider media.
+  smoke:
+    source: rtsp://blofy-stream-media.railway.internal:8554/smoke
+    sourceOnDemand: yes
+    sourceOnDemandStartTimeout: 25s
+    sourceOnDemandCloseAfter: 10s
+    maxReaders: 2
