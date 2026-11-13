@@ -458,7 +458,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
       const action=path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
-      const action=path==='/operator/api/ops/schedule'?'ops-schedule':
+        path==='/operator/api/ops/schedule'?'ops-schedule':
         path==='/operator/api/ops/snapshot'?'ops-snapshot':
         path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
         path==='/operator/api/library-ai/chat'?'library-ai-chat':
