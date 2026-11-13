@@ -30,6 +30,8 @@ test('private HLS edge forwards origin cookie redirects and exact media bytes',a
    const first=await fetch(base+'/smoke/index.m3u8',{redirect:'manual'});
    assert.equal(first.status,307);
    assert.equal(first.headers.get('location'),'/smoke/index.m3u8?cookieCheck=1');
+   assert.match(first.headers.get('set-cookie')||'',/^sid=ready;/,
+     'HLS cookie negotiation must survive the read-through redirect');
    const second=await fetch(base+first.headers.get('location'),{
      headers:{cookie:'sid=ready'}});
    assert.equal(second.status,200);
