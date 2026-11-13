@@ -185,6 +185,20 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           ok:false,code:[400,413,415].includes(error?.status)?error.message:'platform_audit_ai_unavailable'}));
       return true;
     }
+    if(req.method==='POST'&&path==='/operator/api/media-failures/recheck-now'){
+      if(req.headers['x-blofy-operator-action']!=='media-failures-recheck-now'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      void readAdminJson(req).then(body=>{
+        if(body.confirmed!==true)
+          return {status:400,body:{ok:false,code:'operator_confirmation_required'}};
+        return portal.mediaFailuresRecheck({sourceId:body.sourceId,confirmed:true});
+      }).then(result=>json(res,result.status,result.body))
+        .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,
+          {ok:false,code:[400,413,415].includes(error?.status)?
+            error.message:'unavailable_recheck_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
     }
