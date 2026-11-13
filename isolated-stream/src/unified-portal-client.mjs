@@ -15,7 +15,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=(path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
+    const budget=path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
+      (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
       const response=await fetchImpl(url,{
@@ -215,6 +216,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function mediaFailuresRecheck({sourceId,confirmed}={}){
+    if(!UUID.test(String(sourceId||''))||confirmed!==true)
+      return Promise.resolve({status:400,body:{ok:false,code:'unavailable_source_not_allowed'}});
+    return call(ROOT+'/media-failures/recheck-now',{method:'POST',
+      body:{sourceId,confirmed:true}});
+  }
   function mediaFailureItems({sourceId=''}={}){
     if(sourceId&&!UUID.test(String(sourceId)))
       return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_source_id'}});
@@ -252,5 +259,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
-    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems};
+    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck};
 }
