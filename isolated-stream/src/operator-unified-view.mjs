@@ -842,6 +842,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p id="diagnostic-failures-summary" class="diag-inline-note" role="status">لم تُقرأ بيانات الأخطاء بعد.</p>
 <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>النوع</th><th>الحالة</th><th>العناصر</th><th>تستحق إعادة الفحص</th></tr></thead>
 <tbody id="diagnostic-failures"></tbody></table></div>
+<h4 style="margin:20px 0 8px">تفاصيل العناصر المسجلة</h4>
+<p class="muted">أسماء عناصر المصدر نفسها حين تكون موجودة في الفهرس، دون عرض روابط الفيديو أو أي كلمة مرور.</p>
+<p id="diagnostic-failures-items-status" class="diag-inline-note" role="status" aria-live="polite">جار انتظار فحص السجل.</p>
+<div class="tablewrap"><table><thead><tr><th>المصدر</th><th>الاسم أو معرف العنصر</th><th>النوع</th><th>الحالة</th><th>آخر تحقق</th><th>موعد المراجعة</th></tr></thead>
+<tbody id="diagnostic-failures-items"></tbody></table></div>
 <p class="muted">لا نحذف العناصر ولا نفترض أنها عادت للعمل؛ فحص عينة وسائط مصرح بها يتم يدويًا من «فحص المصدر» بالأعلى، ويختلف عن إعادة التحقق من كل عنصر 404 على حدة.</p>
 </div>
 <div class="panel" id="device-audio-validation">
@@ -3714,9 +3719,37 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
   });
+  async function loadFailureItems(sourceId){
+    var tbody=$("diagnostic-failures-items"),status=$("diagnostic-failures-items-status");
+    tbody.replaceChildren();status.textContent="جار قراءة العناصر المسجلة بدون طلب بث جديد.";
+    try{
+      var reply=await api("media-failure-items"+(sourceId?"?sourceId="+encodeURIComponent(sourceId):""));
+      var items=Array.isArray(reply.items)?reply.items:[];
+      items.forEach(function(item){
+        var tr=node("tr");
+        var src=(state.overview?.sources||[]).find(function(s){return s.id===item.sourceId});
+        cell(tr,src?.name||"المصدر المسجل");
+        var info=node("div");info.appendChild(node("strong",item.name||("العنصر "+item.itemId),"name"));
+        info.appendChild(node("small","ID: "+item.itemId,"meta num"));
+        cell(tr,info);
+        cell(tr,item.kind==="movie"?"فيلم":item.kind==="series"?"حلقة مسلسل":"غير معروف");
+        cell(tr,node("span",item.state==="missing"?"404 موثّق":item.state==="recovered"?"تعافٍ موثّق":"غير معروف",
+          "diag-state "+(item.state==="missing"?"warning":item.state==="recovered"?"ok":"unknown")));
+        var format=function(time){return time?new Date(time).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"}):"لم يُفحص"};
+        cell(tr,format(item.lastCheckedAt));cell(tr,format(item.nextCheckAt));tbody.appendChild(tr);
+      });
+      if(!items.length){var tr=node("tr");var td=cell(tr,"لا يوجد عناصر مسجلة من هذا المصدر.");td.colSpan=6;tbody.appendChild(tr)}
+      status.textContent="عدد العناصر المعروضة: "+count(items.length)+
+        " · من سجل 404 الحقيقي فقط. التاريخ لا يثبت الحالة الحالية؛ لا يتم تشغيل الفيديو هنا.";
+    }catch(e){
+      var tr=node("tr"),td=cell(tr,"تعذر عرض تفاصيل 404 حاليًا. لا يؤثر ذلك على قائمة الملخص.");td.colSpan=6;tbody.appendChild(tr);
+      status.textContent="تعذر قراءة العناصر التفصيلية: "+String(e.message||"").slice(0,65);
+    }
+  }
   async function loadFailures(){
     var tbody=$("diagnostic-failures"),summary=$("diagnostic-failures-summary");
     var sourceId=$("diagnostic-failures-source").value||"";
+    void loadFailureItems(sourceId);
     tbody.replaceChildren();summary.textContent="جار قراءة السجل المحفوظ؛ لا يبدأ فحص تشغيل جديد.";
     try{
       var d=await api("media-failures"+(sourceId?"?sourceId="+encodeURIComponent(sourceId):""));
