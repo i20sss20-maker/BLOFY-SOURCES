@@ -50,7 +50,7 @@ export function createLiveFanout({
     try{onEvent({...item})}catch{}
   }
   const counters={providerFailures:0,slowViewerDisconnects:0,
-    capacityRejections:0,cooldownRejections:0,upstreamReconnects:0,
+    capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0};
@@ -322,7 +322,8 @@ export function createLiveFanout({
       closeFeed(row.key,'closed',row);
     }
   }
-  async function handle(req,res,sourceUrl,{allowProviderCdn=false}={}){
+  async function handle(req,res,sourceUrl,{allowProviderCdn=false,
+    licensedSourceId=null,providerMaxConcurrentFeeds=null}={}){
     if(req.method==='HEAD'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
@@ -350,6 +351,27 @@ export function createLiveFanout({
         return;
       }
     }
+    if(!row&&providerMaxConcurrentFeeds===1&&
+       typeof licensedSourceId==='string'&&
+       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(licensedSourceId)){
+      // A single-upstream Xtream subscription can share the SAME channel
+      // across licensed viewers, but cannot promise a different live channel
+      // concurrently. Protect the already playing channel: never evict it or
+      // open a second connection using this known one-connection account.
+      // The scope is trusted backend metadata; it is not read from clients.
+      const existing=[...feeds.values()].some(other=>
+        other.licensedSourceId===licensedSourceId&&
+        other.providerMaxConcurrentFeeds===1&&
+        other.key!==key);
+      if(existing){
+        counters.sourceLimitRejections++;
+        res.writeHead(503,{'retry-after':'2','cache-control':'no-store',
+          'content-type':'application/json',
+          'referrer-policy':'no-referrer'});
+        res.end('{"ok":false,"code":"fanout_source_channel_limit"}');
+        return;
+      }
+    }
     if(!row){
       // During rapid channel zapping, old feeds remain alive for idleMs
       // after their last viewer leaves. Reclaim ONLY those idle feeds if
@@ -367,6 +389,9 @@ export function createLiveFanout({
       }
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
         allowProviderCdn:allowProviderCdn===true,
+        licensedSourceId:providerMaxConcurrentFeeds===1&&
+          typeof licensedSourceId==='string'?licensedSourceId:null,
+        providerMaxConcurrentFeeds:providerMaxConcurrentFeeds===1?1:null,
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
