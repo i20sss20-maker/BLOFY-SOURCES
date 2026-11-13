@@ -146,6 +146,38 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .catch(()=>json(res,503,{ok:false,code:'platform_audit_unavailable'}));
       return true;
     }
+    if(req.method==='POST'&&path==='/operator/api/full-audit/ai'){
+      if(req.headers['x-blofy-operator-action']!=='full-audit-ai-explain'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      // Groq receives ONLY fixed anonymous check codes. No URLs, source IDs,
+      // account details, secrets, raw metrics, media bytes or device identifiers.
+      // This is a manual advisory request; it never executes a repair.
+      const allowed=new Set(['bridge','sources','catalog_live','catalog_movie',
+        'catalog_series','media404','codes','libraryAI','subscribers','engine',
+        'mediamtx','restream','fanout','quality_live','quality_movie',
+        'quality_series','quality_startup','playback','sourceCapacity',
+        'appUpdates','audio','episodes','subtitles','backup']);
+      void platformAudit.audit().then(report=>{
+        if(report?.ok!==true)return {ok:false,code:'platform_audit_unavailable'};
+        const relevant=(report.checks||[]).filter(c=>
+          allowed.has(c.id)&&['warning','unknown'].includes(c.status))
+          .sort((a,b)=>Number(b.status==='warning')-Number(a.status==='warning'))
+          .slice(0,8);
+        if(!relevant.length)return {ok:true,provider:null,priorityCode:'none',
+          explanationAr:'لا توجد تحذيرات في الفحص الحالي؛ استجابة الخدمات لا تثبت نجاح التشغيل على الأجهزة.',
+          advisoryOnly:true,decodedAudioVideoVerified:false,actionsExecuted:0};
+        const assessment={ok:true,incidents:relevant.map(c=>({
+          code:'audit_'+c.id+'_'+c.status,count:1,
+          severity:c.status==='warning'?'warning':'unknown',
+          actionCode:'manual_review'
+        })),coverage:{}};
+        return playbackAi.explain(assessment);
+      }).then(result=>json(res,result.ok?200:
+        result.code==='playback_ai_cooldown'||result.code==='playback_ai_busy'?429:503,result))
+        .catch(()=>json(res,503,{ok:false,code:'platform_audit_ai_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
     }
