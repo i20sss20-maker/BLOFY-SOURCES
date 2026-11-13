@@ -353,6 +353,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
       }),
+      '/operator/api/media-failure-items':()=>portal.mediaFailureItems({
+        sourceId:uri.searchParams.get('sourceId')||''
+      }),
       '/operator/api/episodes':()=>portal.episodes({
         sourceId:uri.searchParams.get('sourceId'),
         seriesId:uri.searchParams.get('seriesId')
