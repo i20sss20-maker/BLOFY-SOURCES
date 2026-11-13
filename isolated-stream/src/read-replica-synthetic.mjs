@@ -130,7 +130,7 @@ export async function verifyReadReplicaSynthetic({
      const variant=playlist.split(/\r?\n/).map(x=>x.trim())
        .find(x=>x&&!x.startsWith('#'));
      if(!variant)throw Error('replica_invalid_manifest');
-     playlistPath=mediaChild(variant,PRIVATE+playlistPath);
+     playlistPath=mediaChild(variant,playlistPath);
      stage='variant';
      playlist=await getWarmPlaylist(playlistPath);
    }
