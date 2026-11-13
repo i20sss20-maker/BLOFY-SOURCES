@@ -83,3 +83,77 @@ test('source cap is ignored for unscoped grants, preserving legacy stream behavi
    await new Promise(resolve=>srv.close(resolve));
  }
 });
+
+
+test('two authorized upstream channel slots allow two channels but never a third',async()=>{
+ let calls=0;
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(new ReadableStream({start(c){
+   c.enqueue(new Uint8Array(packet));
+  }}),{headers:{'content-type':'video/mp2t'}});}
+ });
+ const srv=http.createServer((req,res)=>{
+  const channel=req.url==='/a'?12:req.url==='/b'?13:14;
+  void fanout.handle(req,res,'https://licensed.example/live/provider/key/'+channel+'.ts',{
+    licensedSourceId:SOURCE_ID,providerMaxConcurrentFeeds:2
+  });
+ });
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const base='http://127.0.0.1:'+srv.address().port;
+  const one=await fetch(base+'/a'),two=await fetch(base+'/b'),three=await fetch(base+'/c');
+  assert.equal(one.status,200);assert.equal(two.status,200);
+  assert.equal(three.status,503);
+  assert.equal((await three.json()).code,'fanout_source_channel_limit');
+  assert.equal(calls,2);
+  assert.equal(fanout.stats().activeFeeds,2);
+  assert.equal(fanout.stats().sourceLimitRejections,1);
+  await one.body.cancel().catch(()=>{});
+  await two.body.cancel().catch(()=>{});
+ }finally{fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r))}
+});
+
+test('source quotas are isolated even when two scoped grants contain identical URLs',async()=>{
+ let calls=0;
+ const secondary='22222222-2222-4222-8222-222222222222';
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(packet));
+  }}),{headers:{'content-type':'video/mp2t'}});}
+ });
+ const srv=http.createServer((req,res)=>{
+  void fanout.handle(req,res,URL_A,{licensedSourceId:req.url==='/one'?SOURCE_ID:secondary,
+   providerMaxConcurrentFeeds:1});
+ });
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const base='http://127.0.0.1:'+srv.address().port;
+  const one=await fetch(base+'/one'),two=await fetch(base+'/two');
+  assert.equal(one.status,200);assert.equal(two.status,200);
+  assert.equal(calls,2,'different licensed sources must not share upstream stream');
+  assert.equal(fanout.stats().activeFeeds,2);
+  await one.body.cancel().catch(()=>{});await two.body.cancel().catch(()=>{});
+ }finally{fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r))}
+});
+
+test('changed provider limit cannot expand existing single-feed grant while live',async()=>{
+ let calls=0;
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(packet));
+  }}),{headers:{'content-type':'video/mp2t'}});}
+ });
+ const srv=http.createServer((req,res)=>{
+  void fanout.handle(req,res,req.url==='/second'?URL_B:URL_A,{
+   licensedSourceId:SOURCE_ID,providerMaxConcurrentFeeds:req.url==='/second'?2:1
+  });
+ });
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const base='http://127.0.0.1:'+srv.address().port;
+  const one=await fetch(base+'/first'),two=await fetch(base+'/second');
+  assert.equal(one.status,200);assert.equal(two.status,503);
+  assert.equal(calls,1);
+  await one.body.cancel().catch(()=>{});
+ }finally{fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r))}
+});
