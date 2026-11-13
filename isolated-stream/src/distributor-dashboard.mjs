@@ -705,41 +705,124 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }finally{btn.disabled=false}
  });
 
- async function loadLibrary(more=false){
-  const type=$('library-type').value,q=$('library-search').value.trim();
-  if(!more)libraryOffset=0;
-  const d=await request('library',{type,q,offset:libraryOffset});
-  const body=$('library-rows');if(!more)body.replaceChildren();
-  const items=(d.items||[]).slice().sort((a,b)=>{
-    const na=Number(a.sortOrder)>0?Number(a.sortOrder):Number.MAX_SAFE_INTEGER;
-    const nb=Number(b.sortOrder)>0?Number(b.sortOrder):Number.MAX_SAFE_INTEGER;
-    return na-nb||String(a.group||'').localeCompare(String(b.group||''),'ar')||
-      String(a.name||'').localeCompare(String(b.name||''),'ar');
-  });
-  for(const item of items){
-   const tr=document.createElement('tr');
-   for(const val of [item.title||item.name,item.categoryName,item.group||'—',
-     item.sortOrder||0,item.hidden?'مخفي':'ظاهر']){
-    const td=document.createElement('td');td.textContent=String(val??'—');tr.appendChild(td);
-   }
-   const cell=document.createElement('td'),btn=document.createElement('button');
-   btn.type='button';btn.className='btn secondary mini';btn.textContent='تنظيم';
-   btn.addEventListener('click',()=>{
-    activeLibraryItem=item;
-    $('library-edit-group').value=item.group||'';
-    $('library-edit-name').value=item.title||'';
-    $('library-edit-sort').value=String(item.sortOrder||0);
-    $('library-edit-hidden').checked=item.hidden===true;
-    $('library-dialog').showModal();
-   });
-   cell.appendChild(btn);tr.appendChild(cell);body.appendChild(tr);
-  }
-  libraryNext=d.nextOffset;libraryOffset=libraryNext??libraryOffset;
-  $('library-more').hidden=libraryNext==null;
-  text('library-count','المعروض: '+body.children.length);
-  if(!body.children.length){const tr=document.createElement('tr'),td=document.createElement('td');
-   td.colSpan=7;td.textContent='لا توجد عناصر مطابقة';tr.appendChild(td);body.appendChild(tr)}
+ let libraryEpoch=0;
+ const selectedLibrary=new Map(),loadedLibrary=new Map();
+ function selectionState(){
+   text('library-selection-count','المحدد '+selectedLibrary.size+' / المعروض '+loadedLibrary.size);
+   for(const id of ['library-bulk-show','library-bulk-hide','library-bulk-group-save','library-select-clear'])
+     $(id).disabled=selectedLibrary.size===0;
  }
+ async function loadCategories(){
+   const type=$('library-type').value,data=await request('library-categories',{type});
+   if(type!==$('library-type').value)return;
+   const el=$('library-category'),old=el.value;el.replaceChildren();
+   const all=document.createElement('option');all.value='';all.textContent='جميع التصنيفات';el.appendChild(all);
+   for(const c of data.categories||[]){
+     const op=document.createElement('option');
+     op.value=String(c.id||'');op.textContent=String(c.name||c.id||'');
+     el.appendChild(op);
+   }
+   el.value=[...el.options].some(x=>x.value===old)?old:'';
+   text('library-total','محتوى saleh · إجمالي '+(data.total??'—')+
+     ' · التصنيفات: '+(data.categories||[]).length);
+ }
+ async function loadLibrary(more=false){
+   const type=$('library-type').value,q=$('library-search').value.trim();
+   const categoryId=$('library-category').value;
+   if(!more){libraryOffset=0;libraryNext=null;libraryEpoch++;
+     selectedLibrary.clear();loadedLibrary.clear();$('library-rows').replaceChildren();
+     selectionState();
+   }else if(libraryNext==null)return;
+   const epoch=libraryEpoch,offset=more?libraryNext:0;
+   const d=await request('library',{type,q,categoryId,offset});
+   if(epoch!==libraryEpoch||type!==$('library-type').value||
+      q!==$('library-search').value.trim()||
+      categoryId!==$('library-category').value)return;
+   const body=$('library-rows');
+   for(const item of d.items||[]){
+     const id=String(item.id||'');
+     if(loadedLibrary.has(id))continue;
+     loadedLibrary.set(id,item);
+     const tr=document.createElement('tr');
+     const td=document.createElement('td'),checkbox=document.createElement('input');
+     checkbox.type='checkbox';checkbox.dataset.libraryId=id;
+     checkbox.setAttribute('aria-label','تحديد '+String(item.title||item.name||id).slice(0,90));
+     checkbox.addEventListener('change',()=>{
+       if(checkbox.checked){
+         if(selectedLibrary.size>=100){checkbox.checked=false;
+           msg('يمكن تعديل 100 عنصر كحد أقصى في العملية الواحدة',false);return;}
+         selectedLibrary.set(id,item);
+       }else selectedLibrary.delete(id);
+       selectionState();
+     });
+     td.appendChild(checkbox);tr.appendChild(td);
+     for(const v of [item.title||item.name,item.categoryName||'—',item.group||'—',
+       item.sortOrder||0,item.hidden?'مخفي':'ظاهر']){
+       const c=document.createElement('td');c.textContent=String(v??'—');tr.appendChild(c);
+     }
+     const action=document.createElement('td'),btn=document.createElement('button');
+     btn.type='button';btn.className='btn secondary mini';btn.textContent='تنظيم';
+     btn.addEventListener('click',()=>{
+       activeLibraryItem=item;
+       $('library-edit-group').value=item.group||'';
+       $('library-edit-name').value=item.title||'';
+       $('library-edit-sort').value=String(item.sortOrder||0);
+       $('library-edit-hidden').checked=item.hidden===true;
+       $('library-dialog').showModal();
+     });
+     action.appendChild(btn);tr.appendChild(action);body.appendChild(tr);
+   }
+   libraryNext=d.nextOffset;libraryOffset=libraryNext??offset;
+   $('library-more').hidden=libraryNext==null;
+   text('library-count','المعروض: '+loadedLibrary.size+(libraryNext!=null?' · المزيد متاح':' · نهاية النتائج'));
+   selectionState();
+   if(!loadedLibrary.size){
+     const row=document.createElement('tr'),cell=document.createElement('td');
+     cell.colSpan=7;cell.textContent='لا توجد عناصر مطابقة';
+     row.appendChild(cell);body.appendChild(row);
+   }
+ }
+ $('library-select-all').addEventListener('click',()=>{
+   for(const [id,item] of loadedLibrary){
+     if(selectedLibrary.size>=100)break;
+     selectedLibrary.set(id,item);
+   }
+   for(const box of $('library-rows').querySelectorAll('[data-library-id]'))
+     box.checked=selectedLibrary.has(box.dataset.libraryId);
+   selectionState();
+   if(loadedLibrary.size>100)msg('تم تحديد أول 100 عنصر. نفّذ العملية ثم تابع البقية.',true);
+ });
+ $('library-select-clear').addEventListener('click',()=>{
+   selectedLibrary.clear();
+   for(const box of $('library-rows').querySelectorAll('[data-library-id]'))box.checked=false;
+   selectionState();
+ });
+ async function saveLibraryBulk(mode){
+   const ids=[...selectedLibrary.keys()];
+   if(!ids.length)return msg('حدد عناصر أولًا',false);
+   const body={type:$('library-type').value,itemIds:ids};
+   if(mode==='show')body.hidden=false;
+   else if(mode==='hide')body.hidden=true;
+   else{
+     body.group=$('library-bulk-group').value.trim();
+     if(!body.group||body.group.length>60)
+       return msg('أدخل اسم المجموعة (حتى 60 حرفًا)',false);
+   }
+   if(!confirm('تطبيق التعديل على '+ids.length+
+     ' عنصرًا في مكتبة متجرك فقط، دون تغيير مكتبة المصدر أو اشتراكات العملاء؟'))return;
+   const buttons=['library-bulk-show','library-bulk-hide','library-bulk-group-save'];
+   for(const id of buttons)$(id).disabled=true;
+   try{
+     const result=await request('organize-bulk',body);
+     msg('تم تحديث '+(result.updated||0)+' عنصر'+
+       (result.skipped?' · تم تجاهل '+result.skipped+' عنصرًا خارج النطاق':''),true);
+     await loadLibrary(false);
+   }catch(e){msg('تعذر التنظيم الجماعي: '+e.message,false)}
+   finally{selectionState()}
+ }
+ $('library-bulk-show').addEventListener('click',()=>saveLibraryBulk('show'));
+ $('library-bulk-hide').addEventListener('click',()=>saveLibraryBulk('hide'));
+ $('library-bulk-group-save').addEventListener('click',()=>saveLibraryBulk('group'));
 
  $('library-edit-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!activeLibraryItem)return;
