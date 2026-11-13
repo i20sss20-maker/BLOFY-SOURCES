@@ -53,7 +53,7 @@ async function readAdminJson(req){
 export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',edgeObservabilityKey='',
-  playbackGroqApiKey='',
+  playbackGroqApiKey='',getReplicaSynthetic=()=>null,
   liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
@@ -69,7 +69,16 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
   const readReplica=createReadReplicaObserver({fetchImpl});
-  const replicaProbe={running:false,lastAt:0};
+  const replicaProbe={running:false,lastAt:0,latest:null};
+  function safeReplicaProof(proof){
+    if(!proof||typeof proof!=='object')return null;
+    return {ok:proof.ok===true,code:String(proof.code||'unknown').slice(0,65),
+      stage:String(proof.stage||'unknown').slice(0,32),
+      transportVerified:proof.transportVerified===true,
+      bytesVerified:Number.isSafeInteger(proof.bytesVerified)?Math.max(0,Math.min(proof.bytesVerified,4096)):0,
+      elapsedMs:Number.isSafeInteger(proof.elapsedMs)?Math.max(0,Math.min(proof.elapsedMs,60000)):null,
+      realSalehVerified:false,customerTrafficChanged:false};
+  }
   async function engineStatus(){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),1800);
     try{
@@ -289,6 +298,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         replicaProbe.running=true;replicaProbe.lastAt=now;
         try{
           const proof=await verifyReadReplicaSynthetic({fetchImpl,timeoutMs:20000});
+          replicaProbe.latest={...safeReplicaProof(proof),checkedAt:new Date().toISOString(),
+            source:'manual_synthetic'};
           return {status:200,body:{ok:true,probe:proof}};
         }finally{replicaProbe.running=false}
       }).then(result=>json(res,result.status,result.body))
@@ -302,7 +313,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .then(([engine,mediaControl,readReplicaState])=>json(res,200,{
           ok:true,service:'BLOFY-STREAM',role:'independent-control',
           customerTrafficEnabled:false,realSourceMediaVerified:false,
-          engine,sharedRelay:sharedRelayStats(),readReplica:readReplicaState,mediaControl:{
+          engine,sharedRelay:sharedRelayStats(),readReplica:readReplicaState,
+          readReplicaSynthetic:replicaProbe.latest||safeReplicaProof(getReplicaSynthetic()),
+          mediaControl:{
             controlAvailable:mediaControl.online,activePaths:mediaControl.readyPaths,
             hlsSessions:mediaControl.hlsSessions,diagnostics:mediaControl.diagnostics,
             paths:mediaControl.paths||[]
