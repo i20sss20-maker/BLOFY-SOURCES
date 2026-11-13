@@ -102,9 +102,16 @@ export function createPrivateHlsEdge({
       await response.body?.cancel().catch(()=>{});
       if(!local||local.smoke!==path.smoke)
         return respond(res,502,{ok:false,code:'edge_redirect_denied'});
-      res.writeHead(response.status,{
-        location:local.path+local.search,'cache-control':'no-store',
-        'referrer-policy':'no-referrer'});
+      const redirectHeaders={location:local.path+local.search,
+        'cache-control':'no-store','referrer-policy':'no-referrer'};
+      // MediaMTX HLS session negotiation begins with a cookie-setting 302.
+      // Forward the cookie on this trusted fixed-origin redirect; otherwise
+      // browser/client requests can fail despite a valid synthetic manifest.
+      const originCookie=response.headers.get('set-cookie');
+      if(originCookie&&originCookie.length<=500&&
+        /^[a-zA-Z0-9_-]{1,48}=[^\r\n]{1,450}$/.test(originCookie))
+        redirectHeaders['set-cookie']=originCookie;
+      res.writeHead(response.status,redirectHeaders);
       res.end();return;
     }
     // Only carry trusted media headers and the MediaMTX HLS session cookie.
