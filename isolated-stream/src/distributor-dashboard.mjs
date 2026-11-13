@@ -93,6 +93,18 @@ body[data-theme="light"] .chip.active{background:#d7e3f2;color:#172b50}
 body[data-theme="light"] dialog{background:#fff}
 body[data-theme="light"] .secret{background:#e1f7eb}
 .num{direction:ltr;unicode-bidi:isolate;display:inline-block}
+.profile-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.profile-line strong{color:var(--mint);font:700 17px/1.7 ui-monospace,Consolas,monospace;direction:ltr;unicode-bidi:isolate}
+#account-card{border-color:#3e6b77;background:linear-gradient(130deg,#172b39,var(--card) 72%)}
+#account-card h2{margin-bottom:7px}
+.catalog-top{border:1px solid #445978;border-radius:13px;padding:13px;background:#192338;margin:12px 0}
+.library-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.library-actions input[type=text]{width:min(230px,100%)}
+.library-actions .btn{white-space:nowrap}
+#library-selection-count{color:var(--mint)}
+.secret strong{unicode-bidi:isolate;direction:ltr;max-width:100%;overflow-wrap:anywhere}
+.btn.danger{background:#753448;border-color:#b9697c}
+@media(prefers-reduced-motion:no-preference){.card,.btn{transition:transform .16s ease,filter .16s ease,border-color .16s ease}.card:hover{border-color:#50617d}.btn:active{transform:scale(.985)}}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
 </style></head><body><main>
 <header><h1 class="page-title">لوحة توزيع</h1>
@@ -107,6 +119,14 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="field"><label>&nbsp;</label><button class="btn" type="submit">تسجيل الدخول</button></div>
 </form></section>
 <section id="workspace" hidden>
+<div class="card" id="account-card">
+ <div class="row"><div><h2>حساب التاجر</h2><p class="muted" style="margin:0">بيانات دخول لوحتك آمنة. كلمة مرور اللوحة القديمة لا يمكن عرضها، ويمكن تغييرها بعد التحقق منها.</p></div>
+ <span class="badge">BLOFY DISTRIBUTOR</span></div>
+ <div class="profile-line"><span class="muted">اسم المستخدم:</span>
+ <strong id="merchant-username">—</strong>
+ <button class="btn secondary mini" id="merchant-copy-username" type="button">نسخ الاسم</button>
+ <button class="btn secondary mini" id="merchant-password-open" type="button">تغيير كلمة مرور اللوحة</button></div>
+</div>
 <div class="card"><span id="who" hidden></span><span id="enabled" hidden></span>
 <div class="stats">
 <div class="stat"><small>الرصيد</small><strong id="credits">—</strong></div>
@@ -164,11 +184,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <dialog id="manage-dialog" aria-labelledby="manage-title"><h2 id="manage-title">إدارة الاشتراك</h2>
 <div id="manage-info" class="details-grid"></div>
 <div class="dialog-buttons" style="justify-content:flex-start;flex-wrap:wrap">
-<button class="btn secondary mini" id="manage-copy" type="button">نسخ</button>
+<button class="btn secondary mini" id="manage-copy" type="button">عرض ونسخ الكود أو بيانات Xtream</button>
+<button class="btn danger mini" id="manage-rotate" type="button" hidden>تغيير اسم المستخدم وكلمة مرور Xtream</button>
 <button class="btn secondary mini" id="manage-renew" type="button">تجديد</button>
 <button class="btn secondary mini" id="manage-relogin" type="button">إعادة دخول</button>
 <button class="btn secondary mini" id="manage-customer" type="button">العميل</button>
 <button class="btn secondary mini" data-close-dialog="manage-dialog" type="button">إغلاق</button></div></dialog>
+<dialog id="merchant-password-dialog" aria-labelledby="merchant-password-title">
+<h2 id="merchant-password-title">تغيير كلمة مرور التاجر</h2>
+<p class="muted">ستُلغى جلسات الدخول على الأجهزة الأخرى. كلمة المرور الجديدة لا تقل عن 14 حرفًا وتتضمن حرفًا كبيرًا وصغيرًا ورقمًا.</p>
+<form id="merchant-password-form" class="formgrid">
+<div class="field full"><label for="merchant-current-password">كلمة المرور الحالية</label>
+<input id="merchant-current-password" type="password" autocomplete="current-password" required maxlength="200"></div>
+<div class="field full"><label for="merchant-new-password">كلمة المرور الجديدة</label>
+<input id="merchant-new-password" type="password" autocomplete="new-password" required minlength="14" maxlength="128"></div>
+<div class="field full"><label for="merchant-password-confirm">تأكيد كلمة المرور</label>
+<input id="merchant-password-confirm" type="password" autocomplete="new-password" required minlength="14"></div>
+<div class="dialog-buttons field full"><button type="button" class="btn secondary" data-close-dialog="merchant-password-dialog">إلغاء</button>
+<button id="merchant-password-save" class="btn" type="submit">حفظ التغيير</button></div></form></dialog>
 <dialog id="renew-dialog" aria-labelledby="renew-title"><h2 id="renew-title">تجديد الاشتراك</h2>
 <form id="renew-form"><div class="formgrid"><div class="field"><label for="renew-days">المدة</label>
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
