@@ -23,9 +23,11 @@ test('BLOFY private replica pulls only authorized Origin live paths, never provi
  assert.match(text,/apiAddress: 127\.0\.0\.1:9997/);
  assert.match(text,/fc00::\/7/);
 });
-test('MediaMTX pilot edge matches existing Origin build version and has no start secrets',async()=>{
+test('active private read-through edge is Node and does not carry provider secrets',async()=>{
  const text=await readFile(dockerFile,'utf8');
- assert.match(text,/FROM bluenviron\/mediamtx:1\.19\.2-ffmpeg/);
- assert.match(text,/COPY mediamtx\.yml \/mediamtx\.yml/);
- assert.doesNotMatch(text,/ENV |ARG |COPY .*secret|curl|wget|ENTRYPOINT/);
+ assert.match(text,/FROM node:22-alpine/);
+ assert.match(text,/COPY index\.mjs \/app\/index\.mjs/);
+ assert.match(text,/EXPOSE 8888/);
+ assert.match(text,/USER node/);
+ assert.doesNotMatch(text,/ENV .*TOKEN|ARG |COPY .*secret|curl|wget|ENTRYPOINT/);
 });
