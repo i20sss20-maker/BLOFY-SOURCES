@@ -406,6 +406,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  <span class="pill">نقل المشتركين: <strong id="read-replica-cutover">غير مفعّل</strong></span>
  </div>
  <p class="muted" id="read-replica-note" role="status" aria-live="polite">فحص الاتصال لا يفتح قناة من saleh ولا يثبت أن الصوت أو الصورة يعملان.</p>
+<div class="diag-actions">
+<button type="button" class="btn secondary" id="read-replica-synthetic-probe">🧪 اختبار Origin ← Replica بعينة تجريبية</button>
+</div>
+<p id="read-replica-synthetic-result" role="status" aria-live="polite" class="diag-inline-note">الفحص يدوي، ويشغّل عينة MediaMTX تجريبية فقط دون الوصول إلى saleh أو حسابات العملاء.</p>
  </div>
 <div class="panel"><h3>المشاركة بين المشتركين</h3><p class="muted">هذه أرقام مستقلة لمسارات المشاركة الجديدة فقط؛ لا تشمل التشغيل العادي من التطبيق.</p><div class="inline"><span class="pill" id="shared-mode">—</span><span class="pill">اتصالات المصدر: <strong id="shared-feeds">—</strong></span><span class="pill">المشاهدون: <strong id="shared-viewers">—</strong></span><span class="pill">مصادر في فترة تهدئة: <strong id="fanout-cooldowns">—</strong></span><span class="pill">مشاهدون جدد استفادوا من تهيئة TS: <strong id="fanout-warm-joins">—</strong></span><span class="pill">ذاكرة التهيئة المؤقتة: <strong id="fanout-replay-buffer">—</strong> KiB</span><span class="pill">طلبات قناة إضافية حُجبت لحماية حد المصدر: <strong id="fanout-source-limit">—</strong></span><span class="pill">فشل سحب مشترك: <strong id="fanout-provider-failures">—</strong></span><span class="pill">مشاهدون بطيئون قُطعت جلساتهم: <strong id="fanout-slow-disconnects">—</strong></span><span class="pill">أخطاء Relay منذ آخر تشغيل: <strong id="relay-errors">—</strong></span></div><p id="relay-error-breakdown" class="muted"></p></div>
 <div class="panel" id="smart-ops-panel">
@@ -3653,6 +3657,35 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     catch(e){$("live-result").textContent="تعذر عرض المسارات: "+e.message}
   }
   $("live-reload").addEventListener("click",loadLive);
+  $("read-replica-synthetic-probe").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var button=this;button.disabled=true;
+    value("read-replica-synthetic-result",
+      "جار اختبار نقل عينة HLS تجريبية من Origin إلى Replica. لا يتم تشغيل بث saleh.");
+    try{
+      var result=await action("read-replica/synthetic-probe","replica-synthetic-probe",{});
+      var probe=result.probe||{};
+      if(probe.ok===true&&probe.transportVerified===true){
+        value("read-replica-synthetic-result","✓ وصل مقطع MPEG-TS عبر الخادم الجديد: "+
+          count(probe.bytesVerified)+" بايت تحققت. لا يعني اختبار الصوت أو القنوات الحقيقية أو تحويل العملاء.");
+      }else{
+        var codes={replica_path_not_ready:"مسار العينة التجريبية غير جاهز.",
+          replica_private_unreachable:"تعذر الوصول لخادم التوزيع الخاص.",
+          replica_invalid_manifest:"قائمة HLS غير صالحة.",
+          replica_segment_not_ready:"لم يجهز مقطع HLS خلال نافذة الاختبار.",
+          replica_auth_denied:"صلاحيات قراءة MediaMTX رفضت الاختبار.",
+          replica_invalid_ts:"لم يتم العثور على حزم MPEG-TS صالحة في المقطع.",
+          replica_invalid_segment:"قائمة HLS تشير إلى مسار غير مصرح به."};
+        value("read-replica-synthetic-result",
+          "لم يكتمل الاختبار: "+(codes[probe.code]||String(probe.code||"غير معروف"))+
+          " · لم يتغير مسار أي عميل أو مصدر Xtream.");
+      }
+    }catch(e){
+      value("read-replica-synthetic-result",String(e.message)==="replica_probe_cooldown"?
+        "تم تشغيل الاختبار مؤخرًا؛ إعادة التجربة متاحة بعد دقيقتين.":
+        "تعذر بدء اختبار التوزيع: "+e.message);
+    }finally{button.disabled=false}
+  });
   function sharedFailureText(code){
     var labels={
       pilot_source_not_found:"لم يوجد مصدر مرخّص باسم saleh",
