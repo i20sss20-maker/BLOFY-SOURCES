@@ -215,6 +215,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  function mediaFailureItems({sourceId=''}={}){
+    if(sourceId&&!UUID.test(String(sourceId)))
+      return Promise.resolve({status:400,body:{ok:false,code:'stream_invalid_source_id'}});
+    const query=sourceId?'?'+new URLSearchParams({sourceId}):'';
+    return call(ROOT+'/media-failure-items'+query);
+  }
   function mediaFailures({sourceId=''}={}){
     if(sourceId&&!UUID.test(sourceId))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_source_id'}});
@@ -246,5 +252,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
-    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures};
+    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems};
 }
