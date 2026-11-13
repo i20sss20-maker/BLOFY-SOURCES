@@ -330,7 +330,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function showIssue(d){
   clearTimeout(visibleSecretTimer);
   const box=$("issued-result");box.replaceChildren();box.hidden=false;
-  const head=document.createElement('h2');head.textContent="تم الاستخراج";box.appendChild(head);
+  const head=document.createElement('h2');head.textContent="بيانات الاشتراك";box.appendChild(head);
   if(d.code)line(box,"الكود",d.code);
   if(d.credentials){
     line(box,"الهوست",d.credentials.serverUrl);
