@@ -158,7 +158,11 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'mediamtx','restream','fanout','quality_live','quality_movie',
         'quality_series','quality_startup','playback','sourceCapacity',
         'appUpdates','audio','episodes','subtitles','backup']);
-      void platformAudit.audit().then(report=>{
+      void readAdminJson(req).then(body=>{
+        const sourceId=body.sourceId===undefined?'':String(body.sourceId||'');
+        if(sourceId&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(sourceId))
+          return {ok:false,code:'platform_audit_source_invalid'};
+        return platformAudit.audit({sourceId}).then(report=>{
         if(report?.ok!==true)return {ok:false,code:'platform_audit_unavailable'};
         const relevant=(report.checks||[]).filter(c=>
           allowed.has(c.id)&&['warning','unknown'].includes(c.status))
@@ -173,9 +177,12 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
           actionCode:'manual_review'
         })),coverage:{}};
         return playbackAi.explain(assessment);
+        });
       }).then(result=>json(res,result.ok?200:
+        result.code==='platform_audit_source_invalid'?400:
         result.code==='playback_ai_cooldown'||result.code==='playback_ai_busy'?429:503,result))
-        .catch(()=>json(res,503,{ok:false,code:'platform_audit_ai_unavailable'}));
+        .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,{
+          ok:false,code:[400,413,415].includes(error?.status)?error.message:'platform_audit_ai_unavailable'}));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
