@@ -289,6 +289,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 @media(max-width:1100px){.diag-intro{flex-direction:column;align-items:stretch}.diag-priorities{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:740px){.diag-priorities,.diag-device-grid{grid-template-columns:1fr}.diag-intro{padding:17px}.diag-actions select{max-width:180px}.diag-recommendations .row{flex-wrap:wrap}.diag-recommendations .row span.muted{flex-basis:100%}}
 
+
+/* Visible, immediately adjacent AI result — never buried beneath long reports. */
+.diag-ai-card{display:flex;flex-direction:column;gap:12px;margin:15px 0 19px;padding:16px 18px;border:1px solid #44649d;border-radius:16px;background:radial-gradient(ellipse at 10% 10%,#293c774f,transparent 65%),linear-gradient(130deg,#142843,#111e39);box-shadow:0 8px 29px #020a1a5b}
+.diag-ai-indicator{display:flex;gap:12px;align-items:center}
+.diag-ai-indicator strong{display:block;font-size:15px;color:#f3f6ff}
+.diag-ai-indicator small{display:block;font-size:11px;color:#afc4dd;margin-top:3px}
+.diag-ai-glow{width:39px;height:39px;display:grid;place-items:center;flex-shrink:0;border-radius:12px;background:#414e9c6a;color:#bbd4ff;font-size:22px}
+.diag-ai-text{margin:0!important;padding:13px 16px!important;background:#0b1c33ba;border:1px solid #374f73;border-radius:12px;line-height:1.95;font-size:14px;color:#e6f2ff;min-height:49px;overflow-wrap:anywhere}
+.diag-ai-card[data-state="success"]{border-color:#329c8a}.diag-ai-card[data-state="success"] .diag-ai-glow{color:#70f1d0;background:#17645788}
+.diag-ai-card[data-state="error"]{border-color:#b57959}.diag-ai-card[data-state="error"] .diag-ai-glow{color:#ffca92;background:#68423199}
+.diag-ai-card[data-state="loading"] .diag-ai-glow{animation:diagAiPulse 1.4s ease-in-out infinite alternate}
+@keyframes diagAiPulse{from{box-shadow:0 0 0 #6b8dfe00}to{box-shadow:0 0 22px #718fff77}}
+@media(prefers-reduced-motion:reduce){.diag-ai-glow{animation:none!important}}
 </style>
 </head><body><div class="layout"><aside id="app-sidebar" class="app-sidebar" aria-label="القائمة الجانبية">
 <div class="sidebar-top"><div class="logo"><div class="logo-icon">B</div><div class="logo-copy"><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
@@ -777,9 +790,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
 <div class="diag-actions"><label class="diag-source-label" for="deep-audit-source">المصدر <select id="deep-audit-source" aria-label="المصدر المراد فحصه"><option value="">كل المصادر</option></select></label>
 <button id="deep-audit-run" class="btn" type="button">↻ بدء الفحص</button>
-<button id="deep-audit-ai" class="btn secondary" type="button" disabled>🤖 تحليل Groq</button>
+<button id="deep-audit-ai" class="btn secondary" type="button" disabled aria-controls="deep-audit-ai-result">🤖 تفسير Groq AI</button>
 <button id="deep-audit-export" class="btn secondary" type="button">تصدير تقرير الدعم</button></div></div>
 <p class="muted">فحص قراءة فقط، يعتمد على السجلات وحالات الخدمات، ولا يشغّل فيديو أو يغيّر اشتراكات العملاء.</p>
+<div id="deep-audit-ai-card" class="diag-ai-card" role="region" aria-label="نتيجة Groq AI">
+<div class="diag-ai-indicator"><span class="diag-ai-glow" aria-hidden="true">✦</span><div><strong>Groq AI • تحليل الفحص</strong><small id="deep-audit-ai-status">اتصال Groq لم يُتحقق منه في هذه الصفحة بعد.</small></div></div>
+<p id="deep-audit-ai-result" class="diag-ai-text" role="status" aria-live="polite" aria-atomic="true">شغّل الفحص، ثم اضغط «تفسير Groq AI». سيظهر التفسير هنا مباشرة، ولن يختفي أسفل الجداول.</p>
+</div>
 <div class="cards">
 <div class="stat"><small>سليم حسب المؤشرات</small><strong id="deep-audit-ok">—</strong></div>
 <div class="stat"><small>يحتاج مراجعة</small><strong id="deep-audit-warning">—</strong></div>
@@ -793,7 +810,6 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <span id="deep-audit-visible" class="muted" role="status">—</span></div>
 <div class="tablewrap"><table><thead><tr><th>القسم</th><th>الحالة</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
 <tbody id="deep-audit-items"></tbody></table></div>
-<p id="deep-audit-ai-result" class="diag-ai-result muted" role="status" aria-live="polite">تحليل Groq اختياري؛ يرسل أسماء مؤشرات مجهولة فقط عند الضغط ولا يصلح الأعطال تلقائيًا.</p>
 <h4>الخطوات المقترحة</h4><div id="deep-audit-recommendations" class="diag-recommendations" aria-live="polite"></div>
 </div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
@@ -1207,6 +1223,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var runButton=$("deep-audit-run"),tbody=$("deep-audit-items");
     if(runButton.disabled)return;
     runButton.disabled=true;$("deep-audit-ai").disabled=true;
+    $("deep-audit-ai-card").dataset.state="loading";
+    value("deep-audit-ai-status","جارٍ قراءة المؤشرات...");
     value("deep-audit-status","جارٍ جمع مؤشرات النظام. لا يبدأ تشغيل وسائط...");
     try{
       var sid=$("deep-audit-source").value||"";
@@ -1234,8 +1252,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " مؤشر"+(result.cacheHit?" · نتيجة محفوظة حديثًا":"")+
         " · "+(result.source?.name?"المصدر: "+result.source.name:"مصدر افتراضي حسب خدمة الفحص")+
         " · لا يشمل فك ترميز فيديو أو صوت على الأجهزة.");
-      $("deep-audit-ai").disabled=false;
+      $("deep-audit-ai-card").dataset.state="ready";
+      value("deep-audit-ai-result","الفحص جاهز. اضغط «تفسير Groq AI» ليظهر الشرح هنا فورًا. لا يتم الاتصال بـ Groq إلا عند الطلب.");
+      try{
+        var aiState=await api("playback-health");
+        var configured=aiState?.ai?.configured===true;
+        $("deep-audit-ai").disabled=!configured;
+        value("deep-audit-ai-status",configured?"✓ مفتاح Groq مضبوط • جاهز للتفسير اليدوي":"مفتاح Groq غير مهيأ في STREAM API");
+        if(!configured)value("deep-audit-ai-result","التحليل المحلي متاح؛ أضف مفتاح BLOFY_STREAM_GROQ_API_KEY في Railway لتفعيل تفسير Groq.");
+      }catch{
+        // Allow manual attempt when status endpoint is transiently unavailable.
+        $("deep-audit-ai").disabled=false;
+        value("deep-audit-ai-status","لم تتوفر حالة الاتصال • يمكن تجربة Groq يدويًا");
+      }
     }catch(e){
+      $("deep-audit-ai-card").dataset.state="error";
+      value("deep-audit-ai-status","فشل الفحص المحلي");
       value("deep-audit-status","تعذر إكمال الفحص: "+e.message);
       tbody.replaceChildren();
     }finally{runButton.disabled=false}
@@ -1248,16 +1280,44 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("deep-audit-ai").addEventListener("click",async function(){
     if(!latestAudit){value("deep-audit-ai-result","شغّل الفحص أولًا.");return}
-    this.disabled=true;value("deep-audit-ai-result","جار طلب تفسير Groq للمؤشرات المجهولة فقط...");
+    if(this.disabled)return;
+    var btn=this,card=$("deep-audit-ai-card"),status=$("deep-audit-ai-status");
+    btn.disabled=true;btn.textContent="⏳ جارٍ تحليل Groq...";
+    card.dataset.state="loading";card.setAttribute("aria-busy","true");
+    status.textContent="طلب Groq قيد التنفيذ • لا تغييرات على المحتوى أو العملاء";
+    value("deep-audit-ai-result","جارٍ تحليل مؤشرات الفحص باستخدام Groq AI. النتيجة ستظهر هنا.");
     try{
-      var response=await action("full-audit/ai","full-audit-ai-explain",{});
-      value("deep-audit-ai-result",
-        (response.provider==="Groq"?"🤖 Groq: ":"")+
-        String(response.explanationAr||"تعذر الحصول على تفسير حاليًا")+
-        " · توجيه غير تنفيذي؛ يلزم اختبار الصوت والصورة على الجهاز.");
-    }catch(e){value("deep-audit-ai-result","تعذر تحليل Groq حاليًا: "+e.message+
-      " · التقرير المحلي لا يزال متاحًا، ولن يُعاد الاتصال تلقائيًا.");}
-    finally{this.disabled=false}
+      var response=await action("full-audit/ai","full-audit-ai-explain",{
+        sourceId:$("deep-audit-source").value||""
+      });
+      if(!response.ok||typeof response.explanationAr!=="string")throw Error("playback_ai_invalid_response");
+      card.dataset.state="success";
+      status.textContent=(response.provider==="Groq"?"✓ تم الاتصال بـ Groq بنجاح":"✓ شرح الفحص جاهز")+
+        " • لا توجد إجراءات تلقائية";
+      var key=String(response.priorityCode||"");
+      var match=key.match(/^audit_(.+)_(warning|unknown)$/);
+      var label=match?(deepAuditNames[match[1]]||"مؤشر إضافي"):"حسب المؤشرات المتاحة";
+      value("deep-audit-ai-result","✦ "+response.explanationAr+
+        " • الأولوية: "+label+" • التوصية تحتاج مراجعة المشرف واختبار الأجهزة.");
+    }catch(e){
+      var code=String(e.message||"");
+      var message={
+        playback_ai_cooldown:"تم استخدام Groq قبل أقل من دقيقة. جرّبه بعد مرور 60 ثانية؛ الطلب السابق لا يعني فشل الاتصال.",
+        playback_ai_busy:"هناك طلب Groq قيد التنفيذ. انتظر اكتماله بدل فتح اتصال جديد.",
+        playback_ai_boot_limit:"وصلت إلى الحد الوقائي للتحليلات في تشغيل السيرفر الحالي.",
+        playback_ai_not_configured:"مفتاح Groq غير مفعّل على STREAM API.",
+        playback_ai_provider_unavailable:"تعذر الوصول إلى Groq أو انتهت مهلة الاتصال. لا يشير ذلك إلى عطل في البث.",
+        playback_ai_invalid_response:"اتصل النظام بـ Groq لكن صيغة الرد غير صالحة؛ احتفظنا بالتقرير المحلي.",
+        platform_audit_unavailable:"تعذر الحصول على معلومات الفحص الحالية.",
+        unified_bridge_unavailable:"تعذّر الاتصال ببوابة البيانات."
+      }[code]||"تعذر عرض تفسير Groq حاليًا ("+code.slice(0,65)+").";
+      card.dataset.state="error";
+      status.textContent="⚠ لم يكتمل طلب التفسير • الفحص المحلي متاح";
+      value("deep-audit-ai-result",message);
+    }finally{
+      card.removeAttribute("aria-busy");
+      btn.disabled=false;btn.textContent="🤖 تفسير Groq AI";
+    }
   });
   $("diagnostic-go-capacity").addEventListener("click",function(){openAuditTarget({id:"sourceCapacity"})});
   $("diagnostic-go-audio").addEventListener("click",function(){openAuditTarget({id:"audio"})});
