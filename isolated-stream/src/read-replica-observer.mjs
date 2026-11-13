@@ -1,4 +1,4 @@
-// Private MediaMTX read-replica reachability for BLOFY operator.
+// Private HLS read-through edge reachability for BLOFY operator.
 // Non-media GET / never starts an Origin path. It is a CONTROL-PLANE signal,
 // not a test of video playback, provider connections, or customer availability.
 const PRIVATE_EDGE='http://blofy-stream-read-replica.railway.internal:8888';
@@ -21,7 +21,7 @@ export function createReadReplicaObserver({fetchImpl=fetch,timeoutMs=1800}={}){
      // read-replica service is alive, not that a stream is ready.
      const reachable=response.status>=200&&response.status<500;
      latest={configured:true,reachable,privateNetworkOnly:true,
-       service:'BLOFY MediaMTX Read Replica',httpStatus:response.status,
+       service:'BLOFY private HLS read edge',httpStatus:response.status,
        probedAt:now,transport:'private_hls_root_only',
        providerRequests:0,originPathsRequested:0,
        actualVideoVerified:false,customersRouted:false,
@@ -29,7 +29,7 @@ export function createReadReplicaObserver({fetchImpl=fetch,timeoutMs=1800}={}){
      return {...latest};
    }catch{
      latest={configured:true,reachable:false,privateNetworkOnly:true,
-       service:'BLOFY MediaMTX Read Replica',httpStatus:null,probedAt:now,
+       service:'BLOFY private HLS read edge',httpStatus:null,probedAt:now,
        transport:'private_hls_root_only',providerRequests:0,
        originPathsRequested:0,actualVideoVerified:false,customersRouted:false,
        code:'private_edge_unreachable'};
@@ -37,6 +37,6 @@ export function createReadReplicaObserver({fetchImpl=fetch,timeoutMs=1800}={}){
    }finally{clearTimeout(timer)}
  }
  return {check,snapshot:()=>latest?{...latest}:{configured:true,reachable:null,
-    privateNetworkOnly:true,service:'BLOFY MediaMTX Read Replica',
+    privateNetworkOnly:true,service:'BLOFY private HLS read edge',
     actualVideoVerified:false,customersRouted:false,code:'not_checked'}};
 }
