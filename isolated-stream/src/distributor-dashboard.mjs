@@ -394,6 +394,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const fields=[
     ['النوع',item.type==='app'?'كود':'Xtream'],
     ['العميل',item.customerName||'—'],
+    [item.type==='xtream'?'اسم مستخدم Xtream':'الكود',
+       item.type==='xtream'?(item.accountUsername||'اعرض البيانات'):
+         (item.codeHint||'اعرض الكود')],
     ['الجوال',item.customerPhone||'—'],
     ['الحالة',outcomeStatus(item)],
     ['الصلاحية',dateOnly(item.expiresAt)],
@@ -460,12 +463,18 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     const td=tableCell(tr,'لا توجد اشتراكات');td.colSpan=5;target.appendChild(tr);}
   for(const item of issueRows){
    const row=document.createElement('tr');
-   tableCell(row,item.type==='app'?'كود':'Xtream');
+   tableCell(row,item.type==='app'?
+     'كود · '+(item.codeHint||'عرضه من الإجراءات'):
+     'Xtream · '+(item.accountUsername||'عرض المستخدم من الإجراءات'));
    const customer=tableCell(row,item.customerName||'—');
    if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
    tableCell(row,dateOnly(item.expiresAt));
    tableCell(row,outcomeStatus(item));
    const actions=tableCell(row,'');
+   if(item.status==='done')rowButton(actions,'عرض/نسخ',async()=>{
+      const result=await request('reveal',{issueId:item.id});
+      showIssue(result);
+    });
    rowButton(actions,'إدارة',()=>showManage(item));
    target.appendChild(row);
   }
