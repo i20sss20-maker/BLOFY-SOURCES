@@ -83,9 +83,24 @@ export async function verifyReadReplicaSynthetic({
    }
    throw Error('replica_redirect_invalid');
  }
+ // HLS starts on demand. MediaMTX can answer 500 briefly until the
+ // private RTSP source publishes its first keyframe/segment. Retry ONLY the
+ // internal synthetic playlist with a strict total attempt cap; never retry
+ // Xtream provider or arbitrary URLs.
+ async function getWarmPlaylist(url){
+   for(let attempt=0;attempt<12;attempt++){
+     try{return (await get(url,48*1024)).toString('utf8')}
+     catch(error){
+       const retryable=['replica_http_error','replica_path_not_ready'].includes(error?.message);
+       if(!retryable||attempt===11)throw error;
+       await wait(900);
+     }
+   }
+   throw Error('replica_probe_failed');
+ }
  try{
    const url='/smoke/index.m3u8';
-   let playlist=(await get(url,48*1024)).toString('utf8');
+   let playlist=await getWarmPlaylist(url);
    for(let attempt=0;attempt<5;attempt++){
      if(!playlist.startsWith('#EXTM3U'))throw Error('replica_invalid_manifest');
      const match=/#EXTINF:[^\r\n]*\r?\n([^#\r\n]+)/.exec(playlist);
@@ -108,7 +123,7 @@ export async function verifyReadReplicaSynthetic({
      }
      if(attempt===4)break;
      await wait(1100);
-     playlist=(await get(url,48*1024)).toString('utf8');
+     playlist=await getWarmPlaylist(url);
    }
    throw Error('replica_segment_not_ready');
  }catch(err){
