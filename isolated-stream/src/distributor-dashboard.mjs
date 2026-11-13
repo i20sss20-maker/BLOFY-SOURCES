@@ -217,9 +217,23 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="card" id="library-panel"><div class="row"><h2>المكتبة</h2></div>
 <div class="formgrid"><div class="field"><label for="library-type">نوع المحتوى</label><select id="library-type">
 <option value="live">القنوات</option><option value="movie" selected>الأفلام</option><option value="series">المسلسلات</option></select></div>
+<div class="field"><label for="library-category">التصنيف</label><select id="library-category"><option value="">جميع التصنيفات</option></select></div>
 <div class="field"><label for="library-search">بحث</label><input id="library-search" type="search" maxlength="85" placeholder="ابحث عن عنوان..."></div>
 <div class="field"><label>&nbsp;</label><button id="library-go" class="btn secondary" type="button">عرض المحتوى</button></div></div>
-<div class="tablewrap" style="margin-top:15px"><table><thead><tr><th>العنوان</th><th>التصنيف</th><th>مجموعتي</th><th>ترتيب</th><th>العرض</th><th>تحكم</th></tr></thead><tbody id="library-rows"></tbody></table></div>
+<div class="catalog-top">
+ <div class="row"><span class="muted" id="library-total">المصدر: saleh · جار قراءة إجمالي المحتوى</span>
+ <span id="library-selection-count" role="status">تم تحديد 0</span></div>
+ <div class="library-actions" style="margin-top:9px">
+  <button class="btn secondary mini" id="library-select-all" type="button">تحديد كل العناصر المعروضة</button>
+  <button class="btn secondary mini" id="library-select-clear" type="button">إلغاء التحديد</button>
+  <button class="btn secondary mini" id="library-bulk-show" type="button">إظهار المحدد</button>
+  <button class="btn secondary mini" id="library-bulk-hide" type="button">إخفاء المحدد</button>
+  <input id="library-bulk-group" type="text" maxlength="60" placeholder="اسم المجموعة الجديدة" aria-label="اسم مجموعة العناصر المحددة">
+  <button class="btn secondary mini" id="library-bulk-group-save" type="button">نقل المحدد إلى المجموعة</button>
+ </div>
+ <p class="muted" style="margin:8px 0 0">تقدر تختار عناصر معينة أو جميع المعروضة (حتى 100 عنصر للعملية). بقية محتوى saleh تقدر توصله من التصنيفات والبحث وزر المزيد. التغييرات خاصة بمتجرك.</p>
+ </div>
+ <div class="tablewrap" style="margin-top:15px"><table><thead><tr><th scope="col">تحديد</th><th>العنوان</th><th>التصنيف</th><th>مجموعتي</th><th>ترتيب</th><th>العرض</th><th>تحكم</th></tr></thead><tbody id="library-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="library-count" class="muted">—</span><button id="library-more" class="btn secondary" type="button" hidden>المزيد</button></div></div>
 <dialog id="library-dialog" aria-labelledby="library-edit-title">
 <h2 id="library-edit-title">تنظيم المحتوى</h2>
@@ -724,7 +738,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('library-more').hidden=libraryNext==null;
   text('library-count','المعروض: '+body.children.length);
   if(!body.children.length){const tr=document.createElement('tr'),td=document.createElement('td');
-   td.colSpan=6;td.textContent='لا توجد عناصر مطابقة';tr.appendChild(td);body.appendChild(tr)}
+   td.colSpan=7;td.textContent='لا توجد عناصر مطابقة';tr.appendChild(td);body.appendChild(tr)}
  }
 
  $('library-edit-form').addEventListener('submit',async e=>{
