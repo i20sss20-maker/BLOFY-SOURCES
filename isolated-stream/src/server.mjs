@@ -135,7 +135,11 @@ export function createStreamServer({
   const liveSupervisor=createLiveRestreamSupervisor({
     portal:unifiedPortal,fetchImpl,
     httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
-    mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||''
+    mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    // Requires explicit admin activation after a verified saleh source pilot.
+    // Existing subscriber routing remains untouched by this operator control.
+    salehOnlyOrigin:process.env.BLOFY_STREAM_SALEH_ORIGIN_ENABLED==='1',
+    salehUpstreamChannelLimit:1
   });
   const vodBroker=createVodPreviewBroker({portal:unifiedPortal,fetchImpl});
   const autoHealth=createLiveAutoHealth({liveSupervisor,
