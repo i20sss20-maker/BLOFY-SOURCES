@@ -8,6 +8,7 @@ import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
+import {validateSalehOriginSource,salehOriginReadiness} from './saleh-origin-policy.mjs';
 
 const MTX='http://blofy-stream-media.railway.internal:9997';
 const HLS='http://blofy-stream-media.railway.internal:8888';
@@ -81,8 +82,12 @@ function buildCommand(name,ticket,{httpEofReconnect=false,audioMode='copy'}={}){
 export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
   maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,
-  httpEofReconnect=false,onUnexpectedError=()=>{}
+  httpEofReconnect=false,onUnexpectedError=()=>{},
+  salehOnlyOrigin=false,salehUpstreamChannelLimit=1
 }={}){
+  if(!Number.isSafeInteger(salehUpstreamChannelLimit)||
+      salehUpstreamChannelLimit<1||salehUpstreamChannelLimit>64)
+    throw new Error('saleh_origin_channel_limit_invalid');
   if(!Number.isInteger(maxSharedReaders)||maxSharedReaders<1||maxSharedReaders>2048)
     throw new Error('restream_shared_readers_invalid');
   const auth=optsAuth(mediaPassword);
@@ -150,6 +155,22 @@ export function createLiveRestreamSupervisor({
       }
       // One optional transcoder per isolated operator control service;
       // do not reconfigure any customer route or existing healthy channel.
+      if(salehOnlyOrigin===true){
+        // Inspect the existing authenticated source inventory before preparing
+        // a new publisher. No upstream Xtream request happens here.
+        if(typeof portal.overview!=='function')
+          return safe({ok:false,code:'saleh_origin_source_inventory_unavailable'},503);
+        const inventory=await portal.overview();
+        const verified=validateSalehOriginSource(inventory,sourceId);
+        if(!verified.ok)return safe(verified,
+          verified.code==='saleh_origin_source_inventory_unavailable'?503:409);
+        if(backupSourceId||backupChannelId)
+          return safe({ok:false,code:'saleh_origin_backup_requires_separate_capacity'},409);
+        if([...paths.values()].filter(row=>row.sourceId===sourceId).length
+          >=salehUpstreamChannelLimit)
+          return safe({ok:false,code:'saleh_origin_source_channel_limit',
+            existingPathsUnaffected:true,customerTrafficChanged:false},409);
+      }
       if(audioMode==='aac'&&[...paths.values()].some(row=>row.audioMode==='aac'))
         return safe({ok:false,code:'restream_audio_transcode_capacity_reached'},429);
       if(paths.size>=maxPaths)return safe({ok:false,code:'restream_capacity_reached'},409);
@@ -157,6 +178,8 @@ export function createLiveRestreamSupervisor({
       if(upstream.status!==200||upstream.body?.ok!==true)
         return safe({ok:false,code:upstream.body?.code||'restream_source_unavailable'},
           upstream.status>=400&&upstream.status<600?upstream.status:503);
+      if(salehOnlyOrigin===true&&upstream.body.sourceId!==sourceId)
+        return safe({ok:false,code:'saleh_origin_source_mismatch'},409);
       if(upstream.body.kind!=='live'||upstream.body.extension!=='ts'||typeof upstream.body.sourceUrl!=='string')
         return safe({ok:false,code:'restream_source_invalid'},502);
       try{await assertPublicMediaUrl(upstream.body.sourceUrl,{lookup})}
@@ -237,7 +260,11 @@ export function createLiveRestreamSupervisor({
       customerTrafficChanged:false},202);
   }
   function list(){
-    return {ok:true,maxPaths,maxSharedReaders,items:[...paths.values()].map(row=>({
+    return {ok:true,maxPaths,maxSharedReaders,
+      salehOrigin:salehOriginReadiness({enabled:salehOnlyOrigin,
+        paths:[...paths.values()],
+        upstreamChannelLimit:salehUpstreamChannelLimit}),
+      items:[...paths.values()].map(row=>({
       path:row.name,sourceId:row.sourceId,channelId:row.channelId,
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
