@@ -31,6 +31,7 @@ authInternalUsers:
 paths:
   "~^(live-[a-f0-9]{12})$":
     source: rtsp://blofy-stream-media.railway.internal:8554/$G1
+    rtspTransport: tcp
     sourceOnDemand: yes
     sourceOnDemandStartTimeout: 25s
     sourceOnDemandCloseAfter: 10s
@@ -38,6 +39,7 @@ paths:
   # Private synthetic test channel. Never references saleh/provider media.
   smoke:
     source: rtsp://blofy-stream-media.railway.internal:8554/smoke
+    rtspTransport: tcp
     sourceOnDemand: yes
     sourceOnDemandStartTimeout: 25s
     sourceOnDemandCloseAfter: 10s
