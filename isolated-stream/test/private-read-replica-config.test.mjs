@@ -11,7 +11,8 @@ test('BLOFY private replica pulls only authorized Origin live paths, never provi
  assert.match(text,/source: rtsp:\/\/blofy-stream-media\.railway\.internal:8554\/\$G1/);
  assert.match(text,/sourceOnDemand: yes/);
  assert.match(text,/maxReaders: 256/);
- assert.doesNotMatch(text,/source: https?:\/\//);
+ assert.match(text,/source: http:\/\/blofy-stream-media\.railway\.internal:8888\/smoke\/index\.m3u8/);
+ assert.doesNotMatch(text,/source: https?:\/\/(?!blofy-stream-media\.railway\.internal:8888\/smoke\/index\.m3u8)/);
  assert.doesNotMatch(text,/get\.php|player_api\.php|password=|source:\s*rtsp:\/\/[^\n]*@/);
  assert.doesNotMatch(text,/action: publish/);
  assert.match(text,/rtspTransports:\s*\[tcp\]/);
