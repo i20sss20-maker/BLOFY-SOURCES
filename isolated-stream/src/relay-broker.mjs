@@ -8,6 +8,7 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createLiveFanout} from './live-fanout.mjs';
 
 const TTL=45_000,MAX_TICKETS=1024,MAX_ISSUE_BYTES=4096;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TICKET_PATH=/^\/relay\/([0-9a-f]{48})$/;
 const mediaTypes=new Set(['live','movie','series']);
 function sameBearer(header,secret){
@@ -156,7 +157,12 @@ export function createRelayBroker({
       return respond(res,503,{ok:false,code:'relay_issue_unavailable'});
     const sharedLiveGranted=sharedLiveEnabled===true&&input.kind==='live'&&
       input.sharedLive===true;
+    const grouped=sharedLiveGranted&&
+      input.providerMaxConcurrentFeeds===1&&
+      UUID.test(String(input.licensedSourceId||''));
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
+      licensedSourceId:grouped?String(input.licensedSourceId).toLowerCase():null,
+      providerMaxConcurrentFeeds:grouped?1:null,
       sharedLive:sharedLiveGranted,
       // Only an already licensed, explicitly shared, signed bridge grant
       // may follow one provider-issued public CDN redirect.
@@ -184,7 +190,9 @@ export function createRelayBroker({
     if(row.uses>=5)tickets.delete(match[1]);
     if(row.sharedLive){
       try{return await fanout.handle(req,res,row.sourceUrl,{
-        allowProviderCdn:row.approvedProviderRedirect===true
+        allowProviderCdn:row.approvedProviderRedirect===true,
+        licensedSourceId:row.licensedSourceId,
+        providerMaxConcurrentFeeds:row.providerMaxConcurrentFeeds
       })}
       catch{
         if(res.headersSent||res.destroyed)return;
