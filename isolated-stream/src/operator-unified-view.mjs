@@ -468,6 +468,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted">هذا التقرير يقرأ آخر معلومات الاتصال التي أعلنها مزود المصدر وعدد الاشتراكات المرتبطة من قاعدة BLOFY. لا ينشئ اتصال بث ولا يُمثل عدد المشاهدين المتصلين الآن.</p></div>
   <button class="btn secondary" id="source-capacity-refresh" type="button">↻ قراءة السعة المحفوظة</button></div>
   <p class="muted" id="source-capacity-status" role="status" aria-live="polite">لم تُقرأ البيانات بعد.</p>
+<p class="diag-inline-note" id="source-capacity-insight" role="status" aria-live="polite">سنوضح المصادر التي تعلن اتصالًا واحدًا فور توفر البيانات؛ الاشتراكات ليست اتصالات مصدر.</p>
   <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>الحالة</th><th>حد المصدر المعلن</th>
   <th>اتصالات المزود المعلنة</th><th>اشتراكات مرتبطة وفعالة</th><th>HTTP مباشر الآن</th><th>بث مباشر HTTP الآن</th><th>آخر اختبار</th><th>التقييم</th>
   </tr></thead><tbody id="source-capacity-rows"></tbody></table></div>
@@ -971,7 +972,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var sources=(state.overview&&state.overview.sources)||[];
     ["stream-source","diagnostic-source","deep-audit-source","diagnostic-failures-source","library-source","account-source","codes-source","live-source","live-backup-source"].forEach(function(id){
       select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
-        id==="library-source"||id==="deep-audit-source"||id==="diagnostic-failures-source"?"كل المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
+        id==="deep-audit-source"?"المصدر الافتراضي للفحص":id==="library-source"||id==="diagnostic-failures-source"?"كل المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
     // AI works against exactly one source. Populate a nearby selector so
     // the operator does not have to scroll back to the catalog filters.
@@ -3311,6 +3312,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         snapshot_only:"لا يظهر خطر من آخر بيانات محفوظة"
       };
       var tbody=$("source-capacity-rows");tbody.replaceChildren();
+       var single=data.sources.filter(function(row){return row.enabled!==false&&row.sourceReportedMaxConnections===1}).length;
+       var noCapacity=data.sources.filter(function(row){return row.enabled!==false&&row.sourceReportedMaxConnections===0}).length;
+       value("source-capacity-insight",single?
+         "⚠ "+count(single)+" مصدر مفعّل يعلن اتصالًا واحدًا فقط لكل حساب؛ مشاركة نفس القناة قد توفر الاتصال عند وجود إذن، لكن تشغيل قنوات مختلفة يتطلب سعة منفصلة من المزود.":
+         noCapacity?"⚠ توجد مصادر تعلن عدم السماح بأي اتصال جديد؛ تحقق من المزود.":
+         "لم يظهر في البيانات المخزنة مصدر يعلن حدًا يساوي اتصالًا واحدًا. لا يعني ذلك أن السعة كافية حتى تُختبر.");
       data.sources.slice(0,60).forEach(function(row){
         var tr=node("tr");
         cell(tr,String(row.name||"مصدر غير مسمى"));
@@ -3338,6 +3345,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         ". قياس HTTP المباشر يشمل جلسات الوكيل المباشرة بهذه العملية فقط؛ لا يشمل التحويل 307 أو المشاركة أو HLS أو خدمات Edge أو نسخ Railway الأخرى، ولا يمثل عدد المشاهدين المميزين. لا يتم إنشاء اتصالات أو تغيير كود أو نقل مشترك.");
     }catch(error){
       value("source-capacity-status","تعذر قراءة حدود المصدر؛ الحالة غير معروفة، ولا يجوز افتراض سلامتها.");
+       value("source-capacity-insight","لا توجد قياسات سعة موثوقة حاليًا؛ لا نفترض أن المصادر تسمح بالمشاركة.");
       value("source-capacity-warning","هذا التقرير يتطلب بوابة BLOFY واتصال الإدارة المحمي. لا يوجد فحص بث إضافي. "+String(error.message||"").slice(0,90));
     }
   }
