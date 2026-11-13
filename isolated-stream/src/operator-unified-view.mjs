@@ -254,6 +254,41 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 @media(max-width:370px){.cards{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.view.active{animation:none}.app-sidebar{transition:none}}
 
+
+/* Diagnostic command-center: readable priority summaries and explicit safe actions. */
+.diag-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;background:radial-gradient(ellipse at 10% 5%,#275b8259,transparent 61%),linear-gradient(135deg,#122944,#121e37);border-color:#426d95}
+.diag-intro h3{font-size:clamp(21px,2.2vw,29px);margin:5px 0 8px}
+.diag-eyebrow{font-size:10px;font-weight:850;letter-spacing:1px;color:#94e5f5}
+.diag-quick,.diag-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.diag-quick .btn{white-space:nowrap}
+.diag-actions label,.diag-source-label{font-size:11px;font-weight:700;color:#b7cbe0;display:flex;align-items:center;gap:8px}
+.diag-actions select{min-width:145px;max-width:265px}
+.diag-priorities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:14px 0}
+.diag-priority{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:15px;background:#152b45;border:1px solid #3e5c7a;border-radius:14px;min-height:150px}
+.diag-priority[data-severity="warning"]{border-right:4px solid #f2bd70}
+.diag-priority[data-severity="unknown"]{border-right:4px solid #7899b8}
+.diag-priority strong{font-size:14px;color:#f2f8ff}
+.diag-priority p{flex:1;margin:0;color:#b4c9df;line-height:1.75;font-size:12px}
+.diag-priority .btn{align-self:flex-start}
+.diag-filterbar{display:flex;align-items:end;gap:11px;flex-wrap:wrap;margin:15px 0}
+.diag-filterbar label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:750;color:#c5d8ec}
+.diag-filterbar select{min-width:165px}
+.diag-filterbar input{min-width:min(70vw,265px)}
+.diag-filterbar .muted{padding:9px 0}
+.diag-state{font-size:11px;font-weight:750;border-radius:12px;padding:4px 9px;display:inline-block;white-space:nowrap}
+.diag-state.warning{background:#6f4b242f;color:#f9cb81;border:1px solid #8b6a3d}
+.diag-state.unknown{background:#243c55;color:#b9d1e6;border:1px solid #506883}
+.diag-state.ok{background:#133c34;color:#79e1c1;border:1px solid #2b7762}
+.diag-recommendations{display:grid;gap:8px}
+.diag-recommendations .row{align-items:center;gap:11px;background:#10243c;border:1px solid #304967;border-radius:12px;padding:13px}
+.diag-recommendations .row span.muted{flex:1}
+.diag-ai-result,.diag-inline-note{padding:12px 14px;margin:12px 0;border:1px solid #3e5978;border-radius:12px;background:#102540;color:#c7d7e9;line-height:1.85}
+.diag-device-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:13px 0}
+.diag-device{display:grid;gap:7px;padding:17px;border:1px solid #3e5978;border-radius:13px;background:#11273e}
+.diag-device strong{font-size:15px;color:#eaf6ff}.diag-device span{color:#b3c8dc;font-size:12px;line-height:1.8}
+@media(max-width:1100px){.diag-intro{flex-direction:column;align-items:stretch}.diag-priorities{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){.diag-priorities,.diag-device-grid{grid-template-columns:1fr}.diag-intro{padding:17px}.diag-actions select{max-width:180px}.diag-recommendations .row{flex-wrap:wrap}.diag-recommendations .row span.muted{flex-basis:100%}}
+
 </style>
 </head><body><div class="layout"><aside id="app-sidebar" class="app-sidebar" aria-label="القائمة الجانبية">
 <div class="sidebar-top"><div class="logo"><div class="logo-icon">B</div><div class="logo-copy"><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
@@ -728,10 +763,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <tbody id="dist-list"></tbody></table></div></div>
 </section>
 <section class="view" id="page-diagnostics"><div class="heading"><div><h2>الفحص والصيانة</h2><p>تشخيص المصادر ومحرك البث بدون تعديل محتوى المشتركين.</p></div></div>
+<div class="diag-intro panel" id="diagnostic-guided-center">
+ <div><span class="diag-eyebrow">BLOFY STREAM · تشخيص ذكي</span>
+ <h3>مركز فحص التشغيل والمصادر</h3>
+ <p class="muted">ابدأ بالبيانات المخزنة، ثم افحص عينة واحدة عند الحاجة وبأمرك. نجاح الخادم لا يثبت صوتًا وصورة على جهاز المشاهد.</p></div>
+ <div class="diag-quick">
+ <button type="button" class="btn secondary" id="diagnostic-go-capacity">📡 حدود المصدر</button>
+ <button type="button" class="btn secondary" id="diagnostic-go-audio">🔊 تشخيص الصوت</button>
+ <button type="button" class="btn secondary" id="diagnostic-go-failures">⚠️ سجل 404</button>
+ </div></div>
 <div class="panel" id="deep-audit-panel">
-<div class="controls"><h3>فحص النظام بالكامل</h3>
-<button id="deep-audit-run" class="btn" type="button">بدء الفحص</button>
-<button id="deep-audit-export" class="btn secondary" type="button">تصدير تقرير الدعم</button></div>
+<div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
+<div class="diag-actions"><label class="diag-source-label" for="deep-audit-source">المصدر <select id="deep-audit-source" aria-label="المصدر المراد فحصه"><option value="">كل المصادر</option></select></label>
+<button id="deep-audit-run" class="btn" type="button">↻ بدء الفحص</button>
+<button id="deep-audit-ai" class="btn secondary" type="button" disabled>🤖 تحليل Groq</button>
+<button id="deep-audit-export" class="btn secondary" type="button">تصدير تقرير الدعم</button></div></div>
 <p class="muted">فحص قراءة فقط، يعتمد على السجلات وحالات الخدمات، ولا يشغّل فيديو أو يغيّر اشتراكات العملاء.</p>
 <div class="cards">
 <div class="stat"><small>سليم حسب المؤشرات</small><strong id="deep-audit-ok">—</strong></div>
@@ -739,9 +785,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="stat"><small>لم يتم التحقق</small><strong id="deep-audit-unknown">—</strong></div>
 </div>
 <p class="muted" id="deep-audit-status" role="status" aria-live="polite">لم يبدأ الفحص بعد.</p>
+<div id="deep-audit-priorities" class="diag-priorities" aria-live="polite"><p class="muted">ستظهر هنا المشاكل الأهم بعد الفحص مع اختصارات الوصول للإجراء المناسب.</p></div>
+<div class="diag-filterbar"><label for="deep-audit-filter">عرض الحالة
+<select id="deep-audit-filter"><option value="all">جميع النتائج</option><option value="warning">تحتاج مراجعة</option><option value="unknown">غير مؤكدة</option><option value="ok">سليمة حسب المؤشرات</option></select></label>
+<label for="deep-audit-search">بحث في التقرير <input id="deep-audit-search" type="search" maxlength="90" placeholder="مثال: الصوت، القنوات، التحديثات"></label>
+<span id="deep-audit-visible" class="muted" role="status">—</span></div>
 <div class="tablewrap"><table><thead><tr><th>القسم</th><th>الحالة</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
 <tbody id="deep-audit-items"></tbody></table></div>
-<h4>الخطوات المقترحة</h4><div id="deep-audit-recommendations" aria-live="polite"></div>
+<p id="deep-audit-ai-result" class="diag-ai-result muted" role="status" aria-live="polite">تحليل Groq اختياري؛ يرسل أسماء مؤشرات مجهولة فقط عند الضغط ولا يصلح الأعطال تلقائيًا.</p>
+<h4>الخطوات المقترحة</h4><div id="deep-audit-recommendations" class="diag-recommendations" aria-live="polite"></div>
 </div>
 <div class="panel"><h3>فحص المصدر</h3><div class="inline"><select id="diagnostic-source"></select>
 <select id="diagnostic-type"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option><option value="episode">الحلقات</option></select>
@@ -765,11 +817,25 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="tablewrap"><table><thead><tr><th>الرقم</th><th>معرف الحلقة</th><th>امتداد التشغيل</th></tr></thead>
 <tbody id="diagnostic-episode-map-results"></tbody></table></div>
 </div>
-<div class="panel"><div class="controls"><h3>العناصر التي أعاد المزود لها 404</h3>
-<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث الحالات</button></div>
-<p class="muted">إحصاءات مسجلة من فحوص التشغيل الحقيقية. عدم وجود سجل لا يعني أن جميع عناصر المكتبة تعمل.</p>
+<div class="panel" id="media-failures-panel"><div class="controls"><div><h3>⚠️ سجل العناصر التي أعاد المزود لها 404</h3>
+<p class="muted">سجل تاريخي من الفحوص الفعلية؛ لا يعني أن العناصر ما زالت معطلة الآن.</p></div>
+<div class="diag-actions"><label for="diagnostic-failures-source">المصدر
+<select id="diagnostic-failures-source" aria-label="تصفية أخطاء 404 حسب المصدر"><option value="">كل المصادر</option></select></label>
+<button id="diagnostic-failures-reload" class="btn secondary sm" type="button">↻ تحديث السجل</button></div></div>
+<p id="diagnostic-failures-summary" class="diag-inline-note" role="status">لم تُقرأ بيانات الأخطاء بعد.</p>
 <div class="tablewrap"><table><thead><tr><th>المصدر</th><th>النوع</th><th>الحالة</th><th>العناصر</th><th>تستحق إعادة الفحص</th></tr></thead>
-<tbody id="diagnostic-failures"></tbody></table></div></div>
+<tbody id="diagnostic-failures"></tbody></table></div>
+<p class="muted">لا نحذف العناصر ولا نفترض أنها عادت للعمل؛ فحص عينة وسائط مصرح بها يتم يدويًا من «فحص المصدر» بالأعلى، ويختلف عن إعادة التحقق من كل عنصر 404 على حدة.</p>
+</div>
+<div class="panel" id="device-audio-validation">
+<h3>🎧 خطة التأكد من الصوت والصورة على الأجهزة</h3>
+<p class="muted">الفحص الآلي يحدد وصول المسارات والترميز فقط. التحقق النهائي يتطلب تشغيل قناة مسموح بها على الجهازين وسماع الصوت ومشاهدة الصورة.</p>
+<div class="diag-device-grid"><div class="diag-device"><strong>Android 9 / Android TV</strong><span>شغّل قناة فيها صوت معروف ثم أخرى متأثرة. لاحظ نوع المشكلة ووقت اختفاء الصوت. اختبر ترجمات الحلقة.</span></div>
+<div class="diag-device"><strong>Windows</strong><span>شغّل القناتين نفسهما وقارن محرك التشغيل وترميز الصوت وزمن فتح القناة وحالة الترجمة.</span></div></div>
+<div class="diag-quick"><button type="button" id="diagnostic-open-audio" class="btn secondary">عرض مسارات الصوت المرصودة</button>
+<button type="button" id="diagnostic-open-playback" class="btn secondary">عرض مراقبة تشغيل الوسائط</button></div>
+<p class="muted">نتائج تجربة الجهاز ليست مقيسة آليًا من الموقع، ولا يحوّل النظام الصوت أو يغيّر اشتراكات العملاء بمجرد عرض التشخيص.</p>
+</div>
 </section><footer>BLOFY STREAM · لوحة واحدة لبيانات السيرفر والمصادر والعملاء · جميع الأرقام من الخدمات الفعلية</footer>
 </main></div></div>
 <dialog id="command-palette" aria-label="اختصارات لوحة الإدارة">
@@ -903,9 +969,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   function renderSources(){
     var sources=(state.overview&&state.overview.sources)||[];
-    ["stream-source","diagnostic-source","library-source","account-source","codes-source","live-source","live-backup-source"].forEach(function(id){
+    ["stream-source","diagnostic-source","deep-audit-source","diagnostic-failures-source","library-source","account-source","codes-source","live-source","live-backup-source"].forEach(function(id){
       select(id,(id==="account-source"||id==="codes-source")?sources.filter(function(s){return s.enabled&&s.publishCatalog}):sources,
-        id==="library-source"?"جميع المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
+        id==="library-source"||id==="deep-audit-source"||id==="diagnostic-failures-source"?"كل المصادر":(id==="account-source"||id==="codes-source")?"جميع المصادر المنشورة":id==="live-backup-source"?"بدون مصدر احتياطي":null);
     });
     // AI works against exactly one source. Populate a nearby selector so
     // the operator does not have to scroll back to the catalog filters.
@@ -1071,49 +1137,134 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     });
     return values.join(" · ")||"—";
   }
+  var latestAudit=null;
+  function deepAuditTarget(entry){
+    if(entry.id==="sourceCapacity")return ["restream","source-capacity-panel"];
+    if(entry.id==="media404")return ["diagnostics","media-failures-panel"];
+    if(entry.id==="audio")return ["restream","shared-relay-audio-diagnostics"];
+    if(entry.id==="quality_live"||entry.id==="quality_movie"||entry.id==="quality_series"||entry.id==="playback")
+      return ["restream","smart-playback-panel"];
+    if(entry.id==="catalog_live"||entry.id==="catalog_movie"||entry.id==="catalog_series")
+      return ["library",null];
+    if(entry.id==="appUpdates"||entry.id==="subtitles"||entry.id==="episodes"||entry.id==="backup")
+      return ["diagnostics","device-audio-validation"];
+    return ["diagnostics","deep-audit-panel"];
+  }
+  function openAuditTarget(entry){
+    var target=deepAuditTarget(entry);
+    tab(target[0]);
+    requestAnimationFrame(function(){
+      if(target[1]&&$(target[1]))$(target[1]).scrollIntoView({behavior:"smooth",block:"start"});
+    });
+  }
+  function renderAuditRows(){
+    var tbody=$("deep-audit-items");tbody.replaceChildren();
+    var all=Array.isArray(latestAudit?.checks)?latestAudit.checks:[];
+    var wanted=$("deep-audit-filter").value,query=$("deep-audit-search").value.trim().toLowerCase();
+    var priority={warning:0,unknown:1,ok:2};
+    var rows=all.slice().sort(function(a,b){return (priority[a.status]??3)-(priority[b.status]??3)})
+      .filter(function(entry){
+        if(wanted!=="all"&&entry.status!==wanted)return false;
+        var text=(deepAuditNames[entry.id]||"")+" "+(deepAuditCodes[entry.code]||"")+" "+auditMetrics(entry.metrics);
+        return !query||text.toLowerCase().includes(query);
+      });
+    rows.forEach(function(entry){
+      var row=node("tr");
+      cell(row,deepAuditNames[entry.id]||"مؤشر إضافي");
+      var label=entry.status==="ok"?"سليم حسب المؤشرات":entry.status==="warning"?"يحتاج مراجعة":"غير مؤكّد";
+      cell(row,node("span",label,"diag-state "+(entry.status==="ok"?"ok":entry.status==="warning"?"warning":"unknown")));
+      cell(row,deepAuditCodes[entry.code]||"النتيجة غير معروفة");
+      cell(row,auditMetrics(entry.metrics));
+      tbody.appendChild(row);
+    });
+    if(!rows.length){var tr=node("tr");var td=cell(tr,"لا توجد نتائج مطابقة للفلتر.");td.colSpan=4;tbody.appendChild(tr)}
+    value("deep-audit-visible","المعروض "+count(rows.length)+" من "+count(all.length));
+  }
+  function renderAuditPriorities(report){
+    var target=$("deep-audit-priorities");target.replaceChildren();
+    var focus=["sourceCapacity","media404","audio","quality_live","quality_movie","quality_series"];
+    var checks=report.checks||[];
+    var rows=focus.map(function(id){return checks.find(function(c){return c.id===id})}).filter(Boolean);
+    rows=rows.sort(function(a,b){return Number(b.status==="warning")-Number(a.status==="warning")}).slice(0,3);
+    rows.forEach(function(entry){
+      var card=node("div",undefined,"diag-priority");
+      card.dataset.severity=entry.status==="warning"?"warning":"unknown";
+      card.appendChild(node("strong",deepAuditNames[entry.id]||"مؤشر التشخيص"));
+      var info=deepAuditCodes[entry.code]||"لا توجد عينة كافية للحكم.";
+      if(entry.id==="sourceCapacity"&&entry.metrics?.maxConnections===1)
+        info+=" · الحد المعلن اتصال واحد لحساب المصدر، وليس لكل كود.";
+      if(entry.id==="media404")
+        info+=" · العناصر المفقودة المسجلة: "+count(entry.metrics?.missing);
+      if(entry.id==="audio")
+        info+=" · المسارات المرصودة: "+count(entry.metrics?.observed)+"؛ غياب العينات لا يعني عدم وجود صوت.";
+      card.appendChild(node("p",info));
+      card.appendChild(button("فتح التفاصيل ←",function(){openAuditTarget(entry)},"secondary"));
+      target.appendChild(card);
+    });
+  }
   async function loadDeepAudit(){
-    var button=$("deep-audit-run"),tbody=$("deep-audit-items");
-    if(button.disabled)return;
-    button.disabled=true;value("deep-audit-status","جارٍ فحص مؤشرات النظام...");
+    var runButton=$("deep-audit-run"),tbody=$("deep-audit-items");
+    if(runButton.disabled)return;
+    runButton.disabled=true;$("deep-audit-ai").disabled=true;
+    value("deep-audit-status","جارٍ جمع مؤشرات النظام. لا يبدأ تشغيل وسائط...");
     try{
-      var sid=$("diagnostic-source").value||"";
+      var sid=$("deep-audit-source").value||"";
       var result=await api("full-audit"+(sid?"?sourceId="+encodeURIComponent(sid):""));
       if(!result.ok||!Array.isArray(result.checks))throw Error("نتيجة الفحص غير متاحة");
+      latestAudit=result;
       value("deep-audit-ok",count(result.summary?.ok));
       value("deep-audit-warning",count(result.summary?.warning));
       value("deep-audit-unknown",count(result.summary?.unknown));
-      tbody.replaceChildren();
-      result.checks.forEach(function(entry){
-        var row=node("tr"),status=entry.status==="ok"?"سليم حسب المؤشرات":
-          entry.status==="warning"?"يحتاج مراجعة":"غير مؤكّد";
-        cell(row,deepAuditNames[entry.id]||"مؤشر إضافي");
-        var color=node("span",status,entry.status==="ok"?"ok":"warn");
-        cell(row,color);
-        cell(row,deepAuditCodes[entry.code]||"النتيجة غير معروفة");
-        cell(row,auditMetrics(entry.metrics));
-        tbody.appendChild(row);
-      });
+      renderAuditRows();renderAuditPriorities(result);
       var recommended=$("deep-audit-recommendations");recommended.replaceChildren();
       (result.recommendations||[]).slice(0,12).forEach(function(entry){
         var element=node("div",undefined,"row");
-        element.style.margin="8px 0";
-        var title=node("strong",deepAuditNames[entry.checkId]||"توصية");
-        var description=node("span",entry.recommendation,"muted");
-        var open=button("فتح القسم",function(){tab(entry.module||"diagnostics")},"secondary");
-        element.appendChild(title);element.appendChild(description);
+        element.appendChild(node("strong",deepAuditNames[entry.checkId]||"توصية"));
+        element.appendChild(node("span",entry.recommendation,"muted"));
+        var check=(result.checks||[]).find(function(x){return x.id===entry.checkId});
+        var open=button("فتح التفاصيل",function(){openAuditTarget(check||{id:entry.checkId})},"secondary");
         element.appendChild(open);recommended.appendChild(element);
       });
       if(!recommended.children.length)
         recommended.appendChild(node("p","لا توجد توصيات جديدة من المؤشرات الحالية.","muted"));
-      var now=new Date(result.checkedAt||Date.now()).toLocaleString("ar-SA",
+      var now=new Date(result.checkedAt||Date.now()).toLocaleString("ar-SA-u-nu-latn",
         {timeZone:"Asia/Riyadh"});
       value("deep-audit-status","آخر فحص: "+now+" · "+result.checks.length+
         " مؤشر"+(result.cacheHit?" · نتيجة محفوظة حديثًا":"")+
+        " · "+(result.source?.name?"المصدر: "+result.source.name:"مصدر افتراضي حسب خدمة الفحص")+
         " · لا يشمل فك ترميز فيديو أو صوت على الأجهزة.");
+      $("deep-audit-ai").disabled=false;
     }catch(e){
       value("deep-audit-status","تعذر إكمال الفحص: "+e.message);
-    }finally{button.disabled=false}
+      tbody.replaceChildren();
+    }finally{runButton.disabled=false}
   }
+  $("deep-audit-filter").addEventListener("change",renderAuditRows);
+  $("deep-audit-search").addEventListener("input",renderAuditRows);
+  $("deep-audit-source").addEventListener("change",function(){
+    latestAudit=null;$("deep-audit-ai").disabled=true;
+    value("deep-audit-status","تغيّر المصدر؛ اضغط بدء الفحص للحصول على نتيجة جديدة.");
+  });
+  $("deep-audit-ai").addEventListener("click",async function(){
+    if(!latestAudit){value("deep-audit-ai-result","شغّل الفحص أولًا.");return}
+    this.disabled=true;value("deep-audit-ai-result","جار طلب تفسير Groq للمؤشرات المجهولة فقط...");
+    try{
+      var response=await action("full-audit/ai","full-audit-ai-explain",{});
+      value("deep-audit-ai-result",
+        (response.provider==="Groq"?"🤖 Groq: ":"")+
+        String(response.explanationAr||"تعذر الحصول على تفسير حاليًا")+
+        " · توجيه غير تنفيذي؛ يلزم اختبار الصوت والصورة على الجهاز.");
+    }catch(e){value("deep-audit-ai-result","تعذر تحليل Groq حاليًا: "+e.message+
+      " · التقرير المحلي لا يزال متاحًا، ولن يُعاد الاتصال تلقائيًا.");}
+    finally{this.disabled=false}
+  });
+  $("diagnostic-go-capacity").addEventListener("click",function(){openAuditTarget({id:"sourceCapacity"})});
+  $("diagnostic-go-audio").addEventListener("click",function(){openAuditTarget({id:"audio"})});
+  $("diagnostic-open-audio").addEventListener("click",function(){openAuditTarget({id:"audio"})});
+  $("diagnostic-open-playback").addEventListener("click",function(){openAuditTarget({id:"playback"})});
+  $("diagnostic-go-failures").addEventListener("click",function(){
+    $("media-failures-panel").scrollIntoView({behavior:"smooth",block:"start"});
+  });
   $("deep-audit-run").addEventListener("click",loadDeepAudit);
   $("deep-audit-export").addEventListener("click",async function(){
     var button=this;button.disabled=true;
@@ -3496,26 +3647,44 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{this.disabled=false}
   });
   async function loadFailures(){
-    var tbody=$("diagnostic-failures");tbody.replaceChildren();
+    var tbody=$("diagnostic-failures"),summary=$("diagnostic-failures-summary");
+    var sourceId=$("diagnostic-failures-source").value||"";
+    tbody.replaceChildren();summary.textContent="جار قراءة السجل المحفوظ؛ لا يبدأ فحص تشغيل جديد.";
     try{
-      var d=await api("media-failures");
-      if(!(d.entries||[]).length){
-        var empty=node("tr");var td=cell(empty,"لا توجد نتائج فشل 404 مسجلة حتى الآن");
-        td.colSpan=5;tbody.appendChild(empty);return;
-      }
-      (d.entries||[]).forEach(function(e){
+      var d=await api("media-failures"+(sourceId?"?sourceId="+encodeURIComponent(sourceId):""));
+      if(d.ok===false)throw Error(d.code||"media_failures_unavailable");
+      // Aggregate states only. The upstream currently exposes no safe item-level
+      // replay endpoint; do not imply an individual 404 was rechecked.
+      var rows=Array.isArray(d.entries)?d.entries:[];
+      var missing=0,due=0,recovered=0;
+      rows.forEach(function(e){
+        var n=Number(e.count)||0,needs=Number(e.due)||0;
+        if(e.state==="missing"){missing+=n;due+=needs}
+        if(e.state==="recovered")recovered+=n;
         var tr=node("tr");
         var source=(state.overview?.sources||[]).find(function(s){return s.id===e.sourceId});
-        cell(tr,source?.name||String(e.sourceId).slice(0,8));
-        cell(tr,e.kind);cell(tr,e.state);
+        cell(tr,source?.name||"مصدر غير مسمى");
+        cell(tr,({live:"قنوات",movie:"أفلام",series:"مسلسلات",episode:"حلقات"})[e.kind]||String(e.kind||"—"));
+        cell(tr,node("span",e.state==="missing"?"مفقود سابقًا":
+          e.state==="recovered"?"تعافٍ مسجّل":"سجل غير مصنف",
+          "diag-state "+(e.state==="missing"?"warning":e.state==="recovered"?"ok":"unknown")));
         cell(tr,count(e.count));cell(tr,count(e.due));tbody.appendChild(tr);
       });
+      if(!rows.length){
+        var empty=node("tr");var td=cell(empty,"لا توجد حالات 404 مسجلة ضمن نطاق الفلتر الحالي.");
+        td.colSpan=5;tbody.appendChild(empty);
+      }
+      summary.textContent="مفقود مسجّل: "+count(missing)+" · تستحق إعادة فحص: "+count(due)+
+        " · تعافٍ موثّق: "+count(recovered)+
+        " · السجل لا يثبت الحالة الحالية لكل عنصر.";
     }catch(e){
+      summary.textContent="تعذّر قراءة سجل 404؛ لا يمكن الحكم على العناصر.";
       var row=node("tr");var td=cell(row,"تعذر عرض سجل الأعطال: "+e.message);
       td.colSpan=5;tbody.appendChild(row);
     }
   }
   $("diagnostic-failures-reload").addEventListener("click",loadFailures);
+  $("diagnostic-failures-source").addEventListener("change",loadFailures);
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
   setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);
