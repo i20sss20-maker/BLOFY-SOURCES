@@ -245,6 +245,10 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   <button class="btn secondary mini" id="library-bulk-group-save" type="button">نقل المحدد إلى المجموعة</button>
  </div>
  <p class="muted" style="margin:8px 0 0">تقدر تختار عناصر معينة أو جميع المعروضة (حتى 100 عنصر للعملية). بقية محتوى saleh تقدر توصله من التصنيفات والبحث وزر المزيد. التغييرات خاصة بمتجرك.</p>
+ <div class="row" style="margin-top:12px">
+ <button class="btn secondary mini" type="button" id="library-preview">معاينة تأثير اختياراتي على مكتبة العملاء</button>
+ <span id="library-preview-result" role="status" aria-live="polite" class="muted">التنظيم محفوظ للتاجر فقط. اضغط المعاينة لمعرفة ما سيظهر للعملاء عند تفعيل تصفية المحتوى.</span>
+ </div>
  </div>
  <div class="tablewrap" style="margin-top:15px"><table><thead><tr><th scope="col">تحديد</th><th>العنوان</th><th>التصنيف</th><th>مجموعتي</th><th>ترتيب</th><th>العرض</th><th>تحكم</th></tr></thead><tbody id="library-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="library-count" class="muted">—</span><button id="library-more" class="btn secondary" type="button" hidden>المزيد</button></div></div>
@@ -855,6 +859,21 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    }catch(e){msg('تعذر التنظيم الجماعي: '+e.message,false)}
    finally{selectionState()}
  }
+ $('library-preview').addEventListener('click',async()=>{
+   const btn=$('library-preview');btn.disabled=true;
+   text('library-preview-result','جار حساب تأثير اختياراتك على مكتبة saleh...');
+   try{
+     const r=await request('library-preview',{type:$('library-type').value});
+     text('library-preview-result',
+       'إجمالي المحتوى: '+r.total+
+       ' · سيظهر: '+r.wouldShow+
+       ' · سيُخفى: '+r.wouldHide+
+       ' · المجموعات المخصصة: '+r.grouped+
+       ' · اشتراكات التاجر: '+r.merchantIssuedSubscriptions+
+       ' · معاينة فقط؛ لم يُعدّل محتوى أي عميل');
+   }catch(e){text('library-preview-result','تعذر حساب المعاينة: '+e.message)}
+   finally{btn.disabled=false}
+ });
  $('library-bulk-show').addEventListener('click',()=>saveLibraryBulk('show'));
  $('library-bulk-hide').addEventListener('click',()=>saveLibraryBulk('hide'));
  $('library-bulk-group-save').addEventListener('click',()=>saveLibraryBulk('group'));
