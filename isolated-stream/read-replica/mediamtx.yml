@@ -8,6 +8,7 @@ rtspTransports: [tcp]
 rtmp: no
 srt: no
 webrtc: no
+moq: no
 hls: yes
 hlsAddress: :8888
 hlsVariant: mpegts
