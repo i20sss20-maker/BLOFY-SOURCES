@@ -158,11 +158,12 @@ export function createRelayBroker({
     const sharedLiveGranted=sharedLiveEnabled===true&&input.kind==='live'&&
       input.sharedLive===true;
     const grouped=sharedLiveGranted&&
-      input.providerMaxConcurrentFeeds===1&&
+      Number.isSafeInteger(input.providerMaxConcurrentFeeds)&&
+      input.providerMaxConcurrentFeeds>=1&&input.providerMaxConcurrentFeeds<=64&&
       UUID.test(String(input.licensedSourceId||''));
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
       licensedSourceId:grouped?String(input.licensedSourceId).toLowerCase():null,
-      providerMaxConcurrentFeeds:grouped?1:null,
+      providerMaxConcurrentFeeds:grouped?input.providerMaxConcurrentFeeds:null,
       sharedLive:sharedLiveGranted,
       // Only an already licensed, explicitly shared, signed bridge grant
       // may follow one provider-issued public CDN redirect.
