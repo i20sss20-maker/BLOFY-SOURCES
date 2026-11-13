@@ -36,12 +36,14 @@ paths:
     sourceOnDemandStartTimeout: 25s
     sourceOnDemandCloseAfter: 10s
     maxReaders: 256
-  # Private synthetic test channel. Never references saleh/provider media.
+  # Fixed synthetic-only QA path. Read the origin over private RTSP/TCP,
+  # exactly like the production live-* read replicas. HLS->HLS on-demand
+  # previously timed out while the origin's own test playlist was working.
+  # Never contacts saleh, a provider URL, or a customer session.
   smoke:
-    # Only private synthetic QA uses HLS-to-HLS; production live paths
-    # retain low-latency RTSP-over-TCP origin pulls.
-    source: http://blofy-stream-media.railway.internal:8888/smoke/index.m3u8
+    source: rtsp://blofy-stream-media.railway.internal:8554/smoke
+    rtspTransport: tcp
     sourceOnDemand: yes
-    sourceOnDemandStartTimeout: 25s
-    sourceOnDemandCloseAfter: 10s
+    sourceOnDemandStartTimeout: 30s
+    sourceOnDemandCloseAfter: 15s
     maxReaders: 2
