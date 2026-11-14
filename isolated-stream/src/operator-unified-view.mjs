@@ -608,6 +608,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
+<div class="panel" id="content-hub-season-entry" style="border:1px solid #38bdf8;background:linear-gradient(120deg,#102941,#13233b);margin-bottom:18px">
+ <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+  <div>
+   <h3 style="margin:0 0 8px">📚 إدارة المواسم والحلقات الجديدة</h3>
+   <p class="muted" style="margin:0">بعد نجاح تشغيل الحلقة، يمكنك إدارة المسلسلات والمواسم ونقل الحلقات ومتابعة النسبة والإيقاف والاستكمال من مركز المحتوى الخاص. هذا القسم يُفتح في لوحة BLOFY PLAYER الإدارية، وليس داخل مكتبة STREAM الحالية.</p>
+  </div>
+  <a class="btn" id="content-hub-season-launch" href="https://blofyplayer.com/admin/content-hub" target="_blank" rel="noopener noreferrer" aria-label="فتح إدارة المواسم والحلقات في مركز محتوى BLOFY PLAYER">📂 فتح إدارة المواسم والحلقات ↗</a>
+ </div>
+ <p class="muted" style="margin:10px 0 0;font-size:13px">قد تحتاج تسجيل الدخول بحساب الإدارة في الصفحة الجديدة. لا يبدأ أي نقل بمجرد فتحها، ولا تتغير مسارات تشغيل المشتركين.</p>
+</div>
 <div class="panel" id="content-hub-batches">
 <h3>⬇ تنزيل أفلام BLOFY على دفعات آمنة</h3>
 <p class="muted">ينقل كل طلب جزءًا واحدًا فقط (8 ميجابايت)، ويحفظه في التخزين الخاص مع التحقق من سلامته. يمكن استكمال الأجزاء المحفوظة دون تنزيلها مجددًا. لا يتم تحويل تشغيل المشتركين تلقائيًا.</p>
@@ -639,7 +649,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
 </div>
 <div class="panel" id="content-hub-episodes">
-<h3>📺 المرحلة التالية: تجهيز نقل حلقات المسلسلات</h3>
+<h3>📺 الحلقات المخزنة والمواسم</h3>
+<p class="muted"><a href="https://blofyplayer.com/admin/content-hub" target="_blank" rel="noopener noreferrer">↗ إدارة المواسم والحلقات واختيار دفعات النقل الجديدة في مركز المحتوى</a></p>
 <p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
 <div class="actions">
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
