@@ -17,6 +17,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
     const budget=path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
       path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
+      path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
@@ -268,6 +269,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
    return call(SEASONS+'series/'+n);
   };
   const contentHubSeasonQueue=()=>call(SEASONS+'queue');
+  const contentHubSeasonHealth=()=>call(SEASONS+'health');
+  const contentHubSeasonAudit=({runId,confirmed}={})=>{
+   if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_storage_audit_owner_confirmation_required'}});
+   return call(SEASONS+'audit',{method:'POST',body:{runId,confirmed:true}});
+  };
   const contentHubSeasonAVStatus=()=>call(SEASONS+'confirmation');
   const contentHubSeasonProbe=({gatewayId,confirmed}={})=>{
    const n=Number(gatewayId);
@@ -414,7 +422,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
-    contentHubSeasonQueue,contentHubSeasonAVStatus,contentHubSeasonProbe,
+    contentHubSeasonQueue,contentHubSeasonHealth,contentHubSeasonAudit,
+    contentHubSeasonAVStatus,contentHubSeasonProbe,
     contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
     contentHubSeasonAVConfirm};
 }
