@@ -1,13 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
-import {createStreamServer} from '../src/server.mjs';
+import http from 'node:http';
+import {createOperatorDashboard} from '../src/operator-dashboard.mjs';
 
 const secret='operator-owner-verified-preview-secret-long';
 const bridge='private-stream-portal-bridge-secret-longer-than-forty-characters';
 const auth='Basic '+Buffer.from('operator:'+secret).toString('base64');
 async function withServer(options,cb){
- const {app}=createStreamServer(options);
+ const operator=createOperatorDashboard({
+  adminToken:secret,unifiedSecret:bridge,
+  engineOrigin:'http://blofy-stream-media.railway.internal:8888',
+  ...options});
+ const app=http.createServer((req,res)=>{
+  if(!operator.handle(req,res)){res.writeHead(404);res.end()}
+ });
  app.listen(0,'127.0.0.1');
  await once(app,'listening');
  try{return await cb('http://127.0.0.1:'+app.address().port)}
