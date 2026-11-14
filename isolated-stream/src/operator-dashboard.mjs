@@ -2,6 +2,7 @@
 // credentials, source catalogs or production services. No API tokens in HTML.
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-unified-view.mjs';
+import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
@@ -136,10 +137,19 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const nonce=randomBytes(16).toString('base64');
       const body=Buffer.from(renderOperatorDashboard(nonce));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store',
-        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    // This route is reachable only after the exact operator Basic auth
+    // above; never expose a private S3 or internal portal URL to browsers.
+    if(path==='/operator/api/content-hub/preview'){
+      void streamOperatorOwnerPreview({req,res,
+        getUpstream:({signal})=>portal.contentHubPreviewRaw({signal})})
+        .catch(()=>{if(!res.headersSent)json(res,503,{
+          ok:false,code:'owner_preview_stream_failed'})});
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/stream-release'){
       void releaseInspector.inspect().then(report=>json(res,200,report))
