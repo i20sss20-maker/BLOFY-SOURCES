@@ -1581,6 +1581,126 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     p.style.cssText="width:100%;height:14px;accent-color:#60a5fa";
     return p;
   }
+  var seasonHealthBusy=false;
+  var seasonHealthDescriptions={
+    season_episodes_failed:"حلقات فشلت وتحتاج مراجعة يدوية",
+    season_worker_interrupted:"حلقات توقفت بعد إعادة تشغيل الخدمة، ويمكن استكمالها يدويًا",
+    season_storage_budget_near_threshold:"اقتربت البايتات المسجلة من الحد التخطيطي الذي حدده المسؤول",
+    season_storage_integrity_mismatch:"فحص SHA-256 اكتشف اختلافًا حقيقيًا في جزء مخزّن",
+    season_storage_audit_unavailable:"تعذر قراءة بعض الأجزاء من التخزين أثناء الفحص"
+  };
+  var seasonAuditDescriptions={
+    season_storage_sample_verified:"✓ الأجزاء المختبرة سليمة (فحص جزئي فقط)",
+    season_storage_checksum_mismatch:"❌ اختلفت بصمة SHA-256: يحتاج الملف إلى مراجعة",
+    season_storage_read_unavailable:"⚠ تعذر قراءة جزء من التخزين: تحقق من الاتصال",
+    season_storage_manifest_unavailable:"⚠ لا يوجد سجل مكتمل وصالح لهذه الحلقة"
+  };
+  function seasonFormatAuditTime(value){
+    var date=new Date(value||0);
+    return Number.isFinite(date.getTime())?
+      date.toLocaleString("ar-SA"):"—";
+  }
+  async function refreshSeasonHealth(){
+    if(seasonHealthBusy)return;
+    seasonHealthBusy=true;
+    $("season-health-refresh").disabled=true;
+    try{
+      var data=await api("content-hub/seasons/health");
+      if(data.ok!==true)throw Error("season_health_unavailable");
+      $("season-health-summary").textContent="إجمالي الحلقات في قائمة النقل: "+
+        Number(data.episodeCount||0)+" · المكتملة: "+
+        Number(data.verifiedCount||0)+" · الفاشلة: "+
+        Number(data.failedCount||0)+" · قيد الانتظار: "+
+        Number(data.queuedCount||0)+
+        " · البايتات المحفوظة وفق السجلات: "+hubBytes(data.storedBytes);
+      $("season-storage-progress").value=Math.min(100,
+        Math.max(0,Number(data.percent)||0));
+      $("season-storage-note").textContent=
+        "البايتات المؤكدة في المواسم: "+hubBytes(data.verifiedBytes)+
+        " · إجمالي حجم الحلقات المحددة: "+hubBytes(data.expectedBytes)+
+        " · نسبة النقل: "+Number(data.percent||0)+"%."+
+        (data.budgetBytes?
+         " الحد التخطيطي: "+hubBytes(data.budgetBytes)+
+          " ("+data.budgetUtilization+"% من الحد).":"")+
+        " المساحة المتبقية الحقيقية في S3 غير معروفة، والبيانات من PostgreSQL.";
+      var alerts=$("season-health-alerts");alerts.replaceChildren();
+      if(!Array.isArray(data.alerts)||!data.alerts.length){
+        var good=seasonNode("p","muted",
+          "✅ لا تظهر تنبيهات مسجلة في حالة المواسم الحالية.");
+        good.style.color="#70e3bc";alerts.append(good);
+      }else{
+        data.alerts.slice(0,10).forEach(function(a){
+          var item=seasonNode("p","muted",
+            (a.severity==="error"?"❌ ":"⚠️ ")+
+            (seasonHealthDescriptions[a.code]||"تنبيه من النظام")+
+            " ("+Number(a.count||0)+")");
+          item.style.cssText="margin:3px 0;color:"+
+            (a.severity==="error"?"#ff9a9a":"#ffcf87");
+          alerts.append(item);
+        });
+      }
+      var select=$("season-audit-select"),before=select.value;
+      select.replaceChildren(new Option("اختر حلقة مكتملة",""));
+      var seen=new Set();
+      if(/^[A-Za-z0-9_-]{8,80}$/.test(String(data.verifiedPilotRunId||""))){
+        select.add(new Option("الحلقة التجريبية المحفوظة",
+          String(data.verifiedPilotRunId)));
+        seen.add(data.verifiedPilotRunId);
+      }
+      seasonRows.filter(function(r){
+        return r.state==="verified"&&
+          /^[A-Za-z0-9_-]{8,80}$/.test(String(r.runId||""))&&
+          !seen.has(r.runId);
+      }).forEach(function(r){
+        select.add(new Option("حلقة "+r.episodeNumber+" · "+
+          String(r.title||"").slice(0,60),String(r.runId)));
+        seen.add(r.runId);
+      });
+      if(seen.has(before))select.value=before;
+      $("season-audit-run").disabled=!select.value;
+      var audits=$("season-health-audit-list");audits.replaceChildren();
+      (Array.isArray(data.latestAudits)?data.latestAudits:[])
+        .slice(0,8).forEach(function(record){
+          audits.append(seasonNode("div","",
+            (seasonAuditDescriptions[record.code]||"فحص غير محدد")+
+            " · "+record.checkedParts+"/"+record.totalParts+
+            " أجزاء · "+seasonFormatAuditTime(record.checkedAt)));
+        });
+    }catch(e){
+      $("season-health-summary").textContent=
+       "تعذّر قراءة صحة التخزين حاليًا؛ لا يمكن تأكيد سلامة الملفات من هذه القراءة.";
+      $("season-audit-run").disabled=true;
+    }finally{
+      seasonHealthBusy=false;$("season-health-refresh").disabled=false;
+    }
+  }
+  $("season-health-refresh").addEventListener("click",refreshSeasonHealth);
+  $("season-audit-select").addEventListener("change",function(){
+    $("season-audit-run").disabled=!this.value;
+  });
+  $("season-audit-run").addEventListener("click",async function(){
+    var selected=$("season-audit-select").value;
+    if(!/^[A-Za-z0-9_-]{8,80}$/.test(selected))return;
+    if(!confirm("فحص بصمة SHA-256 لعينة من أول ووسط وآخر أجزاء الحلقة؟ يقرأ حدًا أقصى 24 ميجابايت من S3، ولا يفحص جميع أجزاء الملف."))return;
+    this.disabled=true;
+    $("season-audit-status").textContent=
+      "جارٍ التحقق من الأجزاء المحددة من التخزين الخاص…";
+    try{
+      var result=await action("content-hub/seasons/audit","season-audit",
+        {confirmed:true,runId:selected});
+      $("season-audit-status").textContent=
+        (seasonAuditDescriptions[result.code]||result.code)+
+        " · عدد الأجزاء المختبرة "+Number(result.checkedParts||0)+
+        " من "+Number(result.totalParts||0)+
+        " · بايتات تم فحصها "+hubBytes(result.checkedBytes)+
+        ". لا يعني هذا فحص الملف كاملًا.";
+    }catch(error){
+      $("season-audit-status").textContent=
+        "تعذر إكمال الفحص: "+String(error.message||"غير متاح")+
+        " — إن كررت الطلب خلال دقيقة، انتظر انتهاء فترة الحماية.";
+    }
+    await refreshSeasonHealth();
+  });
   function seasonRefreshButtons(data){
     var active=data?.worker?.active===true;
     var ready=data?.readiness?.ready===true;
@@ -1907,10 +2027,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     await refreshSeasonQueue();
   });
   refreshSeasonQueue();
+  refreshSeasonHealth();
   setInterval(function(){
     if(!document.hidden&&$("page-library")?.classList.contains("active"))
       refreshSeasonQueue();
   },11000);
+  setInterval(function(){
+    if(!document.hidden&&$("page-library")?.classList.contains("active"))
+      refreshSeasonHealth();
+  },30000);
   loadContentHub();
   setInterval(function(){
     var page=$("page-library");
