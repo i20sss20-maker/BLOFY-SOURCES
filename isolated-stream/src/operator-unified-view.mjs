@@ -669,6 +669,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
      </div>
      <p class="muted" id="season-audit-status" role="status">فحص يدوي يقرأ حتى 24 ميجابايت من التخزين الخاص فقط؛ لا يحمّل من مزود القنوات ولا يغيّر الملفات.</p>
      <div id="season-health-audit-list" class="muted" style="margin-top:9px"></div>
+     <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2b4b6d">
+      <h4>⚡ اختبار قراءتين متزامنتين من التخزين الخاص</h4>
+      <p class="muted">اختبار يدوي لحلقتين مكتملتين مختلفتين: يقرأ جزءًا واحدًا (حتى 8 MB) من كل حلقة بالتزامن ويتحقق من SHA-256. هذا اختبار أداء التخزين فقط، وليس اختبار تشغيل مشتركين فعليين أو فك فيديو.</p>
+      <div class="actions">
+       <select id="season-concurrent-first" aria-label="الحلقة الأولى" style="max-width:270px"><option value="">الحلقة الأولى</option></select>
+       <select id="season-concurrent-second" aria-label="الحلقة الثانية" style="max-width:270px"><option value="">الحلقة الثانية</option></select>
+      </div>
+      <button id="season-concurrent-run" type="button" class="btn secondary" disabled>▶ فحص قراءتين متزامنتين</button>
+      <p class="muted" id="season-concurrent-status" role="status">يتطلب حلقتين مختلفتين مكتملتين ومصرّحًا بتخزينهما. لا يبدأ تلقائيًا.</p>
+     </div>
     </div>
     <div class="panel" style="margin-top:14px;background:rgba(5,15,30,.3)">
      <h4>③ اعتماد تشغيل الحلقة بالصوت والصورة</h4>
@@ -1663,6 +1673,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       });
       if(seen.has(before))select.value=before;
       $("season-audit-run").disabled=!select.value;
+      var first=$("season-concurrent-first"),second=$("season-concurrent-second");
+      var firstBefore=first.value,secondBefore=second.value;
+      first.replaceChildren(new Option("الحلقة الأولى",""));
+      second.replaceChildren(new Option("الحلقة الثانية",""));
+      Array.from(select.options).filter(function(option){return option.value}).forEach(
+        function(option){
+          first.add(new Option(option.textContent,option.value));
+          second.add(new Option(option.textContent,option.value));
+        });
+      if(seen.has(firstBefore))first.value=firstBefore;
+      if(seen.has(secondBefore))second.value=secondBefore;
+      $("season-concurrent-run").disabled=!
+        (first.value&&second.value&&first.value!==second.value);
+      if(seen.size<2)$("season-concurrent-status").textContent=
+        "لا تتوفر حلقتان مكتملتان مختلفتان حتى الآن. الاختبار مقفل لحماية المصدر.";
       var audits=$("season-health-audit-list");audits.replaceChildren();
       (Array.isArray(data.latestAudits)?data.latestAudits:[])
         .slice(0,8).forEach(function(record){
@@ -1677,6 +1702,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("season-health-summary").textContent=
        "تعذّر قراءة صحة التخزين حاليًا؛ لا يمكن تأكيد سلامة الملفات من هذه القراءة.";
       $("season-audit-run").disabled=true;
+      $("season-concurrent-run").disabled=true;
     }finally{
       seasonHealthBusy=false;$("season-health-refresh").disabled=false;
     }
@@ -1707,6 +1733,32 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " — إن كررت الطلب خلال دقيقة، انتظر انتهاء فترة الحماية.";
     }
     await refreshSeasonHealth();
+  });
+  function seasonConcurrentEnable(){
+    var first=$("season-concurrent-first").value;
+    var second=$("season-concurrent-second").value;
+    $("season-concurrent-run").disabled=!first||!second||first===second;
+  }
+  $("season-concurrent-first").addEventListener("change",seasonConcurrentEnable);
+  $("season-concurrent-second").addEventListener("change",seasonConcurrentEnable);
+  $("season-concurrent-run").addEventListener("click",async function(){
+    var a=$("season-concurrent-first").value,b=$("season-concurrent-second").value;
+    if(!a||!b||a===b||!confirm("تشغيل قراءتين متزامنتين من S3 فقط، بحد أقصى 16 ميجابايت في الإجمالي؟ لا يتضمن بث مشتركين."))return;
+    this.disabled=true;
+    $("season-concurrent-status").textContent="جارٍ اختبار قراءة حلقتين معًا من التخزين الخاص…";
+    try{
+      var result=await action("content-hub/seasons/concurrent-read",
+        "season-concurrent-read",{confirmed:true,runIds:[a,b]});
+      $("season-concurrent-status").textContent=result.ok?
+        "✅ نجحت قراءتان متزامنتان من التخزين: "+
+        result.checkedChunks+"/2 جزء · "+hubBytes(result.requestedBytes)+
+        " · "+Number(result.durationMs||0)+" مللي ثانية. هذا لا يثبت تحمّل المشتركين أو تشغيل الفيديو.":
+        "فشل فحص التخزين المتزامن: "+String(result.code||"غير معروف");
+    }catch(error){
+      $("season-concurrent-status").textContent=
+        "تعذر الفحص: "+String(error.message||"غير متاح")+
+        ". يوجد حد حماية: محاولة واحدة كل دقيقتين.";
+    }finally{seasonConcurrentEnable()}
   });
   function seasonRefreshButtons(data){
     seasonLastQueueData=data;
