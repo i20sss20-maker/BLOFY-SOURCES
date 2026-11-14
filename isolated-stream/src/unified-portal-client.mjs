@@ -15,7 +15,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+    const budget=path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
+      path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
+      path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
