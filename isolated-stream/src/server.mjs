@@ -435,6 +435,23 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
           }));
         }).catch(()=>console.warn('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',
           JSON.stringify({ok:false,code:'bridge_probe_error'})));
+        // Metadata-only season bridge proof. Never reads upstream media or
+        // reveals object keys, credentials, title names or subscriber data.
+        void portal.contentHubSeasonQueue().then(({status,body})=>{
+          const rows=Array.isArray(body?.episodes)?body.episodes:[];
+          console.info('BLOFY_STREAM_SEASON_BRIDGE_PROOF',JSON.stringify({
+            ok:status===200&&body?.ok===true,
+            ready:body?.readiness?.ready===true,
+            blockedBy:Array.isArray(body?.readiness?.blockedBy)?
+              body.readiness.blockedBy.slice(0,12):[],
+            queued:rows.filter(x=>x.state==='queued').length,
+            verified:rows.filter(x=>x.state==='verified').length,
+            active:body?.worker?.active===true,
+            providerMediaRequests:0,customerCutover:false
+          }));
+        }).catch(()=>console.warn('BLOFY_STREAM_SEASON_BRIDGE_PROOF',
+          JSON.stringify({ok:false,code:'season_bridge_unavailable',
+            providerMediaRequests:0,customerCutover:false})));
       },15000);timer.unref?.();
     }
     // Operator-triggered once per deployment. No provider credentials and
