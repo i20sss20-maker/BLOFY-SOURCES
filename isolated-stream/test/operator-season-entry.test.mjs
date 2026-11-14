@@ -39,7 +39,7 @@ test('STREAM library embeds real season controls without redirecting to old admi
  assert.match(html,/50 حلقة بحد أقصى/);
  assert.match(html,/اختبار قراءتين متزامنتين من التخزين الخاص/);
  assert.match(html,/api\("content-hub\/seasons\/series"/);
- assert.match(html,/api\("content-hub\/seasons\/queue"/);
+ assert.match(html,/api\("content-hub\/seasons\/queue\/page\/"\+seasonPage/);
  assert.match(html,/action\("content-hub\/seasons\/enqueue","season-enqueue"/);
  assert.match(html,/action\("content-hub\/seasons\/start","season-start"/);
  assert.match(html,/action\("content-hub\/seasons\/pause","season-pause"/);
