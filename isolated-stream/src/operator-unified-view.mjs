@@ -644,6 +644,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
      <h4>② قائمة النقل ونسب الحلقات</h4>
      <p id="season-queue-note" class="muted" role="status">جارٍ قراءة قائمة الانتظار...</p>
+     <label for="season-max-batches">ميزانية الجلسة الواحدة (نقل متسلسل، حد الجزء 8 MB)</label>
+     <select id="season-max-batches" style="width:100%;margin:7px 0">
+      <option value="12" selected>آمن — حتى 12 جزءًا (96 MB)</option>
+      <option value="60">متوسط — حتى 60 جزءًا (480 MB)</option>
+      <option value="120">موسع — حتى 120 جزءًا (960 MB)</option>
+     </select>
+     <p class="muted">تُطبّق الميزانية عند الضغط على بدء فقط، مع حد زمني مستقل 45 دقيقة. لا تشغيل تلقائي، ويمكن إيقاف النقل يدويًا.</p>
      <div class="actions">
       <button class="btn" id="season-start" type="button" disabled>▶ بدء / استكمال النقل</button>
       <button class="btn secondary" id="season-pause" type="button" disabled>⏸ إيقاف آمن</button>
@@ -2041,9 +2048,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     if(!confirm("تأكيد وجود حقوق التخزين، وعدم انشغال مصدر البث حاليًا؟ سيبدأ النقل المتسلسل بحلقة واحدة في كل مرة."))return;
     this.disabled=true;
     try{
+      var budget=Number($("season-max-batches").value);
+      if(![12,60,120].includes(budget))throw Error("ميزانية النقل غير صالحة");
       await action("content-hub/seasons/start","season-start",
-        {confirmed:true,licensedStorage:true,sourceIdle:true});
-      seasonMessage("بدأت جلسة النقل الآمن. راقب نسب الحلقات أدناه.");
+        {confirmed:true,licensedStorage:true,sourceIdle:true,
+         maxBatches:budget});
+      seasonMessage("بدأت جلسة نقل متسلسلة بحد أقصى "+budget+
+        " جزءًا (حتى "+hubBytes(budget*8388608)+"). راقب نسب الحلقات أدناه.");
     }catch(e){seasonMessage("تعذر بدء النقل: "+e.message)}
     finally{await refreshSeasonQueue()}
   });
