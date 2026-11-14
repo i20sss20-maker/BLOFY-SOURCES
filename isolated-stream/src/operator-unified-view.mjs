@@ -1173,7 +1173,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var candidates=Array.isArray(response.candidates)?response.candidates:[];
       $("content-hub-episodes-status").textContent=candidates.length?
         "ظهرت "+count(candidates.length)+" حلقات مؤهلة للفحص. لم يبدأ نقل أي حلقة. اختر حلقة لاحقًا بعد تأكيد صلاحية التخزين.":
-        "لا توجد حلقات مؤهلة في فهرس المصدر حاليًا.";
+        "لا توجد حلقات مفهرسة مؤهلة حاليًا. قد تحتاج مزامنة تفاصيل المسلسلات أولًا؛ لا يعني هذا أن المصدر خالٍ من المسلسلات.";
       candidates.forEach(function(item){
         var card=document.createElement("p");
         card.className="muted";
