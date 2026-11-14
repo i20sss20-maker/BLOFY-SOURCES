@@ -19,7 +19,8 @@ test('STREAM library embeds real season controls without redirecting to old admi
   'season-health-alerts','season-audit-select','season-audit-run',
   'season-health-audit-list','season-audit-status',
   'season-concurrent-first','season-concurrent-second','season-concurrent-run',
-  'season-concurrent-status','season-max-batches']){
+  'season-concurrent-status','season-max-batches',
+  'season-page-label','season-page-previous','season-page-next']){
   assert.match(html,new RegExp('id="'+id+'"'),id);
  }
  assert.match(html,/إدارة المواسم والحلقات — داخل BLOFY STREAM/);
@@ -33,6 +34,9 @@ test('STREAM library embeds real season controls without redirecting to old admi
  assert.match(html,/action\("content-hub\/seasons\/retry",\s*"season-retry"/);
  assert.match(html,/إعادة محاولة يدوية للحلقة/);
  assert.match(html,/manualRetries/);
+ assert.match(html,/content-hub\/seasons\/queue\/page\/"\+seasonPage/);
+ assert.match(html,/seasonTotalEpisodes/);
+ assert.match(html,/50 حلقة بحد أقصى/);
  assert.match(html,/اختبار قراءتين متزامنتين من التخزين الخاص/);
  assert.match(html,/api\("content-hub\/seasons\/series"/);
  assert.match(html,/api\("content-hub\/seasons\/queue"/);
