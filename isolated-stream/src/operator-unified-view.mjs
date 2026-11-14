@@ -1620,6 +1620,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   var seasonHealthDescriptions={
     season_episodes_failed:"حلقات فشلت وتحتاج مراجعة يدوية",
     season_worker_interrupted:"حلقات توقفت بعد إعادة تشغيل الخدمة، ويمكن استكمالها يدويًا",
+    season_checkpoint_no_progress:"تنبيه: لم يُحفظ تقدم جديد للحلقة الجارية منذ أكثر من ثلاث دقائق (قد يكون جزء كبير قيد النقل)",
     season_storage_budget_near_threshold:"اقتربت البايتات المسجلة من الحد التخطيطي الذي حدده المسؤول",
     season_storage_integrity_mismatch:"فحص SHA-256 اكتشف اختلافًا حقيقيًا في جزء مخزّن",
     season_storage_audit_unavailable:"تعذر قراءة بعض الأجزاء من التخزين أثناء الفحص"
@@ -1673,6 +1674,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           var item=seasonNode("p","muted",
             (a.severity==="error"?"❌ ":"⚠️ ")+
             (seasonHealthDescriptions[a.code]||"تنبيه من النظام")+
+            (a.code==="season_checkpoint_no_progress"&&
+              Number(a.ageSeconds)>=180?" · "+
+              seasonTransferSeconds(a.ageSeconds):"")+
             " ("+Number(a.count||0)+")");
           item.style.cssText="margin:3px 0;color:"+
             (a.severity==="error"?"#ff9a9a":"#ffcf87");
