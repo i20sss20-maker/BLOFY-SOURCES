@@ -644,6 +644,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
      <h4>② قائمة النقل ونسب الحلقات</h4>
      <p id="season-queue-note" class="muted" role="status">جارٍ قراءة قائمة الانتظار...</p>
+     <p id="season-transfer-live" class="muted" role="status" aria-live="polite">السرعة والوقت المتبقي يظهران بعد حفظ جزءين متتاليين أثناء النقل. لا توجد حركة بث تلقائية.</p>
      <label for="season-state-filter">تصفية قائمة الحلقات حسب الحالة</label>
      <select id="season-state-filter" style="width:100%;margin:8px 0">
       <option value="all">كل الحلقات</option>
@@ -1784,6 +1785,53 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         ". يوجد حد حماية: محاولة واحدة كل دقيقتين.";
     }finally{seasonConcurrentEnable()}
   });
+  // Read-only browser calculation from actual persisted PostgreSQL byte
+  // checkpoints. No guessed source bitrate or full-file ETA before two
+  // positive observations; no history is uploaded or written to provider.
+  var seasonTransferSamples=new Map();
+  function seasonTransferSeconds(seconds){
+    var n=Math.max(0,Math.ceil(Number(seconds)||0));
+    if(n>=3600)return Math.ceil(n/3600)+" ساعة تقريبًا";
+    if(n>=60)return Math.ceil(n/60)+" دقيقة تقريبًا";
+    return n+" ثانية تقريبًا";
+  }
+  function seasonTransferProgress(row,worker){
+    if(!row||!worker||row.state!=="running"||
+       worker.active!==true||String(worker.currentRunId||"")!==String(row.runId||"")){
+      if(row?.runId)seasonTransferSamples.delete(row.runId);
+      return "";
+    }
+    var id=String(row.runId),now=Date.now();
+    var copied=Math.max(0,Number(row.bytesCopied)||0);
+    var expected=Math.max(copied,Number(row.expectedBytes)||0);
+    var prev=seasonTransferSamples.get(id);
+    var next={at:now,bytes:copied,rate:0,lastPositive:0};
+    if(prev&&copied>=prev.bytes&&now>prev.at&&now-prev.at<=90000){
+      var instant=(copied-prev.bytes)*1000/(now-prev.at);
+      if(instant>0){
+        next.rate=prev.rate>0?0.6*instant+0.4*prev.rate:instant;
+        next.lastPositive=now;
+      }else if(now-prev.lastPositive<30000){
+        next.rate=prev.rate;next.lastPositive=prev.lastPositive;
+      }
+    }
+    seasonTransferSamples.set(id,next);
+    // A long in-flight chunk may not yet be checkpointed. Warn about
+    // checkpoint age only. Never claim the source or playback is down.
+    var age=Number(row.checkpointAgeSeconds);
+    if(Number.isFinite(age)&&age>=180){
+      return "⚠️ لم يُحفظ جزء جديد منذ "+seasonTransferSeconds(age)+
+        ". راجع اتصال النقل إن استمر؛ لا يعني ذلك توقف بث المشتركين.";
+    }
+    if(next.rate>0&&now-next.lastPositive<30000&&expected>copied){
+      var eta=(expected-copied)/next.rate;
+      return "سرعة الحفظ المقاسة: "+hubBytes(next.rate)+
+        "/ثانية · الوقت المتبقي تقديريًا: "+
+        (Number.isFinite(eta)&&eta<=86400?seasonTransferSeconds(eta):
+          "غير محدد");
+    }
+    return "جارٍ النقل، بانتظار تسجيل جزء جديد لحساب السرعة والوقت المتبقي.";
+  }
   function seasonRefreshButtons(data){
     seasonLastQueueData=data;
     var active=data?.worker?.active===true;
@@ -1856,6 +1904,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           selectedState+"/page/"+seasonPage);
       }
       seasonRows=Array.isArray(data.episodes)?data.episodes:[];
+      var current=(data.worker?.active===true)?String(data.worker.currentRunId||""):"";
+      $("season-transfer-live").textContent=current?
+        "نقل حلقة واحدة متسلسلًا؛ تُقاس السرعة بعد حفظ الأجزاء (كل جزء حتى 8 MB). لا تؤثر القراءة على المشتركين.":
+        "لا توجد عملية نقل نشطة. السرعة والوقت المتبقي يظهران بعد تسجيل تقدم فعلي.";
+      // Prevent keeping stale measurement samples forever when navigating.
+      if(seasonTransferSamples.size>50){
+        seasonTransferSamples.forEach(function(v,key){
+          if(Date.now()-v.at>120000)seasonTransferSamples.delete(key);
+        });
+      }
       $("season-page-previous").disabled=seasonPage<=1;
       $("season-page-next").disabled=seasonPage>=seasonPages;
       $("season-page-label").textContent="الصفحة "+seasonPage+" من "+seasonPages+
@@ -1890,6 +1948,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
               }[r.state]||"قيد المعالجة"));
             item.style.marginTop="8px";
             card.append(item,seasonMeter(r.percent));
+            var transfer=seasonTransferProgress(r,data?.worker||{});
+            if(transfer){
+              var speed=seasonNode("p","muted",transfer);
+              speed.style.cssText="margin:5px 0 10px;color:"+
+                (transfer.startsWith("⚠️")?"#ffcf87":"#9eead4");
+              card.append(speed);
+              if(String(data.worker?.currentRunId||"")===String(r.runId))
+                $("season-transfer-live").textContent=transfer;
+            }
             if(r.state==="failed"){
               var why=({
                 episode_retryable_error:"فشل اتصال مؤقت بالمصدر",
