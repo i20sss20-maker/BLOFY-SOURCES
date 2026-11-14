@@ -18,6 +18,8 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  assert.ok(html.includes('content-hub/batch/pause'));
  assert.ok(html.includes('content-hub/playback/diagnose'));
  assert.ok(html.includes('canary_audio_video_decoded'));
+ assert.ok(html.includes('canary_audio_video_and_seeks_verified'));
+ assert.ok(html.includes('seeksVerified'));
  assert.ok(html.includes('setInterval(function()'));
  assert.ok(html.includes('data.continuousCopy'));
  assert.match(html,/id="content-hub-next-batch" type="button" aria-describedby=/);
