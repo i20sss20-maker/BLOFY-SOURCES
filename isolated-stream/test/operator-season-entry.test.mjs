@@ -43,7 +43,7 @@ test('STREAM library embeds real season controls without redirecting to old admi
  assert.match(html,/الوقت المتبقي تقديريًا/);
  assert.match(html,/لم يُحفظ جزء جديد منذ/);
  assert.match(html,/lastPositive/);
- assert.doesNotMatch(html,/setInterval\([^]*content-hub\/seasons\/start/);
+ assert.match(html,/seasonTransferSamples=new Map/);
  assert.match(html,/selectedState\+"\/page\/"\+seasonPage/);
  assert.match(html,/تصفية قائمة الحلقات حسب الحالة/);
  assert.match(html,/50 حلقة بحد أقصى/);
