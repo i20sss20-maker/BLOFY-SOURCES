@@ -178,3 +178,25 @@ test('manual failed-episode requeue requires source-idle and owner rights; never
  assert.deepEqual(observed[0].body,{runId,confirmed:true,
   licensedStorage:true,sourceIdle:true});
 });
+
+
+test('paged season queue never permits unbounded query or malformed page',async()=>{
+ const calls=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   calls.push({path:new URL(url).pathname,method:init.method,
+    auth:init.headers.authorization});
+   return new Response(JSON.stringify({ok:true,page:{number:2,pages:4,
+     pageSize:50,totalEpisodes:180},episodes:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ for(const page of [0,-1,20001,'2?token=bad',0.5]){
+  const bad=await client.contentHubSeasonQueuePage(page);
+  assert.equal(bad.status,400);
+ }
+ assert.equal(calls.length,0);
+ const result=await client.contentHubSeasonQueuePage(2);
+ assert.equal(result.status,200);
+ assert.equal(result.body.page.totalEpisodes,180);
+ assert.deepEqual(calls,[{path:'/internal/blofy-stream/content-hub/seasons/queue/page/2',
+  method:'GET',auth:'Bearer '+secret}]);
+});
