@@ -10,13 +10,19 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  for(const id of ['content-hub-batches','content-hub-next-batch',
    'content-hub-preflight','content-hub-summary','content-hub-runs',
    'content-hub-start-copy','content-hub-pause-copy','content-hub-progress',
-   'content-hub-percent','content-hub-diagnose','content-hub-canary-status'])
+   'content-hub-percent','content-hub-diagnose','content-hub-canary-status',
+   'content-hub-episodes','content-hub-episodes-check',
+   'content-hub-episodes-status','content-hub-episodes-list'])
    assert.ok(html.includes('id="'+id+'"'),id);
  assert.ok(html.includes('content-hub/status'));
  assert.ok(html.includes('content-hub/batch/next'));
  assert.ok(html.includes('content-hub/batch/start'));
  assert.ok(html.includes('content-hub/batch/pause'));
  assert.ok(html.includes('content-hub/playback/diagnose'));
+ assert.ok(html.includes('content-hub/episodes/candidates'));
+ assert.ok(html.includes('لم يبدأ نقل أي حلقة'));
+ assert.ok(html.includes('out.replaceChildren()'));
+ assert.ok(html.includes('card.textContent='));
  assert.ok(html.includes('canary_audio_video_decoded'));
  assert.ok(html.includes('canary_audio_video_and_seeks_verified'));
  assert.ok(html.includes('seeksVerified'));
@@ -55,6 +61,7 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  assert.equal(calls.length,0);
  await client.contentHubStatus();
  await client.contentHubPreflight();
+ await client.contentHubEpisodeCandidates();
  const approved=await client.contentHubNextBatch({confirmed:true});
  assert.equal(approved.status,202);
  const noStart=await client.contentHubStartCopy({confirmed:false});
@@ -70,13 +77,14 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  assert.deepEqual(calls.map(x=>x.path),[
   '/internal/blofy-stream/content-hub/status',
   '/internal/blofy-stream/content-hub/preflight',
+  '/internal/blofy-stream/content-hub/episodes/candidates',
   '/internal/blofy-stream/content-hub/batch/next',
   '/internal/blofy-stream/content-hub/batch/start',
   '/internal/blofy-stream/content-hub/batch/pause',
   '/internal/blofy-stream/content-hub/playback/diagnose']);
- assert.equal(calls[2].method,'POST');
- assert.deepEqual(calls[2].body,{confirmed:true});
+ assert.equal(calls[3].method,'POST');
  assert.deepEqual(calls[3].body,{confirmed:true});
- assert.deepEqual(calls[5].body,{confirmed:true});
+ assert.deepEqual(calls[4].body,{confirmed:true});
+ assert.deepEqual(calls[6].body,{confirmed:true});
  assert.ok(calls.every(x=>x.auth==='Bearer '+secret));
 });
