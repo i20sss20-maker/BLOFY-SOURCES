@@ -22,6 +22,12 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  assert.ok(html.includes('seeksVerified'));
  assert.ok(html.includes('setInterval(function()'));
  assert.ok(html.includes('data.continuousCopy'));
+ assert.ok(html.includes('movieComplete'));
+ assert.ok(html.includes('✅ الفيلم محفوظ بالكامل'));
+ assert.ok(html.includes('لا تضغط بدء أو استكمال مرة ثانية'));
+ assert.match(html,/content-hub-start-copy"\)\.disabled=movieComplete/);
+ assert.match(html,/content-hub-next-batch"\)\.disabled=movieComplete/);
+ assert.ok(html.includes('r.state==="verified"'));
  assert.match(html,/id="content-hub-next-batch" type="button" aria-describedby=/);
  assert.doesNotMatch(html,/id="content-hub-next-batch" type="button" disabled/);
  assert.match(html,/hubBlockerLabels/);
