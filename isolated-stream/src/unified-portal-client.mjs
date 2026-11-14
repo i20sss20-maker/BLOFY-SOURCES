@@ -278,6 +278,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
    return call(SEASONS+'concurrent-read',{method:'POST',
     body:{runIds,confirmed:true}});
   };
+  const contentHubSeasonRetry=({runId,confirmed,licensedStorage,sourceIdle}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_retry_manual_review_required'}});
+   return call(SEASONS+'retry',{method:'POST',body:{
+    runId,confirmed:true,licensedStorage:true,sourceIdle:true}});
+  };
   const contentHubSeasonQueue=()=>call(SEASONS+'queue');
   const contentHubSeasonHealth=()=>call(SEASONS+'health');
   const contentHubSeasonAudit=({runId,confirmed}={})=>{
@@ -434,7 +442,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
-    contentHubSeasonQueue,contentHubSeasonHealth,contentHubSeasonAudit,
+    contentHubSeasonQueue,contentHubSeasonRetry,
+    contentHubSeasonHealth,contentHubSeasonAudit,
     contentHubConcurrentRead,
     contentHubSeasonAVStatus,contentHubSeasonProbe,
     contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
