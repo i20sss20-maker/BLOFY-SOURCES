@@ -18,6 +18,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const budget=path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
       path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
       path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
+      path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
@@ -268,6 +269,15 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return Promise.resolve({status:400,body:{ok:false,code:'season_id_invalid'}});
    return call(SEASONS+'series/'+n);
   };
+  const contentHubConcurrentRead=({runIds,confirmed}={})=>{
+   if(confirmed!==true||!Array.isArray(runIds)||runIds.length!==2||
+     runIds[0]===runIds[1]||runIds.some(x=>
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(x||''))))
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'private_read_canary_owner_confirmation_required'}});
+   return call(SEASONS+'concurrent-read',{method:'POST',
+    body:{runIds,confirmed:true}});
+  };
   const contentHubSeasonQueue=()=>call(SEASONS+'queue');
   const contentHubSeasonHealth=()=>call(SEASONS+'health');
   const contentHubSeasonAudit=({runId,confirmed}={})=>{
@@ -423,6 +433,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
     contentHubSeasonQueue,contentHubSeasonHealth,contentHubSeasonAudit,
+    contentHubConcurrentRead,
     contentHubSeasonAVStatus,contentHubSeasonProbe,
     contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
     contentHubSeasonAVConfirm};
