@@ -609,14 +609,61 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
 <div class="panel" id="content-hub-season-entry" style="border:1px solid #38bdf8;background:linear-gradient(120deg,#102941,#13233b);margin-bottom:18px">
- <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
-  <div>
-   <h3 style="margin:0 0 8px">📚 إدارة المواسم والحلقات الجديدة</h3>
-   <p class="muted" style="margin:0">بعد نجاح تشغيل الحلقة، يمكنك إدارة المسلسلات والمواسم ونقل الحلقات ومتابعة النسبة والإيقاف والاستكمال من مركز المحتوى الخاص. هذا القسم يُفتح في لوحة BLOFY PLAYER الإدارية، وليس داخل مكتبة STREAM الحالية.</p>
+  <div class="controls">
+   <div><h3 style="margin:0">📚 إدارة المواسم والحلقات — داخل BLOFY STREAM</h3>
+    <p class="muted" style="margin:4px 0">اختيار المسلسلات، النقل الآمن، النسب، الإيقاف والاستكمال من نفس المكتبة. دون فتح الموقع القديم.</p></div>
+   <div class="actions"><button class="btn secondary" id="season-refresh" type="button">↻ تحديث المواسم</button>
+    <span class="pill" id="season-online">جار فحص الاتصال</span></div>
   </div>
-  <a class="btn" id="content-hub-season-launch" href="https://blofyplayer.com/admin/content-hub" target="_blank" rel="noopener noreferrer" aria-label="فتح إدارة المواسم والحلقات في مركز محتوى BLOFY PLAYER">📂 فتح إدارة المواسم والحلقات ↗</a>
- </div>
- <p class="muted" style="margin:10px 0 0;font-size:13px">قد تحتاج تسجيل الدخول بحساب الإدارة في الصفحة الجديدة. لا يبدأ أي نقل بمجرد فتحها، ولا تتغير مسارات تشغيل المشتركين.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px;margin-top:12px">
+   <div>
+    <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
+     <h4>① اختر المسلسل والموسم</h4>
+     <div class="actions">
+      <button id="season-pilot" class="btn secondary" type="button">🔍 مسلسل الحلقة المحفوظة</button>
+      <button id="season-series-load" class="btn secondary" type="button">عرض المسلسلات</button>
+     </div>
+     <label for="season-series-select">المسلسل</label>
+     <select id="season-series-select" style="width:100%;max-width:100%;margin:7px 0"><option value="">اختر مسلسلًا</option></select>
+     <div class="actions">
+      <input id="season-series-id" type="number" min="1" step="1" placeholder="أو رقم المسلسل" aria-label="معرف المسلسل" style="max-width:220px">
+      <button class="btn secondary" id="season-series-open" type="button">فتح بالرقم</button>
+      <button class="btn" id="season-series-episodes" type="button" disabled>عرض المواسم</button>
+     </div>
+     <label for="season-season-select">الموسم</label>
+     <select id="season-season-select" disabled style="width:100%;max-width:100%;margin:7px 0"><option value="">اختر الموسم</option></select>
+     <div class="actions">
+      <button class="btn secondary" id="season-select-batch" type="button" disabled>تحديد أول 12 حلقة</button>
+      <button class="btn" id="season-enqueue" type="button" disabled>＋ إضافة إلى الانتظار</button>
+     </div>
+     <p class="muted" id="season-candidates-note" role="status">اختر مسلسلًا ثم موسمًا. فحص حجم الحلقة يقرأ 4 كيلوبايت فقط.</p>
+     <div id="season-candidates" style="max-height:460px;overflow:auto;display:grid;gap:10px" aria-live="polite"></div>
+    </div>
+   </div>
+   <div>
+    <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
+     <h4>② قائمة النقل ونسب الحلقات</h4>
+     <p id="season-queue-note" class="muted" role="status">جارٍ قراءة قائمة الانتظار...</p>
+     <div class="actions">
+      <button class="btn" id="season-start" type="button" disabled>▶ بدء / استكمال النقل</button>
+      <button class="btn secondary" id="season-pause" type="button" disabled>⏸ إيقاف آمن</button>
+     </div>
+     <div id="season-queue-list" aria-live="polite" style="display:grid;gap:12px;margin-top:12px"></div>
+     <p class="muted" style="margin:10px 0 0">يُحفظ التقدم في PostgreSQL والتخزين الخاص. لا تُحوّل قنوات أو أكواد المشتركين تلقائيًا.</p>
+    </div>
+    <div class="panel" style="margin-top:14px;background:rgba(5,15,30,.3)">
+     <h4>③ اعتماد تشغيل الحلقة بالصوت والصورة</h4>
+     <p class="muted">بعد تشغيل العينة من التخزين تأكد من الصورة والصوت في متصفحك؛ بدون ذلك لن يبدأ نقل الموسم.</p>
+     <button id="season-play-preview" type="button" class="btn secondary">▶ تشغيل عينة الحلقة المحفوظة</button>
+     <video id="season-preview-video" controls playsinline preload="none" style="width:100%;max-height:320px;display:block;background:black;border-radius:12px;margin:12px 0"></video>
+     <label style="display:block;margin-top:8px"><input type="checkbox" id="season-video-okay"> شاهدت الصورة بوضوح</label>
+     <label style="display:block;margin-top:8px"><input type="checkbox" id="season-audio-okay"> سمعت الصوت بشكل صحيح</label>
+     <div class="actions" style="margin-top:12px"><button id="season-av-confirm" type="button" class="btn" disabled>✓ اعتماد اختبار التشغيل</button></div>
+     <p class="muted" id="season-av-note" role="status">لم يُسجّل تأكيد المتصفح بعد.</p>
+    </div>
+   </div>
+  </div>
+  <p class="muted" id="season-action-note" role="status" style="margin-top:14px">جميع عمليات النقل تتطلب صلاحية تخزين المحتوى وخمول المصدر، ولا تبدأ تلقائيًا.</p>
 </div>
 <div class="panel" id="content-hub-batches">
 <h3>⬇ تنزيل أفلام BLOFY على دفعات آمنة</h3>
@@ -650,7 +697,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </div>
 <div class="panel" id="content-hub-episodes">
 <h3>📺 الحلقات المخزنة والمواسم</h3>
-<p class="muted"><a href="https://blofyplayer.com/admin/content-hub" target="_blank" rel="noopener noreferrer">↗ إدارة المواسم والحلقات واختيار دفعات النقل الجديدة في مركز المحتوى</a></p>
+<p class="muted">يمكنك إدارة المواسم من القسم الجديد بأعلى هذه الصفحة دون الانتقال لأي لوحة أخرى.</p>
 <p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
 <div class="actions">
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
