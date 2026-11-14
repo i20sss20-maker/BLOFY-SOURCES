@@ -468,7 +468,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
-      const action=path==='/operator/api/content-hub/episodes/probe'?'content-hub-episode-probe':
+      const action=path==='/operator/api/content-hub/episodes/next'?'content-hub-episode-next':
+        path==='/operator/api/content-hub/episodes/probe'?'content-hub-episode-probe':
         path==='/operator/api/content-hub/playback/diagnose'?'content-hub-playback-diagnose':
         path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
         path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
@@ -491,6 +492,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='content-hub-episode-next')return portal.contentHubNextEpisodeChunk(data);
         if(action==='content-hub-episode-probe')return portal.contentHubProbeEpisode(data);
         if(action==='content-hub-playback-diagnose')return portal.contentHubDiagnosePlayback(data);
         if(action==='content-hub-copy-start')return portal.contentHubStartCopy(data);
