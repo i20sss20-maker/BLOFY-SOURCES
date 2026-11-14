@@ -434,8 +434,11 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     const seasonQueuePageRoute=path.match(
       /^\/operator\/api\/content-hub\/seasons\/queue\/page\/([1-9][0-9]{0,4})$/);
-    if(req.method==='GET'&&seasonQueuePageRoute){
-      const page=Number(seasonQueuePageRoute[1]);
+    const seasonFilterPageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/status\/(all|pending|queued|running|paused|verified|failed)\/page\/([1-9][0-9]{0,4})$/);
+    if(req.method==='GET'&&(seasonQueuePageRoute||seasonFilterPageRoute)){
+      const page=Number(seasonQueuePageRoute?.[1]||seasonFilterPageRoute?.[2]);
+      const state=seasonFilterPageRoute?.[1]||'all';
       if(page>20000){
         json(res,400,{ok:false,code:'season_queue_page_invalid'});
         return true;
@@ -444,7 +447,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         json(res,400,{ok:false,code:'season_queue_query_denied'});
         return true;
       }
-      void portal.contentHubSeasonQueuePage(page)
+      void portal.contentHubSeasonQueuePage(page,{state})
        .then(({status,body})=>json(res,status,body))
        .catch(()=>json(res,503,{
         ok:false,code:'season_queue_page_unavailable'}));
