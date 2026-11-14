@@ -20,6 +20,9 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  assert.ok(html.includes('content-hub/batch/pause'));
  assert.ok(html.includes('content-hub/playback/diagnose'));
  assert.ok(html.includes('content-hub/episodes/candidates'));
+ assert.ok(html.includes('content-hub/episodes/probe'));
+ assert.ok(html.includes('فحص حجم هذه الحلقة (4 KB فقط)'));
+ assert.ok(html.includes('dataset.episodeProbe='));
  assert.ok(html.includes('لم يبدأ نقل أي حلقة'));
  assert.ok(html.includes('out.replaceChildren()'));
  assert.ok(html.includes('card.textContent='));
@@ -62,6 +65,12 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  await client.contentHubStatus();
  await client.contentHubPreflight();
  await client.contentHubEpisodeCandidates();
+ const deniedEpisode=await client.contentHubProbeEpisode({gatewayId:332,confirmed:false});
+ assert.equal(deniedEpisode.status,400);
+ const wrongEpisode=await client.contentHubProbeEpisode({gatewayId:-1,confirmed:true});
+ assert.equal(wrongEpisode.status,400);
+ const episodeSize=await client.contentHubProbeEpisode({gatewayId:332,confirmed:true});
+ assert.equal(episodeSize.status,202);
  const approved=await client.contentHubNextBatch({confirmed:true});
  assert.equal(approved.status,202);
  const noStart=await client.contentHubStartCopy({confirmed:false});
@@ -78,13 +87,15 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
   '/internal/blofy-stream/content-hub/status',
   '/internal/blofy-stream/content-hub/preflight',
   '/internal/blofy-stream/content-hub/episodes/candidates',
+  '/internal/blofy-stream/content-hub/episodes/probe',
   '/internal/blofy-stream/content-hub/batch/next',
   '/internal/blofy-stream/content-hub/batch/start',
   '/internal/blofy-stream/content-hub/batch/pause',
   '/internal/blofy-stream/content-hub/playback/diagnose']);
  assert.equal(calls[3].method,'POST');
- assert.deepEqual(calls[3].body,{confirmed:true});
+ assert.deepEqual(calls[3].body,{gatewayId:332,confirmed:true});
  assert.deepEqual(calls[4].body,{confirmed:true});
- assert.deepEqual(calls[6].body,{confirmed:true});
+ assert.deepEqual(calls[5].body,{confirmed:true});
+ assert.deepEqual(calls[7].body,{confirmed:true});
  assert.ok(calls.every(x=>x.auth==='Bearer '+secret));
 });
