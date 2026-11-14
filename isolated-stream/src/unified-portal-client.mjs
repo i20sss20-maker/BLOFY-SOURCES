@@ -302,12 +302,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       code:'season_enqueue_owner_confirmation_required'}});
    return call(SEASONS+'enqueue',{method:'POST',body:data});
   };
-  const contentHubSeasonStart=({confirmed,licensedStorage,sourceIdle}={})=>{
-   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true)
+  const contentHubSeasonStart=({confirmed,licensedStorage,sourceIdle,maxBatches=12}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      ![12,60,120].includes(Number(maxBatches)))
     return Promise.resolve({status:400,body:{ok:false,
      code:'season_start_operator_confirmation_required'}});
    return call(SEASONS+'start',{method:'POST',
-    body:{confirmed:true,licensedStorage:true,sourceIdle:true}});
+    body:{confirmed:true,licensedStorage:true,sourceIdle:true,
+     maxBatches:Number(maxBatches)}});
   };
   const contentHubSeasonPause=({confirmed}={})=>{
    if(confirmed!==true)return Promise.resolve({status:400,
