@@ -1182,6 +1182,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         card.textContent=String(item.title||"حلقة بدون عنوان").slice(0,220)+
           " · رقم الحلقة في الفهرس: "+id+
           " · الصيغة: "+String(item.extension||"—").slice(0,8);
+        var probe=document.createElement("button");
+        probe.className="btn secondary";probe.type="button";
+        probe.textContent="فحص حجم هذه الحلقة (4 KB فقط)";
+        probe.dataset.episodeProbe=String(id);
+        probe.style.marginInlineStart="10px";
+        card.append(" ",probe);
+        var proof=document.createElement("span");
+        proof.className="muted";
+        proof.dataset.episodeSizeResult=String(id);
+        card.append(" ",proof);
         out.append(card);
       });
     }catch(e){
@@ -1189,6 +1199,30 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "تعذر فحص الحلقات من المصدر الخاص. لم تُنزّل أي ملفات. "+
           String(e.message||"").slice(0,90);
     }finally{this.disabled=false}
+  });
+  $("content-hub-episodes-list").addEventListener("click",async function(event){
+    var button=event.target?.closest?.("button[data-episode-probe]");
+    if(!button||button.disabled)return;
+    var id=Number(button.dataset.episodeProbe);
+    if(!Number.isSafeInteger(id)||id<1)return;
+    if(!confirm("فحص حجم الحلقة رقم "+id+
+      " بطلب 4 كيلوبايت فقط من المصدر؟ لا يتم حفظ الفيلم أو نقل الحلقة."))return;
+    button.disabled=true;
+    var info=this.querySelector('span[data-episode-size-result="'+id+'"]');
+    if(info)info.textContent=" · جارٍ فحص حجم المصدر...";
+    try{
+      var result=await action("content-hub/episodes/probe",
+        "content-hub-episode-probe",{gatewayId:id,confirmed:true});
+      if(info)info.textContent=" ✅ الحجم المتوقع: "+
+        hubBytes(result.expectedBytes)+" · "+result.expectedBytes+
+        " بايت · "+(result.validatorPresent?"المصدر يوفّر معرف نسخة":"لا يوجد معرف ثابت للنسخة")+
+        " · تم قراءة 4 KB فقط. لم يبدأ النسخ.";
+      show("نجح فحص حجم الحلقة "+id+" دون بدء التحميل.",true);
+    }catch(e){
+      if(info)info.textContent=" تعذّر فحص حجم الحلقة: "+
+        String(e.message||"خطأ").slice(0,75)+
+        ". لم يتم حفظ أي بيانات.";
+    }finally{button.disabled=false}
   });
   $("content-hub-owner-preview").addEventListener("click",async function(){
     if(this.disabled)return;
