@@ -638,6 +638,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div id="content-hub-runs" class="muted" aria-live="polite"></div>
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
 </div>
+<div class="panel" id="content-hub-episodes">
+<h3>📺 المرحلة التالية: تجهيز نقل حلقات المسلسلات</h3>
+<p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
+<div class="actions">
+<button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
+</div>
+<p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
+<div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
+</div>
 <div class="panel"><div class="controls"><div class="inline">
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
@@ -1153,6 +1162,33 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
     }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("content-hub-episodes-check").addEventListener("click",async function(){
+    this.disabled=true;
+    $("content-hub-episodes-status").textContent=
+      "جارٍ قراءة فهرس الحلقات فقط، بدون الوصول إلى ملفات الفيديو...";
+    var out=$("content-hub-episodes-list");out.replaceChildren();
+    try{
+      var response=await api("content-hub/episodes/candidates");
+      var candidates=Array.isArray(response.candidates)?response.candidates:[];
+      $("content-hub-episodes-status").textContent=candidates.length?
+        "ظهرت "+count(candidates.length)+" حلقات مؤهلة للفحص. لم يبدأ نقل أي حلقة. اختر حلقة لاحقًا بعد تأكيد صلاحية التخزين.":
+        "لا توجد حلقات مؤهلة في فهرس المصدر حاليًا.";
+      candidates.forEach(function(item){
+        var card=document.createElement("p");
+        card.className="muted";
+        var id=Number(item.gatewayId);
+        if(!Number.isSafeInteger(id)||id<1)return;
+        card.textContent=String(item.title||"حلقة بدون عنوان").slice(0,220)+
+          " · رقم الحلقة في الفهرس: "+id+
+          " · الصيغة: "+String(item.extension||"—").slice(0,8);
+        out.append(card);
+      });
+    }catch(e){
+      $("content-hub-episodes-status").textContent=
+        "تعذر فحص الحلقات من المصدر الخاص. لم تُنزّل أي ملفات. "+
+          String(e.message||"").slice(0,90);
+    }finally{this.disabled=false}
   });
   $("content-hub-owner-preview").addEventListener("click",async function(){
     if(this.disabled)return;
