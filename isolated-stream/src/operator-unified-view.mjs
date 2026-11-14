@@ -1067,12 +1067,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("content-hub-diagnose").disabled=data.canaryRunning===true||
         Number(summary.verifiedCount||0)<1;
       var desc=data.canaryRunning?"جارٍ فحص الصورة والصوت من التخزين الخاص...":
-        canary.ok===true&&canary.code==="canary_audio_video_decoded"?
+        canary.ok===true&&
+        ["canary_audio_video_decoded","canary_audio_video_and_seeks_verified"].includes(canary.code)?
         "✅ تم فك ترميز الصورة والصوت: "+String(canary.videoCodec||"—")+
         " "+String(canary.width||"")+"×"+String(canary.height||"")+
         " | صوت: "+String(canary.audioCodec||"—")+
         " | إطارات صورة: "+String(canary.videoFramesDecoded||0)+
         " | عينات صوت: "+String(canary.audioFramesDecoded||0)+
+        (canary.seekVerified===true?
+         " | ✅ التقديم والترجيع: "+String(canary.seeksVerified||0)+" مواضع ناجحة":
+         " | فحص التقديم والترجيع غير مكتمل")+
         " | الملف الكامل تم التحقق من سلامته.":
         canary.checkedAt?"تعذر إكمال فحص التشغيل ("+
           String(canary.code||"غير معروف")+
