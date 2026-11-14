@@ -220,6 +220,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   // Railway project. Never expose its private token, S3 keys or URL in UI.
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubPreflight=()=>call(ROOT+'/content-hub/preflight');
+  const contentHubDiagnosePlayback=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'playback_diagnostic_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/playback/diagnose',{
+      method:'POST',body:{confirmed:true}});
+  };
   const contentHubStartCopy=({confirmed}={})=>{
     if(confirmed!==true)return Promise.resolve({
       status:400,body:{ok:false,code:'copy_confirmation_required'}
@@ -281,5 +288,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubPreflight,contentHubNextBatch,
-    contentHubStartCopy,contentHubPauseCopy};
+    contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback};
 }
