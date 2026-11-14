@@ -645,7 +645,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
 <button class="btn" id="content-hub-episode-start" type="button" disabled>▶ بدء / استكمال تنزيل الحلقة المعتمدة</button>
 <button class="btn secondary" id="content-hub-episode-pause" type="button" disabled>⏸ إيقاف تنزيل الحلقة</button>
+<button class="btn secondary" id="content-hub-episode-diagnose" type="button" disabled>🎞 فحص صورة وصوت الحلقة المكتملة</button>
 </div>
+<p class="muted" role="status" id="content-hub-episode-canary-status">فحص الصورة والصوت متاح بعد اكتمال الحلقة والتحقق من سلامتها.</p>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
 <p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
 <div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
@@ -1090,6 +1092,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "✅ الحلقة مكتملة":episodeActive?"جارٍ تنزيل الحلقة":
         "▶ بدء / استكمال تنزيل الحلقة المعتمدة";
       $("content-hub-episode-copy-progress").textContent=episodeCopyMessage;
+      var epCanary=data.lastEpisodeCanary||{};
+      $("content-hub-episode-diagnose").disabled=!episodeComplete||
+        data.episodeCanaryRunning===true;
+      $("content-hub-episode-canary-status").textContent=
+        data.episodeCanaryRunning===true?
+        "جارٍ فحص تشغيل الحلقة من التخزين الخاص فقط...":
+        epCanary.ok===true&&
+          epCanary.code==="canary_audio_video_and_seeks_verified"?
+        "✅ الصورة والصوت والتقديم والترجيع: ناجحة · "+
+          String(epCanary.videoCodec||"—")+" / "+
+          String(epCanary.audioCodec||"—")+" · "+
+          String(epCanary.seeksVerified||0)+" مواضع قراءة":
+        epCanary.checkedAt?"لم يكتمل فحص تشغيل الحلقة: "+
+          String(epCanary.code||"unknown").slice(0,75):
+        episodeComplete?"الحلقة كاملة. اضغط فحص تشغيل الصورة والصوت للتأكد.":
+          "لا يمكن اختبار تشغيل حلقة لم تكتمل ولم يُتحقق من SHA-256.";
       $("content-hub-episodes-list").querySelectorAll("button[data-episode-copy]")
         .forEach(function(button){
           var approved=Number(button.dataset.episodeCopy)===
@@ -1282,6 +1300,20 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         String(e.message||"خطأ").slice(0,75)+
         ". لم يتم حفظ أي بيانات.";
     }finally{button.disabled=false}
+  });
+  $("content-hub-episode-diagnose").addEventListener("click",async function(){
+    if(this.disabled)return;
+    if(!confirm("فحص الصوت والصورة والتقديم والترجيع للحلقة المكتملة من التخزين الخاص فقط؟ لن يتغير تشغيل المشتركين."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/playback/diagnose",
+        "content-hub-episode-diagnose",{confirmed:true});
+      $("content-hub-episode-canary-status").textContent=
+        "تم قبول فحص الحلقة. النتيجة تظهر مع تحديث حالة النقل.";
+      show("بدأ فحص حلقة خاصة بدون استخدام المصدر الخارجي.",true);
+    }catch(e){show("تعذر فحص تشغيل الحلقة: "+
+      String(e.message||"غير متاح"),false)}
+    finally{await loadContentHub()}
   });
   $("content-hub-episode-start").addEventListener("click",async function(){
     var gate=hubState?.episodeCopyReadiness||{};
