@@ -2,6 +2,7 @@
 // credentials, source catalogs or production services. No API tokens in HTML.
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-unified-view.mjs';
+import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
@@ -136,10 +137,23 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const nonce=randomBytes(16).toString('base64');
       const body=Buffer.from(renderOperatorDashboard(nonce));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store',
-        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    // This route is reachable only after the exact operator Basic auth
+    // above; never expose a private S3 or internal portal URL to browsers.
+    if(path==='/operator/api/content-hub/preview'||
+       path==='/operator/api/content-hub/episodes/preview'){
+      const episode=path.endsWith('/episodes/preview');
+      void streamOperatorOwnerPreview({req,res,
+        getUpstream:({signal})=>episode?
+          portal.contentHubEpisodePreviewRaw({signal}):
+          portal.contentHubPreviewRaw({signal})})
+        .catch(()=>{if(!res.headersSent)json(res,503,{
+          ok:false,code:'owner_preview_stream_failed'})});
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/stream-release'){
       void releaseInspector.inspect().then(report=>json(res,200,report))
@@ -398,6 +412,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       // Operator Basic auth enforced above; portal Bearer key never returned
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
+      '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
+      '/operator/api/content-hub/episodes/candidates':()=>portal.contentHubEpisodeCandidates(),
+      '/operator/api/content-hub/preflight':()=>portal.contentHubPreflight(),
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
@@ -455,7 +472,16 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
-      const action=path==='/operator/api/ops/schedule'?'ops-schedule':
+      const action=path==='/operator/api/content-hub/episodes/playback/diagnose'?'content-hub-episode-diagnose':
+        path==='/operator/api/content-hub/episodes/start'?'content-hub-episode-start':
+        path==='/operator/api/content-hub/episodes/pause'?'content-hub-episode-pause':
+        path==='/operator/api/content-hub/episodes/next'?'content-hub-episode-next':
+        path==='/operator/api/content-hub/episodes/probe'?'content-hub-episode-probe':
+        path==='/operator/api/content-hub/playback/diagnose'?'content-hub-playback-diagnose':
+        path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
+        path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
+        path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
+        path==='/operator/api/ops/schedule'?'ops-schedule':
         path==='/operator/api/ops/snapshot'?'ops-snapshot':
         path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
         path==='/operator/api/library-ai/chat'?'library-ai-chat':
@@ -473,6 +499,15 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='content-hub-episode-start')return portal.contentHubStartEpisodeCopy(data);
+        if(action==='content-hub-episode-pause')return portal.contentHubPauseEpisodeCopy();
+        if(action==='content-hub-episode-next')return portal.contentHubNextEpisodeChunk(data);
+        if(action==='content-hub-episode-probe')return portal.contentHubProbeEpisode(data);
+        if(action==='content-hub-episode-diagnose')return portal.contentHubDiagnoseEpisode(data);
+        if(action==='content-hub-playback-diagnose')return portal.contentHubDiagnosePlayback(data);
+        if(action==='content-hub-copy-start')return portal.contentHubStartCopy(data);
+        if(action==='content-hub-copy-pause')return portal.contentHubPauseCopy();
+        if(action==='content-hub-batch-next')return portal.contentHubNextBatch(data);
         if(action==='ops-schedule')return portal.opsSchedule(data);
         if(action==='ops-snapshot')return portal.opsSnapshot(data);
         if(action==='library-ai-rollback')return portal.libraryAIRollback(data);

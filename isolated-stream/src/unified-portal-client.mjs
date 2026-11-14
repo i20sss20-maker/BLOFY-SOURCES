@@ -15,7 +15,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
+    const budget=path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+      path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
+      path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
     try{
@@ -216,6 +218,87 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       expiresAt:data.expiresAt||null
     }});
   }
+  // Content Hub lives behind the authoritative portal in a different
+  // Railway project. Never expose its private token, S3 keys or URL in UI.
+  // Binary owner preview uses a fixed HTTPS endpoint. Does not return a
+  // storage URL or bridge secret to the frontend; upstream body is streamed.
+  async function contentHubEpisodePreviewRaw({signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/episodes/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
+  async function contentHubPreviewRaw({signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
+  const contentHubStatus=()=>call(ROOT+'/content-hub/status');
+  const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
+  const contentHubStartEpisodeCopy=({gatewayId,confirmed}={})=>{
+    const id=Number(gatewayId);
+    if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
+      return Promise.resolve({status:400,body:{
+       ok:false,code:'episode_start_confirmation_required'}});
+    return call(ROOT+'/content-hub/episodes/start',{
+     method:'POST',body:{gatewayId:id,confirmed:true}});
+  };
+  const contentHubPauseEpisodeCopy=()=>call(
+    ROOT+'/content-hub/episodes/pause',{method:'POST',body:{confirmed:true}});
+  const contentHubNextEpisodeChunk=({gatewayId,confirmed}={})=>{
+    const id=Number(gatewayId);
+    if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
+      return Promise.resolve({status:400,body:{
+       ok:false,code:'episode_copy_explicit_confirmation_required'}});
+    return call(ROOT+'/content-hub/episodes/next',{
+      method:'POST',body:{gatewayId:id,confirmed:true}});
+  };
+  const contentHubProbeEpisode=({gatewayId,confirmed}={})=>{
+    const id=Number(gatewayId);
+    if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'episode_probe_explicit_confirmation_required'}});
+    return call(ROOT+'/content-hub/episodes/probe',{
+      method:'POST',body:{gatewayId:id,confirmed:true}});
+  };
+  const contentHubPreflight=()=>call(ROOT+'/content-hub/preflight');
+  const contentHubDiagnoseEpisode=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'episode_canary_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/episodes/playback/diagnose',{
+      method:'POST',body:{confirmed:true}});
+  };
+  const contentHubDiagnosePlayback=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'playback_diagnostic_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/playback/diagnose',{
+      method:'POST',body:{confirmed:true}});
+  };
+  const contentHubStartCopy=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'copy_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/batch/start',{
+      method:'POST',body:{confirmed:true}});
+  };
+  const contentHubPauseCopy=()=>call(ROOT+'/content-hub/batch/pause',{
+    method:'POST',body:{confirmed:true}});
+  const contentHubNextBatch=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'batch_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/batch/next',{
+      method:'POST',body:{confirmed:true}});
+  };
   function mediaFailuresRecheck({sourceId,confirmed}={}){
     if(!UUID.test(String(sourceId||''))||confirmed!==true)
       return Promise.resolve({status:400,body:{ok:false,code:'unavailable_source_not_allowed'}});
@@ -259,5 +342,11 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
-    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck};
+    libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
+    contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
+    contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
+    contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
+    contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
+    contentHubDiagnoseEpisode,
+    contentHubPreviewRaw,contentHubEpisodePreviewRaw};
 }

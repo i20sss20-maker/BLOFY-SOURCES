@@ -608,6 +608,58 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
+<div class="panel" id="content-hub-batches">
+<h3>⬇ تنزيل أفلام BLOFY على دفعات آمنة</h3>
+<p class="muted">ينقل كل طلب جزءًا واحدًا فقط (8 ميجابايت)، ويحفظه في التخزين الخاص مع التحقق من سلامته. يمكن استكمال الأجزاء المحفوظة دون تنزيلها مجددًا. لا يتم تحويل تشغيل المشتركين تلقائيًا.</p>
+<div class="actions">
+<button class="btn secondary" id="content-hub-refresh" type="button">↻ تحديث حالة النقل</button>
+<button class="btn secondary" id="content-hub-preflight" type="button">فحص مصدر الفيلم بدون تحميل</button>
+<button class="btn" id="content-hub-start-copy" type="button" aria-describedby="content-hub-notice">▶ بدء / استكمال تنزيل الفيلم</button>
+<button class="btn secondary" id="content-hub-pause-copy" type="button" disabled>⏸ إيقاف التنزيل</button>
+<button class="btn secondary" id="content-hub-next-batch" type="button" aria-describedby="content-hub-notice">تنزيل جزء واحد (8 MB)</button>
+</div>
+<p class="muted" role="status" id="content-hub-summary">جار التحقق من التخزين الخاص...</p>
+<progress id="content-hub-progress" value="0" max="100" aria-label="نسبة نقل الفيلم" style="width:100%;height:22px;accent-color:#60a5fa"></progress>
+<p class="muted" id="content-hub-percent">0% · بانتظار النقل</p>
+<div style="margin-top:16px;padding:16px;border:1px solid #254464;border-radius:14px">
+<strong>فحص تشغيل الفيلم من التخزين الخاص</strong>
+<p class="muted">فحص حقيقي لقراءة ملف الفيلم المحفوظ، والتعرف على مسارات الفيديو والصوت وفك ترميز عينات منهما، بدون الرجوع إلى مصدر القنوات.</p>
+<button class="btn secondary" id="content-hub-diagnose" type="button">▶ اختبار الصورة والصوت</button>
+<p class="muted" role="status" id="content-hub-canary-status">لم يتم استرجاع نتيجة فحص التشغيل بعد.</p>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #254464">
+<strong>🎞 مشاهدة عينة تجريبية من تخزين BLOFY</strong>
+<p class="muted">عينة قصيرة (12 ثانية) بصيغة MP4 مع تحويل صوت AC3 إلى AAC للمتصفح، من الملف المخزن فقط. ليست تشغيلًا مباشرًا للعملاء أو اختبارًا كاملًا لأجهزة Android TV.</p>
+<button class="btn secondary" id="content-hub-owner-preview" type="button" disabled>▶ تشغيل العينة الخاصة</button>
+<video id="content-hub-preview-player" controls playsinline preload="none"
+  style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
+<p class="muted" id="content-hub-preview-note">العينة متاحة للمدير فقط بعد التأكد من اكتمال الفيلم.</p>
+</div>
+</div>
+<div id="content-hub-runs" class="muted" aria-live="polite"></div>
+<p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
+</div>
+<div class="panel" id="content-hub-episodes">
+<h3>📺 المرحلة التالية: تجهيز نقل حلقات المسلسلات</h3>
+<p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
+<div class="actions">
+<button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
+<button class="btn" id="content-hub-episode-start" type="button" disabled>▶ بدء / استكمال تنزيل الحلقة المعتمدة</button>
+<button class="btn secondary" id="content-hub-episode-pause" type="button" disabled>⏸ إيقاف تنزيل الحلقة</button>
+<button class="btn secondary" id="content-hub-episode-diagnose" type="button" disabled>🎞 فحص صورة وصوت الحلقة المكتملة</button>
+</div>
+<p class="muted" role="status" id="content-hub-episode-canary-status">فحص الصورة والصوت متاح بعد اكتمال الحلقة والتحقق من سلامتها.</p>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #254464">
+<strong>🎞 معاينة الحلقة المخزنة</strong>
+<p class="muted">مقطع خاص بالمدير مدته 12 ثانية بصيغة H.264/AAC، لا يُحمّل من المصدر ولا يغيّر تشغيل المشتركين.</p>
+<button class="btn secondary" id="content-hub-episode-preview" type="button" disabled>▶ مشاهدة عينة الحلقة</button>
+<video id="content-hub-episode-preview-player" controls playsinline preload="none"
+ style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
+<p class="muted" id="content-hub-episode-preview-note">متاحة بعد اكتمال الحلقة والتحقق من سلامة بياناتها.</p>
+</div>
+<p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
+<p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
+<div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
+</div>
 <div class="panel"><div class="controls"><div class="inline">
 <select id="library-type" aria-label="نوع الوسائط"><option value="live">القنوات</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select>
 <select id="library-source" aria-label="المصدر"><option value="">جميع المصادر</option></select>
@@ -980,6 +1032,461 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
       headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
     var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+  var hubState=null,hubLoading=false;
+  var hubBytes=function(n){
+    var val=Number(n||0);
+    if(!Number.isFinite(val)||val<0)return "—";
+    return val>=1073741824?(val/1073741824).toFixed(2)+" GB":
+      val>=1048576?(val/1048576).toFixed(1)+" MB":
+      val.toLocaleString("en-US")+" B";
+  };
+  // Display independent server-enforced safety gates instead of a dead
+  // disabled button. A click while blocked never requests video bytes.
+  var hubBlockerLabels={
+    batch_not_enabled:"تفعيل النقل الجزئي في الخادم",
+    storage_upload_disabled:"تفعيل الحفظ في التخزين الخاص",
+    storage_rights_unconfirmed:"تأكيد صلاحية حفظ الفيلم",
+    source_quiet_window_unconfirmed:"تحديد فترة خمول المصدر",
+    source_idle_unconfirmed:"التأكد أن المصدر غير مستخدم الآن",
+    batch_run_id_missing:"تحديد رقم عملية النقل",
+    movie_size_unconfirmed:"تأكيد حجم الفيلم",
+    approved_movie_not_selected:"تحديد الفيلم المراد نقله",
+    source_bridge_not_configured:"تجهيز الاتصال الداخلي بالمصدر",
+    invalid_batch_limit:"تصحيح إعداد عدد الأجزاء"
+  };
+  function hubBlockerMessage(data){
+    var missing=data&&data.batchReadiness&&data.batchReadiness.blockedBy;
+    if(!Array.isArray(missing)||!missing.length)
+      return "التنزيل غير مفعّل في إعدادات Content Hub. استخدم فحص مصدر الفيلم لمعرفة حالته.";
+    return "التحميل متوقف للأسباب التالية: "+missing.map(function(code){
+      return hubBlockerLabels[code]||"إعداد غير مكتمل";
+    }).join("، ")+" . لم يتم تنزيل أي جزء من المصدر.";
+  }
+  async function loadContentHub(){
+    if(hubLoading)return;hubLoading=true;
+    try{
+      var data=await api("content-hub/status");
+      hubState=data;
+      var episodeGate=data.episodeCopyReadiness||{};
+      var episodeActive=data.episodeContinuousCopy?.active===true;
+      $("content-hub-episode-start").disabled=episodeGate.ready!==true||
+        data.episodeCopyBusy===true;
+      $("content-hub-episode-pause").disabled=!episodeActive;
+      var episodeRuns=Array.isArray(data.episodeRuns)?data.episodeRuns:[];
+      var episodeRun=episodeRuns.find(function(x){
+        return x.format==="private_episode_chunks";
+      })||null;
+      var episodeComplete=episodeRun?.state==="verified"&&
+        Number(episodeRun.expectedBytes||0)>0&&
+        Number(episodeRun.bytesCopied||0)===Number(episodeRun.expectedBytes||0);
+      var episodePercent=episodeRun?Math.min(100,Math.max(0,
+        Number(episodeRun.bytesCopied||0)/
+        Math.max(1,Number(episodeRun.expectedBytes||1))*100)):0;
+      var episodeCopyMessage=episodeComplete?
+        "✅ الحلقة مكتملة وتم التحقق من SHA-256 · "+
+        hubBytes(episodeRun.expectedBytes):
+        episodeRun?"الحلقة: "+episodePercent.toFixed(2)+"% · "+
+          hubBytes(episodeRun.bytesCopied)+" من "+
+          hubBytes(episodeRun.expectedBytes)+
+          (data.episodeCopyBusy?" · جارٍ حفظ الجزء الحالي":
+            " · الأجزاء محفوظة ويمكن الاستكمال"):
+        "لم يبدأ نقل أي حلقة؛ ما زلنا في مرحلة الفحص.";
+      if(episodeGate.ready!==true&&!episodeComplete)
+        episodeCopyMessage+=" · النقل غير مفعّل: "+
+          (episodeGate.blockedBy||[]).join("، ");
+      $("content-hub-episode-start").disabled=episodeGate.ready!==true||
+        data.episodeCopyBusy===true||episodeComplete;
+      $("content-hub-episode-start").textContent=episodeComplete?
+        "✅ الحلقة مكتملة":episodeActive?"جارٍ تنزيل الحلقة":
+        "▶ بدء / استكمال تنزيل الحلقة المعتمدة";
+      $("content-hub-episode-copy-progress").textContent=episodeCopyMessage;
+      var epCanary=data.lastEpisodeCanary||{};
+      $("content-hub-episode-diagnose").disabled=!episodeComplete||
+        data.episodeCanaryRunning===true;
+      $("content-hub-episode-preview").disabled=!episodeComplete||
+        data.ownerEpisodePreviewEnabled!==true;
+      $("content-hub-episode-preview-note").textContent=!episodeComplete?
+        "لا يمكن تشغيل عينة قبل اكتمال الحلقة والتحقق من SHA-256.":
+        data.ownerEpisodePreviewEnabled===true?
+        "الحلقة محفوظة. اضغط مشاهدة عينة الحلقة (12 ثانية).":
+        "معاينة الحلقة مقفلة من الخادم حاليًا حتى اجتياز الاختبارات.";
+      $("content-hub-episode-canary-status").textContent=
+        data.episodeCanaryRunning===true?
+        "جارٍ فحص تشغيل الحلقة من التخزين الخاص فقط...":
+        epCanary.ok===true&&
+          epCanary.code==="canary_audio_video_and_seeks_verified"?
+        "✅ الصورة والصوت والتقديم والترجيع: ناجحة · "+
+          String(epCanary.videoCodec||"—")+" / "+
+          String(epCanary.audioCodec||"—")+" · "+
+          String(epCanary.seeksVerified||0)+" مواضع قراءة":
+        epCanary.checkedAt?"لم يكتمل فحص تشغيل الحلقة: "+
+          String(epCanary.code||"unknown").slice(0,75):
+        episodeComplete?"الحلقة كاملة. اضغط فحص تشغيل الصورة والصوت للتأكد.":
+          "لا يمكن اختبار تشغيل حلقة لم تكتمل ولم يُتحقق من SHA-256.";
+      $("content-hub-episodes-list").querySelectorAll("button[data-episode-copy]")
+        .forEach(function(button){
+          var approved=Number(button.dataset.episodeCopy)===
+            Number(episodeGate.approvedGatewayId||0);
+          button.disabled=!approved||episodeGate.ready!==true||
+            data.episodeCopyBusy===true||episodeComplete;
+          button.textContent=episodeComplete&&approved?
+            "✅ الحلقة مكتملة":data.episodeCopyBusy&&approved?
+            "جارٍ حفظ الجزء...":"⬇ نقل الجزء التالي (8 MB)";
+        });
+      var job=data.continuousCopy||{};
+      var running=data.pilotRunning===true||job.active===true;
+      var chunked=Array.isArray(data.runs)?
+        data.runs.find(function(item){return item.format==="private_chunks"}):null;
+      // Durable "verified" is authoritative; a new container's in-memory
+      // continuous-copy status may read "idle" after the movie is complete.
+      var movieComplete=chunked?.state==="verified"&&
+        Number(chunked?.expectedBytes||0)>0&&
+        Number(chunked?.bytesCopied||0)===Number(chunked?.expectedBytes||0);
+      $("content-hub-start-copy").disabled=movieComplete||running||
+        data.chunkedBatchEnabled!==true;
+      $("content-hub-start-copy").textContent=movieComplete?
+        "✅ الفيلم محفوظ بالكامل":job.state==="paused"||job.state==="failed"?
+        "▶ استكمال تنزيل الفيلم":"▶ بدء / استكمال تنزيل الفيلم";
+      $("content-hub-pause-copy").disabled=movieComplete||!running;
+      $("content-hub-next-batch").disabled=movieComplete||running;
+      $("content-hub-next-batch").textContent=movieComplete?
+        "✅ كل الأجزاء محفوظة":data.chunkedBatchEnabled===true?
+        "تنزيل جزء واحد (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
+      var summary=data.accounting||{};
+      var progress=chunked?Math.min(100,Math.max(0,
+        Number(chunked.bytesCopied||0)/Math.max(1,Number(chunked.expectedBytes||1))*100)):0;
+      $("content-hub-progress").value=progress;
+      $("content-hub-percent").textContent=progress.toFixed(2)+"% · "+
+        hubBytes(chunked?.bytesCopied||0)+" من "+hubBytes(chunked?.expectedBytes||0)+
+        " · الحالة: "+(movieComplete?"اكتمل وتحققنا من سلامته":
+          job.active?"جارٍ النقل":job.state==="failed"?"توقف بسبب خطأ":
+          job.state==="paused"?"متوقف ويمكن استكماله":
+          job.state==="completed"?"اكتمل":chunked?"محفوظ جزئيًا":"لم يبدأ");
+      $("content-hub-summary").textContent=
+        "أفلام مكتملة: "+count(summary.verifiedCount||0)+
+        " · حجم الملفات المؤكدة: "+hubBytes(summary.verifiedBytes)+
+        " · أجزاء محفوظة: "+hubBytes(summary.stagedChunkBytes||0)+
+        " · النقل الآن: "+(running?"جارٍ":"متوقف");
+      var canary=data.lastCanary||{};
+      $("content-hub-diagnose").disabled=data.canaryRunning===true||
+        Number(summary.verifiedCount||0)<1;
+      $("content-hub-owner-preview").disabled=!movieComplete||
+        data.ownerPreviewEnabled!==true;
+      $("content-hub-preview-note").textContent=!movieComplete?
+        "لا تتوفر معاينة قبل اكتمال الفيلم والتحقق منه.":
+        data.ownerPreviewEnabled===true?
+        "المعاينة خاصة ومحدودة بـ12 ثانية؛ اضغط تشغيل لتجربة المتصفح دون تحويل الأكواد.":
+        "معاينة المتصفح مقفلة من إعدادات الخادم؛ فحوصات الصورة والصوت الآلية متاحة.";
+      var desc=data.canaryRunning?"جارٍ فحص الصورة والصوت من التخزين الخاص...":
+        canary.ok===true&&
+        ["canary_audio_video_decoded","canary_audio_video_and_seeks_verified"].includes(canary.code)?
+        "✅ تم فك ترميز الصورة والصوت: "+String(canary.videoCodec||"—")+
+        " "+String(canary.width||"")+"×"+String(canary.height||"")+
+        " | صوت: "+String(canary.audioCodec||"—")+
+        " | إطارات صورة: "+String(canary.videoFramesDecoded||0)+
+        " | عينات صوت: "+String(canary.audioFramesDecoded||0)+
+        (canary.seekVerified===true?
+         " | ✅ التقديم والترجيع: "+String(canary.seeksVerified||0)+" مواضع ناجحة":
+         " | فحص التقديم والترجيع غير مكتمل")+
+        " | الملف الكامل تم التحقق من سلامته.":
+        canary.checkedAt?"تعذر إكمال فحص التشغيل ("+
+          String(canary.code||"غير معروف")+
+          "). لا يتم تغيير تشغيل المشتركين.":
+          "لم يتم اختبار التشغيل في هذه الجلسة. الفيلم المكتمل فقط قابل للفحص.";
+      $("content-hub-canary-status").textContent=desc;
+      var box=$("content-hub-runs");box.replaceChildren();
+      var runs=Array.isArray(data.runs)?data.runs:[];
+      if(!runs.length)box.textContent="ما فيه عمليات نسخ حقيقية محفوظة حتى الآن.";
+      runs.slice(0,10).forEach(function(run){
+        var row=document.createElement("p");row.className="muted";
+        var pct=Math.min(100,Math.max(0,Number(run.percent||0)));
+        row.textContent=String(run.runId||"نسخ تجريبي")+
+          " — "+pct+"% ("+hubBytes(run.bytesCopied)+
+          " من "+hubBytes(run.expectedBytes)+") · "+
+          (run.state==="verified"?"مكتمل ومتحقق منه":
+           run.state==="staged"?"محفوظ وقابل للاستكمال":
+           run.state==="failed"?"فشل":"جارٍ");
+        box.append(row);
+      });
+      $("content-hub-notice").textContent=movieComplete?
+        "✅ اكتمل نقل الفيلم والتحقق من الملف. لا تضغط بدء أو استكمال مرة ثانية. التالي: اختبار تشغيله على أجهزة BLOFY PLAYER قبل تحويل تشغيل المشتركين.":
+        running?"الفيلم يُنقل تلقائيًا على دفعات 8 MB. يظهر التقدم أعلاه كل عدة ثوانٍ.":
+        job.state==="failed"?"توقف النقل بسبب: "+String(job.code||"خطأ غير معروف")+
+        " · يمكنك استكمال النقل من آخر جزء محفوظ بعد حل المشكلة.":data.chunkedBatchEnabled?
+        "النقل جاهز. اضغط بدء تنزيل الفيلم مرة واحدة، أو حمّل جزءًا تجريبيًا.":
+        hubBlockerMessage(data);
+    }catch(e){
+      hubState=null;
+      $("content-hub-start-copy").disabled=true;
+      $("content-hub-pause-copy").disabled=true;
+      $("content-hub-next-batch").disabled=false;
+      $("content-hub-next-batch").textContent="ℹ لماذا لا يبدأ النقل؟";
+      $("content-hub-notice").textContent=
+        "التحقق من جاهزية الخادم غير متاح، لم يبدأ أي تنزيل.";
+      $("content-hub-summary").textContent=
+        "تعذر الاتصال بالتخزين الخاص: "+String(e.message||"غير متاح").slice(0,70);
+    }finally{hubLoading=false}
+  }
+  $("content-hub-refresh").addEventListener("click",loadContentHub);
+  $("content-hub-preflight").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var x=await api("content-hub/preflight");
+      $("content-hub-notice").textContent=
+        "المصدر: "+String(x.sourceName||"غير معروف")+
+        " · الفيلم #"+String(x.gatewayId||"غير محدد")+
+        " · نسخة محفوظة مصرح بها: "+(x.storageRightsDeclared?"نعم":"غير مؤكدة")+
+        " · خمول المصدر: "+(x.sourceIdleDeclared?"معلن":"غير مؤكد")+
+        " · توافق الفيلم المحدد: "+(x.approvedMovieMatches?"نعم":"لا")+
+        " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
+    }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
+    finally{this.disabled=false}
+  });
+  $("content-hub-episodes-check").addEventListener("click",async function(){
+    this.disabled=true;
+    $("content-hub-episodes-status").textContent=
+      "جارٍ قراءة فهرس الحلقات فقط، بدون الوصول إلى ملفات الفيديو...";
+    var out=$("content-hub-episodes-list");out.replaceChildren();
+    try{
+      var response=await api("content-hub/episodes/candidates");
+      var candidates=Array.isArray(response.candidates)?response.candidates:[];
+      $("content-hub-episodes-status").textContent=candidates.length?
+        "ظهرت "+count(candidates.length)+" حلقات مؤهلة للفحص. لم يبدأ نقل أي حلقة. اختر حلقة لاحقًا بعد تأكيد صلاحية التخزين.":
+        "لا توجد حلقات مفهرسة مؤهلة حاليًا. قد تحتاج مزامنة تفاصيل المسلسلات أولًا؛ لا يعني هذا أن المصدر خالٍ من المسلسلات.";
+      candidates.forEach(function(item){
+        var card=document.createElement("p");
+        card.className="muted";
+        var id=Number(item.gatewayId);
+        if(!Number.isSafeInteger(id)||id<1)return;
+        card.textContent=String(item.title||"حلقة بدون عنوان").slice(0,220)+
+          " · رقم الحلقة في الفهرس: "+id+
+          " · الصيغة: "+String(item.extension||"—").slice(0,8);
+        var probe=document.createElement("button");
+        probe.className="btn secondary";probe.type="button";
+        probe.textContent="فحص حجم هذه الحلقة (4 KB فقط)";
+        probe.dataset.episodeProbe=String(id);
+        probe.style.marginInlineStart="10px";
+        card.append(" ",probe);
+        var proof=document.createElement("span");
+        proof.className="muted";
+        proof.dataset.episodeSizeResult=String(id);
+        card.append(" ",proof);
+        var chunkButton=document.createElement("button");
+        chunkButton.type="button";chunkButton.className="btn secondary";
+        chunkButton.dataset.episodeCopy=String(id);
+        chunkButton.style.marginInlineStart="10px";
+        chunkButton.textContent="⬇ نقل الجزء التالي (8 MB)";
+        var ready=hubState?.episodeCopyReadiness||{};
+        var selected=Number(ready.approvedGatewayId)===id;
+        var verified=hubState?.episodeRuns?.some(function(x){
+          return x.format==="private_episode_chunks"&&x.state==="verified";
+        });
+        chunkButton.disabled=!selected||ready.ready!==true||
+          hubState?.episodeCopyBusy===true||Boolean(verified);
+        card.append(" ",chunkButton);
+        out.append(card);
+      });
+    }catch(e){
+      $("content-hub-episodes-status").textContent=
+        "تعذر فحص الحلقات من المصدر الخاص. لم تُنزّل أي ملفات. "+
+          String(e.message||"").slice(0,90);
+    }finally{this.disabled=false}
+  });
+  $("content-hub-episodes-list").addEventListener("click",async function(event){
+    var button=event.target?.closest?.("button[data-episode-probe]");
+    if(!button||button.disabled)return;
+    var id=Number(button.dataset.episodeProbe);
+    if(!Number.isSafeInteger(id)||id<1)return;
+    if(!confirm("فحص حجم الحلقة رقم "+id+
+      " بطلب 4 كيلوبايت فقط من المصدر؟ لا يتم حفظ الفيلم أو نقل الحلقة."))return;
+    button.disabled=true;
+    var info=this.querySelector('span[data-episode-size-result="'+id+'"]');
+    if(info)info.textContent=" · جارٍ فحص حجم المصدر...";
+    try{
+      var result=await action("content-hub/episodes/probe",
+        "content-hub-episode-probe",{gatewayId:id,confirmed:true});
+      if(info)info.textContent=" ✅ الحجم المتوقع: "+
+        hubBytes(result.expectedBytes)+" · "+result.expectedBytes+
+        " بايت · "+(result.validatorPresent?"المصدر يوفّر معرف نسخة":"لا يوجد معرف ثابت للنسخة")+
+        " · تم قراءة 4 KB فقط. لم يبدأ النسخ.";
+      show("نجح فحص حجم الحلقة "+id+" دون بدء التحميل.",true);
+    }catch(e){
+      if(info)info.textContent=" تعذّر فحص حجم الحلقة: "+
+        String(e.message||"خطأ").slice(0,75)+
+        ". لم يتم حفظ أي بيانات.";
+    }finally{button.disabled=false}
+  });
+  $("content-hub-episode-preview").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var player=$("content-hub-episode-preview-player");
+    player.pause();player.removeAttribute("src");player.load();
+    player.src="/operator/api/content-hub/episodes/preview";
+    player.load();
+    $("content-hub-episode-preview-note").textContent=
+      "جارٍ تحميل عينة قصيرة من التخزين الخاص. لا توجد أي روابط مصدر في المتصفح.";
+    try{await player.play()}catch{
+      $("content-hub-episode-preview-note").textContent=
+        "اضغط تشغيل داخل المشغل، أو تحقق من اتصال Content Hub.";
+    }
+  });
+  $("content-hub-episode-preview-player").addEventListener("error",function(){
+    $("content-hub-episode-preview-note").textContent=
+      "تعذر تشغيل عينة الحلقة في المتصفح؛ لا يعني ذلك أن الملف الأصلي تالف.";
+  });
+  $("content-hub-episode-diagnose").addEventListener("click",async function(){
+    if(this.disabled)return;
+    if(!confirm("فحص الصوت والصورة والتقديم والترجيع للحلقة المكتملة من التخزين الخاص فقط؟ لن يتغير تشغيل المشتركين."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/playback/diagnose",
+        "content-hub-episode-diagnose",{confirmed:true});
+      $("content-hub-episode-canary-status").textContent=
+        "تم قبول فحص الحلقة. النتيجة تظهر مع تحديث حالة النقل.";
+      show("بدأ فحص حلقة خاصة بدون استخدام المصدر الخارجي.",true);
+    }catch(e){show("تعذر فحص تشغيل الحلقة: "+
+      String(e.message||"غير متاح"),false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-episode-start").addEventListener("click",async function(){
+    var gate=hubState?.episodeCopyReadiness||{};
+    var id=Number(gate.approvedGatewayId);
+    if(!gate.ready||!Number.isSafeInteger(id)||id<1){
+      show("تنزيل الحلقة غير جاهز: تحقق من إعداد المصدر وصلاحية التخزين.",false);
+      return;
+    }
+    if(!confirm("بدء نقل الحلقة رقم "+id+
+      " بالكامل، جزءًا بعد جزء بحجم 8 MB من المصدر إلى التخزين الخاص؟ تأكد أن لديك حق تخزينها وأن المصدر غير مستخدم حاليًا."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/start","content-hub-episode-start",
+        {gatewayId:id,confirmed:true});
+      show("بدأ نقل الحلقة تدريجيًا. تظهر النسبة وتتحدث تلقائيًا.",true);
+    }catch(e){show("تعذر بدء تنزيل الحلقة: "+String(e.message||""),false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-episode-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف نقل الحلقة مؤقتًا؟ الأجزاء المنقولة ستبقى محفوظة."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/pause","content-hub-episode-pause",
+        {confirmed:true});
+      show("طلب إيقاف الحلقة وصل. يمكن الاستكمال من آخر جزء.",true);
+    }catch(e){show("تعذر إيقاف الحلقة: "+String(e.message||""),false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-episodes-list").addEventListener("click",async function(event){
+    var button=event.target?.closest?.("button[data-episode-copy]");
+    if(!button||button.disabled)return;
+    var id=Number(button.dataset.episodeCopy);
+    var ready=hubState?.episodeCopyReadiness||{};
+    if(!Number.isSafeInteger(id)||id<1||ready.ready!==true||
+      Number(ready.approvedGatewayId)!==id){
+      show("الحلقة غير معتمدة للتنزيل أو إعدادات النقل غير مكتملة.",false);return;
+    }
+    if(!confirm("تأكيد تنزيل جزء واحد فقط (8 MB) من الحلقة رقم "+id+
+       " إلى التخزين الخاص؟ يؤكد هذا أن لديك حقوق تخزين المحتوى وأن المصدر غير مستخدم حاليًا."))return;
+    button.disabled=true;
+    try{
+      await action("content-hub/episodes/next",
+        "content-hub-episode-next",{gatewayId:id,confirmed:true});
+      show("بدأ تنزيل جزء واحد من الحلقة. تظهر نتيجة الحفظ في حالة النقل.",true);
+    }catch(e){
+      show("تعذر تنزيل جزء الحلقة: "+String(e.message||"غير متاح"),false);
+    }finally{await loadContentHub()}
+  });
+  $("content-hub-owner-preview").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var player=$("content-hub-preview-player");
+    // The browser requests a fixed same-origin owner-only route. It never
+    // receives Railway internal URLs, bearer tokens or upstream credentials.
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    player.src="/operator/api/content-hub/preview";
+    player.load();
+    $("content-hub-preview-note").textContent=
+      "تحميل عينة 12 ثانية من التخزين الخاص. يختلف دعم AC3 في التطبيق عن AAC في المتصفح.";
+    try{await player.play()}catch{
+      $("content-hub-preview-note").textContent=
+        "اضغط تشغيل داخل المشغل. إن تعذّر، راجع حالة المعاينة أو الاتصال الخاص.";
+    }
+  });
+  $("content-hub-preview-player").addEventListener("error",function(){
+    $("content-hub-preview-note").textContent=
+      "تعذر تشغيل العينة في المتصفح. لا يعني هذا أن الفيلم الأصلي تالف.";
+  });
+  $("content-hub-diagnose").addEventListener("click",async function(){
+    if(this.disabled)return;
+    if(!confirm("اختبار الفيديو والصوت من عينة محدودة من الفيلم المخزن؟ لن تتغير قنوات المشتركين أو مصدر التشغيل."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/playback/diagnose",
+        "content-hub-playback-diagnose",{confirmed:true});
+      $("content-hub-canary-status").textContent=
+        "تم قبول طلب الفحص. ستظهر نتائج الصورة والصوت عند اكتمال التحليل.";
+      show("بدأ فحص تشغيل النسخة المخزنة، دون الاتصال بالمصدر الأصلي.",true);
+    }catch(e){show("تعذر فحص تشغيل الفيلم: "+e.message,false)}
+    finally{await loadContentHub();}
+  });
+  $("content-hub-start-copy").addEventListener("click",async function(){
+    if(hubState?.runs?.some(function(r){return r.format==="private_chunks"&&
+      r.state==="verified"&&Number(r.expectedBytes||0)===Number(r.bytesCopied||0)})){
+      show("الفيلم مكتمل ومتحقق منه. لا تحتاج إعادة تنزيله.",true);return;
+    }
+    if(!hubState||hubState.chunkedBatchEnabled!==true){
+      show(hubBlockerMessage(hubState),false);return;
+    }
+    if(!confirm("تأكيد نقل الفيلم المحدد إلى تخزين BLOFY على دفعات 8 MB؟ تأكد من عدم وجود مشتركين على المصدر وأن لديك حق تخزين الفيلم."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/batch/start","content-hub-copy-start",{confirmed:true});
+      show("بدأ نقل الفيلم تلقائيًا على دفعات. تقدر توقفه من زر الإيقاف.",true);
+    }catch(e){show("تعذر بدء التنزيل: "+e.message,false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-pause-copy").addEventListener("click",async function(){
+    if(!confirm("إيقاف نقل الفيلم؟ الأجزاء المحفوظة ستبقى ويمكن استكمالها."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/batch/pause","content-hub-copy-pause",{confirmed:true});
+      show("طلب الإيقاف وصل. الأجزاء السابقة محفوظة.",true);
+    }catch(e){show("تعذر الإيقاف: "+e.message,false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-next-batch").addEventListener("click",async function(){
+    if(hubState?.runs?.some(function(r){return r.format==="private_chunks"&&
+      r.state==="verified"&&Number(r.expectedBytes||0)===Number(r.bytesCopied||0)})){
+      show("كل أجزاء الفيلم محفوظة وتم التحقق منها بالفعل.",true);return;
+    }
+    if(!hubState){
+      $("content-hub-notice").textContent="الاتصال بمركز المحتوى غير متاح حاليًا. لا يمكن بدء التحميل قبل فحصه.";
+      show("مركز التخزين الخاص غير متصل؛ اضغط تحديث حالة النقل وأعد الفحص.",false);
+      return;
+    }
+    if(hubState.pilotRunning===true){
+      show("فيه دفعة قيد النقل الآن. تابع تقدمها من تحديث حالة النقل.",false);
+      return;
+    }
+    if(hubState.chunkedBatchEnabled!==true){
+      var why=hubBlockerMessage(hubState);
+      $("content-hub-notice").textContent=why;
+      show(why,false);
+      return;
+    }
+    if(!confirm("تأكيد نقل دفعة واحدة بحجم 8 MB من فيلم saleh المحدد؟ يجب ألا يستخدم المشتركون مصدر الفيلم الآن، وأن تكون حقوق التخزين معتمدة."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/batch/next",
+        "content-hub-batch-next",{confirmed:true});
+      show("تم قبول طلب دفعة واحدة، وليس تأكيد اكتمال نقلها. اضغط تحديث حالة النقل.",true);
+    }catch(e){show("تعذّر بدء الدفعة: "+e.message,false)}
+    finally{this.disabled=false;await loadContentHub();}
+  });
+  loadContentHub();
+  setInterval(function(){
+    var page=$("page-library");
+    if(!document.hidden&&page?.classList.contains("active"))loadContentHub();
+  },8000);
   function stateLabel(s){if(s.status==="online")return "متصل";if(s.status==="offline")return "متوقف";if(s.status==="syncing"||s.syncing)return "جار المزامنة";return s.status||"غير معروف"}
   function renderHome(){
     var d=state.overview,e=state.engine;
