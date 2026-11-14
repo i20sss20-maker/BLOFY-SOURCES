@@ -432,6 +432,24 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
        .catch(()=>json(res,503,{ok:false,code:'season_bridge_unavailable'}));
       return true;
     }
+    const seasonQueuePageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/page\/([1-9][0-9]{0,4})$/);
+    if(req.method==='GET'&&seasonQueuePageRoute){
+      const page=Number(seasonQueuePageRoute[1]);
+      if(page>20000){
+        json(res,400,{ok:false,code:'season_queue_page_invalid'});
+        return true;
+      }
+      if(uri.search){
+        json(res,400,{ok:false,code:'season_queue_query_denied'});
+        return true;
+      }
+      void portal.contentHubSeasonQueuePage(page)
+       .then(({status,body})=>json(res,status,body))
+       .catch(()=>json(res,503,{
+        ok:false,code:'season_queue_page_unavailable'}));
+      return true;
+    }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
       // Operator Basic auth enforced above; portal Bearer key never returned
