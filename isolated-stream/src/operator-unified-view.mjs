@@ -1780,11 +1780,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var ready=data?.readiness?.ready===true;
     $("season-start").disabled=!ready||active||!seasonAVConfirmed||
       !seasonStorageSafe||
-      !(data?.episodes||[]).some(function(x){
-        // After a restart the DB may retain "running" with no worker.
-        // A new explicit start safely restores its checkpoint under PG lock.
-        return ["queued","paused","running"].includes(x.state);
-      });
+      !(Number(data?.page?.pendingEpisodes)>0||
+        (data?.episodes||[]).some(function(x){
+          // After a restart the DB may retain "running" with no worker.
+          // A new explicit start safely restores its checkpoint under PG lock.
+          return ["queued","paused","running"].includes(x.state);
+        }));
     $("season-pause").disabled=!active;
     $("season-enqueue").disabled=!ready||active||!seasonData;
     $("season-online").textContent=active?"جارٍ النقل":ready?"النظام جاهز":"النقل مقفل";
