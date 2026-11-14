@@ -144,9 +144,13 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     }
     // This route is reachable only after the exact operator Basic auth
     // above; never expose a private S3 or internal portal URL to browsers.
-    if(path==='/operator/api/content-hub/preview'){
+    if(path==='/operator/api/content-hub/preview'||
+       path==='/operator/api/content-hub/episodes/preview'){
+      const episode=path.endsWith('/episodes/preview');
       void streamOperatorOwnerPreview({req,res,
-        getUpstream:({signal})=>portal.contentHubPreviewRaw({signal})})
+        getUpstream:({signal})=>episode?
+          portal.contentHubEpisodePreviewRaw({signal}):
+          portal.contentHubPreviewRaw({signal})})
         .catch(()=>{if(!res.headersSent)json(res,503,{
           ok:false,code:'owner_preview_stream_failed'})});
       return true;
