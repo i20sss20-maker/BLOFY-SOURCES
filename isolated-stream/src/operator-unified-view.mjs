@@ -655,6 +655,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <button class="btn" id="season-start" type="button" disabled>▶ بدء / استكمال النقل</button>
       <button class="btn secondary" id="season-pause" type="button" disabled>⏸ إيقاف آمن</button>
      </div>
+     <div class="actions" style="margin-top:12px;justify-content:space-between">
+      <button id="season-page-previous" class="btn secondary" type="button" disabled>→ السابق</button>
+      <span id="season-page-label" class="muted" role="status">الصفحة 1 · قراءة بحد 50 حلقة</span>
+      <button id="season-page-next" class="btn secondary" type="button" disabled>التالي ←</button>
+     </div>
+     <p class="muted" style="margin:6px 0">تظهر هنا 50 حلقة بحد أقصى في كل صفحة؛ النسب المجمعّة للصفحة فقط. إجمالي تقدم المكتبة بالكامل يظهر في صحة التخزين.</p>
      <div id="season-queue-list" aria-live="polite" style="display:grid;gap:12px;margin-top:12px"></div>
      <div id="season-episode-preview-wrap" style="display:none;margin-top:14px">
       <p id="season-episode-preview-note" class="muted" role="status">لم يتم اختيار حلقة للمعاينة بعد.</p>
@@ -1580,6 +1586,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   // no redirect to the legacy BLOFY PLAYER administrator.
   var seasonData=null,seasonRows=[],seasonAVConfirmed=false;
   var seasonPreviewWatched=false,seasonQueueBusy=false;
+  var seasonPage=1,seasonPages=1,seasonTotalEpisodes=0;
   function seasonMessage(msg){$("season-action-note").textContent=String(msg||"");}
   function seasonButtonAV(){
     $("season-av-confirm").disabled=seasonAVConfirmed||
@@ -1800,6 +1807,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       !seasonStorageSafe?"البدء متوقف لحين التحقق من سلامة التخزين: راجع التنبيهات أدناه.":
       "جاهز لاستكمال الحلقات التي أضفتها لقائمة الانتظار.";
   }
+  $("season-page-previous").addEventListener("click",function(){
+    if(seasonQueueBusy||seasonPage<=1)return;
+    seasonPage--;void refreshSeasonQueue();
+  });
+  $("season-page-next").addEventListener("click",function(){
+    if(seasonQueueBusy||seasonPage>=seasonPages)return;
+    seasonPage++;void refreshSeasonQueue();
+  });
   async function refreshSeasonQueue(){
     if(seasonQueueBusy)return;
     seasonQueueBusy=true;
@@ -1810,8 +1825,20 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "✅ تم اعتماد سماع الصوت ورؤية الصورة من المسؤول.":
         "لم يتم تسجيل التأكيد. شغّل العينة في الأعلى ثم أكد الصوت والصورة.";
       seasonButtonAV();
-      var data=await api("content-hub/seasons/queue");
+      var data=await api("content-hub/seasons/queue/page/"+seasonPage);
+      if(data.ok!==true||!data.page)throw Error("season_page_metadata_unavailable");
+      seasonPages=Math.max(1,Number(data.page.pages)||1);
+      seasonTotalEpisodes=Math.max(0,Number(data.page.totalEpisodes)||0);
+      if(data.page.outOfRange&&seasonPage>seasonPages){
+        seasonPage=seasonPages;
+        data=await api("content-hub/seasons/queue/page/"+seasonPage);
+      }
       seasonRows=Array.isArray(data.episodes)?data.episodes:[];
+      $("season-page-previous").disabled=seasonPage<=1;
+      $("season-page-next").disabled=seasonPage>=seasonPages;
+      $("season-page-label").textContent="الصفحة "+seasonPage+" من "+seasonPages+
+        " · عدد الحلقات المسجلة "+seasonTotalEpisodes+
+        " · عرض "+seasonRows.length+" حلقة";
       seasonRefreshButtons(data);
       var parent=$("season-queue-list");
       parent.replaceChildren();
@@ -1904,6 +1931,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("season-queue-note").textContent="تعذر قراءة مركز المواسم: "+String(e.message||"غير متاح");
       $("season-start").disabled=true;$("season-pause").disabled=true;
       $("season-enqueue").disabled=true;
+      $("season-page-previous").disabled=true;
+      $("season-page-next").disabled=true;
     }finally{seasonQueueBusy=false}
   }
   function clearSeasonSelection(){
