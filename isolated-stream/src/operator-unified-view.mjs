@@ -1039,23 +1039,31 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       hubState=data;
       var job=data.continuousCopy||{};
       var running=data.pilotRunning===true||job.active===true;
-      $("content-hub-start-copy").disabled=running||data.chunkedBatchEnabled!==true;
-      $("content-hub-start-copy").textContent=job.state==="paused"||job.state==="failed"?
-        "▶ استكمال تنزيل الفيلم":"▶ بدء / استكمال تنزيل الفيلم";
-      $("content-hub-pause-copy").disabled=!running;
-      $("content-hub-next-batch").disabled=running;
-      $("content-hub-next-batch").textContent=data.chunkedBatchEnabled===true?
-        "تنزيل جزء واحد (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
-      var summary=data.accounting||{};
       var chunked=Array.isArray(data.runs)?
         data.runs.find(function(item){return item.format==="private_chunks"}):null;
+      // Durable "verified" is authoritative; a new container's in-memory
+      // continuous-copy status may read "idle" after the movie is complete.
+      var movieComplete=chunked?.state==="verified"&&
+        Number(chunked?.expectedBytes||0)>0&&
+        Number(chunked?.bytesCopied||0)===Number(chunked?.expectedBytes||0);
+      $("content-hub-start-copy").disabled=movieComplete||running||
+        data.chunkedBatchEnabled!==true;
+      $("content-hub-start-copy").textContent=movieComplete?
+        "✅ الفيلم محفوظ بالكامل":job.state==="paused"||job.state==="failed"?
+        "▶ استكمال تنزيل الفيلم":"▶ بدء / استكمال تنزيل الفيلم";
+      $("content-hub-pause-copy").disabled=movieComplete||!running;
+      $("content-hub-next-batch").disabled=movieComplete||running;
+      $("content-hub-next-batch").textContent=movieComplete?
+        "✅ كل الأجزاء محفوظة":data.chunkedBatchEnabled===true?
+        "تنزيل جزء واحد (8 MB)":"ℹ لماذا لا يبدأ النقل؟";
+      var summary=data.accounting||{};
       var progress=chunked?Math.min(100,Math.max(0,
         Number(chunked.bytesCopied||0)/Math.max(1,Number(chunked.expectedBytes||1))*100)):0;
       $("content-hub-progress").value=progress;
       $("content-hub-percent").textContent=progress.toFixed(2)+"% · "+
         hubBytes(chunked?.bytesCopied||0)+" من "+hubBytes(chunked?.expectedBytes||0)+
-        " · الحالة: "+(job.active?"جارٍ النقل":
-          job.state==="failed"?"توقف بسبب خطأ":
+        " · الحالة: "+(movieComplete?"اكتمل وتحققنا من سلامته":
+          job.active?"جارٍ النقل":job.state==="failed"?"توقف بسبب خطأ":
           job.state==="paused"?"متوقف ويمكن استكماله":
           job.state==="completed"?"اكتمل":chunked?"محفوظ جزئيًا":"لم يبدأ");
       $("content-hub-summary").textContent=
@@ -1097,8 +1105,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
            run.state==="failed"?"فشل":"جارٍ");
         box.append(row);
       });
-      $("content-hub-notice").textContent=running?
-        "الفيلم يُنقل تلقائيًا على دفعات 8 MB. يظهر التقدم أعلاه كل عدة ثوانٍ.":
+      $("content-hub-notice").textContent=movieComplete?
+        "✅ اكتمل نقل الفيلم والتحقق من الملف. لا تضغط بدء أو استكمال مرة ثانية. التالي: اختبار تشغيله على أجهزة BLOFY PLAYER قبل تحويل تشغيل المشتركين.":
+        running?"الفيلم يُنقل تلقائيًا على دفعات 8 MB. يظهر التقدم أعلاه كل عدة ثوانٍ.":
         job.state==="failed"?"توقف النقل بسبب: "+String(job.code||"خطأ غير معروف")+
         " · يمكنك استكمال النقل من آخر جزء محفوظ بعد حل المشكلة.":data.chunkedBatchEnabled?
         "النقل جاهز. اضغط بدء تنزيل الفيلم مرة واحدة، أو حمّل جزءًا تجريبيًا.":
@@ -1144,6 +1153,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{await loadContentHub();}
   });
   $("content-hub-start-copy").addEventListener("click",async function(){
+    if(hubState?.runs?.some(function(r){return r.format==="private_chunks"&&
+      r.state==="verified"&&Number(r.expectedBytes||0)===Number(r.bytesCopied||0)})){
+      show("الفيلم مكتمل ومتحقق منه. لا تحتاج إعادة تنزيله.",true);return;
+    }
     if(!hubState||hubState.chunkedBatchEnabled!==true){
       show(hubBlockerMessage(hubState),false);return;
     }
@@ -1165,6 +1178,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{await loadContentHub()}
   });
   $("content-hub-next-batch").addEventListener("click",async function(){
+    if(hubState?.runs?.some(function(r){return r.format==="private_chunks"&&
+      r.state==="verified"&&Number(r.expectedBytes||0)===Number(r.bytesCopied||0)})){
+      show("كل أجزاء الفيلم محفوظة وتم التحقق منها بالفعل.",true);return;
+    }
     if(!hubState){
       $("content-hub-notice").textContent="الاتصال بمركز المحتوى غير متاح حاليًا. لا يمكن بدء التحميل قبل فحصه.";
       show("مركز التخزين الخاص غير متصل؛ اضغط تحديث حالة النقل وأعد الفحص.",false);
