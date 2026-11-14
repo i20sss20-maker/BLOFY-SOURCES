@@ -1839,6 +1839,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("season-page-next").disabled=seasonPage>=seasonPages;
       $("season-page-label").textContent="الصفحة "+seasonPage+" من "+seasonPages+
         " · عدد الحلقات المسجلة "+seasonTotalEpisodes+
+        " · تنتظر النقل "+Number(data.page.pendingEpisodes||0)+
         " · عرض "+seasonRows.length+" حلقة";
       seasonRefreshButtons(data);
       var parent=$("season-queue-list");
