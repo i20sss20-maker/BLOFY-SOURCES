@@ -12,7 +12,8 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
    'content-hub-start-copy','content-hub-pause-copy','content-hub-progress',
    'content-hub-percent','content-hub-diagnose','content-hub-canary-status',
    'content-hub-episodes','content-hub-episodes-check',
-   'content-hub-episodes-status','content-hub-episodes-list'])
+   'content-hub-episodes-status','content-hub-episodes-list',
+   'content-hub-episode-copy-progress'])
    assert.ok(html.includes('id="'+id+'"'),id);
  assert.ok(html.includes('content-hub/status'));
  assert.ok(html.includes('content-hub/batch/next'));
@@ -21,6 +22,11 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  assert.ok(html.includes('content-hub/playback/diagnose'));
  assert.ok(html.includes('content-hub/episodes/candidates'));
  assert.ok(html.includes('content-hub/episodes/probe'));
+ assert.ok(html.includes('content-hub/episodes/next'));
+ assert.ok(html.includes('episodeCopyReadiness'));
+ assert.ok(html.includes('dataset.episodeCopy='));
+ assert.ok(html.includes('نقل الجزء التالي (8 MB)'));
+ assert.ok(html.includes('episodeRun.bytesCopied'));
  assert.ok(html.includes('فحص حجم هذه الحلقة (4 KB فقط)'));
  assert.ok(html.includes('dataset.episodeProbe='));
  assert.ok(html.includes('لم يبدأ نقل أي حلقة'));
@@ -71,6 +77,12 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  assert.equal(wrongEpisode.status,400);
  const episodeSize=await client.contentHubProbeEpisode({gatewayId:332,confirmed:true});
  assert.equal(episodeSize.status,202);
+ const deniedCopy=await client.contentHubNextEpisodeChunk({gatewayId:332,confirmed:false});
+ assert.equal(deniedCopy.status,400);
+ const invalidCopy=await client.contentHubNextEpisodeChunk({gatewayId:-1,confirmed:true});
+ assert.equal(invalidCopy.status,400);
+ const nextEpisode=await client.contentHubNextEpisodeChunk({gatewayId:332,confirmed:true});
+ assert.equal(nextEpisode.status,202);
  const approved=await client.contentHubNextBatch({confirmed:true});
  assert.equal(approved.status,202);
  const noStart=await client.contentHubStartCopy({confirmed:false});
@@ -88,14 +100,16 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
   '/internal/blofy-stream/content-hub/preflight',
   '/internal/blofy-stream/content-hub/episodes/candidates',
   '/internal/blofy-stream/content-hub/episodes/probe',
+  '/internal/blofy-stream/content-hub/episodes/next',
   '/internal/blofy-stream/content-hub/batch/next',
   '/internal/blofy-stream/content-hub/batch/start',
   '/internal/blofy-stream/content-hub/batch/pause',
   '/internal/blofy-stream/content-hub/playback/diagnose']);
  assert.equal(calls[3].method,'POST');
  assert.deepEqual(calls[3].body,{gatewayId:332,confirmed:true});
- assert.deepEqual(calls[4].body,{confirmed:true});
+ assert.deepEqual(calls[4].body,{gatewayId:332,confirmed:true});
  assert.deepEqual(calls[5].body,{confirmed:true});
- assert.deepEqual(calls[7].body,{confirmed:true});
+ assert.deepEqual(calls[6].body,{confirmed:true});
+ assert.deepEqual(calls[8].body,{confirmed:true});
  assert.ok(calls.every(x=>x.auth==='Bearer '+secret));
 });
