@@ -14,12 +14,18 @@ test('STREAM library embeds real season controls without redirecting to old admi
   'season-queue-list','season-start','season-pause',
   'season-preview-video','season-video-okay','season-audio-okay',
   'season-av-confirm','season-av-note',
-  'season-episode-preview-player','season-episode-preview-wrap']){
+  'season-episode-preview-player','season-episode-preview-wrap',
+  'season-health-panel','season-health-summary','season-storage-progress',
+  'season-health-alerts','season-audit-select','season-audit-run',
+  'season-health-audit-list','season-audit-status']){
   assert.match(html,new RegExp('id="'+id+'"'),id);
  }
  assert.match(html,/إدارة المواسم والحلقات — داخل BLOFY STREAM/);
  assert.match(html,/operator\/api\/content-hub\/seasons\/episodes\//);
  assert.match(html,/اختبار تشغيل الحلقة/);
+ assert.match(html,/api\("content-hub\/seasons\/health"\)/);
+ assert.match(html,/action\("content-hub\/seasons\/audit","season-audit"/);
+ assert.match(html,/المساحة المتبقية الحقيقية في S3 غير معروفة/);
  assert.match(html,/api\("content-hub\/seasons\/series"/);
  assert.match(html,/api\("content-hub\/seasons\/queue"/);
  assert.match(html,/action\("content-hub\/seasons\/enqueue","season-enqueue"/);
