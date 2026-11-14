@@ -287,12 +287,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     runId,confirmed:true,licensedStorage:true,sourceIdle:true}});
   };
   const contentHubSeasonQueue=()=>call(SEASONS+'queue');
-  const contentHubSeasonQueuePage=page=>{
+  const contentHubSeasonQueuePage=(page,{state='all'}={})=>{
    const n=Number(page);
-   if(!Number.isSafeInteger(n)||n<1||n>20000)
+   if(!Number.isSafeInteger(n)||n<1||n>20000||
+      !['all','pending','queued','running','paused','verified','failed'].includes(state))
     return Promise.resolve({status:400,body:{ok:false,
       code:'season_queue_page_invalid'}});
-   return call(SEASONS+'queue/page/'+n);
+   return call(SEASONS+'queue/status/'+state+'/page/'+n);
   };
   const contentHubSeasonHealth=()=>call(SEASONS+'health');
   const contentHubSeasonAudit=({runId,confirmed}={})=>{
