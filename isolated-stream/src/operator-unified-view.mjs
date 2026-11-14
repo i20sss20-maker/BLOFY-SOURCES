@@ -626,6 +626,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted">فحص حقيقي لقراءة ملف الفيلم المحفوظ، والتعرف على مسارات الفيديو والصوت وفك ترميز عينات منهما، بدون الرجوع إلى مصدر القنوات.</p>
 <button class="btn secondary" id="content-hub-diagnose" type="button">▶ اختبار الصورة والصوت</button>
 <p class="muted" role="status" id="content-hub-canary-status">لم يتم استرجاع نتيجة فحص التشغيل بعد.</p>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #254464">
+<strong>🎞 مشاهدة عينة تجريبية من تخزين BLOFY</strong>
+<p class="muted">عينة قصيرة (12 ثانية) بصيغة MP4 مع تحويل صوت AC3 إلى AAC للمتصفح، من الملف المخزن فقط. ليست تشغيلًا مباشرًا للعملاء أو اختبارًا كاملًا لأجهزة Android TV.</p>
+<button class="btn secondary" id="content-hub-owner-preview" type="button" disabled>▶ تشغيل العينة الخاصة</button>
+<video id="content-hub-preview-player" controls playsinline preload="none"
+  style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
+<p class="muted" id="content-hub-preview-note">العينة متاحة للمدير فقط بعد التأكد من اكتمال الفيلم.</p>
+</div>
 </div>
 <div id="content-hub-runs" class="muted" aria-live="polite"></div>
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
@@ -1074,6 +1082,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var canary=data.lastCanary||{};
       $("content-hub-diagnose").disabled=data.canaryRunning===true||
         Number(summary.verifiedCount||0)<1;
+      $("content-hub-owner-preview").disabled=!movieComplete||
+        data.ownerPreviewEnabled!==true;
+      $("content-hub-preview-note").textContent=!movieComplete?
+        "لا تتوفر معاينة قبل اكتمال الفيلم والتحقق منه.":
+        data.ownerPreviewEnabled===true?
+        "المعاينة خاصة ومحدودة بـ12 ثانية؛ اضغط تشغيل لتجربة المتصفح دون تحويل الأكواد.":
+        "معاينة المتصفح مقفلة من إعدادات الخادم؛ فحوصات الصورة والصوت الآلية متاحة.";
       var desc=data.canaryRunning?"جارٍ فحص الصورة والصوت من التخزين الخاص...":
         canary.ok===true&&
         ["canary_audio_video_decoded","canary_audio_video_and_seeks_verified"].includes(canary.code)?
@@ -1138,6 +1153,27 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
     }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("content-hub-owner-preview").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var player=$("content-hub-preview-player");
+    // The browser requests a fixed same-origin owner-only route. It never
+    // receives Railway internal URLs, bearer tokens or upstream credentials.
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    player.src="/operator/api/content-hub/preview";
+    player.load();
+    $("content-hub-preview-note").textContent=
+      "تحميل عينة 12 ثانية من التخزين الخاص. يختلف دعم AC3 في التطبيق عن AAC في المتصفح.";
+    try{await player.play()}catch{
+      $("content-hub-preview-note").textContent=
+        "اضغط تشغيل داخل المشغل. إن تعذّر، راجع حالة المعاينة أو الاتصال الخاص.";
+    }
+  });
+  $("content-hub-preview-player").addEventListener("error",function(){
+    $("content-hub-preview-note").textContent=
+      "تعذر تشغيل العينة في المتصفح. لا يعني هذا أن الفيلم الأصلي تالف.";
   });
   $("content-hub-diagnose").addEventListener("click",async function(){
     if(this.disabled)return;
