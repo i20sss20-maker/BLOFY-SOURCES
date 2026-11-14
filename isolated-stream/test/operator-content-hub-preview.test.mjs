@@ -85,3 +85,32 @@ test('oversized private preview rejected before any browser bytes',async()=>{
   assert.equal((await res.json()).code,'owner_preview_payload_invalid');
  });
 });
+
+test('verified episode preview is Basic protected and routes only through fixed portal bridge',async()=>{
+ const mp4=Buffer.concat([Buffer.alloc(4),Buffer.from('ftyp'),
+  Buffer.alloc(3500,0x31)]);
+ const calls=[];
+ await withServer({fetchImpl:async(url,opts)=>{
+  calls.push({url:String(url),opts});
+  return new Response(mp4,{status:200,headers:{
+   'content-type':'video/mp4','content-length':String(mp4.length)
+  }});
+ }},async base=>{
+  const url=base+'/operator/api/content-hub/episodes/preview';
+  assert.equal((await fetch(url)).status,401);
+  assert.equal(calls.length,0);
+  const r=await fetch(url,{headers:{authorization:auth}});
+  assert.equal(r.status,200);
+  assert.equal(r.headers.get('cache-control'),'private,no-store');
+  assert.deepEqual(Buffer.from(await r.arrayBuffer()),mp4);
+  const html=await fetch(base+'/operator',{headers:{authorization:auth}});
+  const page=await html.text();
+  assert.match(page,/id="content-hub-episode-preview-player"/);
+  assert.match(page,/content-hub\/episodes\/preview/);
+  assert.doesNotMatch(page,/blofy-content-hub\.railway\.internal/);
+ });
+ assert.equal(calls.length,1);
+ assert.ok(calls[0].url.endsWith(
+  '/internal/blofy-stream/content-hub/episodes/preview'));
+ assert.equal(calls[0].opts.headers.authorization,'Bearer '+bridge);
+});
