@@ -153,3 +153,28 @@ test('manual season queue budget and dual-S3 read remain on the signed fixed bri
  assert.deepEqual(seen[1].body,{runIds,confirmed:true});
  assert.equal(seen[1].header,'Bearer '+secret);
 });
+
+
+test('manual failed-episode requeue requires source-idle and owner rights; never starts copy',async()=>{
+ const observed=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   observed.push({url,method:init.method,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,automaticStart:false}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const runId='season_0123456789abcdef01234567';
+ const denied=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:false});
+ assert.equal(denied.status,400);
+ assert.equal(observed.length,0);
+ const result=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:true});
+ assert.equal(result.status,200);
+ assert.equal(result.body.automaticStart,false);
+ assert.equal(observed.length,1);
+ assert.equal(observed[0].method,'POST');
+ assert.equal(new URL(observed[0].url).pathname,
+  '/internal/blofy-stream/content-hub/seasons/retry');
+ assert.deepEqual(observed[0].body,{runId,confirmed:true,
+  licensedStorage:true,sourceIdle:true});
+});
