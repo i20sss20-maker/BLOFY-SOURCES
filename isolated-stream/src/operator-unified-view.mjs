@@ -643,6 +643,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
 <div class="actions">
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
+<button class="btn" id="content-hub-episode-start" type="button" disabled>▶ بدء / استكمال تنزيل الحلقة المعتمدة</button>
+<button class="btn secondary" id="content-hub-episode-pause" type="button" disabled>⏸ إيقاف تنزيل الحلقة</button>
 </div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
 <p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
@@ -1056,6 +1058,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var data=await api("content-hub/status");
       hubState=data;
       var episodeGate=data.episodeCopyReadiness||{};
+      var episodeActive=data.episodeContinuousCopy?.active===true;
+      $("content-hub-episode-start").disabled=episodeGate.ready!==true||
+        data.episodeCopyBusy===true;
+      $("content-hub-episode-pause").disabled=!episodeActive;
       var episodeRuns=Array.isArray(data.episodeRuns)?data.episodeRuns:[];
       var episodeRun=episodeRuns.find(function(x){
         return x.format==="private_episode_chunks";
@@ -1078,6 +1084,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       if(episodeGate.ready!==true&&!episodeComplete)
         episodeCopyMessage+=" · النقل غير مفعّل: "+
           (episodeGate.blockedBy||[]).join("، ");
+      $("content-hub-episode-start").disabled=episodeGate.ready!==true||
+        data.episodeCopyBusy===true||episodeComplete;
+      $("content-hub-episode-start").textContent=episodeComplete?
+        "✅ الحلقة مكتملة":episodeActive?"جارٍ تنزيل الحلقة":
+        "▶ بدء / استكمال تنزيل الحلقة المعتمدة";
       $("content-hub-episode-copy-progress").textContent=episodeCopyMessage;
       $("content-hub-episodes-list").querySelectorAll("button[data-episode-copy]")
         .forEach(function(button){
@@ -1271,6 +1282,33 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         String(e.message||"خطأ").slice(0,75)+
         ". لم يتم حفظ أي بيانات.";
     }finally{button.disabled=false}
+  });
+  $("content-hub-episode-start").addEventListener("click",async function(){
+    var gate=hubState?.episodeCopyReadiness||{};
+    var id=Number(gate.approvedGatewayId);
+    if(!gate.ready||!Number.isSafeInteger(id)||id<1){
+      show("تنزيل الحلقة غير جاهز: تحقق من إعداد المصدر وصلاحية التخزين.",false);
+      return;
+    }
+    if(!confirm("بدء نقل الحلقة رقم "+id+
+      " بالكامل، جزءًا بعد جزء بحجم 8 MB من المصدر إلى التخزين الخاص؟ تأكد أن لديك حق تخزينها وأن المصدر غير مستخدم حاليًا."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/start","content-hub-episode-start",
+        {gatewayId:id,confirmed:true});
+      show("بدأ نقل الحلقة تدريجيًا. تظهر النسبة وتتحدث تلقائيًا.",true);
+    }catch(e){show("تعذر بدء تنزيل الحلقة: "+String(e.message||""),false)}
+    finally{await loadContentHub()}
+  });
+  $("content-hub-episode-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف نقل الحلقة مؤقتًا؟ الأجزاء المنقولة ستبقى محفوظة."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/episodes/pause","content-hub-episode-pause",
+        {confirmed:true});
+      show("طلب إيقاف الحلقة وصل. يمكن الاستكمال من آخر جزء.",true);
+    }catch(e){show("تعذر إيقاف الحلقة: "+String(e.message||""),false)}
+    finally{await loadContentHub()}
   });
   $("content-hub-episodes-list").addEventListener("click",async function(event){
     var button=event.target?.closest?.("button[data-episode-copy]");
