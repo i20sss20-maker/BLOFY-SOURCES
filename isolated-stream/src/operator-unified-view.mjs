@@ -649,6 +649,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <button class="btn secondary" id="season-pause" type="button" disabled>⏸ إيقاف آمن</button>
      </div>
      <div id="season-queue-list" aria-live="polite" style="display:grid;gap:12px;margin-top:12px"></div>
+     <div id="season-episode-preview-wrap" style="display:none;margin-top:14px">
+      <p id="season-episode-preview-note" class="muted" role="status">لم يتم اختيار حلقة للمعاينة بعد.</p>
+      <video id="season-episode-preview-player" controls playsinline preload="none" style="width:100%;max-height:320px;background:#000;border-radius:12px"></video>
+     </div>
      <p class="muted" style="margin:10px 0 0">يُحفظ التقدم في PostgreSQL والتخزين الخاص. لا تُحوّل قنوات أو أكواد المشتركين تلقائيًا.</p>
     </div>
     <div class="panel" style="margin-top:14px;background:rgba(5,15,30,.3)">
@@ -1625,6 +1629,24 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
               }[r.state]||"قيد المعالجة"));
             item.style.marginTop="8px";
             card.append(item,seasonMeter(r.percent));
+            if(r.state==="verified"&&
+              /^[A-Za-z0-9_-]{8,80}$/.test(String(r.runId||""))){
+              var view=seasonNode("button","btn secondary","▶ اختبار تشغيل الحلقة "+r.episodeNumber);
+              view.type="button";view.style.marginTop="8px";
+              view.dataset.seasonRunId=String(r.runId);
+              view.addEventListener("click",function(){
+                var preview=$("season-episode-preview-player");
+                preview.pause();preview.removeAttribute("src");preview.load();
+                preview.src="/operator/api/content-hub/seasons/episodes/"+
+                  encodeURIComponent(String(r.runId))+"/preview";
+                preview.load();
+                $("season-episode-preview-wrap").style.display="block";
+                $("season-episode-preview-note").textContent=
+                  "معاينة الحلقة "+r.episodeNumber+
+                  " من التخزين الخاص. تأكد من الصورة والصوت؛ لا تؤثر على بث المشتركين.";
+              });
+              card.append(view);
+            }
           });
         parent.append(card);
       });
@@ -1644,6 +1666,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     $("season-select-batch").disabled=true;
     $("season-enqueue").disabled=true;
   }
+  $("season-episode-preview-player").addEventListener("error",function(){
+    $("season-episode-preview-note").textContent=
+      "تعذر تشغيل معاينة الحلقة. قد تكون لم تكتمل أو حدث خطأ في ترميز المعاينة.";
+  });
   $("season-refresh").addEventListener("click",refreshSeasonQueue);
   $("season-series-select").addEventListener("change",function(){
     clearSeasonSelection();
