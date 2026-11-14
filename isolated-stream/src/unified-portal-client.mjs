@@ -15,7 +15,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
+    const budget=path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+      path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
@@ -232,6 +233,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
+  const contentHubNextEpisodeChunk=({gatewayId,confirmed}={})=>{
+    const id=Number(gatewayId);
+    if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
+      return Promise.resolve({status:400,body:{
+       ok:false,code:'episode_copy_explicit_confirmation_required'}});
+    return call(ROOT+'/content-hub/episodes/next',{
+      method:'POST',body:{gatewayId:id,confirmed:true}});
+  };
   const contentHubProbeEpisode=({gatewayId,confirmed}={})=>{
     const id=Number(gatewayId);
     if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
@@ -308,7 +317,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
-    contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,contentHubPreflight,contentHubNextBatch,
+    contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
+    contentHubNextEpisodeChunk,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubPreviewRaw};
 }
