@@ -260,6 +260,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       method:'POST',body:{gatewayId:id,confirmed:true}});
   };
   const contentHubPreflight=()=>call(ROOT+'/content-hub/preflight');
+  const contentHubDiagnoseEpisode=({confirmed}={})=>{
+    if(confirmed!==true)return Promise.resolve({
+      status:400,body:{ok:false,code:'episode_canary_confirmation_required'}
+    });
+    return call(ROOT+'/content-hub/episodes/playback/diagnose',{
+      method:'POST',body:{confirmed:true}});
+  };
   const contentHubDiagnosePlayback=({confirmed}={})=>{
     if(confirmed!==true)return Promise.resolve({
       status:400,body:{ok:false,code:'playback_diagnostic_confirmation_required'}
@@ -331,5 +338,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
     contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
+    contentHubDiagnoseEpisode,
     contentHubPreviewRaw};
 }
