@@ -1540,6 +1540,330 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){show("تعذّر بدء الدفعة: "+e.message,false)}
     finally{this.disabled=false;await loadContentHub();}
   });
+  // Season operations are rendered and executed right here in STREAM;
+  // no redirect to the legacy BLOFY PLAYER administrator.
+  var seasonData=null,seasonRows=[],seasonAVConfirmed=false;
+  var seasonPreviewWatched=false,seasonQueueBusy=false;
+  function seasonMessage(msg){$("season-action-note").textContent=String(msg||"");}
+  function seasonButtonAV(){
+    $("season-av-confirm").disabled=seasonAVConfirmed||
+      !seasonPreviewWatched||!$("season-video-okay").checked||
+      !$("season-audio-okay").checked;
+  }
+  function seasonNode(tag,cls,text){
+    var el=document.createElement(tag);
+    if(cls)el.className=cls;
+    if(text!==undefined)el.textContent=String(text);
+    return el;
+  }
+  function seasonMeter(percentage){
+    var p=seasonNode("progress");p.max=100;
+    p.value=Math.min(100,Math.max(0,Number(percentage)||0));
+    p.style.cssText="width:100%;height:14px;accent-color:#60a5fa";
+    return p;
+  }
+  function seasonRefreshButtons(data){
+    var active=data?.worker?.active===true;
+    var ready=data?.readiness?.ready===true;
+    $("season-start").disabled=!ready||active||!seasonAVConfirmed||
+      !(data?.episodes||[]).some(function(x){return x.state==="queued"||x.state==="paused"});
+    $("season-pause").disabled=!active;
+    $("season-enqueue").disabled=!ready||active||!seasonData;
+    $("season-online").textContent=active?"جارٍ النقل":ready?"النظام جاهز":"النقل مقفل";
+    $("season-online").className="pill "+(active||ready?"good":"bad");
+    var blocked=(data?.readiness?.blockedBy||[]).map(function(x){
+      return ({
+        season_queue_disabled:"تفعيل قائمة النقل",episode_copy_disabled:"تفعيل نسخ الحلقات",
+        storage_upload_disabled:"السماح بالتخزين الخاص",
+        storage_rights_unconfirmed:"تأكيد صلاحية التخزين",
+        episode_rights_unconfirmed:"تأكيد حقوق الحلقات",
+        source_idle_unconfirmed:"التأكد من خمول المصدر",
+        quiet_window_unconfirmed:"نافذة نقل خالية من البث",
+        source_bridge_not_configured:"اتصال المصدر الداخلي"
+      })[x]||x;
+    });
+    $("season-queue-note").textContent=active?"النقل جارٍ بحلقة واحدة في كل مرة. "+
+      "سيُحفظ التقدم عند الإيقاف.":!ready?
+      "النقل متوقف بسبب الإعدادات: "+blocked.join("، "):
+      !seasonAVConfirmed?"قبل النقل شغّل عينة الحلقة وأكد الصوت والصورة.":
+      "جاهز لاستكمال الحلقات التي أضفتها لقائمة الانتظار.";
+  }
+  async function refreshSeasonQueue(){
+    if(seasonQueueBusy)return;
+    seasonQueueBusy=true;
+    try{
+      var proof=await api("content-hub/seasons/confirmation");
+      seasonAVConfirmed=proof.confirmed===true;
+      $("season-av-note").textContent=seasonAVConfirmed?
+        "✅ تم اعتماد سماع الصوت ورؤية الصورة من المسؤول.":
+        "لم يتم تسجيل التأكيد. شغّل العينة في الأعلى ثم أكد الصوت والصورة.";
+      seasonButtonAV();
+      var data=await api("content-hub/seasons/queue");
+      seasonRows=Array.isArray(data.episodes)?data.episodes:[];
+      seasonRefreshButtons(data);
+      var parent=$("season-queue-list");
+      parent.replaceChildren();
+      var seasons=Array.isArray(data.seasons)?data.seasons:[];
+      if(!seasons.length){
+        parent.append(seasonNode("p","muted","لا توجد حلقات في قائمة النقل إلى الآن."));
+      }
+      seasons.forEach(function(group){
+        var card=seasonNode("div","panel");
+        card.style.cssText="margin:0;background:#0a1a31;padding:14px;border:1px solid #29476b";
+        var label=seasonNode("strong","",group.seasonKey+" · "+
+          (Number(group.verifiedCount)||0)+"/"+(Number(group.episodeCount)||0)+" حلقة");
+        card.append(label,seasonMeter(group.percent),
+          seasonNode("p","muted",(Number(group.percent)||0)+"% · "+
+           hubBytes(group.bytesCopied)+" / "+hubBytes(group.expectedBytes)));
+        seasonRows.filter(function(r){return r.seasonKey===group.seasonKey})
+          .forEach(function(r){
+            var item=seasonNode("div","muted","حلقة "+r.episodeNumber+
+              " — "+String(r.title||"").slice(0,80)+" · "+
+              (Number(r.percent)||0)+"% · "+({
+                verified:"مكتملة",failed:"تحتاج مراجعة",queued:"بانتظار النقل",
+                paused:"موقوفة",running:"جار نقلها"
+              }[r.state]||"قيد المعالجة"));
+            item.style.marginTop="8px";
+            card.append(item,seasonMeter(r.percent));
+          });
+        parent.append(card);
+      });
+    }catch(e){
+      $("season-online").textContent="المركز غير متاح";
+      $("season-online").className="pill bad";
+      $("season-queue-note").textContent="تعذر قراءة مركز المواسم: "+String(e.message||"غير متاح");
+      $("season-start").disabled=true;$("season-pause").disabled=true;
+      $("season-enqueue").disabled=true;
+    }finally{seasonQueueBusy=false}
+  }
+  function clearSeasonSelection(){
+    seasonData=null;
+    $("season-season-select").disabled=true;
+    $("season-season-select").replaceChildren(new Option("اختر الموسم",""));
+    $("season-candidates").replaceChildren();
+    $("season-select-batch").disabled=true;
+    $("season-enqueue").disabled=true;
+  }
+  $("season-refresh").addEventListener("click",refreshSeasonQueue);
+  $("season-series-select").addEventListener("change",function(){
+    clearSeasonSelection();
+    $("season-series-episodes").disabled=!/^[0-9]+$/.test(this.value);
+  });
+  $("season-series-load").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var response=await api("content-hub/seasons/series");
+      var list=Array.isArray(response.series)?response.series:[];
+      var select=$("season-series-select");
+      select.replaceChildren(new Option("اختر مسلسلًا",""));
+      list.forEach(function(x){
+        if(Number.isSafeInteger(x.seriesGatewayId)&&x.seriesGatewayId>0)
+          select.add(new Option(String(x.title||"مسلسل")+" · #"+x.seriesGatewayId,
+            String(x.seriesGatewayId)));
+      });
+      clearSeasonSelection();
+      seasonMessage("تم تحميل "+list.length+" مسلسلًا. اختر مسلسلًا ثم عرض المواسم.");
+    }catch(e){seasonMessage("فشل تحميل المسلسلات: "+e.message)}
+    finally{this.disabled=false}
+  });
+  async function openSeasonSeries(id){
+    var n=Number(id);
+    if(!Number.isSafeInteger(n)||n<1){seasonMessage("رقم المسلسل غير صحيح.");return}
+    $("season-series-episodes").disabled=true;
+    $("season-candidates-note").textContent="جار جلب المواسم والحلقات من الفهرس…";
+    try{
+      var response=await api("content-hub/seasons/series/"+n);
+      seasonData=response;
+      var select=$("season-series-select"),key=String(n);
+      if(!Array.from(select.options).some(function(o){return o.value===key}))
+        select.add(new Option(String(response.title||"مسلسل")+" · #"+n,key));
+      select.value=key;
+      if(select.selectedOptions[0])select.selectedOptions[0].textContent=
+        String(response.title||"مسلسل")+" · #"+n;
+      var seasons=Array.isArray(response.seasons)?response.seasons:[];
+      var seasonSelect=$("season-season-select");
+      seasonSelect.replaceChildren(new Option("اختر الموسم",""));
+      seasons.forEach(function(x){
+        seasonSelect.add(new Option("الموسم "+x.seasonNumber+
+          " — "+x.episodeCount+" حلقة",String(x.seasonNumber)));
+      });
+      seasonSelect.disabled=seasons.length===0;
+      $("season-candidates").replaceChildren();
+      $("season-candidates-note").textContent=seasons.length?
+       "اختر الموسم، ثم فحص الأحجام بدقة قبل الإضافة.":
+       "لم يُعثر على مواسم مفهرسة لهذا المسلسل.";
+    }catch(e){
+      clearSeasonSelection();
+      $("season-candidates-note").textContent=
+       "تعذر قراءة مواسم هذا المسلسل: "+e.message;
+    }finally{$("season-series-episodes").disabled=false}
+  }
+  $("season-series-episodes").addEventListener("click",function(){
+    void openSeasonSeries($("season-series-select").value);
+  });
+  $("season-series-open").addEventListener("click",function(){
+    var n=Number($("season-series-id").value);
+    if(Number.isSafeInteger(n)&&n>0)void openSeasonSeries(n);
+    else seasonMessage("أدخل رقم مسلسل صحيحًا.");
+  });
+  $("season-pilot").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var pilot=await api("content-hub/seasons/pilot");
+      var id=Number(pilot.seriesGatewayId),episodeId=Number(pilot.episodeGatewayId);
+      await openSeasonSeries(id);
+      var seasons=seasonData?.seasons||[];
+      var matched=seasons.find(function(season){
+        return (season.episodes||[]).some(function(ep){return ep.gatewayId===episodeId});
+      });
+      if(matched){
+        $("season-season-select").value=String(matched.seasonNumber);
+        $("season-season-select").dispatchEvent(new Event("change"));
+        seasonMessage("وجدت مسلسل الحلقة المحفوظة وموسمها الفعلي. حدد الحلقات التالية.");
+      }else seasonMessage("تم العثور على المسلسل، لكن الحلقة ليست في الفهرس المفصّل.");
+    }catch(e){seasonMessage("لم أتمكن من ربط الحلقة المحفوظة: "+e.message)}
+    finally{this.disabled=false}
+  });
+  $("season-season-select").addEventListener("change",function(){
+    var group=seasonData?.seasons?.find(function(s){
+      return String(s.seasonNumber)===$("season-season-select").value;
+    });
+    var rows=group?.episodes||[];
+    var box=$("season-candidates");box.replaceChildren();
+    rows.forEach(function(item,index){
+      var card=seasonNode("div","panel");
+      card.style.cssText="margin:0;padding:12px;background:#0d213b;border:1px solid #365778";
+      var line=seasonNode("label","");
+      line.style.cssText="display:flex;align-items:center;gap:10px";
+      var check=seasonNode("input");check.type="checkbox";
+      check.dataset.gatewayId=String(item.gatewayId);
+      check.className="season-check";
+      line.append(check,seasonNode("strong","",item.episodeNumber+
+        ". "+String(item.title||"الحلقة").slice(0,120)));
+      var row=seasonNode("div","actions");
+      var size=seasonNode("input");size.type="number";size.step="1";
+      size.readOnly=true;size.placeholder="الحجم بالبايت بعد الفحص";
+      size.className="season-size";size.style.maxWidth="220px";
+      var btn=seasonNode("button","btn secondary","فحص الحجم (4 KB)");
+      btn.type="button";
+      btn.addEventListener("click",async function(){
+        if(!confirm("هل تسمح بفحص 4 كيلوبايت فقط من مصدر هذه الحلقة؟"))return;
+        btn.disabled=true;
+        try{
+          var data=await action("content-hub/seasons/probe","season-probe",
+            {confirmed:true,gatewayId:item.gatewayId});
+          var bytes=Number(data.expectedBytes);
+          if(!Number.isSafeInteger(bytes)||bytes<8388608||bytes>4294967296)
+            throw Error("لم يثبت حجم الحلقة بدقة");
+          size.value=String(bytes);
+          btn.textContent="✓ تم فحص "+hubBytes(bytes);
+        }catch(e){seasonMessage("تعذر فحص الحلقة "+item.episodeNumber+": "+e.message)}
+        finally{btn.disabled=false}
+      });
+      row.append(btn,size);
+      card.append(line,row);box.append(card);
+    });
+    $("season-select-batch").disabled=rows.length===0;
+    $("season-candidates-note").textContent=rows.length?
+      "عدد حلقات الموسم "+rows.length+". اختر ما يصل إلى 12 حلقة. يجب فحص حجم كل حلقة.":
+      "لا توجد حلقات مفهرسة في الموسم.";
+  });
+  $("season-select-batch").addEventListener("click",function(){
+    var list=$("season-candidates").querySelectorAll(".season-check");
+    list.forEach(function(c,i){c.checked=i<12});
+    seasonMessage("تم تحديد "+Math.min(12,list.length)+" حلقة؛ افحص أحجامها ثم أضفها.");
+  });
+  $("season-enqueue").addEventListener("click",async function(){
+    var seasons=seasonData?.seasons||[];
+    var season=seasons.find(function(s){
+      return String(s.seasonNumber)===$("season-season-select").value;
+    });
+    if(!season){seasonMessage("اختر موسمًا أولًا.");return}
+    var chosen=Array.from($("season-candidates").querySelectorAll(".season-check"))
+      .filter(function(c){return c.checked});
+    if(chosen.length<1||chosen.length>12){
+      seasonMessage("اختر بين حلقة واحدة و12 حلقة في الدفعة.");return;
+    }
+    var episodeMap=new Map(season.episodes.map(function(x){return [x.gatewayId,x]}));
+    var jobs=chosen.map(function(c){
+      var id=Number(c.dataset.gatewayId),episode=episodeMap.get(id);
+      return {gatewayId:id,episodeNumber:episode?.episodeNumber,
+       expectedBytes:Number(c.closest(".panel").querySelector(".season-size").value)};
+    });
+    if(jobs.some(function(x){return !Number.isSafeInteger(x.expectedBytes)||
+      x.expectedBytes<8388608||x.expectedBytes>4294967296||
+      !Number.isSafeInteger(x.episodeNumber)})){
+      seasonMessage("افحص الحجم الدقيق لجميع الحلقات المختارة قبل الإضافة.");return;
+    }
+    if(!confirm("تأكيد امتلاك حقوق تخزين كل حلقة مختارة؟ ستُضاف إلى الانتظار ولن يبدأ النقل تلقائيًا."))return;
+    this.disabled=true;
+    try{
+      var result=await action("content-hub/seasons/enqueue","season-enqueue",
+        {confirmed:true,licensedStorage:true,
+         seriesGatewayId:seasonData.seriesGatewayId,
+         seasonNumber:season.seasonNumber,episodes:jobs});
+      seasonMessage("أُضيفت "+result.added+" حلقة. تمت إعادة استخدام المحفوظة: "+
+        (result.reusedExisting||0)+". لم يبدأ نقل جديد بعد.");
+      await refreshSeasonQueue();
+    }catch(e){seasonMessage("تعذرت إضافة الحلقات: "+e.message)}
+    finally{this.disabled=false}
+  });
+  $("season-start").addEventListener("click",async function(){
+    if(!confirm("تأكيد وجود حقوق التخزين، وعدم انشغال مصدر البث حاليًا؟ سيبدأ النقل المتسلسل بحلقة واحدة في كل مرة."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/seasons/start","season-start",
+        {confirmed:true,licensedStorage:true,sourceIdle:true});
+      seasonMessage("بدأت جلسة النقل الآمن. راقب نسب الحلقات أدناه.");
+    }catch(e){seasonMessage("تعذر بدء النقل: "+e.message)}
+    finally{await refreshSeasonQueue()}
+  });
+  $("season-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف جلسة النقل مع الاحتفاظ بالأجزاء المكتملة؟"))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/seasons/pause","season-pause",{confirmed:true});
+      seasonMessage("تم طلب الإيقاف، وسيحتفظ النظام بالأجزاء المكتملة.");
+    }catch(e){seasonMessage("تعذر إيقاف النقل: "+e.message)}
+    finally{await refreshSeasonQueue()}
+  });
+  $("season-play-preview").addEventListener("click",function(){
+    seasonPreviewWatched=false;
+    $("season-video-okay").checked=false;$("season-audio-okay").checked=false;
+    seasonButtonAV();
+    var player=$("season-preview-video");
+    player.pause();player.removeAttribute("src");player.load();
+    player.src="/operator/api/content-hub/episodes/preview";
+    player.load();seasonMessage("شغّل العينة وتحقق من الصوت والصورة بنفسك.");
+  });
+  $("season-preview-video").addEventListener("timeupdate",function(){
+    if(this.currentTime>=0.6)seasonPreviewWatched=true;
+    seasonButtonAV();
+  });
+  $("season-preview-video").addEventListener("error",function(){
+    seasonMessage("المعاينة غير متاحة. تحقق من اكتمال الحلقة وصلاحيات المراجعة.");
+  });
+  $("season-video-okay").addEventListener("change",seasonButtonAV);
+  $("season-audio-okay").addEventListener("change",seasonButtonAV);
+  $("season-av-confirm").addEventListener("click",async function(){
+    if(!seasonPreviewWatched||!$("season-video-okay").checked||
+       !$("season-audio-okay").checked)return;
+    if(!confirm("هل شاهدت الفيديو وسمعت الصوت فعليًا من العينة المحفوظة؟"))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/seasons/confirm","season-confirm",
+        {confirmed:true,videoConfirmed:true,audioConfirmed:true});
+      seasonAVConfirmed=true;
+      $("season-av-note").textContent="✅ تم حفظ تأكيد الصورة والصوت.";
+      seasonMessage("تم اعتماد اختبار التشغيل. بقيت شروط الحقوق وخمول المصدر.");
+    }catch(e){seasonMessage("تعذّر تسجيل اعتماد التشغيل: "+e.message)}
+    await refreshSeasonQueue();
+  });
+  refreshSeasonQueue();
+  setInterval(function(){
+    if(!document.hidden&&$("page-library")?.classList.contains("active"))
+      refreshSeasonQueue();
+  },11000);
   loadContentHub();
   setInterval(function(){
     var page=$("page-library");
