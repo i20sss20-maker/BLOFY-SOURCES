@@ -1581,7 +1581,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     p.style.cssText="width:100%;height:14px;accent-color:#60a5fa";
     return p;
   }
-  var seasonHealthBusy=false;
+  var seasonHealthBusy=false,seasonStorageSafe=false,seasonLastQueueData=null;
   var seasonHealthDescriptions={
     season_episodes_failed:"حلقات فشلت وتحتاج مراجعة يدوية",
     season_worker_interrupted:"حلقات توقفت بعد إعادة تشغيل الخدمة، ويمكن استكمالها يدويًا",
@@ -1607,6 +1607,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     try{
       var data=await api("content-hub/seasons/health");
       if(data.ok!==true)throw Error("season_health_unavailable");
+      seasonStorageSafe=!(Array.isArray(data.alerts)&&data.alerts.some(function(a){
+        return ["season_storage_integrity_mismatch",
+          "season_storage_audit_unavailable"].includes(a.code)&&Number(a.count)>0;
+      }));
+      if(seasonLastQueueData)seasonRefreshButtons(seasonLastQueueData);
       $("season-health-summary").textContent="إجمالي الحلقات في قائمة النقل: "+
         Number(data.episodeCount||0)+" · المكتملة: "+
         Number(data.verifiedCount||0)+" · الفاشلة: "+
@@ -1667,6 +1672,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             " أجزاء · "+seasonFormatAuditTime(record.checkedAt)));
         });
     }catch(e){
+      seasonStorageSafe=false;
+      if(seasonLastQueueData)seasonRefreshButtons(seasonLastQueueData);
       $("season-health-summary").textContent=
        "تعذّر قراءة صحة التخزين حاليًا؛ لا يمكن تأكيد سلامة الملفات من هذه القراءة.";
       $("season-audit-run").disabled=true;
@@ -1702,9 +1709,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     await refreshSeasonHealth();
   });
   function seasonRefreshButtons(data){
+    seasonLastQueueData=data;
     var active=data?.worker?.active===true;
     var ready=data?.readiness?.ready===true;
     $("season-start").disabled=!ready||active||!seasonAVConfirmed||
+      !seasonStorageSafe||
       !(data?.episodes||[]).some(function(x){
         // After a restart the DB may retain "running" with no worker.
         // A new explicit start safely restores its checkpoint under PG lock.
@@ -1729,6 +1738,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       "سيُحفظ التقدم عند الإيقاف.":!ready?
       "النقل متوقف بسبب الإعدادات: "+blocked.join("، "):
       !seasonAVConfirmed?"قبل النقل شغّل عينة الحلقة وأكد الصوت والصورة.":
+      !seasonStorageSafe?"البدء متوقف لحين التحقق من سلامة التخزين: راجع التنبيهات أدناه.":
       "جاهز لاستكمال الحلقات التي أضفتها لقائمة الانتظار.";
   }
   async function refreshSeasonQueue(){
