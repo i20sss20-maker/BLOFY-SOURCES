@@ -218,6 +218,17 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   // Content Hub lives behind the authoritative portal in a different
   // Railway project. Never expose its private token, S3 keys or URL in UI.
+  // Binary owner preview uses a fixed HTTPS endpoint. Does not return a
+  // storage URL or bridge secret to the frontend; upstream body is streamed.
+  async function contentHubPreviewRaw({signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubPreflight=()=>call(ROOT+'/content-hub/preflight');
   const contentHubDiagnosePlayback=({confirmed}={})=>{
@@ -288,5 +299,6 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubPreflight,contentHubNextBatch,
-    contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback};
+    contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
+    contentHubPreviewRaw};
 }
