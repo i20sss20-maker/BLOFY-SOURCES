@@ -15,7 +15,11 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+    const budget=path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
+      path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
+      path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
+      path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
+      path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
@@ -231,6 +235,20 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // The run ID is a non-secret durable queue key. Only the private portal
+  // may select verified media. STREAM proxies bytes, never exposes S3.
+  async function contentHubSeasonEpisodePreviewRaw({runId,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+      throw Error('season_episode_preview_invalid_run');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/seasons/episodes/'+
+      String(runId)+'/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   async function contentHubPreviewRaw({signal}={}){
     if(!configured)throw Error('unified_bridge_not_configured');
     return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
@@ -240,6 +258,87 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // Native season controls for /operator#library. All calls stay on the
+  // signed STREAM -> Portal bridge (the browser never touches the old site).
+  const SEASONS=ROOT+'/content-hub/seasons/';
+  const contentHubSeasonSeries=()=>call(SEASONS+'series');
+  const contentHubSeasonPilot=()=>call(SEASONS+'pilot');
+  const contentHubSeasonMetadata=id=>{
+   const n=Number(id);
+   if(!Number.isSafeInteger(n)||n<1)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_id_invalid'}});
+   return call(SEASONS+'series/'+n);
+  };
+  const contentHubConcurrentRead=({runIds,confirmed}={})=>{
+   if(confirmed!==true||!Array.isArray(runIds)||runIds.length!==2||
+     runIds[0]===runIds[1]||runIds.some(x=>
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(x||''))))
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'private_read_canary_owner_confirmation_required'}});
+   return call(SEASONS+'concurrent-read',{method:'POST',
+    body:{runIds,confirmed:true}});
+  };
+  const contentHubSeasonRetry=({runId,confirmed,licensedStorage,sourceIdle}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_retry_manual_review_required'}});
+   return call(SEASONS+'retry',{method:'POST',body:{
+    runId,confirmed:true,licensedStorage:true,sourceIdle:true}});
+  };
+  const contentHubSeasonQueue=()=>call(SEASONS+'queue');
+  const contentHubSeasonQueuePage=(page,{state='all'}={})=>{
+   const n=Number(page);
+   if(!Number.isSafeInteger(n)||n<1||n>20000||
+      !['all','pending','queued','running','paused','verified','failed'].includes(state))
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_queue_page_invalid'}});
+   return call(SEASONS+'queue/status/'+state+'/page/'+n);
+  };
+  const contentHubSeasonHealth=()=>call(SEASONS+'health');
+  const contentHubSeasonAudit=({runId,confirmed}={})=>{
+   if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_storage_audit_owner_confirmation_required'}});
+   return call(SEASONS+'audit',{method:'POST',body:{runId,confirmed:true}});
+  };
+  const contentHubSeasonAVStatus=()=>call(SEASONS+'confirmation');
+  const contentHubSeasonProbe=({gatewayId,confirmed}={})=>{
+   const n=Number(gatewayId);
+   if(!Number.isSafeInteger(n)||n<1||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_probe_confirmation_required'}});
+   return call(SEASONS+'probe',{method:'POST',
+    body:{gatewayId:n,confirmed:true}});
+  };
+  const contentHubSeasonEnqueue=data=>{
+   if(data?.confirmed!==true||data?.licensedStorage!==true||
+     !Array.isArray(data?.episodes)||data.episodes.length<1||
+     data.episodes.length>12)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_enqueue_owner_confirmation_required'}});
+   return call(SEASONS+'enqueue',{method:'POST',body:data});
+  };
+  const contentHubSeasonStart=({confirmed,licensedStorage,sourceIdle,maxBatches=12}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      ![12,60,120].includes(Number(maxBatches)))
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_start_operator_confirmation_required'}});
+   return call(SEASONS+'start',{method:'POST',
+    body:{confirmed:true,licensedStorage:true,sourceIdle:true,
+     maxBatches:Number(maxBatches)}});
+  };
+  const contentHubSeasonPause=({confirmed}={})=>{
+   if(confirmed!==true)return Promise.resolve({status:400,
+    body:{ok:false,code:'season_pause_confirmation_required'}});
+   return call(SEASONS+'pause',{method:'POST',body:{confirmed:true}});
+  };
+  const contentHubSeasonAVConfirm=({confirmed,videoConfirmed,audioConfirmed}={})=>{
+   if(confirmed!==true||videoConfirmed!==true||audioConfirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_browser_av_confirmation_required'}});
+   return call(SEASONS+'confirm',{method:'POST',
+    body:{confirmed:true,videoConfirmed:true,audioConfirmed:true}});
+  };
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
   const contentHubStartEpisodeCopy=({gatewayId,confirmed}={})=>{
@@ -348,5 +447,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
-    contentHubPreviewRaw,contentHubEpisodePreviewRaw};
+    contentHubPreviewRaw,contentHubEpisodePreviewRaw,
+    contentHubSeasonEpisodePreviewRaw,
+    contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
+    contentHubSeasonQueue,contentHubSeasonQueuePage,
+    contentHubSeasonRetry,
+    contentHubSeasonHealth,contentHubSeasonAudit,
+    contentHubConcurrentRead,
+    contentHubSeasonAVStatus,contentHubSeasonProbe,
+    contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
+    contentHubSeasonAVConfirm};
 }

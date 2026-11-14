@@ -142,6 +142,22 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
     }
+    // Signed, run-scoped private video preview for a verified queued
+    // episode. No full video URL, source credentials or S3 data in browser.
+    const selectedSeasonPreview=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/episodes\/([A-Za-z0-9_-]{8,80})\/preview$/);
+    if(selectedSeasonPreview){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'season_preview_method_or_query_denied'});
+        return true;
+      }
+      void streamOperatorOwnerPreview({req,res,
+        getUpstream:({signal})=>portal.contentHubSeasonEpisodePreviewRaw({
+          runId:selectedSeasonPreview[1],signal})})
+       .catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'season_preview_stream_failed'})});
+      return true;
+    }
     // This route is reachable only after the exact operator Basic auth
     // above; never expose a private S3 or internal portal URL to browsers.
     if(path==='/operator/api/content-hub/preview'||
@@ -407,12 +423,47 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         return true;
       }
     }
+    // Native season management in STREAM. All requests require the
+    // operator's existing Basic auth (checked before this branch).
+    const seriesRoute=path.match(/^\/operator\/api\/content-hub\/seasons\/series\/([1-9][0-9]{0,14})$/);
+    if(req.method==='GET'&&seriesRoute){
+      void portal.contentHubSeasonMetadata(Number(seriesRoute[1]))
+       .then(({status,body})=>json(res,status,body))
+       .catch(()=>json(res,503,{ok:false,code:'season_bridge_unavailable'}));
+      return true;
+    }
+    const seasonQueuePageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/page\/([1-9][0-9]{0,4})$/);
+    const seasonFilterPageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/status\/(all|pending|queued|running|paused|verified|failed)\/page\/([1-9][0-9]{0,4})$/);
+    if(req.method==='GET'&&(seasonQueuePageRoute||seasonFilterPageRoute)){
+      const page=Number(seasonQueuePageRoute?.[1]||seasonFilterPageRoute?.[2]);
+      const state=seasonFilterPageRoute?.[1]||'all';
+      if(page>20000){
+        json(res,400,{ok:false,code:'season_queue_page_invalid'});
+        return true;
+      }
+      if(uri.search){
+        json(res,400,{ok:false,code:'season_queue_query_denied'});
+        return true;
+      }
+      void portal.contentHubSeasonQueuePage(page,{state})
+       .then(({status,body})=>json(res,status,body))
+       .catch(()=>json(res,503,{
+        ok:false,code:'season_queue_page_unavailable'}));
+      return true;
+    }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
       // Operator Basic auth enforced above; portal Bearer key never returned
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
       '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
+      '/operator/api/content-hub/seasons/series':()=>portal.contentHubSeasonSeries(),
+      '/operator/api/content-hub/seasons/pilot':()=>portal.contentHubSeasonPilot(),
+      '/operator/api/content-hub/seasons/queue':()=>portal.contentHubSeasonQueue(),
+      '/operator/api/content-hub/seasons/health':()=>portal.contentHubSeasonHealth(),
+      '/operator/api/content-hub/seasons/confirmation':()=>portal.contentHubSeasonAVStatus(),
       '/operator/api/content-hub/episodes/candidates':()=>portal.contentHubEpisodeCandidates(),
       '/operator/api/content-hub/preflight':()=>portal.contentHubPreflight(),
       '/operator/api/sources':()=>portal.sources(),
@@ -472,7 +523,15 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
-      const action=path==='/operator/api/content-hub/episodes/playback/diagnose'?'content-hub-episode-diagnose':
+      const action=path==='/operator/api/content-hub/seasons/retry'?'season-retry':
+        path==='/operator/api/content-hub/seasons/concurrent-read'?'season-concurrent-read':
+        path==='/operator/api/content-hub/seasons/audit'?'season-audit':
+        path==='/operator/api/content-hub/seasons/probe'?'season-probe':
+        path==='/operator/api/content-hub/seasons/enqueue'?'season-enqueue':
+        path==='/operator/api/content-hub/seasons/start'?'season-start':
+        path==='/operator/api/content-hub/seasons/pause'?'season-pause':
+        path==='/operator/api/content-hub/seasons/confirm'?'season-confirm':
+        path==='/operator/api/content-hub/episodes/playback/diagnose'?'content-hub-episode-diagnose':
         path==='/operator/api/content-hub/episodes/start'?'content-hub-episode-start':
         path==='/operator/api/content-hub/episodes/pause'?'content-hub-episode-pause':
         path==='/operator/api/content-hub/episodes/next'?'content-hub-episode-next':
@@ -499,6 +558,14 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='season-retry')return portal.contentHubSeasonRetry(data);
+        if(action==='season-concurrent-read')return portal.contentHubConcurrentRead(data);
+        if(action==='season-audit')return portal.contentHubSeasonAudit(data);
+        if(action==='season-probe')return portal.contentHubSeasonProbe(data);
+        if(action==='season-enqueue')return portal.contentHubSeasonEnqueue(data);
+        if(action==='season-start')return portal.contentHubSeasonStart(data);
+        if(action==='season-pause')return portal.contentHubSeasonPause(data);
+        if(action==='season-confirm')return portal.contentHubSeasonAVConfirm(data);
         if(action==='content-hub-episode-start')return portal.contentHubStartEpisodeCopy(data);
         if(action==='content-hub-episode-pause')return portal.contentHubPauseEpisodeCopy();
         if(action==='content-hub-episode-next')return portal.contentHubNextEpisodeChunk(data);
