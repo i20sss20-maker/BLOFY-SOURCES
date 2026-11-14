@@ -655,6 +655,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
      </div>
      <p class="muted" style="margin:10px 0 0">يُحفظ التقدم في PostgreSQL والتخزين الخاص. لا تُحوّل قنوات أو أكواد المشتركين تلقائيًا.</p>
     </div>
+    <div class="panel" id="season-health-panel" style="margin-top:14px;background:rgba(5,15,30,.3);border:1px solid #35577a">
+     <div class="controls"><h4 style="margin:0">🛡 صحة التخزين والتنبيهات</h4>
+      <button id="season-health-refresh" class="btn secondary" type="button">↻ تحديث فحص التخزين</button></div>
+     <p id="season-health-summary" class="muted" role="status" aria-live="polite">جارٍ قراءة سجلات المساحة والحلقات…</p>
+     <progress id="season-storage-progress" value="0" max="100" style="width:100%;height:15px;accent-color:#34d399" aria-label="نسبة البايتات المسجلة في قائمة النقل"></progress>
+     <p id="season-storage-note" class="muted">المساحة محسوبة من سجلات PostgreSQL، ولا تمثل المساحة الفارغة لدى مزود التخزين.</p>
+     <div id="season-health-alerts" role="status" aria-live="polite" style="display:grid;gap:7px;margin:10px 0"></div>
+     <label for="season-audit-select">فحص سلامة أجزاء حلقة مكتملة (تخزين BLOFY الخاص)</label>
+     <select id="season-audit-select" style="width:100%;margin:8px 0"><option value="">اختر حلقة مكتملة</option></select>
+     <div class="actions">
+      <button id="season-audit-run" type="button" class="btn secondary" disabled>🔎 فحص SHA-256 لثلاثة أجزاء</button>
+     </div>
+     <p class="muted" id="season-audit-status" role="status">فحص يدوي يقرأ حتى 24 ميجابايت من التخزين الخاص فقط؛ لا يحمّل من مزود القنوات ولا يغيّر الملفات.</p>
+     <div id="season-health-audit-list" class="muted" style="margin-top:9px"></div>
+    </div>
     <div class="panel" style="margin-top:14px;background:rgba(5,15,30,.3)">
      <h4>③ اعتماد تشغيل الحلقة بالصوت والصورة</h4>
      <p class="muted">بعد تشغيل العينة من التخزين تأكد من الصورة والصوت في متصفحك؛ بدون ذلك لن يبدأ نقل الموسم.</p>
