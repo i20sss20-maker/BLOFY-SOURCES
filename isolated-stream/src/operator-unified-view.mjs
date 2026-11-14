@@ -1838,6 +1838,45 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
               }[r.state]||"قيد المعالجة"));
             item.style.marginTop="8px";
             card.append(item,seasonMeter(r.percent));
+            if(r.state==="failed"){
+              var why=({
+                episode_retryable_error:"فشل اتصال مؤقت بالمصدر",
+                episode_source_busy:"المصدر مشغول",
+                episode_source_version_changed:"تغير الملف الأصلي؛ يلزم إعادة فهرسة وفحص",
+                episode_source_fingerprint_changed:"تغيرت بصمة الملف؛ لا يمكن استكماله بأمان",
+                episode_private_sha256_mismatch:"اختلاف بصمة جزء محفوظ؛ يلزم مراجعة سلامة التخزين"
+              })[r.code]||"فشل نقل يتطلب مراجعة السبب";
+              var failure=seasonNode("p","muted","السبب: "+why+
+                " · المحاولات اليدوية: "+Number(r.manualRetries||0)+"/2");
+              failure.style.cssText="color:#ffb1aa;margin:6px 0";
+              card.append(failure);
+              if(r.retryable===true&&!data?.worker?.active){
+                var retry=seasonNode("button","btn secondary",
+                 "↻ إعادة محاولة يدوية للحلقة "+r.episodeNumber);
+                retry.type="button";
+                retry.style.margin="8px 0";
+                retry.addEventListener("click",async function(){
+                  if(!confirm("هل راجعت فشل الاتصال، وحقوق التخزين، وخمول المصدر؟ ستعود الحلقة إلى قائمة الانتظار فقط، ولن يبدأ أي نقل تلقائي."))return;
+                  retry.disabled=true;
+                  try{
+                    var result=await action("content-hub/seasons/retry",
+                     "season-retry",{confirmed:true,licensedStorage:true,
+                      sourceIdle:true,runId:r.runId});
+                    seasonMessage(result.ok?
+                      "✅ أُعيدت الحلقة "+r.episodeNumber+
+                      " إلى الانتظار. اختر بدء النقل يدويًا عندما يكون المصدر خاملًا.":
+                      "تعذرت إعادة المحاولة: "+String(result.code||"غير متاح"));
+                    await refreshSeasonQueue();
+                    await refreshSeasonHealth();
+                  }catch(error){
+                    seasonMessage("تعذرت إعادة المحاولة: "+
+                     String(error.message||"غير متاح"));
+                    retry.disabled=false;
+                  }
+                });
+                card.append(retry);
+              }
+            }
             if(r.state==="verified"&&
               /^[A-Za-z0-9_-]{8,80}$/.test(String(r.runId||""))){
               var view=seasonNode("button","btn secondary","▶ اختبار تشغيل الحلقة "+r.episodeNumber);
