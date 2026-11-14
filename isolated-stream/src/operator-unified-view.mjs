@@ -644,6 +644,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
      <h4>② قائمة النقل ونسب الحلقات</h4>
      <p id="season-queue-note" class="muted" role="status">جارٍ قراءة قائمة الانتظار...</p>
+     <label for="season-state-filter">تصفية قائمة الحلقات حسب الحالة</label>
+     <select id="season-state-filter" style="width:100%;margin:8px 0">
+      <option value="all">كل الحلقات</option>
+      <option value="pending">بانتظار النقل / موقوفة / قيد النقل</option>
+      <option value="queued">بانتظار النقل فقط</option>
+      <option value="running">قيد النقل</option>
+      <option value="paused">موقوفة</option>
+      <option value="verified">مكتملة</option>
+      <option value="failed">فاشلة (تحتاج مراجعة)</option>
+     </select>
      <label for="season-max-batches">ميزانية الجلسة الواحدة (نقل متسلسل، حد الجزء 8 MB)</label>
      <select id="season-max-batches" style="width:100%;margin:7px 0">
       <option value="12" selected>آمن — حتى 12 جزءًا (96 MB)</option>
@@ -1808,6 +1818,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       !seasonStorageSafe?"البدء متوقف لحين التحقق من سلامة التخزين: راجع التنبيهات أدناه.":
       "جاهز لاستكمال الحلقات التي أضفتها لقائمة الانتظار.";
   }
+  $("season-state-filter").addEventListener("change",function(){
+    seasonPage=1;
+    $("season-page-previous").disabled=true;
+    $("season-page-next").disabled=true;
+    void refreshSeasonQueue();
+  });
   $("season-page-previous").addEventListener("click",function(){
     if(seasonQueueBusy||seasonPage<=1)return;
     seasonPage--;void refreshSeasonQueue();
@@ -1826,19 +1842,24 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "✅ تم اعتماد سماع الصوت ورؤية الصورة من المسؤول.":
         "لم يتم تسجيل التأكيد. شغّل العينة في الأعلى ثم أكد الصوت والصورة.";
       seasonButtonAV();
-      var data=await api("content-hub/seasons/queue/page/"+seasonPage);
+      var selectedState=$("season-state-filter").value;
+      if(!["all","pending","queued","running","paused","verified","failed"].includes(selectedState))
+        throw Error("season_filter_invalid");
+      var data=await api("content-hub/seasons/queue/status/"+
+        selectedState+"/page/"+seasonPage);
       if(data.ok!==true||!data.page)throw Error("season_page_metadata_unavailable");
       seasonPages=Math.max(1,Number(data.page.pages)||1);
       seasonTotalEpisodes=Math.max(0,Number(data.page.totalEpisodes)||0);
       if(data.page.outOfRange&&seasonPage>seasonPages){
         seasonPage=seasonPages;
-        data=await api("content-hub/seasons/queue/page/"+seasonPage);
+        data=await api("content-hub/seasons/queue/status/"+
+          selectedState+"/page/"+seasonPage);
       }
       seasonRows=Array.isArray(data.episodes)?data.episodes:[];
       $("season-page-previous").disabled=seasonPage<=1;
       $("season-page-next").disabled=seasonPage>=seasonPages;
       $("season-page-label").textContent="الصفحة "+seasonPage+" من "+seasonPages+
-        " · عدد الحلقات المسجلة "+seasonTotalEpisodes+
+        " · عدد الحلقات المطابقة "+seasonTotalEpisodes+
         " · تنتظر النقل "+Number(data.page.pendingEpisodes||0)+
         " · عرض "+seasonRows.length+" حلقة";
       seasonRefreshButtons(data);
@@ -1846,7 +1867,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       parent.replaceChildren();
       var seasons=Array.isArray(data.seasons)?data.seasons:[];
       if(!seasons.length){
-        parent.append(seasonNode("p","muted","لا توجد حلقات في قائمة النقل إلى الآن."));
+        parent.append(seasonNode("p","muted",selectedState==="all"?
+          "لا توجد حلقات في قائمة النقل إلى الآن.":
+          "لا توجد حلقات مطابقة لحالة التصفية المختارة."));
       }
       seasons.forEach(function(group){
         var card=seasonNode("div","panel");
