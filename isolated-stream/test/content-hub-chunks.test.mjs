@@ -14,7 +14,8 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
    'content-hub-episodes','content-hub-episodes-check',
    'content-hub-episodes-status','content-hub-episodes-list',
    'content-hub-episode-copy-progress','content-hub-episode-start',
-   'content-hub-episode-pause'])
+   'content-hub-episode-pause','content-hub-episode-diagnose',
+   'content-hub-episode-canary-status'])
    assert.ok(html.includes('id="'+id+'"'),id);
  assert.ok(html.includes('content-hub/status'));
  assert.ok(html.includes('content-hub/batch/next'));
@@ -26,6 +27,11 @@ test('BLOFY STREAM library has safe resumable 8MiB controls, browser JS parses',
  assert.ok(html.includes('content-hub/episodes/next'));
  assert.ok(html.includes('content-hub/episodes/start'));
  assert.ok(html.includes('content-hub/episodes/pause'));
+ assert.ok(html.includes('content-hub/episodes/playback/diagnose'));
+ assert.ok(html.includes('data.lastEpisodeCanary'));
+ assert.ok(html.includes('!episodeComplete'));
+ assert.ok(html.includes('لا يمكن اختبار تشغيل حلقة لم تكتمل'));
+
  assert.ok(html.includes('episodeContinuousCopy'));
  assert.ok(html.includes('episodeCopyReadiness'));
  assert.ok(html.includes('dataset.episodeCopy='));
@@ -105,6 +111,10 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  assert.equal(deniedCanary.status,400);
  const playback=await client.contentHubDiagnosePlayback({confirmed:true});
  assert.equal(playback.status,202);
+ const deniedEpisodeCanary=await client.contentHubDiagnoseEpisode({confirmed:false});
+ assert.equal(deniedEpisodeCanary.status,400);
+ const episodeCanary=await client.contentHubDiagnoseEpisode({confirmed:true});
+ assert.equal(episodeCanary.status,202);
  assert.deepEqual(calls.map(x=>x.path),[
   '/internal/blofy-stream/content-hub/status',
   '/internal/blofy-stream/content-hub/preflight',
@@ -116,7 +126,8 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
   '/internal/blofy-stream/content-hub/batch/next',
   '/internal/blofy-stream/content-hub/batch/start',
   '/internal/blofy-stream/content-hub/batch/pause',
-  '/internal/blofy-stream/content-hub/playback/diagnose']);
+  '/internal/blofy-stream/content-hub/playback/diagnose',
+  '/internal/blofy-stream/content-hub/episodes/playback/diagnose']);
  assert.equal(calls[3].method,'POST');
  assert.deepEqual(calls[3].body,{gatewayId:332,confirmed:true});
  assert.deepEqual(calls[4].body,{gatewayId:332,confirmed:true});
@@ -125,5 +136,6 @@ test('bridge explicitly confirms only one batch; blocks unapproved requests',asy
  assert.deepEqual(calls[7].body,{confirmed:true});
  assert.deepEqual(calls[8].body,{confirmed:true});
  assert.deepEqual(calls[10].body,{confirmed:true});
+ assert.deepEqual(calls[11].body,{confirmed:true});
  assert.ok(calls.every(x=>x.auth==='Bearer '+secret));
 });
