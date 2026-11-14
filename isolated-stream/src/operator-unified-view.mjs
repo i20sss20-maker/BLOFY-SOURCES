@@ -1767,6 +1767,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     $("season-candidates-note").textContent=rows.length?
       "عدد حلقات الموسم "+rows.length+". اختر ما يصل إلى 12 حلقة. يجب فحص حجم كل حلقة.":
       "لا توجد حلقات مفهرسة في الموسم.";
+    void refreshSeasonQueue();
   });
   $("season-select-batch").addEventListener("click",function(){
     var list=$("season-candidates").querySelectorAll(".season-check");
