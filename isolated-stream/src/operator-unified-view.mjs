@@ -621,6 +621,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted" role="status" id="content-hub-summary">جار التحقق من التخزين الخاص...</p>
 <progress id="content-hub-progress" value="0" max="100" aria-label="نسبة نقل الفيلم" style="width:100%;height:22px;accent-color:#60a5fa"></progress>
 <p class="muted" id="content-hub-percent">0% · بانتظار النقل</p>
+<div style="margin-top:16px;padding:16px;border:1px solid #254464;border-radius:14px">
+<strong>فحص تشغيل الفيلم من التخزين الخاص</strong>
+<p class="muted">فحص حقيقي لقراءة ملف الفيلم المحفوظ، والتعرف على مسارات الفيديو والصوت وفك ترميز عينات منهما، بدون الرجوع إلى مصدر القنوات.</p>
+<button class="btn secondary" id="content-hub-diagnose" type="button">▶ اختبار الصورة والصوت</button>
+<p class="muted" role="status" id="content-hub-canary-status">لم يتم استرجاع نتيجة فحص التشغيل بعد.</p>
+</div>
 <div id="content-hub-runs" class="muted" aria-live="polite"></div>
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
 </div>
@@ -1057,6 +1063,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · حجم الملفات المؤكدة: "+hubBytes(summary.verifiedBytes)+
         " · أجزاء محفوظة: "+hubBytes(summary.stagedChunkBytes||0)+
         " · النقل الآن: "+(running?"جارٍ":"متوقف");
+      var canary=data.lastCanary||{};
+      $("content-hub-diagnose").disabled=data.canaryRunning===true||
+        Number(summary.verifiedCount||0)<1;
+      var desc=data.canaryRunning?"جارٍ فحص الصورة والصوت من التخزين الخاص...":
+        canary.ok===true&&canary.code==="canary_audio_video_decoded"?
+        "✅ تم فك ترميز الصورة والصوت: "+String(canary.videoCodec||"—")+
+        " "+String(canary.width||"")+"×"+String(canary.height||"")+
+        " | صوت: "+String(canary.audioCodec||"—")+
+        " | إطارات صورة: "+String(canary.videoFramesDecoded||0)+
+        " | عينات صوت: "+String(canary.audioFramesDecoded||0)+
+        " | الملف الكامل تم التحقق من سلامته.":
+        canary.checkedAt?"تعذر إكمال فحص التشغيل ("+
+          String(canary.code||"غير معروف")+
+          "). لا يتم تغيير تشغيل المشتركين.":
+          "لم يتم اختبار التشغيل في هذه الجلسة. الفيلم المكتمل فقط قابل للفحص.";
+      $("content-hub-canary-status").textContent=desc;
       var box=$("content-hub-runs");box.replaceChildren();
       var runs=Array.isArray(data.runs)?data.runs:[];
       if(!runs.length)box.textContent="ما فيه عمليات نسخ حقيقية محفوظة حتى الآن.";
@@ -1103,6 +1125,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · لم تُنزل أي بايتات فيديو بهذا الفحص.";
     }catch(e){show("فحص الفيلم غير متاح: "+e.message,false)}
     finally{this.disabled=false}
+  });
+  $("content-hub-diagnose").addEventListener("click",async function(){
+    if(this.disabled)return;
+    if(!confirm("اختبار الفيديو والصوت من عينة محدودة من الفيلم المخزن؟ لن تتغير قنوات المشتركين أو مصدر التشغيل."))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/playback/diagnose",
+        "content-hub-playback-diagnose",{confirmed:true});
+      $("content-hub-canary-status").textContent=
+        "تم قبول طلب الفحص. ستظهر نتائج الصورة والصوت عند اكتمال التحليل.";
+      show("بدأ فحص تشغيل النسخة المخزنة، دون الاتصال بالمصدر الأصلي.",true);
+    }catch(e){show("تعذر فحص تشغيل الفيلم: "+e.message,false)}
+    finally{await loadContentHub();}
   });
   $("content-hub-start-copy").addEventListener("click",async function(){
     if(!hubState||hubState.chunkedBatchEnabled!==true){
