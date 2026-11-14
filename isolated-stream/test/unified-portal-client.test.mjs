@@ -197,6 +197,13 @@ test('paged season queue never permits unbounded query or malformed page',async(
  const result=await client.contentHubSeasonQueuePage(2);
  assert.equal(result.status,200);
  assert.equal(result.body.page.totalEpisodes,180);
- assert.deepEqual(calls,[{path:'/internal/blofy-stream/content-hub/seasons/queue/page/2',
+ assert.deepEqual(calls,[{path:'/internal/blofy-stream/content-hub/seasons/queue/status/all/page/2',
   method:'GET',auth:'Bearer '+secret}]);
+ const failed=await client.contentHubSeasonQueuePage(3,{state:'failed'});
+ assert.equal(failed.status,200);
+ assert.equal(calls[1].path,
+  '/internal/blofy-stream/content-hub/seasons/queue/status/failed/page/3');
+ const invalid=await client.contentHubSeasonQueuePage(1,{state:'verified%2Fanything'});
+ assert.equal(invalid.status,400);
+ assert.equal(calls.length,2);
 });
