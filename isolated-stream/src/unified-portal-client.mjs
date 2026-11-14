@@ -222,6 +222,15 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   // Railway project. Never expose its private token, S3 keys or URL in UI.
   // Binary owner preview uses a fixed HTTPS endpoint. Does not return a
   // storage URL or bridge secret to the frontend; upstream body is streamed.
+  async function contentHubEpisodePreviewRaw({signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/episodes/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   async function contentHubPreviewRaw({signal}={}){
     if(!configured)throw Error('unified_bridge_not_configured');
     return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
@@ -339,5 +348,5 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
-    contentHubPreviewRaw};
+    contentHubPreviewRaw,contentHubEpisodePreviewRaw};
 }
