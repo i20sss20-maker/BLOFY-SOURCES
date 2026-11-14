@@ -233,6 +233,20 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // The run ID is a non-secret durable queue key. Only the private portal
+  // may select verified media. STREAM proxies bytes, never exposes S3.
+  async function contentHubSeasonEpisodePreviewRaw({runId,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+      throw Error('season_episode_preview_invalid_run');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/seasons/episodes/'+
+      String(runId)+'/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   async function contentHubPreviewRaw({signal}={}){
     if(!configured)throw Error('unified_bridge_not_configured');
     return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
@@ -398,6 +412,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
+    contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
     contentHubSeasonQueue,contentHubSeasonAVStatus,contentHubSeasonProbe,
     contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
