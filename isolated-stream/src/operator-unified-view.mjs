@@ -645,6 +645,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
 </div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
+<p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
 <div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
 </div>
 <div class="panel"><div class="controls"><div class="inline">
@@ -1054,6 +1055,40 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     try{
       var data=await api("content-hub/status");
       hubState=data;
+      var episodeGate=data.episodeCopyReadiness||{};
+      var episodeRuns=Array.isArray(data.episodeRuns)?data.episodeRuns:[];
+      var episodeRun=episodeRuns.find(function(x){
+        return x.format==="private_episode_chunks";
+      })||null;
+      var episodeComplete=episodeRun?.state==="verified"&&
+        Number(episodeRun.expectedBytes||0)>0&&
+        Number(episodeRun.bytesCopied||0)===Number(episodeRun.expectedBytes||0);
+      var episodePercent=episodeRun?Math.min(100,Math.max(0,
+        Number(episodeRun.bytesCopied||0)/
+        Math.max(1,Number(episodeRun.expectedBytes||1))*100)):0;
+      var episodeCopyMessage=episodeComplete?
+        "✅ الحلقة مكتملة وتم التحقق من SHA-256 · "+
+        hubBytes(episodeRun.expectedBytes):
+        episodeRun?"الحلقة: "+episodePercent.toFixed(2)+"% · "+
+          hubBytes(episodeRun.bytesCopied)+" من "+
+          hubBytes(episodeRun.expectedBytes)+
+          (data.episodeCopyBusy?" · جارٍ حفظ الجزء الحالي":
+            " · الأجزاء محفوظة ويمكن الاستكمال"):
+        "لم يبدأ نقل أي حلقة؛ ما زلنا في مرحلة الفحص.";
+      if(episodeGate.ready!==true&&!episodeComplete)
+        episodeCopyMessage+=" · النقل غير مفعّل: "+
+          (episodeGate.blockedBy||[]).join("، ");
+      $("content-hub-episode-copy-progress").textContent=episodeCopyMessage;
+      $("content-hub-episodes-list").querySelectorAll("button[data-episode-copy]")
+        .forEach(function(button){
+          var approved=Number(button.dataset.episodeCopy)===
+            Number(episodeGate.approvedGatewayId||0);
+          button.disabled=!approved||episodeGate.ready!==true||
+            data.episodeCopyBusy===true||episodeComplete;
+          button.textContent=episodeComplete&&approved?
+            "✅ الحلقة مكتملة":data.episodeCopyBusy&&approved?
+            "جارٍ حفظ الجزء...":"⬇ نقل الجزء التالي (8 MB)";
+        });
       var job=data.continuousCopy||{};
       var running=data.pilotRunning===true||job.active===true;
       var chunked=Array.isArray(data.runs)?
@@ -1192,6 +1227,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         proof.className="muted";
         proof.dataset.episodeSizeResult=String(id);
         card.append(" ",proof);
+        var chunkButton=document.createElement("button");
+        chunkButton.type="button";chunkButton.className="btn secondary";
+        chunkButton.dataset.episodeCopy=String(id);
+        chunkButton.style.marginInlineStart="10px";
+        chunkButton.textContent="⬇ نقل الجزء التالي (8 MB)";
+        var ready=hubState?.episodeCopyReadiness||{};
+        var selected=Number(ready.approvedGatewayId)===id;
+        var verified=hubState?.episodeRuns?.some(function(x){
+          return x.format==="private_episode_chunks"&&x.state==="verified";
+        });
+        chunkButton.disabled=!selected||ready.ready!==true||
+          hubState?.episodeCopyBusy===true||Boolean(verified);
+        card.append(" ",chunkButton);
         out.append(card);
       });
     }catch(e){
@@ -1223,6 +1271,26 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         String(e.message||"خطأ").slice(0,75)+
         ". لم يتم حفظ أي بيانات.";
     }finally{button.disabled=false}
+  });
+  $("content-hub-episodes-list").addEventListener("click",async function(event){
+    var button=event.target?.closest?.("button[data-episode-copy]");
+    if(!button||button.disabled)return;
+    var id=Number(button.dataset.episodeCopy);
+    var ready=hubState?.episodeCopyReadiness||{};
+    if(!Number.isSafeInteger(id)||id<1||ready.ready!==true||
+      Number(ready.approvedGatewayId)!==id){
+      show("الحلقة غير معتمدة للتنزيل أو إعدادات النقل غير مكتملة.",false);return;
+    }
+    if(!confirm("تأكيد تنزيل جزء واحد فقط (8 MB) من الحلقة رقم "+id+
+       " إلى التخزين الخاص؟ يؤكد هذا أن لديك حقوق تخزين المحتوى وأن المصدر غير مستخدم حاليًا."))return;
+    button.disabled=true;
+    try{
+      await action("content-hub/episodes/next",
+        "content-hub-episode-next",{gatewayId:id,confirmed:true});
+      show("بدأ تنزيل جزء واحد من الحلقة. تظهر نتيجة الحفظ في حالة النقل.",true);
+    }catch(e){
+      show("تعذر تنزيل جزء الحلقة: "+String(e.message||"غير متاح"),false);
+    }finally{await loadContentHub()}
   });
   $("content-hub-owner-preview").addEventListener("click",async function(){
     if(this.disabled)return;
