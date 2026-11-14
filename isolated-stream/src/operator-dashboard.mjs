@@ -502,7 +502,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
-      const action=path==='/operator/api/content-hub/seasons/audit'?'season-audit':
+      const action=path==='/operator/api/content-hub/seasons/concurrent-read'?'season-concurrent-read':
+        path==='/operator/api/content-hub/seasons/audit'?'season-audit':
         path==='/operator/api/content-hub/seasons/probe'?'season-probe':
         path==='/operator/api/content-hub/seasons/enqueue'?'season-enqueue':
         path==='/operator/api/content-hub/seasons/start'?'season-start':
@@ -535,6 +536,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='season-concurrent-read')return portal.contentHubConcurrentRead(data);
         if(action==='season-audit')return portal.contentHubSeasonAudit(data);
         if(action==='season-probe')return portal.contentHubSeasonProbe(data);
         if(action==='season-enqueue')return portal.contentHubSeasonEnqueue(data);
