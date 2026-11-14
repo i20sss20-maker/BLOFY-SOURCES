@@ -1570,7 +1570,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var active=data?.worker?.active===true;
     var ready=data?.readiness?.ready===true;
     $("season-start").disabled=!ready||active||!seasonAVConfirmed||
-      !(data?.episodes||[]).some(function(x){return x.state==="queued"||x.state==="paused"});
+      !(data?.episodes||[]).some(function(x){
+        // After a restart the DB may retain "running" with no worker.
+        // A new explicit start safely restores its checkpoint under PG lock.
+        return ["queued","paused","running"].includes(x.state);
+      });
     $("season-pause").disabled=!active;
     $("season-enqueue").disabled=!ready||active||!seasonData;
     $("season-online").textContent=active?"جارٍ النقل":ready?"النظام جاهز":"النقل مقفل";
@@ -1625,7 +1629,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
               " — "+String(r.title||"").slice(0,80)+" · "+
               (Number(r.percent)||0)+"% · "+({
                 verified:"مكتملة",failed:"تحتاج مراجعة",queued:"بانتظار النقل",
-                paused:"موقوفة",running:"جار نقلها"
+                paused:"موقوفة",running:data?.worker?.active?
+                  "جار نقلها":"بانتظار استكمال بعد إعادة التشغيل"
               }[r.state]||"قيد المعالجة"));
             item.style.marginTop="8px";
             card.append(item,seasonMeter(r.percent));
