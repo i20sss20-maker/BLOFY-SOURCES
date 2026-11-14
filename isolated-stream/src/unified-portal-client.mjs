@@ -233,6 +233,16 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
+  const contentHubStartEpisodeCopy=({gatewayId,confirmed}={})=>{
+    const id=Number(gatewayId);
+    if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
+      return Promise.resolve({status:400,body:{
+       ok:false,code:'episode_start_confirmation_required'}});
+    return call(ROOT+'/content-hub/episodes/start',{
+     method:'POST',body:{gatewayId:id,confirmed:true}});
+  };
+  const contentHubPauseEpisodeCopy=()=>call(
+    ROOT+'/content-hub/episodes/pause',{method:'POST',body:{confirmed:true}});
   const contentHubNextEpisodeChunk=({gatewayId,confirmed}={})=>{
     const id=Number(gatewayId);
     if(confirmed!==true||!Number.isSafeInteger(id)||id<1)
@@ -318,7 +328,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
-    contentHubNextEpisodeChunk,contentHubPreflight,contentHubNextBatch,
+    contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
+    contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubPreviewRaw};
 }
