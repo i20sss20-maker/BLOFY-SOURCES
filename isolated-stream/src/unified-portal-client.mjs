@@ -287,6 +287,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     runId,confirmed:true,licensedStorage:true,sourceIdle:true}});
   };
   const contentHubSeasonQueue=()=>call(SEASONS+'queue');
+  const contentHubSeasonQueuePage=page=>{
+   const n=Number(page);
+   if(!Number.isSafeInteger(n)||n<1||n>20000)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_queue_page_invalid'}});
+   return call(SEASONS+'queue/page/'+n);
+  };
   const contentHubSeasonHealth=()=>call(SEASONS+'health');
   const contentHubSeasonAudit=({runId,confirmed}={})=>{
    if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||confirmed!==true)
@@ -442,7 +449,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
-    contentHubSeasonQueue,contentHubSeasonRetry,
+    contentHubSeasonQueue,contentHubSeasonQueuePage,
+    contentHubSeasonRetry,
     contentHubSeasonHealth,contentHubSeasonAudit,
     contentHubConcurrentRead,
     contentHubSeasonAVStatus,contentHubSeasonProbe,
