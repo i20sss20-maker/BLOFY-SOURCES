@@ -30,7 +30,7 @@ test('STREAM library embeds real season controls without redirecting to old admi
  assert.match(html,/المساحة المتبقية الحقيقية في S3 غير معروفة/);
  assert.match(html,/action\("content-hub\/seasons\/concurrent-read"/);
  assert.match(html,/maxBatches:budget/);
- assert.match(html,/action\("content-hub\/seasons\/retry","season-retry"/);
+ assert.match(html,/action\("content-hub\/seasons\/retry",\s*"season-retry"/);
  assert.match(html,/إعادة محاولة يدوية للحلقة/);
  assert.match(html,/manualRetries/);
  assert.match(html,/اختبار قراءتين متزامنتين من التخزين الخاص/);
