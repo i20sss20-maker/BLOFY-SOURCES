@@ -409,6 +409,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
       '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
+      '/operator/api/content-hub/episodes/candidates':()=>portal.contentHubEpisodeCandidates(),
       '/operator/api/content-hub/preflight':()=>portal.contentHubPreflight(),
       '/operator/api/sources':()=>portal.sources(),
       '/operator/api/accounts':()=>portal.accounts({offset:uri.searchParams.get('offset')||0}),
