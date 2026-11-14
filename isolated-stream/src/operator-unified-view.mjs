@@ -648,6 +648,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button class="btn secondary" id="content-hub-episode-diagnose" type="button" disabled>🎞 فحص صورة وصوت الحلقة المكتملة</button>
 </div>
 <p class="muted" role="status" id="content-hub-episode-canary-status">فحص الصورة والصوت متاح بعد اكتمال الحلقة والتحقق من سلامتها.</p>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #254464">
+<strong>🎞 معاينة الحلقة المخزنة</strong>
+<p class="muted">مقطع خاص بالمدير مدته 12 ثانية بصيغة H.264/AAC، لا يُحمّل من المصدر ولا يغيّر تشغيل المشتركين.</p>
+<button class="btn secondary" id="content-hub-episode-preview" type="button" disabled>▶ مشاهدة عينة الحلقة</button>
+<video id="content-hub-episode-preview-player" controls playsinline preload="none"
+ style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
+<p class="muted" id="content-hub-episode-preview-note">متاحة بعد اكتمال الحلقة والتحقق من سلامة بياناتها.</p>
+</div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
 <p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
 <div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
@@ -1095,6 +1103,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var epCanary=data.lastEpisodeCanary||{};
       $("content-hub-episode-diagnose").disabled=!episodeComplete||
         data.episodeCanaryRunning===true;
+      $("content-hub-episode-preview").disabled=!episodeComplete||
+        data.ownerEpisodePreviewEnabled!==true;
+      $("content-hub-episode-preview-note").textContent=!episodeComplete?
+        "لا يمكن تشغيل عينة قبل اكتمال الحلقة والتحقق من SHA-256.":
+        data.ownerEpisodePreviewEnabled===true?
+        "الحلقة محفوظة. اضغط مشاهدة عينة الحلقة (12 ثانية).":
+        "معاينة الحلقة مقفلة من الخادم حاليًا حتى اجتياز الاختبارات.";
       $("content-hub-episode-canary-status").textContent=
         data.episodeCanaryRunning===true?
         "جارٍ فحص تشغيل الحلقة من التخزين الخاص فقط...":
@@ -1300,6 +1315,23 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         String(e.message||"خطأ").slice(0,75)+
         ". لم يتم حفظ أي بيانات.";
     }finally{button.disabled=false}
+  });
+  $("content-hub-episode-preview").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var player=$("content-hub-episode-preview-player");
+    player.pause();player.removeAttribute("src");player.load();
+    player.src="/operator/api/content-hub/episodes/preview";
+    player.load();
+    $("content-hub-episode-preview-note").textContent=
+      "جارٍ تحميل عينة قصيرة من التخزين الخاص. لا توجد أي روابط مصدر في المتصفح.";
+    try{await player.play()}catch{
+      $("content-hub-episode-preview-note").textContent=
+        "اضغط تشغيل داخل المشغل، أو تحقق من اتصال Content Hub.";
+    }
+  });
+  $("content-hub-episode-preview-player").addEventListener("error",function(){
+    $("content-hub-episode-preview-note").textContent=
+      "تعذر تشغيل عينة الحلقة في المتصفح؛ لا يعني ذلك أن الملف الأصلي تالف.";
   });
   $("content-hub-episode-diagnose").addEventListener("click",async function(){
     if(this.disabled)return;
