@@ -240,6 +240,53 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // Native season controls for /operator#library. All calls stay on the
+  // signed STREAM -> Portal bridge (the browser never touches the old site).
+  const SEASONS=ROOT+'/content-hub/seasons/';
+  const contentHubSeasonSeries=()=>call(SEASONS+'series');
+  const contentHubSeasonPilot=()=>call(SEASONS+'pilot');
+  const contentHubSeasonMetadata=id=>{
+   const n=Number(id);
+   if(!Number.isSafeInteger(n)||n<1)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_id_invalid'}});
+   return call(SEASONS+'series/'+n);
+  };
+  const contentHubSeasonQueue=()=>call(SEASONS+'queue');
+  const contentHubSeasonAVStatus=()=>call(SEASONS+'confirmation');
+  const contentHubSeasonProbe=({gatewayId,confirmed}={})=>{
+   const n=Number(gatewayId);
+   if(!Number.isSafeInteger(n)||n<1||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_probe_confirmation_required'}});
+   return call(SEASONS+'probe',{method:'POST',
+    body:{gatewayId:n,confirmed:true}});
+  };
+  const contentHubSeasonEnqueue=data=>{
+   if(data?.confirmed!==true||data?.licensedStorage!==true||
+     !Array.isArray(data?.episodes)||data.episodes.length<1||
+     data.episodes.length>12)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_enqueue_owner_confirmation_required'}});
+   return call(SEASONS+'enqueue',{method:'POST',body:data});
+  };
+  const contentHubSeasonStart=({confirmed,licensedStorage,sourceIdle}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_start_operator_confirmation_required'}});
+   return call(SEASONS+'start',{method:'POST',
+    body:{confirmed:true,licensedStorage:true,sourceIdle:true}});
+  };
+  const contentHubSeasonPause=({confirmed}={})=>{
+   if(confirmed!==true)return Promise.resolve({status:400,
+    body:{ok:false,code:'season_pause_confirmation_required'}});
+   return call(SEASONS+'pause',{method:'POST',body:{confirmed:true}});
+  };
+  const contentHubSeasonAVConfirm=({confirmed,videoConfirmed,audioConfirmed}={})=>{
+   if(confirmed!==true||videoConfirmed!==true||audioConfirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_browser_av_confirmation_required'}});
+   return call(SEASONS+'confirm',{method:'POST',
+    body:{confirmed:true,videoConfirmed:true,audioConfirmed:true}});
+  };
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
   const contentHubStartEpisodeCopy=({gatewayId,confirmed}={})=>{
@@ -348,5 +395,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
-    contentHubPreviewRaw,contentHubEpisodePreviewRaw};
+    contentHubPreviewRaw,contentHubEpisodePreviewRaw,
+    contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
+    contentHubSeasonQueue,contentHubSeasonAVStatus,contentHubSeasonProbe,
+    contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
+    contentHubSeasonAVConfirm};
 }
