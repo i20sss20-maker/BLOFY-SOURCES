@@ -142,6 +142,22 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
     }
+    // Signed, run-scoped private video preview for a verified queued
+    // episode. No full video URL, source credentials or S3 data in browser.
+    const selectedSeasonPreview=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/episodes\/([A-Za-z0-9_-]{8,80})\/preview$/);
+    if(selectedSeasonPreview){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'season_preview_method_or_query_denied'});
+        return true;
+      }
+      void streamOperatorOwnerPreview({req,res,
+        getUpstream:({signal})=>portal.contentHubSeasonEpisodePreviewRaw({
+          runId:selectedSeasonPreview[1],signal})})
+       .catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'season_preview_stream_failed'})});
+      return true;
+    }
     // This route is reachable only after the exact operator Basic auth
     // above; never expose a private S3 or internal portal URL to browsers.
     if(path==='/operator/api/content-hub/preview'||
