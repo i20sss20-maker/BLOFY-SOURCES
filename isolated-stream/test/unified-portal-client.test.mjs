@@ -121,3 +121,35 @@ test('season health is protected read-only and SHA audit requires explicit owner
  assert.equal(seen[1].auth,'Bearer '+secret);
  assert.deepEqual(JSON.parse(seen[1].body),{runId,confirmed:true});
 });
+
+
+test('manual season queue budget and dual-S3 read remain on the signed fixed bridge',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   seen.push({url:String(url),method:init.method,
+    header:init.headers.authorization,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,code:'test'}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const bad=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:999});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,0);
+ const good=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:12});
+ assert.equal(good.status,200);
+ assert.equal(seen[0].body.maxBatches,12);
+ assert.equal(seen[0].method,'POST');
+ const runIds=['saleh_episode_127434_20261114',
+  'season_0123456789abcdef01234567'];
+ assert.equal((await client.contentHubConcurrentRead({
+  runIds:[runIds[0],runIds[0]],confirmed:true})).status,400);
+ assert.equal(seen.length,1);
+ const read=await client.contentHubConcurrentRead({
+  runIds,confirmed:true});
+ assert.equal(read.status,200);
+ assert.equal(seen[1].url,'https://blofy-activation-portal-production.up.railway.app'+
+  '/internal/blofy-stream/content-hub/seasons/concurrent-read');
+ assert.deepEqual(seen[1].body,{runIds,confirmed:true});
+ assert.equal(seen[1].header,'Bearer '+secret);
+});
