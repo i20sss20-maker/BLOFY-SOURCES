@@ -95,3 +95,29 @@ test('operator catalog and code/account pagination cannot mix stale responses or
  const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
  assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
 });
+
+
+test('season health is protected read-only and SHA audit requires explicit owner action',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(input,init)=>{
+   seen.push({path:new URL(input).pathname,method:init.method,
+    auth:init.headers.authorization,body:init.body});
+   return new Response(JSON.stringify({ok:true,alerts:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const data=await client.contentHubSeasonHealth();
+ assert.equal(data.status,200);
+ assert.equal(seen[0].path,'/internal/blofy-stream/content-hub/seasons/health');
+ assert.equal(seen[0].method,'GET');
+ const bad=await client.contentHubSeasonAudit({
+  runId:'saleh_episode_127434_20261114',confirmed:false});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,1);
+ const runId='saleh_episode_127434_20261114';
+ const ok=await client.contentHubSeasonAudit({runId,confirmed:true});
+ assert.equal(ok.status,200);
+ assert.equal(seen[1].method,'POST');
+ assert.equal(seen[1].path,'/internal/blofy-stream/content-hub/seasons/audit');
+ assert.equal(seen[1].auth,'Bearer '+secret);
+ assert.deepEqual(JSON.parse(seen[1].body),{runId,confirmed:true});
+});
