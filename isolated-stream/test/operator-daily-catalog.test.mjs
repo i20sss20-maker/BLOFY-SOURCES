@@ -14,7 +14,7 @@ test('BLOFY STREAM operator has a read-only 04:00 Riyadh receipt panel',()=>{
  assert.match(html,/4:00 صباحًا/);
  assert.match(html,/لا تنقل ملفات الأفلام والحلقات إلى S3/);
  assert.match(html,/جار استيراد الفهرس/);
- assert.match(html,/مكتمل جزئيًا/);
+ assert.match(html,/اكتمل جزئيًا/);
  assert.doesNotMatch(html,/daily-catalog.*POST/);
 });
 test('fixed signed daily receipt client never accepts user source URL',async()=>{
