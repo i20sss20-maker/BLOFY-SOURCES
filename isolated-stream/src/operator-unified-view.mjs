@@ -905,7 +905,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted">هذه قائمة العناصر المفهرسة في PostgreSQL. حالة «✅ نسخة مكتملة في سجل SHA» تعني تطابق سجل القطع والبصمة والبايتات في قاعدة بيانات Content Hub <strong>ولا تعني التحقق المباشر من وجود جميع القطع في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط. لا يجري الفحص أي نقل أو طلب فيديو من المصدر.</p>
   <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
   <div class="tablewrap"><table>
-   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th><th>فحص S3</th></tr></thead>
+   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th><th>فحص S3</th><th>تجهيز للنقل</th></tr></thead>
    <tbody id="library-mirror-results"></tbody>
   </table></div>
   <div id="library-mirror-head-panel" style="border:1px solid #296c6e;border-radius:12px;padding:12px;margin:12px 0">
@@ -913,6 +913,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <p class="muted">بعد ظهور «نسخة مكتملة في سجل SHA» اختر فحص S3 من صف الفيلم أو الحلقة. يفحص السيرفر حتى 8 أجزاء بطلبات HEAD فقط، ويتحقق من وجودها وأحجامها دون تنزيل الفيديو أو قراءة Xtream. فحص الحجم <strong>لا يعيد حساب بصمة SHA-256</strong>، ولا يثبت أجزاء لم تُفحص.</p>
     <button type="button" class="btn secondary" id="library-head-next" disabled>فحص 8 أجزاء تالية من نفس الملف</button>
     <p id="library-head-status" class="muted" role="status" aria-live="polite">لم يبدأ فحص S3 فعلي. النتائج في الجدول مستمدة من قاعدة بيانات النسخ فقط.</p>
+  </div>
+  <div id="library-mirror-intake-panel" style="padding:12px;margin-top:12px;border:1px solid #a68439;border-radius:12px;background:rgba(63,41,8,.28)">
+    <div class="controls">
+      <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
+      <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
+    </div>
+    <p class="muted">عند اختيار «جهّز سجل النقل» يُحفظ اسم الفيلم أو الحلقة ومعرّفها فقط في PostgreSQL، بحد أقصى 24 عنصرًا للمصدر. <strong>لا يبدأ تحميل</strong> ولا تُحجز مساحة. كل عنصر يبقى بانتظار قياس حجم المصدر وتوثيق حقوق التخزين والتحقق من مساحة S3 وموافقة مستقلة على بدء العامل.</p>
+    <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
+    <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
 </div>
@@ -3557,6 +3566,98 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   $("library-daily-catalog-refresh").addEventListener("click",function(){
     void refreshDailyCatalog();
   });
+  var mirrorIntakeBusy=false;
+  async function refreshMirrorIntakeOwner(){
+    if(mirrorIntakeBusy)return;
+    var status=$("library-mirror-intake-status"),
+      host=$("library-mirror-intake-items");
+    status.textContent="جار قراءة سجلات تجهيز النقل من PostgreSQL...";
+    try{
+      var info=await api("ops/mirror-intake");
+      if(info.ok!==true||info.copyWorkerEnabled!==false||
+        info.mediaCopyStarted!==false||
+        info.mediaBytesTransferred!==0||
+        info.customerCutover!==false||
+        info.stateScope!=="metadata_only_awaiting_preflight"||
+        !Array.isArray(info.items)||info.items.length>24)
+        throw Error("استجابة حالة التجهيز لا تطابق قيود النقل الآمن.");
+      host.replaceChildren();
+      status.textContent="سجلات التجهيز: "+info.pending+
+        " / "+info.maxStaged+
+        " — لا توجد تنزيلات فعلية أو حجز مساحة. جميع العناصر تنتظر إثبات الحقوق والحجم.";
+      if(info.items.length===0){
+        var empty=document.createElement("p");
+        empty.textContent="لم تُجهّز أي عناصر للنقل حتى الآن.";
+        host.appendChild(empty);
+      }
+      info.items.forEach(function(entry){
+        if(!["movie","episode"].includes(entry.kind)||
+          !["awaiting_size_and_license","cancelled"].includes(entry.state))
+          return;
+        var wrap=document.createElement("div");
+        wrap.style.cssText="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px;border:1px solid #4c554a;border-radius:8px";
+        var caption=document.createElement("span");
+        caption.textContent=
+          (entry.kind==="movie"?"فيلم":"حلقة")+" · "+
+          String(entry.title||"").slice(0,120)+" · رقم "+
+          String(entry.id||"").slice(0,128)+" — "+
+          (entry.state==="cancelled"?"ملغى":
+            "بانتظار فحص الحجم وتوثيق صلاحية التخزين");
+        wrap.appendChild(caption);
+        if(entry.state==="awaiting_size_and_license"){
+          var cancel=document.createElement("button");
+          cancel.type="button";cancel.className="btn secondary";
+          cancel.textContent="إلغاء تجهيز العنصر";
+          cancel.addEventListener("click",async function(){
+            if(!confirm("إلغاء تجهيز هذا العنصر؟ لا توجد ملفات قيد التنزيل من هذه القائمة."))return;
+            cancel.disabled=true;
+            try{
+              var out=await action("ops/mirror-intake/cancel",
+                "ops-mirror-cancel",{kind:entry.kind,id:entry.id,
+                  ownerConfirmed:true});
+              if(out.mediaBytesTransferred!==0||out.copyWorkerEnabled!==false)
+                throw Error("استجابة الإلغاء ليست من قائمة التجهيز الخاصة.");
+              await refreshMirrorIntakeOwner();
+            }catch(error){
+              status.textContent="تعذر إلغاء سجل التجهيز: "+
+                String(error.message||"خطأ").slice(0,135);
+            }finally{cancel.disabled=false}
+          });
+          wrap.appendChild(cancel);
+        }
+        host.appendChild(wrap);
+      });
+    }catch(error){
+      status.textContent="⚠ سجل التجهيز غير متاح: "+
+        String(error.message||"تعذر قراءة القائمة").slice(0,150);
+    }
+  }
+  async function stageMirrorIntakeOwner(kind,id,button){
+    if(!["movie","episode"].includes(kind)||
+      (kind==="movie"?!/^[A-Za-z0-9._:-]{1,128}$/.test(id):
+        !/^[1-9][0-9]{0,9}$/.test(id)))return;
+    if(!confirm("هل تريد حفظ هذا العنصر في قائمة تجهيز النقل فقط؟ لن يبدأ تحميل الفيديو ولن تُحجز مساحة. يجب فحص حجم المصدر وصلاحية تخزينه قبل أي نقل."))return;
+    button.disabled=true;
+    try{
+      var out=await action("ops/mirror-intake","ops-mirror-stage",{
+        kind:kind,id:id,ownerConfirmed:true});
+      if(out.ok!==true||out.copyWorkerEnabled!==false||
+         out.mediaCopyStarted!==false||
+         out.mediaBytesTransferred!==0||out.customerCutover!==false)
+        throw Error("لم يؤكد الخادم أن هذا إعداد بيانات فقط.");
+      $("library-mirror-intake-status").textContent=
+        "✅ تم تجهيز سجل العنصر "+id+
+        " كبيانات فقط. لا يعمل عامل نقل حتى اكتمال الشروط.";
+      await refreshMirrorIntakeOwner();
+    }catch(error){
+      $("library-mirror-intake-status").textContent=
+        "⚠ تعذر تجهيز العنصر: "+
+        String(error.message||"غير متاح").slice(0,165);
+    }finally{button.disabled=false}
+  }
+  $("library-mirror-intake-refresh").addEventListener("click",function(){
+    void refreshMirrorIntakeOwner();
+  });
   // Server pins source to approved saleh; no browser-controlled source URL.
   var mirrorCursor="",mirrorBusy=false,mirrorPage=0;
   var mirrorHeadBusy=false,mirrorHeadSelection=null;
@@ -3708,11 +3809,25 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           headCell.textContent="يلزم سجل نسخة مكتملة أولًا";
         }
         row.appendChild(headCell);
+        var intakeCell=document.createElement("td");
+        if(response.manifestCheckAvailable===true&&
+           (type==="movie"||type==="episode")&&
+           ["not_recorded","copy_incomplete","copy_failed"].includes(
+             String(item.copyStatus||""))){
+          var queueButton=document.createElement("button");
+          queueButton.type="button";queueButton.className="btn secondary";
+          queueButton.textContent="📋 جهّز سجل النقل";
+          queueButton.addEventListener("click",function(){
+            void stageMirrorIntakeOwner(type,String(item.id||""),queueButton);
+          });
+          intakeCell.appendChild(queueButton);
+        }else intakeCell.textContent="غير مؤهل للتجهيز الحالي";
+        row.appendChild(intakeCell);
         body.appendChild(row);
       });
       if(!items.length&&mirrorPage===1){
         var row=document.createElement("tr"),cell=document.createElement("td");
-        cell.colSpan=5;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
+        cell.colSpan=6;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
         row.appendChild(cell);body.appendChild(row);
       }
       mirrorCursor=response.hasMore===true?String(response.nextCursor||""):"";
