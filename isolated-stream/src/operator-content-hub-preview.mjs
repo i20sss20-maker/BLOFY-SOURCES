@@ -11,7 +11,13 @@ function failure(res,status,code){
   'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
  res.end(data);
 }
-export async function streamOperatorOwnerPreview({req,res,getUpstream}={}){
+export async function streamOperatorOwnerPreview({req,res,getUpstream,
+  seekPosition=null,timeoutMs=90000}={}){
+ if(seekPosition!==null&&
+    !['start','middle','near_end'].includes(seekPosition))
+  return failure(res,400,'owner_preview_seek_position_invalid');
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<10000||timeoutMs>120000)
+  return failure(res,400,'owner_preview_timeout_invalid');
  if(req.method!=='GET')
   return failure(res,405,'owner_preview_method_denied');
  if(String(req.url||'').includes('?'))
@@ -19,7 +25,7 @@ export async function streamOperatorOwnerPreview({req,res,getUpstream}={}){
  if(typeof getUpstream!=='function')
   return failure(res,503,'owner_preview_unavailable');
  const abort=new AbortController();
- const timer=setTimeout(()=>abort.abort(),90000);timer.unref?.();
+ const timer=setTimeout(()=>abort.abort(),timeoutMs);timer.unref?.();
  const close=()=>abort.abort();
  res.once('close',close);
  try{
@@ -31,6 +37,15 @@ export async function streamOperatorOwnerPreview({req,res,getUpstream}={}){
   const n=Number(upstream.headers.get('content-length'));
   if(!Number.isSafeInteger(n)||n<2048||n>MAX)
    return failure(res,503,'owner_preview_payload_invalid');
+  const reportedPosition=seekPosition===null?null:
+    upstream.headers.get('x-blofy-clip-position');
+  const startSeconds=seekPosition===null?null:
+    Number(upstream.headers.get('x-blofy-clip-start-seconds'));
+  if(seekPosition!==null&&
+     (reportedPosition!==seekPosition||!Number.isFinite(startSeconds)||
+      startSeconds<0||
+      upstream.headers.get('x-blofy-clip-source')!=='verified-private-s3'))
+    return failure(res,503,'owner_seek_private_proof_invalid');
   let count=0;
   const limiter=new Transform({transform(part,encoding,callback){
    count+=part.byteLength;
@@ -44,7 +59,11 @@ export async function streamOperatorOwnerPreview({req,res,getUpstream}={}){
    'cache-control':'private,no-store',
    'x-frame-options':'DENY',
    'x-content-type-options':'nosniff',
-   'referrer-policy':'no-referrer'
+   'referrer-policy':'no-referrer',
+   ...(seekPosition!==null?{
+     'x-blofy-clip-position':seekPosition,
+     'x-blofy-clip-start-seconds':String(Math.floor(startSeconds)),
+     'x-blofy-clip-source':'verified-private-s3'}:{})
   });
   await pipeline(Readable.fromWeb(upstream.body),limiter,res,{
    signal:abort.signal});
