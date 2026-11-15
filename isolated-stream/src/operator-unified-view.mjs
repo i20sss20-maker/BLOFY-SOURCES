@@ -767,6 +767,23 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
 <p class="muted" id="content-hub-episode-preview-note">متاحة بعد اكتمال الحلقة والتحقق من سلامة بياناتها.</p>
 </div>
+<div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
+<h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
+<p class="muted">شغّل عينة الفيلم وعينة الحلقة أعلاه من التخزين الخاص، ثم اختبرهما على متصفح Windows أو Android TV. الأداة تراقب إطارات الفيديو ومرور وقت التشغيل وتطلب منك تأكيد سماع الصوت ورؤية الصورة بنفسك. هذه <strong>عينات 12 ثانية فقط</strong> ولا تثبت مشاهدة الملف كاملًا أو توافق تطبيقات العملاء.</p>
+<div class="field" style="max-width:350px"><label for="hub-qa-platform">الجهاز الذي تُجري عليه الاختبار الآن</label>
+<select id="hub-qa-platform"><option value="">اختر الجهاز</option><option value="windows_browser">Windows — المتصفح</option><option value="android_tv_browser">Android TV — المتصفح</option></select></div>
+<div class="grid" style="margin-top:14px">
+<div class="code-tile"><strong>🎞 الفيلم المحفوظ</strong><p class="muted" role="status" id="hub-qa-movie-status">لم يبدأ تشغيل الفيلم في المتصفح.</p>
+<label style="display:block"><input type="checkbox" id="hub-qa-movie-picture"> رأيت الصورة تتحرك فعليًا</label>
+<label style="display:block"><input type="checkbox" id="hub-qa-movie-audio"> سمعت الصوت فعليًا من الجهاز</label></div>
+<div class="code-tile"><strong>📺 الحلقة المحفوظة</strong><p class="muted" role="status" id="hub-qa-episode-status">لم يبدأ تشغيل الحلقة في المتصفح.</p>
+<label style="display:block"><input type="checkbox" id="hub-qa-episode-picture"> رأيت الصورة تتحرك فعليًا</label>
+<label style="display:block"><input type="checkbox" id="hub-qa-episode-audio"> سمعت الصوت فعليًا من الجهاز</label></div>
+</div>
+<div class="actions" style="margin-top:12px"><button class="btn secondary" id="hub-qa-export" type="button">📋 تنزيل تقرير اختبار المتصفح (JSON)</button></div>
+<p class="muted" id="hub-qa-verdict" role="status" aria-live="polite">لم تكتمل مشاهدة أي عينة. لا توجد موافقة نشر.</p>
+<p class="muted">التقرير يُنشأ محليًا على جهازك فقط؛ لا يحتوي روابط الفيديو أو مفاتيح الاتصال أو بيانات المشتركين ولا يُرسل تلقائيًا للخادم.</p>
+</div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
 <p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
 <div id="content-hub-episodes-list" class="muted" aria-live="polite"></div>
@@ -1429,6 +1446,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("content-hub-episode-preview").addEventListener("click",async function(){
     if(this.disabled)return;
+    resetHubBrowserQa("episode");
     var player=$("content-hub-episode-preview-player");
     player.pause();player.removeAttribute("src");player.load();
     player.src="/operator/api/content-hub/episodes/preview";
@@ -1507,6 +1525,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("content-hub-owner-preview").addEventListener("click",async function(){
     if(this.disabled)return;
+    resetHubBrowserQa("movie");
     var player=$("content-hub-preview-player");
     // The browser requests a fixed same-origin owner-only route. It never
     // receives Railway internal URLs, bearer tokens or upstream credentials.
@@ -5199,6 +5218,102 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("diagnostic-failures-recheck-result",hints[code]||"تعذر تنفيذ الفحص: "+code.slice(0,80));
     }finally{btn.disabled=!$("diagnostic-failures-source").value}
   });
+  // Website-only, owner-local playback evidence: never claims a 12s clip
+  // proves full-file playback or authorizes a subscriber release.
+  var hubBrowserQa={
+    movie:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0},
+    episode:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0}
+  };
+  function hubBrowserQaVerdict(kind){
+    var q=hubBrowserQa[kind],picture=$("hub-qa-"+kind+"-picture").checked,
+      audio=$("hub-qa-"+kind+"-audio").checked;
+    var player=$(kind==="movie"?"content-hub-preview-player":"content-hub-episode-preview-player");
+    return q.videoFrame&&q.playedSeconds>=2&&q.errors===0&&picture&&audio&&
+      !player.muted&&Number(player.volume)>0;
+  }
+  function refreshHubBrowserQa(){
+    ["movie","episode"].forEach(function(kind){
+      var q=hubBrowserQa[kind];
+      var state=q.errors?"❌ المتصفح أبلغ عن خطأ تشغيل.":
+        q.videoFrame&&q.playedSeconds>=2?
+          "✅ ظهر إطار فيديو ومرّ "+Math.floor(q.playedSeconds)+" ثوانٍ؛ يلزم تأكيد الصورة والصوت يدويًا.":
+          "⏳ لم يثبت تشغيل الصورة لمدة ثانيتين بعد.";
+      $("hub-qa-"+kind+"-status").textContent=state;
+    });
+    var selected=$("hub-qa-platform").value;
+    var ready=hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode");
+    $("hub-qa-verdict").textContent=!selected?"حدد جهاز الاختبار أولًا. لا يوجد اعتماد نشر.":
+      ready?"✅ تأكدت عينتا المتصفح بالصوت والصورة على الجهاز المحدد. ما زال تشغيل الملف الكامل واختبار الجهاز الآخر غير مثبتين، ولا توجد موافقة نشر.":
+        "لم يكتمل إثبات تشغيل عينتي الفيلم والحلقة على الجهاز المحدد. لا توجد موافقة نشر.";
+  }
+  function resetHubBrowserQa(kind){
+    hubBrowserQa[kind]={playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0};
+    $("hub-qa-"+kind+"-picture").checked=false;
+    $("hub-qa-"+kind+"-audio").checked=false;
+    refreshHubBrowserQa();
+  }
+  [["movie","content-hub-preview-player"],["episode","content-hub-episode-preview-player"]]
+    .forEach(function(pair){
+      var kind=pair[0],player=$(pair[1]);
+      player.addEventListener("timeupdate",function(){
+        var q=hubBrowserQa[kind];
+        if(!player.paused&&!player.seeking&&player.readyState>=2&&
+          player.videoWidth>0&&player.videoHeight>0){
+          q.videoFrame=true;
+          var now=Number(player.currentTime)||0;
+          if(q.lastMediaTime!==null){
+            var delta=now-q.lastMediaTime;
+            if(delta>0&&delta<=1.5)q.playedSeconds+=delta;
+          }
+          q.lastMediaTime=now;
+        }else q.lastMediaTime=null;
+        refreshHubBrowserQa();
+      });
+      player.addEventListener("seeking",function(){hubBrowserQa[kind].lastMediaTime=null});
+      player.addEventListener("pause",function(){hubBrowserQa[kind].lastMediaTime=null});
+      player.addEventListener("error",function(){
+        hubBrowserQa[kind].errors++;hubBrowserQa[kind].lastMediaTime=null;refreshHubBrowserQa();
+      });
+      player.addEventListener("waiting",function(){
+        hubBrowserQa[kind].buffering++;refreshHubBrowserQa();
+      });
+    });
+  ["movie","episode"].forEach(function(kind){
+    ["picture","audio"].forEach(function(check){
+      $("hub-qa-"+kind+"-"+check).addEventListener("change",refreshHubBrowserQa);
+    });
+  });
+  $("hub-qa-platform").addEventListener("change",refreshHubBrowserQa);
+  $("hub-qa-export").addEventListener("click",function(){
+    var platform=$("hub-qa-platform").value;
+    if(!["windows_browser","android_tv_browser"].includes(platform)){
+      $("hub-qa-verdict").textContent="اختر Windows أو Android TV قبل تصدير التقرير.";
+      return;
+    }
+    function row(kind){
+      var q=hubBrowserQa[kind];
+      return {mediaKind:kind,privateClipSeconds:12,
+        videoFrameObserved:q.videoFrame,playedSeconds:Math.round(q.playedSeconds*10)/10,
+        browserErrors:q.errors,bufferEvents:q.buffering,
+        pictureConfirmedByHuman:$("hub-qa-"+kind+"-picture").checked,
+        audibleAudioConfirmedByHuman:$("hub-qa-"+kind+"-audio").checked,
+        clipPass:hubBrowserQaVerdict(kind),fullLengthPlaybackVerified:false};
+    }
+    var report={schema:"blofy.stream.website.private-clip-qa.v1",
+      platform:platform,checkedAt:new Date().toISOString(),
+      movie:row("movie"),episode:row("episode"),
+      bothClipsPassed:hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode"),
+      serverCopyOrFullMovieProvenByThisReport:false,
+      otherPlatformProvenByThisReport:false,
+      customerReleaseApproved:false};
+    var url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:"application/json"}));
+    var link=document.createElement("a");
+    link.href=url;link.download="blofy-stream-browser-qa-"+platform+".json";
+    document.body.append(link);link.click();link.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    refreshHubBrowserQa();
+  });
+  refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
   setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);
