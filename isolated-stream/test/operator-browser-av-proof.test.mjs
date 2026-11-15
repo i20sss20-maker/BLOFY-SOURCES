@@ -16,7 +16,7 @@ function mount(){
   function el(id){
     if(!nodes.has(id)){
       const n={id,checked:false,value:'',paused:false,seeking:false,readyState:4,
-        videoWidth:1280,videoHeight:720,currentTime:0,textContent:'',events:{},
+        videoWidth:1280,videoHeight:720,currentTime:0,volume:1,muted:false,textContent:'',events:{},
         addEventListener(event,fn){(this.events[event]??=[]).push(fn)},
         fire(event){for(const fn of this.events[event]??[])fn.call(this,{})}};
       nodes.set(id,n);
@@ -55,7 +55,13 @@ test('no PASS without actual moving video + human picture/audio confirmation',()
   assert.equal(qa.hubBrowserQaVerdict('movie'),false);
   movie.videoWidth=1280;movie.currentTime=1;movie.fire('timeupdate');
   assert.equal(qa.hubBrowserQaVerdict('movie'),false);
-  movie.currentTime=3;movie.fire('timeupdate');
+  movie.currentTime=2.1;movie.fire('timeupdate');
+  assert.equal(qa.hubBrowserQaVerdict('movie'),false);
+  movie.currentTime=3.2;movie.fire('timeupdate');
+  assert.equal(qa.hubBrowserQaVerdict('movie'),true);
+  movie.muted=true;
+  assert.equal(qa.hubBrowserQaVerdict('movie'),false,'muted is not audible');
+  movie.muted=false;
   assert.equal(qa.hubBrowserQaVerdict('movie'),true);
   el('hub-qa-movie-audio').checked=false;
   assert.equal(qa.hubBrowserQaVerdict('movie'),false);
