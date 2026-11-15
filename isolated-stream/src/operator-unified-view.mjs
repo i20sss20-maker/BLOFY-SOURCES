@@ -902,7 +902,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <button type="button" class="btn secondary" id="library-mirror-next" disabled>التالي (50)</button>
     </div>
   </div>
-  <p class="muted">هذه قائمة العناصر التي أعاد Xtream فهرستها في PostgreSQL، <strong>وليست ملفات منزّلة أو متحقّقًا من وجودها في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط، لا كل حلقات المسلسلات. لا يجري هذا الفحص أي نقل أو طلب فيديو من المصدر.</p>
+  <p class="muted">هذه قائمة العناصر المفهرسة في PostgreSQL. حالة «✅ نسخة مكتملة في سجل SHA» تعني تطابق سجل القطع والبصمة والبايتات في قاعدة بيانات Content Hub <strong>ولا تعني التحقق المباشر من وجود جميع القطع في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط. لا يجري الفحص أي نقل أو طلب فيديو من المصدر.</p>
   <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
   <div class="tablewrap"><table>
    <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th></tr></thead>
@@ -3582,8 +3582,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       mirrorPage+=1;
       items.forEach(function(item){
         var row=document.createElement("tr");
-        var statusText=item.copyStatus==="metadata_only"?
-          "فهرس فقط — لا تخزين": "لم تتم مطابقة الملف مع S3";
+        var statuses={
+          metadata_only:"فهرس فقط — لا تخزين",
+          not_assessed:"لم يتم فحص سجل النسخ الخاص بعد",
+          not_recorded:"لا يوجد سجل نسخة في Content Hub",
+          copy_incomplete:"نسخ غير مكتمل — بيانات تقدم محفوظة",
+          copy_failed:"نسخ متوقف/فشل — يحتاج مراجعة",
+          verification_inconsistent:"⚠ سجل التحقق غير متطابق",
+          verified_manifest:"✅ نسخة مكتملة في سجل SHA — وجود S3 الفعلي لم يُفحص"
+        };
+        var statusText=statuses[item.copyStatus]||
+          "حالة الملف غير معروفة — لا يُعد محفوظًا";
         [String(item.id||"").slice(0,128),
          String(item.title||"").slice(0,220),
          String(item.extension||"—").slice(0,20),
@@ -3607,7 +3616,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " / قنوات "+Number(counts.live||0)+
         " / مسلسلات "+Number(counts.series||0)+
         (type==="episode"?" | ⚠ الحلقات: مفهرسة جزئيًا فقط":"")+
-        " | نقل الملفات: صفر | مطابقة S3: لم تبدأ.";
+        " | نقل الملفات: صفر | سجلات نسخ مكتملة: "+
+        Number(response.manifestVerifiedCount||0)+
+        " في الصفحة | فحص S3 الفعلي: لم يبدأ | "+
+        (response.manifestCheckAvailable===true?
+          "مطابقة PostgreSQL: جاهزة":"مطابقة PostgreSQL: غير متاحة");
       $("library-mirror-note").textContent=
         "آخر تحديث فهرس Xtream: "+
         (response.latestXtreamSyncAt?
