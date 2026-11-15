@@ -780,8 +780,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <label style="display:block"><input type="checkbox" id="hub-qa-episode-picture"> رأيت الصورة تتحرك فعليًا</label>
 <label style="display:block"><input type="checkbox" id="hub-qa-episode-audio"> سمعت الصوت فعليًا من الجهاز</label></div>
 </div>
-<div class="actions" style="margin-top:12px"><button class="btn secondary" id="hub-qa-export" type="button">📋 تنزيل تقرير اختبار المتصفح (JSON)</button></div>
+<p class="muted">للاختبار الصحيح: اختر الجهاز <strong>قبل</strong> التشغيل، شغّل الفيلم والحلقة، قدّم داخل كل عينة ثم تأكد من استئناف الفيديو والصوت، وحدد مربعي التأكيد يدويًا. كرّر على الجهاز الثاني بشكل مستقل.</p>
+<div class="actions" style="margin-top:12px"><button class="btn secondary" id="hub-qa-export" type="button">📋 تنزيل تقرير اختبار الجهاز (JSON)</button></div>
 <p class="muted" id="hub-qa-verdict" role="status" aria-live="polite">لم تكتمل مشاهدة أي عينة. لا توجد موافقة نشر.</p>
+<div style="margin-top:14px;padding:12px;border:1px solid #405b80;border-radius:10px">
+<strong>📂 مقارنة نتائج Windows وAndroid TV</strong>
+<label for="hub-qa-import" style="display:block;margin-top:6px">اختر ملفي تقرير الاختبار من الجهازين، ليجري المتصفح مقارنة محلية لهوية الفيلم والحلقة والنتائج.</label>
+<input id="hub-qa-import" type="file" accept=".json,application/json" multiple style="margin-top:8px">
+<p id="hub-qa-pair-status" class="muted" role="status" aria-live="polite">لم تتم مقارنة جهازين. لا يتصل هذا الاختبار بالمصدر أو بخوادم إضافية.</p>
+<p class="muted">هوية الجهاز مُدخلة يدويًا وليست إثباتًا عتاديًا. نجاح العينات لا يثبت تشغيل الفيلم كاملًا أو يمنح موافقة نشر.</p>
+</div>
 <p class="muted">التقرير يُنشأ محليًا على جهازك فقط؛ لا يحتوي روابط الفيديو أو مفاتيح الاتصال أو بيانات المشتركين ولا يُرسل تلقائيًا للخادم.</p>
 </div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
@@ -5218,61 +5226,163 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("diagnostic-failures-recheck-result",hints[code]||"تعذر تنفيذ الفحص: "+code.slice(0,80));
     }finally{btn.disabled=!$("diagnostic-failures-source").value}
   });
-  // Website-only, owner-local playback evidence: never claims a 12s clip
-  // proves full-file playback or authorizes a subscriber release.
-  var hubBrowserQa={
-    movie:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0},
-    episode:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0}
-  };
+  // Website-only, authenticated owner evidence. This NEVER declares
+  // full-duration playback, hardware attestation, licensed rights or release.
+  var HUB_QA_SCHEMA="blofy.stream.website.private-clip-qa.v2";
+  var HUB_QA_PLATFORMS=["windows_browser","android_tv_browser"];
+  var HUB_QA_RUN=/^[A-Za-z0-9_-]{8,80}$/;
+  var hubQaFrameWatch={movie:0,episode:0};
+  function newHubQa(kind){
+    return {platform:$("hub-qa-platform").value||"",
+      identity:hubQaIdentity(kind),playedSeconds:0,lastMediaTime:null,
+      videoFrame:false,frameEvidence:"none",renderedFrameSteps:0,
+      lastRenderedMediaTime:null,errors:0,buffering:0,
+      seekPending:false,seekCompleted:0,seekResumeAt:null,
+      resumedAfterSeek:false};
+  }
+  // A report can be compared only to a unique COMPLETE server-verified
+  // manifest. Never infer its identity from the requested upstream title.
+  function hubQaIdentity(kind){
+    var records=kind==="movie"?hubState?.runs:hubState?.episodeRuns;
+    var format=kind==="movie"?"private_chunks":"private_episode_chunks";
+    if(!Array.isArray(records)||hubState?.ok!==true)return null;
+    if(kind==="movie"&&hubState.ownerPreviewEnabled!==true)return null;
+    if(kind==="episode"&&hubState.ownerEpisodePreviewEnabled!==true)return null;
+    var verified=records.filter(function(run){
+      var total=Number(run.expectedBytes),done=Number(run.bytesCopied);
+      return run.format===format&&run.state==="verified"&&
+        HUB_QA_RUN.test(String(run.runId||""))&&
+        Number.isSafeInteger(total)&&total>0&&done===total;
+    });
+    // Multiple verified runs require a future exact-run selection contract
+    // from the server; never guess which source the pinned preview served.
+    if(verified.length!==1)return null;
+    return {runId:String(verified[0].runId),
+      expectedBytes:Number(verified[0].expectedBytes)};
+  }
+  var hubBrowserQa={movie:newHubQa("movie"),episode:newHubQa("episode")};
+  function hubQaPlayer(kind){
+    return $(kind==="movie"?
+      "content-hub-preview-player":"content-hub-episode-preview-player");
+  }
   function hubBrowserQaVerdict(kind){
-    var q=hubBrowserQa[kind],picture=$("hub-qa-"+kind+"-picture").checked,
-      audio=$("hub-qa-"+kind+"-audio").checked;
-    var player=$(kind==="movie"?"content-hub-preview-player":"content-hub-episode-preview-player");
-    return q.videoFrame&&q.playedSeconds>=2&&q.errors===0&&picture&&audio&&
-      !player.muted&&Number(player.volume)>0;
+    var q=hubBrowserQa[kind],player=hubQaPlayer(kind);
+    var manifest=hubQaIdentity(kind);
+    var expected=kind==="movie"?"/operator/api/content-hub/preview":
+      "/operator/api/content-hub/episodes/preview";
+    return Boolean(manifest&&q.identity&&q.identity.runId===manifest.runId&&
+      q.identity.expectedBytes===manifest.expectedBytes&&
+      HUB_QA_PLATFORMS.includes(q.platform)&&
+      q.platform===$("hub-qa-platform").value&&
+      String(player.getAttribute("src")||"")===expected&&
+      q.videoFrame&&q.playedSeconds>=2&&q.seekCompleted>=1&&
+      q.resumedAfterSeek&&q.errors===0&&
+      $("hub-qa-"+kind+"-picture").checked&&
+      $("hub-qa-"+kind+"-audio").checked&&
+      !player.muted&&Number(player.volume)>0);
   }
   function refreshHubBrowserQa(){
     ["movie","episode"].forEach(function(kind){
       var q=hubBrowserQa[kind];
-      var state=q.errors?"❌ المتصفح أبلغ عن خطأ تشغيل.":
+      var state=!q.identity?
+        "لا توجد هوية وحيدة لملف مكتمل ومصرّح بمعاينته. حدّث حالة التخزين.":
+        q.errors?"❌ أبلغ المتصفح عن خطأ تشغيل.":
         q.videoFrame&&q.playedSeconds>=2?
-          "✅ ظهر إطار فيديو ومرّ "+Math.floor(q.playedSeconds)+" ثوانٍ؛ يلزم تأكيد الصورة والصوت يدويًا.":
-          "⏳ لم يثبت تشغيل الصورة لمدة ثانيتين بعد.";
+        "رُصد تقدم "+Math.floor(q.playedSeconds)+" ثانية ("
+        +(q.frameEvidence==="rendered_frames"?"إطارات معروضة":
+        "تقدم وقت وبيانات فيديو فقط")+") · التنقل: "+
+        (q.resumedAfterSeek?"✅ استؤنف بعد التقديم":"لم يثبت الاستئناف")+
+        " · أكّد الصورة والصوت بنفسك.": "⏳ لم تُرصد ثانيتان من فيديو متحرك بعد.";
       $("hub-qa-"+kind+"-status").textContent=state;
     });
-    var selected=$("hub-qa-platform").value;
+    var platform=$("hub-qa-platform").value;
     var ready=hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode");
-    $("hub-qa-verdict").textContent=!selected?"حدد جهاز الاختبار أولًا. لا يوجد اعتماد نشر.":
-      ready?"✅ تأكدت عينتا المتصفح بالصوت والصورة على الجهاز المحدد. ما زال تشغيل الملف الكامل واختبار الجهاز الآخر غير مثبتين، ولا توجد موافقة نشر.":
-        "لم يكتمل إثبات تشغيل عينتي الفيلم والحلقة على الجهاز المحدد. لا توجد موافقة نشر.";
+    $("hub-qa-verdict").textContent=!HUB_QA_PLATFORMS.includes(platform)?
+      "حدد الجهاز قبل تشغيل أي عينة. لا توجد موافقة نشر.":
+      ready?"✅ اجتازت عينتا الفيلم والحلقة هذا المتصفح بالتأكيد اليدوي. صدّر التقرير، واختبر الجهاز الثاني. لا توجد موافقة نشر أو إثبات تشغيل الملف كاملًا.":
+      "الفيلم والحلقة لم يجتازا فحص هذا المتصفح مع التقديم والاستئناف والصوت والصورة. لا توجد موافقة نشر.";
   }
   function resetHubBrowserQa(kind){
-    hubBrowserQa[kind]={playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0};
+    hubQaFrameWatch[kind]++;
+    hubBrowserQa[kind]=newHubQa(kind);
     $("hub-qa-"+kind+"-picture").checked=false;
     $("hub-qa-"+kind+"-audio").checked=false;
     refreshHubBrowserQa();
   }
+  function observeHubQaRenderedFrames(kind,player){
+    if(typeof player.requestVideoFrameCallback!=="function")return;
+    var generation=hubQaFrameWatch[kind];
+    function nextFrame(timestamp,metadata){
+      if(generation!==hubQaFrameWatch[kind])return;
+      var q=hubBrowserQa[kind];
+      var mediaTime=Number(metadata?.mediaTime);
+      if(!player.paused&&!player.seeking&&player.readyState>=2&&
+         Number.isFinite(mediaTime)&&player.videoWidth>0&&player.videoHeight>0){
+        if(q.lastRenderedMediaTime!==null&&
+          mediaTime>q.lastRenderedMediaTime&&
+          mediaTime-q.lastRenderedMediaTime<=1.5)q.renderedFrameSteps++;
+        q.lastRenderedMediaTime=mediaTime;
+        if(q.renderedFrameSteps>=2){
+          q.frameEvidence="rendered_frames";q.videoFrame=true;
+        }
+      }else q.lastRenderedMediaTime=null;
+      if(!player.paused&&!player.seeking)
+        player.requestVideoFrameCallback(nextFrame);
+      refreshHubBrowserQa();
+    }
+    player.requestVideoFrameCallback(nextFrame);
+  }
   [["movie","content-hub-preview-player"],["episode","content-hub-episode-preview-player"]]
     .forEach(function(pair){
       var kind=pair[0],player=$(pair[1]);
+      player.addEventListener("playing",function(){
+        // Restart callbacks after pause/seek only once per playing event.
+        hubQaFrameWatch[kind]++;
+        observeHubQaRenderedFrames(kind,player);
+      });
       player.addEventListener("timeupdate",function(){
         var q=hubBrowserQa[kind];
         if(!player.paused&&!player.seeking&&player.readyState>=2&&
-          player.videoWidth>0&&player.videoHeight>0){
-          q.videoFrame=true;
+           player.videoWidth>0&&player.videoHeight>0){
           var now=Number(player.currentTime)||0;
           if(q.lastMediaTime!==null){
             var delta=now-q.lastMediaTime;
             if(delta>0&&delta<=1.5)q.playedSeconds+=delta;
           }
           q.lastMediaTime=now;
+          if(typeof player.requestVideoFrameCallback!=="function"&&
+             q.playedSeconds>=2){
+            q.videoFrame=true;q.frameEvidence="metadata_progress";
+          }
+          if(q.seekResumeAt!==null&&q.playedSeconds-q.seekResumeAt>=0.4){
+            q.resumedAfterSeek=true;q.seekResumeAt=null;
+          }
         }else q.lastMediaTime=null;
         refreshHubBrowserQa();
       });
-      player.addEventListener("seeking",function(){hubBrowserQa[kind].lastMediaTime=null});
-      player.addEventListener("pause",function(){hubBrowserQa[kind].lastMediaTime=null});
+      player.addEventListener("seeking",function(){
+        var q=hubBrowserQa[kind];q.seekPending=true;
+        q.lastMediaTime=null;q.lastRenderedMediaTime=null;
+      });
+      player.addEventListener("seeked",function(){
+        var q=hubBrowserQa[kind];
+        if(q.seekPending){
+          q.seekCompleted++;q.seekResumeAt=q.playedSeconds;q.seekPending=false;
+        }
+        if(!player.paused){
+          hubQaFrameWatch[kind]++;
+          observeHubQaRenderedFrames(kind,player);
+        }
+        refreshHubBrowserQa();
+      });
+      player.addEventListener("pause",function(){
+        hubBrowserQa[kind].lastMediaTime=null;hubQaFrameWatch[kind]++;
+      });
       player.addEventListener("error",function(){
-        hubBrowserQa[kind].errors++;hubBrowserQa[kind].lastMediaTime=null;refreshHubBrowserQa();
+        hubBrowserQa[kind].errors++;
+        hubBrowserQa[kind].lastMediaTime=null;
+        hubQaFrameWatch[kind]++;
+        refreshHubBrowserQa();
       });
       player.addEventListener("waiting",function(){
         hubBrowserQa[kind].buffering++;refreshHubBrowserQa();
@@ -5283,35 +5393,112 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("hub-qa-"+kind+"-"+check).addEventListener("change",refreshHubBrowserQa);
     });
   });
-  $("hub-qa-platform").addEventListener("change",refreshHubBrowserQa);
+  $("hub-qa-platform").addEventListener("change",function(){
+    ["movie","episode"].forEach(resetHubBrowserQa);
+  });
+  function hubQaReportRow(kind){
+    var q=hubBrowserQa[kind],player=hubQaPlayer(kind);
+    return {mediaKind:kind,privateClipSeconds:12,
+      storedManifest:q.identity?{runId:q.identity.runId,
+        expectedBytes:q.identity.expectedBytes}:null,
+      videoFrameObserved:q.videoFrame,videoFrameEvidence:q.frameEvidence,
+      playedSeconds:Math.round(q.playedSeconds*10)/10,
+      browserErrors:q.errors,bufferEvents:q.buffering,
+      seekCompleted:q.seekCompleted,resumedAfterSeek:q.resumedAfterSeek,
+      muted:!!player.muted,volume:Number(player.volume)||0,
+      pictureConfirmedByHuman:$("hub-qa-"+kind+"-picture").checked,
+      audibleAudioConfirmedByHuman:$("hub-qa-"+kind+"-audio").checked,
+      clipPass:hubBrowserQaVerdict(kind),fullLengthPlaybackVerified:false};
+  }
   $("hub-qa-export").addEventListener("click",function(){
     var platform=$("hub-qa-platform").value;
-    if(!["windows_browser","android_tv_browser"].includes(platform)){
+    if(!HUB_QA_PLATFORMS.includes(platform)){
       $("hub-qa-verdict").textContent="اختر Windows أو Android TV قبل تصدير التقرير.";
       return;
     }
-    function row(kind){
-      var q=hubBrowserQa[kind];
-      return {mediaKind:kind,privateClipSeconds:12,
-        videoFrameObserved:q.videoFrame,playedSeconds:Math.round(q.playedSeconds*10)/10,
-        browserErrors:q.errors,bufferEvents:q.buffering,
-        pictureConfirmedByHuman:$("hub-qa-"+kind+"-picture").checked,
-        audibleAudioConfirmedByHuman:$("hub-qa-"+kind+"-audio").checked,
-        clipPass:hubBrowserQaVerdict(kind),fullLengthPlaybackVerified:false};
-    }
-    var report={schema:"blofy.stream.website.private-clip-qa.v1",
-      platform:platform,checkedAt:new Date().toISOString(),
-      movie:row("movie"),episode:row("episode"),
+    var report={schema:HUB_QA_SCHEMA,platform,
+      checkedAt:new Date().toISOString(),
+      movie:hubQaReportRow("movie"),episode:hubQaReportRow("episode"),
       bothClipsPassed:hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode"),
-      serverCopyOrFullMovieProvenByThisReport:false,
+      sourceRightsProvenByThisReport:false,
+      fullFilePlaybackVerified:false,
       otherPlatformProvenByThisReport:false,
-      customerReleaseApproved:false};
-    var url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:"application/json"}));
+      customerReleaseApproved:false,
+      hardwarePlatformAttested:false};
+    var url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],
+      {type:"application/json"}));
     var link=document.createElement("a");
     link.href=url;link.download="blofy-stream-browser-qa-"+platform+".json";
     document.body.append(link);link.click();link.remove();
     setTimeout(function(){URL.revokeObjectURL(url)},1000);
     refreshHubBrowserQa();
+  });
+  // Read-only cross-platform comparison. This is human-submitted
+  // observation data, NOT a cryptographically attested device test.
+  function compareHubQaReports(reports){
+    if(!Array.isArray(reports)||reports.length!==2)
+      return {ok:false,code:"need_two_reports"};
+    var platforms=reports.map(function(report){return report?.platform}).sort();
+    if(platforms.join("|")!==HUB_QA_PLATFORMS.slice().sort().join("|"))
+      return {ok:false,code:"need_windows_and_android_tv"};
+    var now=Date.now();
+    for(var report of reports){
+      var at=Date.parse(report?.checkedAt||"");
+      if(report?.schema!==HUB_QA_SCHEMA||!Number.isFinite(at)||
+         at>now+5*60000||now-at>7*86400000||
+         report.bothClipsPassed!==true||
+         report.customerReleaseApproved!==false||
+         report.sourceRightsProvenByThisReport!==false||
+         report.fullFilePlaybackVerified!==false||
+         report.otherPlatformProvenByThisReport!==false||
+         report.hardwarePlatformAttested!==false)
+        return {ok:false,code:"report_unverified_or_expired"};
+      for(var kind of ["movie","episode"]){
+        var clip=report[kind],manifest=clip?.storedManifest;
+        if(clip?.clipPass!==true||clip?.videoFrameObserved!==true||
+           clip?.playedSeconds<2||clip?.browserErrors!==0||
+           clip?.seekCompleted<1||clip?.resumedAfterSeek!==true||
+           clip?.muted!==false||!(clip.volume>0)||
+           clip?.pictureConfirmedByHuman!==true||
+           clip?.audibleAudioConfirmedByHuman!==true||
+           clip?.fullLengthPlaybackVerified!==false||
+           !HUB_QA_RUN.test(String(manifest?.runId||""))||
+           !Number.isSafeInteger(manifest?.expectedBytes)||
+           manifest.expectedBytes<=0)
+          return {ok:false,code:"incomplete_video_audio_seek_test"};
+      }
+    }
+    for(var kind of ["movie","episode"]){
+      var a=reports[0][kind].storedManifest,b=reports[1][kind].storedManifest;
+      if(a.runId!==b.runId||a.expectedBytes!==b.expectedBytes)
+        return {ok:false,code:"different_stored_media"};
+      var live=hubQaIdentity(kind);
+      if(!live||live.runId!==a.runId||live.expectedBytes!==a.expectedBytes)
+        return {ok:false,code:"stored_media_changed_since_test"};
+    }
+    return {ok:true,code:"same_private_clips_tested_on_both_browsers"};
+  }
+  $("hub-qa-import").addEventListener("change",async function(){
+    var files=Array.from(this.files||[]);
+    this.value="";
+    if(files.length!==2||files.some(function(f){return f.size>65536||f.size<10})){
+      $("hub-qa-pair-status").textContent=
+        "❌ اختر ملفين فقط، لا يتجاوز كل ملف 64 KB.";
+      return;
+    }
+    try{
+      var reports=await Promise.all(files.map(async function(file){
+        return JSON.parse(await file.text());
+      }));
+      var check=compareHubQaReports(reports);
+      $("hub-qa-pair-status").textContent=check.ok?
+        "✅ تطابق تقريرا عينتي الفيلم والحلقة على متصفحي Windows وAndroid TV، مع تأكيد بشري لكل جهاز. ما زال تشغيل الملف الكامل غير مثبت، ولا توجد موافقة نشر.":
+        "❌ لا يمكن جمع التقريرين: "+check.code+
+        ". صحّح الاختبار أو أعده على الجهازين.";
+    }catch{
+      $("hub-qa-pair-status").textContent=
+        "❌ تعذر قراءة التقريرين. استخدم ملفات JSON الأصلية من لوحة الاختبار.";
+    }
   });
   refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
