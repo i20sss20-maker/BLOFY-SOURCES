@@ -810,6 +810,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <input type="range" id="hub-timeline-seek" min="0" max="0" value="0" step="1" disabled style="width:100%" />
 <div class="muted" id="hub-timeline-clock">00:00 / --:--</div>
 <p id="hub-timeline-status" class="muted" role="status" aria-live="polite">لم يبدأ تشغيل متسلسل. يلزم اعتماد المالك لملف خاص واحد مكتمل، وتفعيل فحص Windows/Android TV قبل نشره.</p>
+<div style="padding:12px;margin-top:12px;border:1px solid #315875;border-radius:10px">
+  <strong>📊 متابعة تشغيل النوافذ وحالات التوقف</strong>
+  <p id="hub-timeline-qos" class="muted" aria-live="polite">لم تبدأ جلسة تشغيل بعد. إحصائيات المتصفح لا تثبت جودة الصوت أو مشاهدة الفيلم كاملًا.</p>
+  <label style="display:block"><input id="hub-timeline-picture" type="checkbox"> تأكدت بنفسي من ظهور صورة متحركة</label>
+  <label style="display:block"><input id="hub-timeline-audio" type="checkbox"> تأكدت بنفسي من سماع الصوت</label>
+  <div class="actions" style="margin-top:10px">
+    <button id="hub-timeline-retry" type="button" class="btn secondary" disabled>↻ إعادة محاولة آخر مقطع</button>
+    <button id="hub-timeline-export" type="button" class="btn secondary" disabled>📋 تنزيل تقرير تجربة التشغيل</button>
+  </div>
+  <p class="muted">التقرير محلي على جهاز المدير فقط، ولا يتضمن رابط التخزين أو بيانات مصدر Xtream، ولا يُعد موافقة لنشر المحتوى للمشتركين.</p>
+</div>
 </div>
 </div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
@@ -5689,8 +5700,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   // 30-second H264/AAC MP4 windows. Not a subscriber player nor HLS.
   var siteTimeline={
     meta:null,kind:null,runId:null,segment:-1,generation:0,playing:false,
-    currentUrl:null,loadController:null,prefetch:null
+    currentUrl:null,loadController:null,prefetch:null,
+    lastFailedSegment:null,lastObservedTime:null
   };
+  var siteTimelineEvidence=null;
   var siteTimelineVideo=$("hub-timeline-player");
   var siteTimelineSlider=$("hub-timeline-seek");
   function siteClock(value){
@@ -5703,6 +5716,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   function siteTimelineMsg(value){
     $("hub-timeline-status").textContent=value;
   }
+  function siteTimelineQoS(){
+    var e=siteTimelineEvidence;
+    $("hub-timeline-export").disabled=!e;
+    $("hub-timeline-retry").disabled=!siteTimeline.meta||
+      siteTimeline.lastFailedSegment===null;
+    $("hub-timeline-qos").textContent=!e?
+      "لم تبدأ جلسة مشاهدة. نتائج الجهاز تحتاج اختبارًا فعليًا.":
+      "نوافذ حُملت: "+e.windowsLoaded+"/"+e.windowsRequested+
+      " · انتقالات: "+e.transitionCount+
+      " · مهلة انتظار التحويل: "+e.busyResponses+
+      " · إعادات اتصال: "+e.retryCount+
+      " · توقف/انتظار: "+e.bufferWaitEvents+
+      " · ثوانٍ لوحظت متفرقة: "+e.seenSeconds.size+
+      " · زمن جلب النوافذ: "+Math.round(e.totalLoadMs/1000)+" ث.";
+  }
   function siteTimelineUpdateControls(){
     var active=!!siteTimeline.meta;
     siteTimelineSlider.disabled=!active;
@@ -5711,6 +5739,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     $("hub-timeline-next").disabled=!active||
       siteTimeline.segment>=siteTimeline.meta.segmentCount-1;
     $("hub-timeline-media").disabled=active;
+    siteTimelineQoS();
   }
   function siteTimelineRefreshClock(){
     var meta=siteTimeline.meta;
@@ -5734,6 +5763,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }
   }
   function siteTimelineStop(){
+    if(siteTimelineEvidence&&!siteTimelineEvidence.stoppedAt)
+      siteTimelineEvidence.stoppedAt=new Date().toISOString();
     siteTimeline.generation++;
     siteTimeline.playing=false;
     siteTimeline.loadController?.abort();
@@ -5747,6 +5778,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     siteTimeline.currentUrl=null;
     siteTimeline.meta=null;siteTimeline.kind=null;siteTimeline.runId=null;
     siteTimeline.segment=-1;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
     siteTimelineSlider.max="0";siteTimelineSlider.value="0";
     siteTimelineUpdateControls();
     siteTimelineRefreshClock();
@@ -5756,16 +5789,60 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       siteTimeline.kind+"/"+encodeURIComponent(siteTimeline.runId)+
       "/clip/"+index+".mp4";
   }
+  async function siteTimelineDelay(ms,signal){
+    if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+    return new Promise(function(resolve,reject){
+      var timer=null;
+      var onAbort=function(){
+        clearTimeout(timer);signal?.removeEventListener("abort",onAbort);
+        reject(Error("تم إلغاء الطلب."));
+      };
+      timer=setTimeout(function(){
+        signal?.removeEventListener("abort",onAbort);resolve();
+      },ms);
+      signal?.addEventListener("abort",onAbort,{once:true});
+    });
+  }
   async function siteTimelineFetch(index,signal){
     var meta=siteTimeline.meta;
     if(!meta||!Number.isSafeInteger(index)||index<0||
       index>=meta.segmentCount)throw Error("رقم مقطع غير صالح.");
-    var response=await fetch(siteTimelinePath(index),{
-      method:"GET",credentials:"same-origin",cache:"no-store",signal});
-    if(!response.ok){
-      if(response.status===429)throw Error("الخادم مشغول بتحويل مقطع آخر؛ أعد التشغيل.");
-      if(response.status===404)throw Error("فحص التشغيل الخاص غير متاح الآن.");
-      throw Error("تعذر تحويل المقطع "+(index+1)+" (HTTP "+response.status+").");
+    var response=null;
+    for(var attempt=0;attempt<8;attempt++){
+      if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+      try{
+        response=await fetch(siteTimelinePath(index),{
+          method:"GET",credentials:"same-origin",cache:"no-store",signal});
+      }catch(error){
+        if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+        if(attempt>=2)throw Error("تعذر الاتصال بالخادم. أعد محاولة النافذة.");
+        if(siteTimelineEvidence)siteTimelineEvidence.retryCount++;
+        await siteTimelineDelay(1000*(attempt+1),signal);
+        continue;
+      }
+      if(response.status===429&&attempt<7){
+        if(siteTimelineEvidence){
+          siteTimelineEvidence.busyResponses++;
+          siteTimelineEvidence.retryCount++;
+        }
+        await siteTimelineDelay(Math.min(7000,1100*(attempt+1)),signal);
+        continue;
+      }
+      if([502,503,504].includes(response.status)&&attempt<2){
+        if(siteTimelineEvidence)siteTimelineEvidence.retryCount++;
+        await siteTimelineDelay(1600*(attempt+1),signal);
+        continue;
+      }
+      break;
+    }
+    siteTimelineQoS();
+    if(!response?.ok){
+      if(response?.status===429)
+        throw Error("خادم التحويل مشغول بعد محاولات محدودة؛ أعد المحاولة يدويًا.");
+      if(response?.status===404)
+        throw Error("فحص التشغيل الخاص غير متاح الآن.");
+      throw Error("تعذر تحويل المقطع "+(index+1)+
+        " (HTTP "+(response?.status||"network")+").");
     }
     var size=Number(response.headers.get("content-length"));
     if(response.headers.get("content-type")!=="video/mp4"||
@@ -5776,7 +5853,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
        !Number.isSafeInteger(size)||size<2048||size>18*1024*1024)
       throw Error("الاستجابة لا تثبت أنها مقطع صحيح من تخزين BLOFY.");
     var bytes=await response.blob();
-    if(bytes.size!==size)throw Error("حجم مقطع الفيديو غير صحيح.");
+    if(bytes.size!==size||
+       await bytes.slice(4,8).text()!=="ftyp")
+      throw Error("محتوى مقطع MP4 أو حجمه غير صحيح.");
     return URL.createObjectURL(bytes);
   }
   function siteTimelineWarmNext(){
@@ -5791,6 +5870,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var meta=siteTimeline.meta;
     if(!meta||index<0||index>=meta.segmentCount)return;
     var generation=++siteTimeline.generation;
+    var beganAt=Date.now();
+    if(siteTimelineEvidence)siteTimelineEvidence.windowsRequested++;
+    siteTimeline.playing=true;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
     var ctl=new AbortController(),pre=siteTimeline.prefetch;
     siteTimeline.loadController?.abort();
     siteTimeline.loadController=ctl;
@@ -5812,11 +5896,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     try{
       var url=pre?await pre.promise:
         await siteTimelineFetch(index,ctl.signal);
+      // A failed speculative prefetch must never permanently block the
+      // actual next window: retry it as an explicit, cancelable request.
+      if(!url&&pre)url=await siteTimelineFetch(index,ctl.signal);
       if(!url)throw Error("لم تنجح معاينة النافذة التالية.");
       if(siteTimeline.generation!==generation||!siteTimeline.meta){
         URL.revokeObjectURL(url);return;
       }
       siteTimeline.currentUrl=url;
+      if(siteTimelineEvidence){
+        siteTimelineEvidence.windowsLoaded++;
+        siteTimelineEvidence.visitedWindows.add(index);
+        siteTimelineEvidence.totalLoadMs+=Date.now()-beganAt;
+        if(index>0)siteTimelineEvidence.transitionCount++;
+        siteTimelineQoS();
+      }
       siteTimelineVideo.src=url;
       siteTimelineVideo.style.display="block";
       siteTimelineVideo.load();
@@ -5837,9 +5931,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           siteTimelineMsg("المقطع جاهز. اضغط تشغيل داخل الفيديو إذا منع المتصفح التشغيل التلقائي.");
       }
     }catch(error){
-      if(siteTimeline.generation===generation)
+      if(siteTimeline.generation===generation){
+        siteTimeline.playing=false;
+        siteTimeline.lastFailedSegment=index;
+        if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+        siteTimelineUpdateControls();
         siteTimelineMsg("❌ "+String(error.message||"فشل تشغيل المقطع").slice(0,175)+
-          " لم يتم اعتماد تشغيل الملف كاملًا.");
+          " جرّب زر إعادة محاولة النافذة. لم يتم اعتماد تشغيل الملف كاملًا.");
+      }
     }
   }
   $("hub-timeline-start").addEventListener("click",async function(){
@@ -5871,6 +5970,20 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         throw Error("لم تتحقق هوية الملف أو مدته.");
       siteTimeline.kind=kind;siteTimeline.runId=identity.runId;
       siteTimeline.meta=meta;siteTimeline.playing=true;
+      siteTimelineEvidence={
+        schema:"blofy.stream.owner-timeline-qa.v1",
+        kind:kind,runId:identity.runId,
+        expectedBytes:identity.expectedBytes,
+        startedAt:new Date().toISOString(),stoppedAt:null,
+        durationSeconds:meta.durationSeconds,
+        segmentCount:meta.segmentCount,segmentSeconds:30,
+        windowsRequested:0,windowsLoaded:0,visitedWindows:new Set(),
+        seenSeconds:new Set(),totalLoadMs:0,transitionCount:0,
+        busyResponses:0,retryCount:0,failedWindows:0,
+        bufferWaitEvents:0,reachedLastWindow:false
+      };
+      $("hub-timeline-picture").checked=false;
+      $("hub-timeline-audio").checked=false;
       siteTimelineSlider.max=String(Math.floor(meta.durationSeconds));
       siteTimelineUpdateControls();
       await siteTimelineLoad(0,0);
@@ -5905,7 +6018,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   siteTimelineVideo.addEventListener("timeupdate",function(){
     siteTimelineRefreshClock();
-    if(siteTimeline.meta&&!this.paused&&this.currentTime>3)
+    var e=siteTimelineEvidence,local=Number(this.currentTime);
+    if(e&&siteTimeline.meta&&siteTimeline.currentUrl&&!this.paused&&
+       Number.isFinite(local)&&local>=0){
+      var last=siteTimeline.lastObservedTime;
+      if(last!==null&&local>last&&local-last<=1.8){
+        var upper=Math.min(Math.floor(local),
+          siteTimeline.meta.segmentSeconds-1);
+        for(var second=Math.floor(last);second<=upper;second++)
+          if(second>=0&&second<siteTimeline.meta.segmentSeconds)
+            e.seenSeconds.add(siteTimeline.segment*
+              siteTimeline.meta.segmentSeconds+second);
+      }
+      siteTimeline.lastObservedTime=local;
+      siteTimelineQoS();
+    }
+    if(siteTimeline.meta&&!this.paused&&this.currentTime>1)
       siteTimelineWarmNext();
   });
   siteTimelineVideo.addEventListener("ended",function(){
@@ -5914,14 +6042,77 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       void siteTimelineLoad(siteTimeline.segment+1,0);
     else{
       siteTimeline.playing=false;
+      if(siteTimelineEvidence)siteTimelineEvidence.reachedLastWindow=true;
+      siteTimelineQoS();
       siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "+
         "يحتاج هذا الاختبار إلى مشاهدة بشرية للتحقق من الصوت والصورة والجودة.");
     }
   });
   siteTimelineVideo.addEventListener("error",function(){
-    if(siteTimeline.meta&&siteTimeline.playing)
+    if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+    if(siteTimeline.meta&&siteTimeline.playing){
+      siteTimeline.lastFailedSegment=siteTimeline.segment;
+      siteTimeline.playing=false;
+      siteTimelineUpdateControls();
       siteTimelineMsg("❌ تعذر فك مقطع MP4 في المتصفح. "+
-        "قد تكون هناك مشكلة توافق أو انقطاع في التخزين.");
+        "اضغط إعادة المحاولة أو افحص توافق الصوت والصورة.");
+    }
+  });
+  ["waiting","stalled"].forEach(function(name){
+    siteTimelineVideo.addEventListener(name,function(){
+      if(siteTimelineEvidence&&siteTimeline.meta){
+        siteTimelineEvidence.bufferWaitEvents++;
+        siteTimelineQoS();
+      }
+    });
+  });
+  $("hub-timeline-retry").addEventListener("click",function(){
+    if(!siteTimeline.meta||siteTimeline.lastFailedSegment===null)return;
+    void siteTimelineLoad(siteTimeline.lastFailedSegment,0);
+  });
+  $("hub-timeline-export").addEventListener("click",function(){
+    var e=siteTimelineEvidence;
+    if(!e)return;
+    var data={
+      schema:e.schema,
+      mediaKind:e.kind,
+      storedManifest:{runId:e.runId,expectedBytes:e.expectedBytes},
+      checkedAt:new Date().toISOString(),
+      startedAt:e.startedAt,
+      stoppedAt:e.stoppedAt,
+      durationSeconds:e.durationSeconds,
+      segmentSeconds:e.segmentSeconds,
+      segmentCount:e.segmentCount,
+      visitedWindows:e.visitedWindows.size,
+      windowsRequested:e.windowsRequested,
+      windowsLoaded:e.windowsLoaded,
+      observedDistinctSeconds:e.seenSeconds.size,
+      totalLoadMilliseconds:e.totalLoadMs,
+      transitionCount:e.transitionCount,
+      busyResponses:e.busyResponses,
+      retryCount:e.retryCount,
+      failedWindows:e.failedWindows,
+      bufferWaitEvents:e.bufferWaitEvents,
+      reachedLastWindow:e.reachedLastWindow,
+      pictureConfirmedByHuman:$("hub-timeline-picture").checked===true,
+      audibleAudioConfirmedByHuman:$("hub-timeline-audio").checked===true,
+      observedProof:"browser_time_updates_only",
+      physicalDeviceAttested:false,
+      sourceRightsProvenByThisReport:false,
+      fullFilePlaybackVerified:false,
+      customerReleaseApproved:false
+    };
+    var blob=new Blob([JSON.stringify(data,null,2)],{
+      type:"application/json"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="blofy-stream-timeline-"+e.kind+"-"+
+      new Date().toISOString().replace(/[:.]/g,"-")+".json";
+    document.body.append(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    siteTimelineMsg("تم تنزيل تقرير محلي لا يحتوي بيانات الاتصال. "+
+      "ما زال اعتماد مشاهدة الملف كاملًا وفحص الصوت الحقيقي مطلوبَين.");
   });
   // Isolated QA unit harness uses minimal mock elements without media APIs.
   if(typeof siteTimelineVideo.pause==='function')siteTimelineStop();
