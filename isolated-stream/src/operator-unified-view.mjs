@@ -905,9 +905,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted">هذه قائمة العناصر المفهرسة في PostgreSQL. حالة «✅ نسخة مكتملة في سجل SHA» تعني تطابق سجل القطع والبصمة والبايتات في قاعدة بيانات Content Hub <strong>ولا تعني التحقق المباشر من وجود جميع القطع في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط. لا يجري الفحص أي نقل أو طلب فيديو من المصدر.</p>
   <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
   <div class="tablewrap"><table>
-   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th></tr></thead>
+   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th><th>فحص S3</th></tr></thead>
    <tbody id="library-mirror-results"></tbody>
   </table></div>
+  <div id="library-mirror-head-panel" style="border:1px solid #296c6e;border-radius:12px;padding:12px;margin:12px 0">
+    <strong>🔍 اختبار فعلي لوجود أجزاء الملف في S3</strong>
+    <p class="muted">بعد ظهور «نسخة مكتملة في سجل SHA» اختر فحص S3 من صف الفيلم أو الحلقة. يفحص السيرفر حتى 8 أجزاء بطلبات HEAD فقط، ويتحقق من وجودها وأحجامها دون تنزيل الفيديو أو قراءة Xtream. فحص الحجم <strong>لا يعيد حساب بصمة SHA-256</strong>، ولا يثبت أجزاء لم تُفحص.</p>
+    <button type="button" class="btn secondary" id="library-head-next" disabled>فحص 8 أجزاء تالية من نفس الملف</button>
+    <p id="library-head-status" class="muted" role="status" aria-live="polite">لم يبدأ فحص S3 فعلي. النتائج في الجدول مستمدة من قاعدة بيانات النسخ فقط.</p>
+  </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
 </div>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
@@ -3553,6 +3559,91 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   // Server pins source to approved saleh; no browser-controlled source URL.
   var mirrorCursor="",mirrorBusy=false,mirrorPage=0;
+  var mirrorHeadBusy=false,mirrorHeadSelection=null;
+  function resetPhysicalHeadSession(message){
+    mirrorHeadSelection=null;
+    $("library-head-next").disabled=true;
+    $("library-head-status").textContent=message||
+      "لم يبدأ فحص أجزاء S3. البيانات المعروضة من PostgreSQL فقط.";
+  }
+  async function inspectPhysicalHead(kind,id,start){
+    if(mirrorHeadBusy)return;
+    if(!["movie","episode"].includes(kind)||
+       (kind==="movie"?!/^[A-Za-z0-9._:-]{1,128}$/.test(id):
+         !/^[1-9][0-9]{0,9}$/.test(id))||
+       !Number.isSafeInteger(start)||start<0||start>504||start%8!==0)return;
+    var panel=$("library-head-status"),
+      next=$("library-head-next");
+    if(start===0){
+      mirrorHeadSelection={kind:kind,id:id,nextStart:null,total:0,
+        matched:0,failures:0,sha:null,seen:0};
+    }else if(!mirrorHeadSelection||
+      mirrorHeadSelection.kind!==kind||
+      mirrorHeadSelection.id!==id||
+      mirrorHeadSelection.nextStart!==start)return;
+    mirrorHeadBusy=true;next.disabled=true;
+    panel.textContent="جار فحص وجود وحجم حتى 8 أجزاء فعلية في S3 للملف "+
+      id+"؛ دون تنزيل فيديو أو الاتصال بالمصدر.";
+    try{
+      var info=await api("ops/mirror-physical-head?"+
+       new URLSearchParams({type:kind,id:id,start:String(start)}));
+      if(info?.ok!==true||info.kind!==kind||info.id!==id||
+        info.partStart!==start||
+        info.physicalProof!=="HEAD_object_size_only"||
+        info.contentSha256Recomputed!==false||
+        info.mediaBytesTransferred!==0||info.providerRequests!==0||
+        info.customerCutover!==false||
+        !/^[a-f0-9]{64}$/.test(String(info.manifestSha256||""))||
+        !Number.isInteger(info.totalParts)||info.totalParts<1||
+        info.totalParts>512||!Number.isInteger(info.checkedParts)||
+        info.checkedParts<1||info.checkedParts>8||
+        !Number.isInteger(info.matchedParts)||!Number.isInteger(info.failures)||
+        info.matchedParts+info.failures!==info.checkedParts)
+        throw Error("الاستجابة لا تثبت إجراء HEAD محدود على تخزين BLOFY.");
+      var s=mirrorHeadSelection;
+      if(!s||s.id!==id||s.kind!==kind)return;
+      if(s.sha&&s.sha!==info.manifestSha256)
+        throw Error("تغيرت بصمة الملف المحفوظ أثناء الفحص؛ أعد الاختبار من البداية.");
+      s.sha=info.manifestSha256;
+      s.total=info.totalParts;
+      if(s.nextStart===start||start===0){
+        // A retried partial 8-part window must not be counted as
+        // new file coverage until this entire window was inspected.
+        if(info.checkedParts===Math.min(8,s.total-start)){
+          s.seen=start+info.checkedParts;
+          s.matched+=info.matchedParts;
+          s.failures+=info.failures;
+        }
+      }
+      s.nextStart=info.nextPartStart;
+      next.disabled=!(Number.isInteger(s.nextStart)&&
+        s.nextStart>=0&&s.nextStart<=504);
+      var complete=s.seen===s.total&&s.failures===0&&
+        info.nextPartStart===null;
+      panel.textContent="نتيجة S3 للملف "+id+
+       ": تم فحص "+info.checkedParts+" أجزاء بهذه الدفعة، "+
+       info.matchedParts+" مطابقة الحجم، "+info.failures+" بها مشكلة. "+
+       "الموضع المدقق: "+s.seen+" من أصل "+s.total+" جزء. "+
+       (complete?"✅ راجعنا وجود وأحجام كل الأجزاء بطلبات HEAD عبر هذه الجلسة. ":
+        "فحص الأجزاء المتبقية لم يكتمل بعد. ")+
+       "⚠️ لم نعد حساب SHA-256 من بايتات S3، ولا نعتبر هذا اختبار تشغيل فيديو.";
+    }catch(error){
+      panel.textContent="❌ تعذر فحص S3 الحقيقي: "+
+       String(error?.message||"خطأ اتصال").slice(0,175)+
+       ". لن نعلن أن القطع موجودة دون إثبات.";
+    }finally{
+      mirrorHeadBusy=false;
+      if(mirrorHeadSelection&&
+         Number.isInteger(mirrorHeadSelection.nextStart)&&
+         mirrorHeadSelection.nextStart<=504)
+        next.disabled=false;
+    }
+  }
+  $("library-head-next").addEventListener("click",function(){
+    var s=mirrorHeadSelection;
+    if(!s||!Number.isInteger(s.nextStart))return;
+    void inspectPhysicalHead(s.kind,s.id,s.nextStart);
+  });
   async function refreshMirrorInventory(next){
     if(mirrorBusy)return;
     var type=$("library-mirror-type").value,
@@ -3578,7 +3669,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         response.customerCutover!==false)
         throw Error("فشل التحقق من نطاق جرد الفهرس الآمن.");
       var items=Array.isArray(response.items)?response.items.slice(0,50):[];
-      if(!next){body.replaceChildren();mirrorPage=0}
+      if(!next){
+        body.replaceChildren();mirrorPage=0;
+        resetPhysicalHeadSession("قائمة جديدة؛ اختر فحص S3 من صف له سجل نسخ مكتمل.");
+      }
       mirrorPage+=1;
       items.forEach(function(item){
         var row=document.createElement("tr");
@@ -3600,11 +3694,25 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
            var cell=document.createElement("td");
            cell.textContent=value;row.appendChild(cell);
          });
+        var headCell=document.createElement("td");
+        if((type==="movie"||type==="episode")&&
+           item.copyStatus==="verified_manifest"){
+          var button=document.createElement("button");
+          button.type="button";button.className="btn secondary";
+          button.textContent="🔍 فحص أول 8 أجزاء في S3";
+          button.addEventListener("click",function(){
+            void inspectPhysicalHead(type,String(item.id||""),0);
+          });
+          headCell.appendChild(button);
+        }else{
+          headCell.textContent="يلزم سجل نسخة مكتملة أولًا";
+        }
+        row.appendChild(headCell);
         body.appendChild(row);
       });
       if(!items.length&&mirrorPage===1){
         var row=document.createElement("tr"),cell=document.createElement("td");
-        cell.colSpan=4;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
+        cell.colSpan=5;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
         row.appendChild(cell);body.appendChild(row);
       }
       mirrorCursor=response.hasMore===true?String(response.nextCursor||""):"";
@@ -3639,6 +3747,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     void refreshMirrorInventory(true);
   });
   $("library-mirror-type").addEventListener("change",function(){
+    resetPhysicalHeadSession("تم تغيير نوع المحتوى؛ يلزم تحديد ملف مكتمل جديد.");
     mirrorCursor="";mirrorPage=0;
     $("library-mirror-results").replaceChildren();
     $("library-mirror-next").disabled=true;
