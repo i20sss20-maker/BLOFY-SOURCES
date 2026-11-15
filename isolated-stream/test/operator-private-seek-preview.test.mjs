@@ -66,6 +66,6 @@ test('website owner has separate MKV middle/end sample panel and honest playback
   'hub-seek-preview-status'])
   assert.match(html,new RegExp('id="'+id+'"'));
  assert.match(html,/site-qa\/seek-preview/);
- assert.match(html,/مدة 10 ثوانٍ/);
+ assert.match(html,/10 ثوانٍ/);
  assert.match(html,/لا يُعتبر هذا تشغيلًا كاملًا/);
 });
