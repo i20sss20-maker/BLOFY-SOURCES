@@ -258,6 +258,24 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // Exact website owner original-file Range path, behind HTTPS Portal bridge.
+  // No source URL, S3 bucket details, customer routing, or mutable actions.
+  async function contentHubOriginalRangeRaw({mediaKind,runId,range='',method='GET',signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!['movie','episode'].includes(mediaKind)||
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||
+       !['GET','HEAD'].includes(method)||
+       typeof range!=='string'||range.length>90)
+      throw Error('content_hub_site_qa_selection_invalid');
+    const route=ORIGIN+ROOT+'/content-hub/site-qa/files/'+mediaKind+'/'+runId;
+    return fetchImpl(route,{
+      method,redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(55000)]):
+        AbortSignal.timeout(55000),
+      headers:{authorization:'Bearer '+secret,accept:'*/*',
+        ...(range?{range}:{})}
+    });
+  }
   // Native season controls for /operator#library. All calls stay on the
   // signed STREAM -> Portal bridge (the browser never touches the old site).
   const SEASONS=ROOT+'/content-hub/seasons/';
@@ -448,6 +466,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
+    contentHubOriginalRangeRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
     contentHubSeasonQueue,contentHubSeasonQueuePage,
