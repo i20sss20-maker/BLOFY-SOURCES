@@ -810,6 +810,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <input type="range" id="hub-timeline-seek" min="0" max="0" value="0" step="1" disabled style="width:100%" />
 <div class="muted" id="hub-timeline-clock">00:00 / --:--</div>
 <p id="hub-timeline-status" class="muted" role="status" aria-live="polite">لم يبدأ تشغيل متسلسل. يلزم اعتماد المالك لملف خاص واحد مكتمل، وتفعيل فحص Windows/Android TV قبل نشره.</p>
+<div style="padding:12px;margin-top:12px;border:1px solid #315875;border-radius:10px">
+  <strong>📊 متابعة تشغيل النوافذ وحالات التوقف</strong>
+  <p id="hub-timeline-qos" class="muted" aria-live="polite">لم تبدأ جلسة تشغيل بعد. إحصائيات المتصفح لا تثبت جودة الصوت أو مشاهدة الفيلم كاملًا.</p>
+  <label style="display:block"><input id="hub-timeline-picture" type="checkbox"> تأكدت بنفسي من ظهور صورة متحركة</label>
+  <label style="display:block"><input id="hub-timeline-audio" type="checkbox"> تأكدت بنفسي من سماع الصوت</label>
+  <div class="actions" style="margin-top:10px">
+    <button id="hub-timeline-retry" type="button" class="btn secondary" disabled>↻ إعادة محاولة آخر مقطع</button>
+    <button id="hub-timeline-export" type="button" class="btn secondary" disabled>📋 تنزيل تقرير تجربة التشغيل</button>
+  </div>
+  <p class="muted">التقرير محلي على جهاز المدير فقط، ولا يتضمن رابط التخزين أو بيانات مصدر Xtream، ولا يُعد موافقة لنشر المحتوى للمشتركين.</p>
+</div>
 </div>
 </div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
