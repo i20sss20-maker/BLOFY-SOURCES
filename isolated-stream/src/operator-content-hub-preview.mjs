@@ -2,7 +2,7 @@
 // STREAM /operator console. No source/media URLs or bearer tokens in HTML.
 import {Readable,Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
-const MAX=12*1024*1024;
+const MAX=12*1024*1024,MAX_TIMELINE=18*1024*1024;
 function failure(res,status,code){
  if(res.headersSent){if(!res.destroyed)res.destroy();return}
  const data=Buffer.from(JSON.stringify({ok:false,code}));
@@ -12,11 +12,13 @@ function failure(res,status,code){
  res.end(data);
 }
 export async function streamOperatorOwnerPreview({req,res,getUpstream,
-  seekPosition=null,timeoutMs=90000}={}){
+  seekPosition=null,timeoutMs=90000,maxBytes=MAX}={}){
+ if(!Number.isSafeInteger(maxBytes)||maxBytes<MAX||maxBytes>MAX_TIMELINE)
+  return failure(res,400,'owner_preview_max_bytes_invalid');
  if(seekPosition!==null&&
     !['start','middle','near_end'].includes(seekPosition))
   return failure(res,400,'owner_preview_seek_position_invalid');
- if(!Number.isSafeInteger(timeoutMs)||timeoutMs<10000||timeoutMs>120000)
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<10000||timeoutMs>158000)
   return failure(res,400,'owner_preview_timeout_invalid');
  if(req.method!=='GET')
   return failure(res,405,'owner_preview_method_denied');
@@ -35,7 +37,7 @@ export async function streamOperatorOwnerPreview({req,res,getUpstream,
    return failure(res,upstream.status===409?409:503,
       'owner_preview_private_media_unavailable');
   const n=Number(upstream.headers.get('content-length'));
-  if(!Number.isSafeInteger(n)||n<2048||n>MAX)
+  if(!Number.isSafeInteger(n)||n<2048||n>maxBytes)
    return failure(res,503,'owner_preview_payload_invalid');
   const reportedPosition=seekPosition===null?null:
     upstream.headers.get('x-blofy-clip-position');
