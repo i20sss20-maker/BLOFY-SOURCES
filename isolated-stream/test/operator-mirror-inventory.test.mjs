@@ -11,7 +11,7 @@ test('operator renders honest Xtream catalog-to-S3 inventory with no transfer cl
   'library-mirror-refresh','library-mirror-next','library-mirror-results',
   'library-mirror-status','library-mirror-note'])
   assert.match(html,new RegExp('id="'+id+'"'));
- assert.match(html,/مطابقة الملف مع S3/);
+ assert.match(html,/وجود جميع القطع في S3/);
  assert.match(html,/مفهرسة جزئيًا فقط/);
  assert.match(html,/نقل الملفات: صفر/);
  assert.match(html,/mediaBytesTransferred!==0/);
