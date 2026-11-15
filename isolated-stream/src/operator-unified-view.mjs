@@ -5221,13 +5221,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   // Website-only, owner-local playback evidence: never claims a 12s clip
   // proves full-file playback or authorizes a subscriber release.
   var hubBrowserQa={
-    movie:{playedSeconds:0,videoFrame:false,errors:0,buffering:0},
-    episode:{playedSeconds:0,videoFrame:false,errors:0,buffering:0}
+    movie:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0},
+    episode:{playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0}
   };
   function hubBrowserQaVerdict(kind){
     var q=hubBrowserQa[kind],picture=$("hub-qa-"+kind+"-picture").checked,
       audio=$("hub-qa-"+kind+"-audio").checked;
-    return q.videoFrame&&q.playedSeconds>=2&&q.errors===0&&picture&&audio;
+    var player=$(kind==="movie"?"content-hub-preview-player":"content-hub-episode-preview-player");
+    return q.videoFrame&&q.playedSeconds>=2&&q.errors===0&&picture&&audio&&
+      !player.muted&&Number(player.volume)>0;
   }
   function refreshHubBrowserQa(){
     ["movie","episode"].forEach(function(kind){
@@ -5245,7 +5247,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "لم يكتمل إثبات تشغيل عينتي الفيلم والحلقة على الجهاز المحدد. لا توجد موافقة نشر.";
   }
   function resetHubBrowserQa(kind){
-    hubBrowserQa[kind]={playedSeconds:0,videoFrame:false,errors:0,buffering:0};
+    hubBrowserQa[kind]={playedSeconds:0,lastMediaTime:null,videoFrame:false,errors:0,buffering:0};
     $("hub-qa-"+kind+"-picture").checked=false;
     $("hub-qa-"+kind+"-audio").checked=false;
     refreshHubBrowserQa();
@@ -5258,12 +5260,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         if(!player.paused&&!player.seeking&&player.readyState>=2&&
           player.videoWidth>0&&player.videoHeight>0){
           q.videoFrame=true;
-          q.playedSeconds=Math.max(q.playedSeconds,Number(player.currentTime)||0);
-        }
+          var now=Number(player.currentTime)||0;
+          if(q.lastMediaTime!==null){
+            var delta=now-q.lastMediaTime;
+            if(delta>0&&delta<=1.5)q.playedSeconds+=delta;
+          }
+          q.lastMediaTime=now;
+        }else q.lastMediaTime=null;
         refreshHubBrowserQa();
       });
+      player.addEventListener("seeking",function(){hubBrowserQa[kind].lastMediaTime=null});
+      player.addEventListener("pause",function(){hubBrowserQa[kind].lastMediaTime=null});
       player.addEventListener("error",function(){
-        hubBrowserQa[kind].errors++;refreshHubBrowserQa();
+        hubBrowserQa[kind].errors++;hubBrowserQa[kind].lastMediaTime=null;refreshHubBrowserQa();
       });
       player.addEventListener("waiting",function(){
         hubBrowserQa[kind].buffering++;refreshHubBrowserQa();
