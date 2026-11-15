@@ -5700,8 +5700,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   // 30-second H264/AAC MP4 windows. Not a subscriber player nor HLS.
   var siteTimeline={
     meta:null,kind:null,runId:null,segment:-1,generation:0,playing:false,
-    currentUrl:null,loadController:null,prefetch:null
+    currentUrl:null,loadController:null,prefetch:null,
+    lastFailedSegment:null,lastObservedTime:null
   };
+  var siteTimelineEvidence=null;
   var siteTimelineVideo=$("hub-timeline-player");
   var siteTimelineSlider=$("hub-timeline-seek");
   function siteClock(value){
@@ -5714,6 +5716,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   function siteTimelineMsg(value){
     $("hub-timeline-status").textContent=value;
   }
+  function siteTimelineQoS(){
+    var e=siteTimelineEvidence;
+    $("hub-timeline-export").disabled=!e;
+    $("hub-timeline-retry").disabled=!siteTimeline.meta||
+      siteTimeline.lastFailedSegment===null;
+    $("hub-timeline-qos").textContent=!e?
+      "لم تبدأ جلسة مشاهدة. نتائج الجهاز تحتاج اختبارًا فعليًا.":
+      "نوافذ حُملت: "+e.windowsLoaded+"/"+e.windowsRequested+
+      " · انتقالات: "+e.transitionCount+
+      " · مهلة انتظار التحويل: "+e.busyResponses+
+      " · إعادات اتصال: "+e.retryCount+
+      " · توقف/انتظار: "+e.bufferWaitEvents+
+      " · ثوانٍ لوحظت متفرقة: "+e.seenSeconds.size+
+      " · زمن جلب النوافذ: "+Math.round(e.totalLoadMs/1000)+" ث.";
+  }
   function siteTimelineUpdateControls(){
     var active=!!siteTimeline.meta;
     siteTimelineSlider.disabled=!active;
@@ -5722,6 +5739,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     $("hub-timeline-next").disabled=!active||
       siteTimeline.segment>=siteTimeline.meta.segmentCount-1;
     $("hub-timeline-media").disabled=active;
+    siteTimelineQoS();
   }
   function siteTimelineRefreshClock(){
     var meta=siteTimeline.meta;
@@ -5745,6 +5763,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }
   }
   function siteTimelineStop(){
+    if(siteTimelineEvidence&&!siteTimelineEvidence.stoppedAt)
+      siteTimelineEvidence.stoppedAt=new Date().toISOString();
     siteTimeline.generation++;
     siteTimeline.playing=false;
     siteTimeline.loadController?.abort();
@@ -5758,6 +5778,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     siteTimeline.currentUrl=null;
     siteTimeline.meta=null;siteTimeline.kind=null;siteTimeline.runId=null;
     siteTimeline.segment=-1;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
     siteTimelineSlider.max="0";siteTimelineSlider.value="0";
     siteTimelineUpdateControls();
     siteTimelineRefreshClock();
