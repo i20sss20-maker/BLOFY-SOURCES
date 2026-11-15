@@ -767,6 +767,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
 <p class="muted" id="content-hub-episode-preview-note">متاحة بعد اكتمال الحلقة والتحقق من سلامة بياناتها.</p>
 </div>
+<div class="panel" id="hub-original-range-panel">
+<h3>📁 فحص الملف الأصلي المحفوظ على BLOFY — وليس عينة 12 ثانية</h3>
+<p class="muted">اختبار قراءة حقيقية من تخزين BLOFY الخاص لملف الفيلم أو الحلقة <strong>كامل الحجم</strong>، عبر HTTP Range من بداية الملف ووسطه ونهايته. لا توجد طلبات لمصدر Xtream ولا تتغير أكواد العملاء. هذه قراءة عينات موزعة من الملف الأصلي، ولا تعني تشغيله كاملًا بالصوت والصورة.</p>
+<div class="actions">
+<button type="button" class="btn secondary" id="hub-original-movie-check">📁 فحص الملف الأصلي للفيلم</button>
+<button type="button" class="btn secondary" id="hub-original-episode-check">📁 فحص الملف الأصلي للحلقة</button>
+<button type="button" class="btn secondary" id="hub-original-movie-play">▶ تجربة تشغيل الفيلم الأصلي في المتصفح (MP4 فقط)</button>
+<button type="button" class="btn secondary" id="hub-original-episode-play">▶ تجربة تشغيل الحلقة الأصلية في المتصفح (MP4 فقط)</button>
+</div>
+<video id="hub-original-browser-player" controls playsinline preload="none"
+ style="display:none;width:min(100%,850px);max-height:420px;background:black;border-radius:12px;margin-top:12px"></video>
+<p class="muted" id="hub-original-range-status" role="status" aria-live="polite">الفحص مقفل من Content Hub افتراضيًا حتى يتم تفعيل تجربة المالك الآمنة. ملفات MKV لا تصبح MP4 تلقائيًا؛ تشغيلها داخل Chrome قد لا يكون مدعومًا.</p>
+</div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
 <h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
 <p class="muted">شغّل عينة الفيلم وعينة الحلقة أعلاه من التخزين الخاص، ثم اختبرهما على متصفح Windows أو Android TV. الأداة تراقب إطارات الفيديو ومرور وقت التشغيل وتطلب منك تأكيد سماع الصوت ورؤية الصورة بنفسك. هذه <strong>عينات 12 ثانية فقط</strong> ولا تثبت مشاهدة الملف كاملًا أو توافق تطبيقات العملاء.</p>
@@ -5499,6 +5512,99 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       $("hub-qa-pair-status").textContent=
         "❌ تعذر قراءة التقريرين. استخدم ملفات JSON الأصلية من لوحة الاختبار.";
     }
+  });
+  // The original-file check intentionally uses sparse 64KiB seeks, NOT
+  // full-file download, FFmpeg conversion or any provider request.
+  var hubOriginalBusy=false;
+  function originalUrl(kind){
+    var identity=hubQaIdentity(kind);
+    return identity?"/operator/api/content-hub/site-qa/files/"+
+      kind+"/"+encodeURIComponent(identity.runId):null;
+  }
+  async function originalHead(kind){
+    var identity=hubQaIdentity(kind),url=originalUrl(kind);
+    if(!identity||!url)throw Error("لا يوجد ملف وحيد مكتمل ومتحقق منه.");
+    var head=await fetch(url,{method:"HEAD",credentials:"same-origin",cache:"no-store"});
+    if(head.status===404)throw Error("فحص الملفات الأصلية غير مفعل في الخادم.");
+    if(!head.ok)throw Error("فشل قراءة معلومات الملف من تخزين BLOFY: "+head.status);
+    var total=Number(head.headers.get("content-length"));
+    var type=String(head.headers.get("content-type")||"");
+    if(!Number.isSafeInteger(total)||total<1||total!==identity.expectedBytes)
+      throw Error("حجم الملف لا يطابق بيانات النسخة المحفوظة.");
+    if(!["video/x-matroska","video/mp4","video/mp2t","video/x-msvideo"].includes(type))
+      throw Error("صيغة الملف الأصلي غير معروفة.");
+    return {url,total,type};
+  }
+  function hubOriginalText(t){
+    $("hub-original-range-status").textContent=t;
+  }
+  async function testHubOriginalRanges(kind){
+    if(hubOriginalBusy)return;
+    hubOriginalBusy=true;
+    var button=$("hub-original-"+kind+"-check");
+    button.disabled=true;
+    hubOriginalText("جار فحص أصل "+(kind==="movie"?"الفيلم":"الحلقة")+
+      " من S3، دون طلب محتوى جديد من المصدر...");
+    try{
+      var file=await originalHead(kind);
+      var chunk=64*1024,offsets=[0,Math.floor(file.total/2),
+        Math.max(0,file.total-chunk)];
+      var results=[];
+      for(var index=0;index<offsets.length;index++){
+        var from=Math.min(file.total-1,offsets[index]);
+        var to=Math.min(file.total-1,from+chunk-1);
+        var range="bytes="+from+"-"+to;
+        var started=performance.now();
+        var reply=await fetch(file.url,{credentials:"same-origin",cache:"no-store",
+          headers:{"range":range}});
+        var expected="bytes "+from+"-"+to+"/"+file.total;
+        if(reply.status!==206||
+          reply.headers.get("content-range")!==expected||
+          Number(reply.headers.get("content-length"))!==to-from+1)
+          throw Error("فشل طلب Range عند الموضع "+String(index+1)+
+            " (HTTP "+reply.status+").");
+        var bytes=await reply.arrayBuffer();
+        if(bytes.byteLength!==to-from+1)
+          throw Error("طول الجزء المحفوظ لا يطابق طلب القراءة.");
+        results.push({position:from,bytes:bytes.byteLength,
+          milliseconds:Math.round(performance.now()-started)});
+        hubOriginalText("✅ مواضع التخزين الأصلية التي اجتازت التحقق: "+
+          results.length+" من 3. جار متابعة الفحص...");
+      }
+      hubOriginalText("✅ نجحت 3 قراءات حقيقية من بداية ووسط ونهاية أصل "+
+        (kind==="movie"?"الفيلم":"الحلقة")+" المحفوظ على BLOFY ("+
+        hubBytes(file.total)+"، "+file.type+
+        "). القراءة وحدها لا تثبت تشغيل الصورة والصوت أو الملف كاملًا.");
+    }catch(e){
+      hubOriginalText("❌ فحص الملف الأصلي لم يكتمل: "+
+        String(e.message||"غير متاح").slice(0,220));
+    }finally{hubOriginalBusy=false;button.disabled=false}
+  }
+  ["movie","episode"].forEach(function(kind){
+    $("hub-original-"+kind+"-check").addEventListener("click",function(){
+      void testHubOriginalRanges(kind);
+    });
+    $("hub-original-"+kind+"-play").addEventListener("click",async function(){
+      var video=$("hub-original-browser-player");
+      video.pause();video.removeAttribute("src");video.load();
+      video.style.display="none";
+      try{
+        var file=await originalHead(kind);
+        if(file.type!=="video/mp4"||!video.canPlayType("video/mp4")){
+          hubOriginalText("الملف الأصلي بصيغة "+file.type+
+            "؛ المتصفح لا يضمن تشغيله مباشرة. يجب توفير مسار تحويل MP4/HLS منفصل قبل اعتماد تشغيل الملف كاملًا.");
+          return;
+        }
+        video.src=file.url;video.style.display="block";video.load();
+        hubOriginalText("تشغيل تجريبي للملف الأصلي MP4 من S3. يجب تأكيد الصورة والصوت فعليًا؛ لا يوجد اعتماد تلقائي.");
+        try{await video.play()}catch{
+          hubOriginalText("اضغط تشغيل في المشغل بعد تحميل معلومات ملف MP4 الأصلي.");
+        }
+      }catch(e){hubOriginalText("تعذّر فتح الأصل: "+String(e.message||"غير متاح").slice(0,180))}
+    });
+  });
+  $("hub-original-browser-player").addEventListener("error",function(){
+    hubOriginalText("❌ المتصفح لم يستطع فك أو تحميل الملف الأصلي. نجاح Range وحده لا يكفي.");
   });
   refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));

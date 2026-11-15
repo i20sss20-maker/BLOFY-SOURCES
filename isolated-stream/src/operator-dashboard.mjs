@@ -3,6 +3,7 @@
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
+import {streamOperatorOriginalRange} from './operator-original-range.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
@@ -141,6 +142,22 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    // Original verified S3 bytes for owner SITE QA only. This is the
+    // website /operator Basic-authenticated control plane, not an app/API.
+    const privateOriginal=path.match(
+      /^\/operator\/api\/content-hub\/site-qa\/files\/(movie|episode)\/([A-Za-z0-9_-]{8,80})$/);
+    if(privateOriginal){
+      if(uri.search){json(res,400,{ok:false,code:'site_qa_query_denied'});return true;}
+      void streamOperatorOriginalRange({req,res,
+        mediaKind:privateOriginal[1],runId:privateOriginal[2],
+        getUpstream:({signal,method,range})=>
+          portal.contentHubOriginalRangeRaw({
+            mediaKind:privateOriginal[1],runId:privateOriginal[2],
+            method,range,signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'site_qa_original_stream_failed'})});
+      return true;
     }
     // Signed, run-scoped private video preview for a verified queued
     // episode. No full video URL, source credentials or S3 data in browser.
