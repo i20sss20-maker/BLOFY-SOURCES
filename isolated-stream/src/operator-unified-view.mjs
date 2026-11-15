@@ -793,6 +793,24 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   style="display:none;width:min(100%,750px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
 <p id="hub-seek-preview-status" class="muted" role="status" aria-live="polite">لم يتم إنشاء أي عينة. قد يستغرق التحويل وقتًا؛ إذا لم يستطع FFmpeg الوصول لموضع الملف فسوف يفشل الفحص بدل إعلان نجاح غير حقيقي.</p>
 </div>
+<div id="hub-owner-timeline" style="margin-top:18px;padding:16px;border:1px solid #39775e;border-radius:14px">
+<h3>🎥 تشغيل متسلسل تجريبي للفيلم أو الحلقة المحفوظة</h3>
+<p class="muted">يعرض نافذة MP4 مدتها 30 ثانية من الملف الأصلي المتحقق منه في تخزين BLOFY. ينتقل إلى التالية عند الانتهاء، ويمكن التقديم لأي دقيقة باستخدام الشريط. يحوّل الخادم MKV إلى H.264/AAC عند الطلب؛ قد يحدث توقف بين المقاطع. هذا <strong>ليس إثبات مشاهدة كاملة ولا تشغيلًا جاهزًا للمشتركين</strong>.</p>
+<div class="actions">
+<label for="hub-timeline-media" style="min-width:180px">نوع الملف
+<select id="hub-timeline-media"><option value="movie">الفيلم المحفوظ</option><option value="episode">الحلقة المحفوظة</option></select></label>
+<button type="button" id="hub-timeline-start" class="btn">▶ ابدأ التجربة من البداية</button>
+<button type="button" id="hub-timeline-previous" class="btn secondary" disabled>⏮ السابق</button>
+<button type="button" id="hub-timeline-next" class="btn secondary" disabled>التالي ⏭</button>
+<button type="button" id="hub-timeline-stop" class="btn secondary" disabled>■ إيقاف</button>
+</div>
+<video id="hub-timeline-player" controls playsinline preload="none"
+ style="display:none;width:min(100%,850px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
+<label for="hub-timeline-seek" style="display:block;margin-top:12px">التقديم إلى أي موضع في الملف الأصلي</label>
+<input type="range" id="hub-timeline-seek" min="0" max="0" value="0" step="1" disabled style="width:100%" />
+<div class="muted" id="hub-timeline-clock">00:00 / --:--</div>
+<p id="hub-timeline-status" class="muted" role="status" aria-live="polite">لم يبدأ تشغيل متسلسل. يلزم اعتماد المالك لملف خاص واحد مكتمل، وتفعيل فحص Windows/Android TV قبل نشره.</p>
+</div>
 </div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
 <h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
