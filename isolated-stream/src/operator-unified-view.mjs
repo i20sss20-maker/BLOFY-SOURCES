@@ -6049,9 +6049,70 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }
   });
   siteTimelineVideo.addEventListener("error",function(){
-    if(siteTimeline.meta&&siteTimeline.playing)
+    if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+    if(siteTimeline.meta&&siteTimeline.playing){
+      siteTimeline.lastFailedSegment=siteTimeline.segment;
+      siteTimeline.playing=false;
+      siteTimelineUpdateControls();
       siteTimelineMsg("❌ تعذر فك مقطع MP4 في المتصفح. "+
-        "قد تكون هناك مشكلة توافق أو انقطاع في التخزين.");
+        "اضغط إعادة المحاولة أو افحص توافق الصوت والصورة.");
+    }
+  });
+  ["waiting","stalled"].forEach(function(name){
+    siteTimelineVideo.addEventListener(name,function(){
+      if(siteTimelineEvidence&&siteTimeline.meta){
+        siteTimelineEvidence.bufferWaitEvents++;
+        siteTimelineQoS();
+      }
+    });
+  });
+  $("hub-timeline-retry").addEventListener("click",function(){
+    if(!siteTimeline.meta||siteTimeline.lastFailedSegment===null)return;
+    void siteTimelineLoad(siteTimeline.lastFailedSegment,0);
+  });
+  $("hub-timeline-export").addEventListener("click",function(){
+    var e=siteTimelineEvidence;
+    if(!e)return;
+    var data={
+      schema:e.schema,
+      mediaKind:e.kind,
+      storedManifest:{runId:e.runId,expectedBytes:e.expectedBytes},
+      checkedAt:new Date().toISOString(),
+      startedAt:e.startedAt,
+      stoppedAt:e.stoppedAt,
+      durationSeconds:e.durationSeconds,
+      segmentSeconds:e.segmentSeconds,
+      segmentCount:e.segmentCount,
+      visitedWindows:e.visitedWindows.size,
+      windowsRequested:e.windowsRequested,
+      windowsLoaded:e.windowsLoaded,
+      observedDistinctSeconds:e.seenSeconds.size,
+      totalLoadMilliseconds:e.totalLoadMs,
+      transitionCount:e.transitionCount,
+      busyResponses:e.busyResponses,
+      retryCount:e.retryCount,
+      failedWindows:e.failedWindows,
+      bufferWaitEvents:e.bufferWaitEvents,
+      reachedLastWindow:e.reachedLastWindow,
+      pictureConfirmedByHuman:$("hub-timeline-picture").checked===true,
+      audibleAudioConfirmedByHuman:$("hub-timeline-audio").checked===true,
+      observedProof:"browser_time_updates_only",
+      physicalDeviceAttested:false,
+      sourceRightsProvenByThisReport:false,
+      fullFilePlaybackVerified:false,
+      customerReleaseApproved:false
+    };
+    var blob=new Blob([JSON.stringify(data,null,2)],{
+      type:"application/json"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="blofy-stream-timeline-"+e.kind+"-"+
+      new Date().toISOString().replace(/[:.]/g,"-")+".json";
+    document.body.append(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    siteTimelineMsg("تم تنزيل تقرير محلي لا يحتوي بيانات الاتصال. "+
+      "ما زال اعتماد مشاهدة الملف كاملًا وفحص الصوت الحقيقي مطلوبَين.");
   });
   // Isolated QA unit harness uses minimal mock elements without media APIs.
   if(typeof siteTimelineVideo.pause==='function')siteTimelineStop();
