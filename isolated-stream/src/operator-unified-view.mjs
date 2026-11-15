@@ -5870,6 +5870,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var meta=siteTimeline.meta;
     if(!meta||index<0||index>=meta.segmentCount)return;
     var generation=++siteTimeline.generation;
+    var beganAt=Date.now();
+    if(siteTimelineEvidence)siteTimelineEvidence.windowsRequested++;
+    siteTimeline.playing=true;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
     var ctl=new AbortController(),pre=siteTimeline.prefetch;
     siteTimeline.loadController?.abort();
     siteTimeline.loadController=ctl;
@@ -5891,11 +5896,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     try{
       var url=pre?await pre.promise:
         await siteTimelineFetch(index,ctl.signal);
+      // A failed speculative prefetch must never permanently block the
+      // actual next window: retry it as an explicit, cancelable request.
+      if(!url&&pre)url=await siteTimelineFetch(index,ctl.signal);
       if(!url)throw Error("لم تنجح معاينة النافذة التالية.");
       if(siteTimeline.generation!==generation||!siteTimeline.meta){
         URL.revokeObjectURL(url);return;
       }
       siteTimeline.currentUrl=url;
+      if(siteTimelineEvidence){
+        siteTimelineEvidence.windowsLoaded++;
+        siteTimelineEvidence.visitedWindows.add(index);
+        siteTimelineEvidence.totalLoadMs+=Date.now()-beganAt;
+        if(index>0)siteTimelineEvidence.transitionCount++;
+        siteTimelineQoS();
+      }
       siteTimelineVideo.src=url;
       siteTimelineVideo.style.display="block";
       siteTimelineVideo.load();
@@ -5916,9 +5931,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           siteTimelineMsg("المقطع جاهز. اضغط تشغيل داخل الفيديو إذا منع المتصفح التشغيل التلقائي.");
       }
     }catch(error){
-      if(siteTimeline.generation===generation)
+      if(siteTimeline.generation===generation){
+        siteTimeline.playing=false;
+        siteTimeline.lastFailedSegment=index;
+        if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+        siteTimelineUpdateControls();
         siteTimelineMsg("❌ "+String(error.message||"فشل تشغيل المقطع").slice(0,175)+
-          " لم يتم اعتماد تشغيل الملف كاملًا.");
+          " جرّب زر إعادة محاولة النافذة. لم يتم اعتماد تشغيل الملف كاملًا.");
+      }
     }
   }
   $("hub-timeline-start").addEventListener("click",async function(){
@@ -5950,6 +5970,20 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         throw Error("لم تتحقق هوية الملف أو مدته.");
       siteTimeline.kind=kind;siteTimeline.runId=identity.runId;
       siteTimeline.meta=meta;siteTimeline.playing=true;
+      siteTimelineEvidence={
+        schema:"blofy.stream.owner-timeline-qa.v1",
+        kind:kind,runId:identity.runId,
+        expectedBytes:identity.expectedBytes,
+        startedAt:new Date().toISOString(),stoppedAt:null,
+        durationSeconds:meta.durationSeconds,
+        segmentCount:meta.segmentCount,segmentSeconds:30,
+        windowsRequested:0,windowsLoaded:0,visitedWindows:new Set(),
+        seenSeconds:new Set(),totalLoadMs:0,transitionCount:0,
+        busyResponses:0,retryCount:0,failedWindows:0,
+        bufferWaitEvents:0,reachedLastWindow:false
+      };
+      $("hub-timeline-picture").checked=false;
+      $("hub-timeline-audio").checked=false;
       siteTimelineSlider.max=String(Math.floor(meta.durationSeconds));
       siteTimelineUpdateControls();
       await siteTimelineLoad(0,0);
@@ -5984,7 +6018,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   siteTimelineVideo.addEventListener("timeupdate",function(){
     siteTimelineRefreshClock();
-    if(siteTimeline.meta&&!this.paused&&this.currentTime>3)
+    var e=siteTimelineEvidence,local=Number(this.currentTime);
+    if(e&&siteTimeline.meta&&siteTimeline.currentUrl&&!this.paused&&
+       Number.isFinite(local)&&local>=0){
+      var last=siteTimeline.lastObservedTime;
+      if(last!==null&&local>last&&local-last<=1.8){
+        var upper=Math.min(Math.floor(local),
+          siteTimeline.meta.segmentSeconds-1);
+        for(var second=Math.floor(last);second<=upper;second++)
+          if(second>=0&&second<siteTimeline.meta.segmentSeconds)
+            e.seenSeconds.add(siteTimeline.segment*
+              siteTimeline.meta.segmentSeconds+second);
+      }
+      siteTimeline.lastObservedTime=local;
+      siteTimelineQoS();
+    }
+    if(siteTimeline.meta&&!this.paused&&this.currentTime>1)
       siteTimelineWarmNext();
   });
   siteTimelineVideo.addEventListener("ended",function(){
@@ -5993,7 +6042,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       void siteTimelineLoad(siteTimeline.segment+1,0);
     else{
       siteTimeline.playing=false;
-      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "+
+      if(siteTimelineEvidence)siteTimelineEvidence.reachedLastWindow=true;
+      siteTimelineQoS();
+      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "
         "يحتاج هذا الاختبار إلى مشاهدة بشرية للتحقق من الصوت والصورة والجودة.");
     }
   });
