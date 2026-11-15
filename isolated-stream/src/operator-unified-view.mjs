@@ -6044,7 +6044,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       siteTimeline.playing=false;
       if(siteTimelineEvidence)siteTimelineEvidence.reachedLastWindow=true;
       siteTimelineQoS();
-      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "
+      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "+
         "يحتاج هذا الاختبار إلى مشاهدة بشرية للتحقق من الصوت والصورة والجودة.");
     }
   });
