@@ -138,10 +138,35 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const nonce=randomBytes(16).toString('base64');
       const body=Buffer.from(renderOperatorDashboard(nonce));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store',
-        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    // Private S3 30-second video windows address the whole verified source
+    // timeline, for manually authenticated owner QA. NOT subscriber HLS.
+    const timeline=path.match(
+      /^\/operator\/api\/content-hub\/timeline\/(movie|episode)\/([A-Za-z0-9_-]{8,80})\/(meta|clip\/(0|[1-9][0-9]{0,3})\.mp4)$/);
+    if(timeline){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'private_timeline_method_denied'});
+        return true;
+      }
+      const mediaKind=timeline[1],runId=timeline[2],segment=timeline[4];
+      if(segment===undefined){
+        void portal.contentHubTimelineMeta({mediaKind,runId})
+          .then(result=>json(res,result.status,result.body))
+          .catch(()=>{if(!res.headersSent)json(res,503,{
+            ok:false,code:'private_timeline_metadata_unavailable'})});
+        return true;
+      }
+      void streamOperatorOwnerPreview({req,res,timeoutMs:155000,
+        maxBytes:18*1024*1024,
+        getUpstream:({signal})=>portal.contentHubTimelineClipRaw({
+          mediaKind,runId,index:Number(segment),signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'private_timeline_segment_unavailable'})});
+      return true;
     }
     // Browser-compatible 10s sample extracted by FFmpeg at an owner-selected
     // point in the FULL verified S3 original, never an Xtream source URL.

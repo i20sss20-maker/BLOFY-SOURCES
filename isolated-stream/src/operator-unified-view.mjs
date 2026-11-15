@@ -793,6 +793,24 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   style="display:none;width:min(100%,750px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
 <p id="hub-seek-preview-status" class="muted" role="status" aria-live="polite">لم يتم إنشاء أي عينة. قد يستغرق التحويل وقتًا؛ إذا لم يستطع FFmpeg الوصول لموضع الملف فسوف يفشل الفحص بدل إعلان نجاح غير حقيقي.</p>
 </div>
+<div id="hub-owner-timeline" style="margin-top:18px;padding:16px;border:1px solid #39775e;border-radius:14px">
+<h3>🎥 تشغيل متسلسل تجريبي للفيلم أو الحلقة المحفوظة</h3>
+<p class="muted">يعرض نافذة MP4 مدتها 30 ثانية من الملف الأصلي المتحقق منه في تخزين BLOFY. ينتقل إلى التالية عند الانتهاء، ويمكن التقديم لأي دقيقة باستخدام الشريط. يحوّل الخادم MKV إلى H.264/AAC عند الطلب؛ قد يحدث توقف بين المقاطع. هذا <strong>ليس إثبات مشاهدة كاملة ولا تشغيلًا جاهزًا للمشتركين</strong>.</p>
+<div class="actions">
+<label for="hub-timeline-media" style="min-width:180px">نوع الملف
+<select id="hub-timeline-media"><option value="movie">الفيلم المحفوظ</option><option value="episode">الحلقة المحفوظة</option></select></label>
+<button type="button" id="hub-timeline-start" class="btn">▶ ابدأ التجربة من البداية</button>
+<button type="button" id="hub-timeline-previous" class="btn secondary" disabled>⏮ السابق</button>
+<button type="button" id="hub-timeline-next" class="btn secondary" disabled>التالي ⏭</button>
+<button type="button" id="hub-timeline-stop" class="btn secondary" disabled>■ إيقاف</button>
+</div>
+<video id="hub-timeline-player" controls playsinline preload="none"
+ style="display:none;width:min(100%,850px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
+<label for="hub-timeline-seek" style="display:block;margin-top:12px">التقديم إلى أي موضع في الملف الأصلي</label>
+<input type="range" id="hub-timeline-seek" min="0" max="0" value="0" step="1" disabled style="width:100%" />
+<div class="muted" id="hub-timeline-clock">00:00 / --:--</div>
+<p id="hub-timeline-status" class="muted" role="status" aria-live="polite">لم يبدأ تشغيل متسلسل. يلزم اعتماد المالك لملف خاص واحد مكتمل، وتفعيل فحص Windows/Android TV قبل نشره.</p>
+</div>
 </div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
 <h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
@@ -5667,6 +5685,246 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     hubSeekBusy=false;
     $("hub-seek-preview-play").disabled=false;
   });
+  // Website /operator owner-only trial: verified S3 MKV -> individual
+  // 30-second H264/AAC MP4 windows. Not a subscriber player nor HLS.
+  var siteTimeline={
+    meta:null,kind:null,runId:null,segment:-1,generation:0,playing:false,
+    currentUrl:null,loadController:null,prefetch:null
+  };
+  var siteTimelineVideo=$("hub-timeline-player");
+  var siteTimelineSlider=$("hub-timeline-seek");
+  function siteClock(value){
+    var v=Math.max(0,Math.floor(Number(value)||0));
+    var h=Math.floor(v/3600),m=Math.floor(v%3600/60),s=v%60;
+    return (h?h+":":"")+
+      (h?String(m).padStart(2,"0"):String(m))+
+      ":"+String(s).padStart(2,"0");
+  }
+  function siteTimelineMsg(value){
+    $("hub-timeline-status").textContent=value;
+  }
+  function siteTimelineUpdateControls(){
+    var active=!!siteTimeline.meta;
+    siteTimelineSlider.disabled=!active;
+    $("hub-timeline-stop").disabled=!active;
+    $("hub-timeline-previous").disabled=!active||siteTimeline.segment<=0;
+    $("hub-timeline-next").disabled=!active||
+      siteTimeline.segment>=siteTimeline.meta.segmentCount-1;
+    $("hub-timeline-media").disabled=active;
+  }
+  function siteTimelineRefreshClock(){
+    var meta=siteTimeline.meta;
+    var duration=meta?.durationSeconds||0;
+    var local=Math.max(0,Number(siteTimelineVideo.currentTime)||0);
+    var seconds=meta?Math.min(duration,
+      Math.max(0,siteTimeline.segment)*meta.segmentSeconds+local):0;
+    $("hub-timeline-clock").textContent=
+      siteClock(seconds)+" / "+(meta?siteClock(duration):"--:--");
+    if(meta&&!siteTimelineSlider.matches(":active"))
+      siteTimelineSlider.value=String(Math.floor(seconds));
+  }
+  function siteTimelineDiscardPrefetch(){
+    var pre=siteTimeline.prefetch;
+    siteTimeline.prefetch=null;
+    if(pre){
+      pre.controller.abort();
+      pre.promise.then(function(url){
+        if(url)URL.revokeObjectURL(url);
+      }).catch(function(){});
+    }
+  }
+  function siteTimelineStop(){
+    siteTimeline.generation++;
+    siteTimeline.playing=false;
+    siteTimeline.loadController?.abort();
+    siteTimeline.loadController=null;
+    siteTimelineDiscardPrefetch();
+    siteTimelineVideo.pause();
+    siteTimelineVideo.removeAttribute("src");
+    siteTimelineVideo.load();
+    siteTimelineVideo.style.display="none";
+    if(siteTimeline.currentUrl)URL.revokeObjectURL(siteTimeline.currentUrl);
+    siteTimeline.currentUrl=null;
+    siteTimeline.meta=null;siteTimeline.kind=null;siteTimeline.runId=null;
+    siteTimeline.segment=-1;
+    siteTimelineSlider.max="0";siteTimelineSlider.value="0";
+    siteTimelineUpdateControls();
+    siteTimelineRefreshClock();
+  }
+  function siteTimelinePath(index){
+    return "/operator/api/content-hub/timeline/"+
+      siteTimeline.kind+"/"+encodeURIComponent(siteTimeline.runId)+
+      "/clip/"+index+".mp4";
+  }
+  async function siteTimelineFetch(index,signal){
+    var meta=siteTimeline.meta;
+    if(!meta||!Number.isSafeInteger(index)||index<0||
+      index>=meta.segmentCount)throw Error("رقم مقطع غير صالح.");
+    var response=await fetch(siteTimelinePath(index),{
+      method:"GET",credentials:"same-origin",cache:"no-store",signal});
+    if(!response.ok){
+      if(response.status===429)throw Error("الخادم مشغول بتحويل مقطع آخر؛ أعد التشغيل.");
+      if(response.status===404)throw Error("فحص التشغيل الخاص غير متاح الآن.");
+      throw Error("تعذر تحويل المقطع "+(index+1)+" (HTTP "+response.status+").");
+    }
+    var size=Number(response.headers.get("content-length"));
+    if(response.headers.get("content-type")!=="video/mp4"||
+       response.headers.get("x-blofy-timeline-source")!=="verified-private-s3"||
+       Number(response.headers.get("x-blofy-timeline-index"))!==index||
+       Number(response.headers.get("x-blofy-timeline-offset"))!==
+          index*meta.segmentSeconds||
+       !Number.isSafeInteger(size)||size<2048||size>18*1024*1024)
+      throw Error("الاستجابة لا تثبت أنها مقطع صحيح من تخزين BLOFY.");
+    var bytes=await response.blob();
+    if(bytes.size!==size)throw Error("حجم مقطع الفيديو غير صحيح.");
+    return URL.createObjectURL(bytes);
+  }
+  function siteTimelineWarmNext(){
+    var idx=siteTimeline.segment+1,meta=siteTimeline.meta;
+    if(!meta||!siteTimeline.playing||idx>=meta.segmentCount||
+       siteTimeline.prefetch)return;
+    var ctl=new AbortController();
+    var request=siteTimelineFetch(idx,ctl.signal).catch(function(){return null});
+    siteTimeline.prefetch={index:idx,controller:ctl,promise:request};
+  }
+  async function siteTimelineLoad(index,offset){
+    var meta=siteTimeline.meta;
+    if(!meta||index<0||index>=meta.segmentCount)return;
+    var generation=++siteTimeline.generation;
+    var ctl=new AbortController(),pre=siteTimeline.prefetch;
+    siteTimeline.loadController?.abort();
+    siteTimeline.loadController=ctl;
+    siteTimeline.prefetch=null;
+    if(pre&&pre.index!==index){
+      pre.controller.abort();
+      pre.promise.then(function(url){if(url)URL.revokeObjectURL(url)})
+        .catch(function(){});
+      pre=null;
+    }
+    siteTimelineVideo.pause();
+    siteTimelineVideo.removeAttribute("src");siteTimelineVideo.load();
+    if(siteTimeline.currentUrl)URL.revokeObjectURL(siteTimeline.currentUrl);
+    siteTimeline.currentUrl=null;
+    siteTimeline.segment=index;
+    siteTimelineUpdateControls();siteTimelineRefreshClock();
+    siteTimelineMsg("جار تجهيز النافذة "+(index+1)+" من "+
+      meta.segmentCount+" من التخزين الخاص... المقاطع تُحوّل عند الطلب.");
+    try{
+      var url=pre?await pre.promise:
+        await siteTimelineFetch(index,ctl.signal);
+      if(!url)throw Error("لم تنجح معاينة النافذة التالية.");
+      if(siteTimeline.generation!==generation||!siteTimeline.meta){
+        URL.revokeObjectURL(url);return;
+      }
+      siteTimeline.currentUrl=url;
+      siteTimelineVideo.src=url;
+      siteTimelineVideo.style.display="block";
+      siteTimelineVideo.load();
+      siteTimelineVideo.addEventListener("loadedmetadata",function(){
+        if(siteTimeline.generation!==generation)return;
+        var seek=Math.max(0,Math.min(Number(offset)||0,
+          Math.max(0,(Number(siteTimelineVideo.duration)||meta.segmentSeconds)-0.15)));
+        if(seek>0)siteTimelineVideo.currentTime=seek;
+      },{once:true});
+      try{
+        await siteTimelineVideo.play();
+        if(siteTimeline.generation===generation)
+          siteTimelineMsg("✅ بدأت النافذة "+(index+1)+" من "+
+           meta.segmentCount+". الصوت والصورة يتطلبان تأكيدك؛ "+
+           "قد يحدث توقف بين النوافذ.");
+      }catch{
+        if(siteTimeline.generation===generation)
+          siteTimelineMsg("المقطع جاهز. اضغط تشغيل داخل الفيديو إذا منع المتصفح التشغيل التلقائي.");
+      }
+    }catch(error){
+      if(siteTimeline.generation===generation)
+        siteTimelineMsg("❌ "+String(error.message||"فشل تشغيل المقطع").slice(0,175)+
+          " لم يتم اعتماد تشغيل الملف كاملًا.");
+    }
+  }
+  $("hub-timeline-start").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var kind=$("hub-timeline-media").value;
+    var identity=hubQaIdentity(kind);
+    if(!identity){siteTimelineMsg(
+      "لا يوجد ملف وحيد مكتمل ومتحقق منه. حدّث المكتبة أولًا.");return}
+    siteTimelineStop();
+    siteTimelineMsg("جار التحقق من مدة الملف الأصلي على S3...");
+    this.disabled=true;
+    try{
+      var route="/operator/api/content-hub/timeline/"+
+        kind+"/"+encodeURIComponent(identity.runId)+"/meta";
+      var response=await fetch(route,{credentials:"same-origin",cache:"no-store"});
+      if(!response.ok)throw Error(response.status===404?
+        "تشغيل الملف الكامل التجريبي غير مفعل في Content Hub.":
+        "فشل فحص مدة الملف (HTTP "+response.status+").");
+      var meta=await response.json();
+      if(meta.ok!==true||meta.mediaKind!==kind||
+        meta.runId!==identity.runId||
+        meta.segmentSeconds!==30||
+        !Number.isInteger(meta.segmentCount)||
+        meta.segmentCount<1||meta.segmentCount>1200||
+        !Number.isFinite(meta.durationSeconds)||
+        Math.ceil(meta.durationSeconds/30)!==meta.segmentCount||
+        meta.customerCutover!==false||
+        meta.fullFilePlaybackVerified!==false)
+        throw Error("لم تتحقق هوية الملف أو مدته.");
+      siteTimeline.kind=kind;siteTimeline.runId=identity.runId;
+      siteTimeline.meta=meta;siteTimeline.playing=true;
+      siteTimelineSlider.max=String(Math.floor(meta.durationSeconds));
+      siteTimelineUpdateControls();
+      await siteTimelineLoad(0,0);
+    }catch(error){
+      siteTimelineStop();
+      siteTimelineMsg("❌ "+String(error.message||"تعذر بدء التشغيل").slice(0,180));
+    }finally{this.disabled=false}
+  });
+  $("hub-timeline-stop").addEventListener("click",function(){
+    siteTimelineStop();siteTimelineMsg("تم إيقاف التشغيل المتسلسل وحذف المقاطع المؤقتة من ذاكرة المتصفح.");
+  });
+  $("hub-timeline-next").addEventListener("click",function(){
+    if(siteTimeline.meta)void siteTimelineLoad(
+      Math.min(siteTimeline.meta.segmentCount-1,siteTimeline.segment+1),0);
+  });
+  $("hub-timeline-previous").addEventListener("click",function(){
+    if(siteTimeline.meta)void siteTimelineLoad(
+      Math.max(0,siteTimeline.segment-1),0);
+  });
+  siteTimelineSlider.addEventListener("input",function(){
+    $("hub-timeline-clock").textContent=
+      siteClock(Number(this.value))+" / "+siteClock(siteTimeline.meta?.durationSeconds||0);
+  });
+  siteTimelineSlider.addEventListener("change",function(){
+    var meta=siteTimeline.meta;
+    if(!meta)return;
+    var target=Math.max(0,Math.min(meta.durationSeconds-0.2,
+      Number(this.value)||0));
+    var index=Math.min(meta.segmentCount-1,
+      Math.floor(target/meta.segmentSeconds));
+    void siteTimelineLoad(index,target-index*meta.segmentSeconds);
+  });
+  siteTimelineVideo.addEventListener("timeupdate",function(){
+    siteTimelineRefreshClock();
+    if(siteTimeline.meta&&!this.paused&&this.currentTime>3)
+      siteTimelineWarmNext();
+  });
+  siteTimelineVideo.addEventListener("ended",function(){
+    if(!siteTimeline.playing||!siteTimeline.meta)return;
+    if(siteTimeline.segment+1<siteTimeline.meta.segmentCount)
+      void siteTimelineLoad(siteTimeline.segment+1,0);
+    else{
+      siteTimeline.playing=false;
+      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "+
+        "يحتاج هذا الاختبار إلى مشاهدة بشرية للتحقق من الصوت والصورة والجودة.");
+    }
+  });
+  siteTimelineVideo.addEventListener("error",function(){
+    if(siteTimeline.meta&&siteTimeline.playing)
+      siteTimelineMsg("❌ تعذر فك مقطع MP4 في المتصفح. "+
+        "قد تكون هناك مشكلة توافق أو انقطاع في التخزين.");
+  });
+  // Isolated QA unit harness uses minimal mock elements without media APIs.
+  if(typeof siteTimelineVideo.pause==='function')siteTimelineStop();
   refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();

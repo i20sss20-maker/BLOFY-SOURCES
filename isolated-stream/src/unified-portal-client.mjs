@@ -15,7 +15,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
+    const budget=path.startsWith(ROOT+'/content-hub/site-qa/timeline/')&&method==='GET'?65000:
+      path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
       path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
       path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
       path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
@@ -292,6 +293,31 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
         headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
       });
   }
+  // On-demand 30-second owner video windows from an exact VERIFIED S3
+  // movie/episode, via signed Portal fixed paths. Never return source URLs.
+  function timelinePath({mediaKind,runId}={}){
+    if(!['movie','episode'].includes(mediaKind)||
+      !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+      throw Error('private_timeline_selection_invalid');
+    return ROOT+'/content-hub/site-qa/timeline/'+mediaKind+'/'+runId;
+  }
+  function contentHubTimelineMeta({mediaKind,runId}={}){
+    try{return call(timelinePath({mediaKind,runId})+'/meta')}
+    catch{return Promise.resolve({status:400,body:{
+      ok:false,code:'private_timeline_selection_invalid'}})}
+  }
+  async function contentHubTimelineClipRaw({mediaKind,runId,index,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!Number.isSafeInteger(index)||index<0||index>1199)
+      throw Error('private_timeline_segment_invalid');
+    const path=timelinePath({mediaKind,runId})+'/clip/'+index+'.mp4';
+    return fetchImpl(ORIGIN+path,{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(158000)]):
+        AbortSignal.timeout(158000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   // Native season controls for /operator#library. All calls stay on the
   // signed STREAM -> Portal bridge (the browser never touches the old site).
   const SEASONS=ROOT+'/content-hub/seasons/';
@@ -484,6 +510,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
     contentHubOriginalRangeRaw,
     contentHubSeekPreviewRaw,
+    contentHubTimelineMeta,contentHubTimelineClipRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
     contentHubSeasonQueue,contentHubSeasonQueuePage,
