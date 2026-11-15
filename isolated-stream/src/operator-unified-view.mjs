@@ -779,6 +779,20 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <video id="hub-original-browser-player" controls playsinline preload="none"
  style="display:none;width:min(100%,850px);max-height:420px;background:black;border-radius:12px;margin-top:12px"></video>
 <p class="muted" id="hub-original-range-status" role="status" aria-live="polite">الفحص مقفل من Content Hub افتراضيًا حتى يتم تفعيل تجربة المالك الآمنة. ملفات MKV لا تصبح MP4 تلقائيًا؛ تشغيلها داخل Chrome قد لا يكون مدعومًا.</p>
+<div id="hub-private-seek-sample" style="margin-top:18px;padding:14px;border:1px solid #37597c;border-radius:14px">
+<strong>🎬 اختبار الصوت والصورة من بداية / منتصف / نهاية الملف الأصلي</strong>
+<p class="muted">يقرأ الخادم أجزاء من الملف <strong>المكتمل والمتحقق منه في تخزين BLOFY</strong>، ثم ينشئ عينة MP4 مدتها 10 ثوانٍ من الموضع المختار. مناسب لفحص ملفات MKV في المتصفح. لا يشغّل الفيلم كاملًا ولا يسحب من Xtream.</p>
+<div class="actions">
+<label for="hub-seek-media" style="min-width:160px;flex:1">اختر الملف
+<select id="hub-seek-media"><option value="movie">الفيلم المحفوظ</option><option value="episode">الحلقة المحفوظة</option></select></label>
+<label for="hub-seek-position" style="min-width:160px;flex:1">موضع الفحص
+<select id="hub-seek-position"><option value="start">بداية الملف</option><option value="middle">منتصف الملف</option><option value="near_end">قرب النهاية</option></select></label>
+<button type="button" class="btn" id="hub-seek-preview-play">▶ إنشاء وتشغيل عينة من S3</button>
+</div>
+<video id="hub-seek-preview-player" controls playsinline preload="none"
+  style="display:none;width:min(100%,750px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
+<p id="hub-seek-preview-status" class="muted" role="status" aria-live="polite">لم يتم إنشاء أي عينة. قد يستغرق التحويل وقتًا؛ إذا لم يستطع FFmpeg الوصول لموضع الملف فسوف يفشل الفحص بدل إعلان نجاح غير حقيقي.</p>
+</div>
 </div>
 <div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
 <h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
@@ -5605,6 +5619,53 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("hub-original-browser-player").addEventListener("error",function(){
     hubOriginalText("❌ المتصفح لم يستطع فك أو تحميل الملف الأصلي. نجاح Range وحده لا يكفي.");
+  });
+  var hubSeekBusy=false,hubSeekPlayedSeconds=0;
+  var hubSeekPlayer=$("hub-seek-preview-player");
+  function setHubSeekStatus(s){$("hub-seek-preview-status").textContent=s}
+  $("hub-seek-preview-play").addEventListener("click",async function(){
+    if(hubSeekBusy)return;
+    var kind=$("hub-seek-media").value,position=$("hub-seek-position").value;
+    if(!["movie","episode"].includes(kind)||
+       !["start","middle","near_end"].includes(position)){
+      setHubSeekStatus("❌ اختيار غير صالح.");return;
+    }
+    var id=hubQaIdentity(kind);
+    if(!id){setHubSeekStatus("لا يوجد ملف واحد مكتمل ومتحقق منه ومحدد للمعاينة في Content Hub.");return}
+    hubSeekBusy=true;this.disabled=true;
+    hubSeekPlayedSeconds=0;
+    hubSeekPlayer.pause();
+    hubSeekPlayer.removeAttribute("src");
+    hubSeekPlayer.load();
+    hubSeekPlayer.style.display="none";
+    var route="/operator/api/content-hub/site-qa/seek-preview/"+
+      kind+"/"+encodeURIComponent(id.runId)+"/"+position;
+    setHubSeekStatus("جار تجهيز عينة صوت وصورة مدتها 10 ثوانٍ من "+
+      (kind==="movie"?"الفيلم":"الحلقة")+" — "+
+      (position==="start"?"بداية الملف":position==="middle"?"منتصف الملف":"قرب النهاية")+
+      ". الخادم يقرأ من S3 الخاص، لا من Xtream.");
+    hubSeekPlayer.src=route;
+    hubSeekPlayer.style.display="block";
+    hubSeekPlayer.load();
+    try{
+      await hubSeekPlayer.play();
+      setHubSeekStatus("✅ بدأ تشغيل العينة الخاصة في المتصفح. تأكد من رؤية الصورة وسماع الصوت بنفسك. هذه ليست مشاهدة الملف كاملًا.");
+    }catch{
+      setHubSeekStatus("لم يبدأ المشغل تلقائيًا. اضغط التشغيل داخل الفيديو؛ وإذا ظهر خطأ فقد تكون المعاينة غير متاحة أو تعذر التحويل.");
+    }finally{hubSeekBusy=false;this.disabled=false}
+  });
+  hubSeekPlayer.addEventListener("timeupdate",function(){
+    if(this.readyState>=2&&!this.paused&&this.videoWidth>0&&this.videoHeight>0){
+      hubSeekPlayedSeconds=Math.max(hubSeekPlayedSeconds,Number(this.currentTime)||0);
+      if(hubSeekPlayedSeconds>=2)setHubSeekStatus(
+        "✅ ظهرت بيانات فيديو وتقدّم تشغيل العينة "+
+        Math.floor(hubSeekPlayedSeconds)+" ثوانٍ. سماع الصوت يحتاج تأكيدك، ولا يُعتبر هذا تشغيلًا كاملًا.");
+    }
+  });
+  hubSeekPlayer.addEventListener("error",function(){
+    setHubSeekStatus("❌ فشل تحميل أو تشغيل عينة S3 من الموضع المختار. قد يكون FFmpeg أو فهرس MKV أو تحويل الصوت بحاجة لمعالجة؛ لم نعتمد الملف.");
+    hubSeekBusy=false;
+    $("hub-seek-preview-play").disabled=false;
   });
   refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));

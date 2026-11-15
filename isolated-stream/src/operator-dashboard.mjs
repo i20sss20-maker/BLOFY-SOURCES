@@ -143,6 +143,23 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
     }
+    // Browser-compatible 10s sample extracted by FFmpeg at an owner-selected
+    // point in the FULL verified S3 original, never an Xtream source URL.
+    const seekPreview=path.match(
+      /^\/operator\/api\/content-hub\/site-qa\/seek-preview\/(movie|episode)\/([A-Za-z0-9_-]{8,80})\/(start|middle|near_end)$/);
+    if(seekPreview){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'site_qa_seek_method_denied'});return true;
+      }
+      void streamOperatorOwnerPreview({
+        req,res,seekPosition:seekPreview[3],timeoutMs:115000,
+        getUpstream:({signal})=>portal.contentHubSeekPreviewRaw({
+          mediaKind:seekPreview[1],runId:seekPreview[2],
+          position:seekPreview[3],signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'site_qa_seek_preview_failed'})});
+      return true;
+    }
     // Original verified S3 bytes for owner SITE QA only. This is the
     // website /operator Basic-authenticated control plane, not an app/API.
     const privateOriginal=path.match(

@@ -276,6 +276,22 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
         ...(range?{range}:{})}
     });
   }
+  // Private owner-only 10s MP4 seek samples, backed by the verified S3
+  // original. Never allow a URL or source path from the browser.
+  async function contentHubSeekPreviewRaw({mediaKind,runId,position,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!['movie','episode'].includes(mediaKind)||
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||
+       !['start','middle','near_end'].includes(position))
+      throw Error('site_qa_seek_selection_invalid');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/site-qa/seek-preview/'+
+      mediaKind+'/'+runId+'/'+position,{
+        method:'GET',redirect:'manual',cache:'no-store',
+        signal:signal?AbortSignal.any([signal,AbortSignal.timeout(110000)]):
+          AbortSignal.timeout(110000),
+        headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+      });
+  }
   // Native season controls for /operator#library. All calls stay on the
   // signed STREAM -> Portal bridge (the browser never touches the old site).
   const SEASONS=ROOT+'/content-hub/seasons/';
@@ -467,6 +483,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubDiagnoseEpisode,
     contentHubPreviewRaw,contentHubEpisodePreviewRaw,
     contentHubOriginalRangeRaw,
+    contentHubSeekPreviewRaw,
     contentHubSeasonEpisodePreviewRaw,
     contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
     contentHubSeasonQueue,contentHubSeasonQueuePage,
