@@ -5923,7 +5923,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       siteTimelineMsg("❌ تعذر فك مقطع MP4 في المتصفح. "+
         "قد تكون هناك مشكلة توافق أو انقطاع في التخزين.");
   });
-  siteTimelineStop();
+  // Isolated QA unit harness uses minimal mock elements without media APIs.
+  if(typeof siteTimelineVideo.pause==='function')siteTimelineStop();
   refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
