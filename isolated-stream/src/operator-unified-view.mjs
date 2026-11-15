@@ -905,9 +905,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted">هذه قائمة العناصر المفهرسة في PostgreSQL. حالة «✅ نسخة مكتملة في سجل SHA» تعني تطابق سجل القطع والبصمة والبايتات في قاعدة بيانات Content Hub <strong>ولا تعني التحقق المباشر من وجود جميع القطع في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط. لا يجري الفحص أي نقل أو طلب فيديو من المصدر.</p>
   <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
   <div class="tablewrap"><table>
-   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th></tr></thead>
+   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th><th>فحص S3</th></tr></thead>
    <tbody id="library-mirror-results"></tbody>
   </table></div>
+  <div id="library-mirror-head-panel" style="border:1px solid #296c6e;border-radius:12px;padding:12px;margin:12px 0">
+    <strong>🔍 اختبار فعلي لوجود أجزاء الملف في S3</strong>
+    <p class="muted">بعد ظهور «نسخة مكتملة في سجل SHA» اختر فحص S3 من صف الفيلم أو الحلقة. يفحص السيرفر حتى 8 أجزاء بطلبات HEAD فقط، ويتحقق من وجودها وأحجامها دون تنزيل الفيديو أو قراءة Xtream. فحص الحجم <strong>لا يعيد حساب بصمة SHA-256</strong>، ولا يثبت أجزاء لم تُفحص.</p>
+    <button type="button" class="btn secondary" id="library-head-next" disabled>فحص 8 أجزاء تالية من نفس الملف</button>
+    <p id="library-head-status" class="muted" role="status" aria-live="polite">لم يبدأ فحص S3 فعلي. النتائج في الجدول مستمدة من قاعدة بيانات النسخ فقط.</p>
+  </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
 </div>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
