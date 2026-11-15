@@ -5448,6 +5448,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
          at>now+5*60000||now-at>7*86400000||
          report.bothClipsPassed!==true||
          report.customerReleaseApproved!==false||
+         report.sourceRightsProvenByThisReport!==false||
          report.fullFilePlaybackVerified!==false||
          report.otherPlatformProvenByThisReport!==false||
          report.hardwarePlatformAttested!==false)
