@@ -878,6 +878,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button class="btn secondary" id="library-ops-refresh" type="button">فحص حالة المصدر والأكواد</button>
 </div></div>
 <p class="muted" id="library-auto-status" role="status" aria-live="polite">اختر مصدرًا ثم افحص المزامنة التلقائية.</p>
+<div class="panel" id="library-daily-catalog-panel" style="margin:12px 0;padding:14px;background:rgba(6,30,44,.4);border:1px solid #25506e">
+  <div class="controls">
+    <h4 style="margin:0">🕓 مزامنة فهرس Xtream اليومية — 4:00 صباحًا بتوقيت السعودية</h4>
+    <button id="library-daily-catalog-refresh" class="btn secondary" type="button">↻ تحديث سجل الأيام</button>
+  </div>
+  <p class="muted">هذه المزامنة تُحدّث بيانات قنوات وأفلام ومسلسلات مصدر saleh المعتمد فقط، ولا تنقل ملفات الأفلام والحلقات إلى S3. لا تخلط بين طلب المزامنة واكتمالها؛ حالة «مكتمل» تظهر فقط بعد نجاح استيراد الفهرس فعلًا.</p>
+  <p id="library-daily-catalog-status" class="muted" role="status" aria-live="polite">اختر تحديث السجل لفحص حالة جدول 4:00 صباحًا.</p>
+  <div id="library-daily-catalog-receipts" class="log" style="display:grid;gap:6px" aria-live="polite"></div>
+</div>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
 <p class="muted" id="library-live-capacity-status" role="status" aria-live="polite">سيعرض هذا التقرير قيود حساب Xtream الأصلي وأسباب انقطاع القنوات، دون قراءة بيانات دخول العملاء.</p>
 <div class="actions">
@@ -3476,6 +3485,49 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     if(!id){$("library-auto-status").textContent="اختر مصدرًا واحدًا أولًا؛ لن نغيّر إعدادات جميع المصادر دفعة واحدة.";}
     return id;
   }
+  async function refreshDailyCatalog(){
+    var status=$("library-daily-catalog-status"),
+      holder=$("library-daily-catalog-receipts");
+    status.textContent="جار فحص سجل المزامنة اليومية من PostgreSQL...";
+    try{
+      var d=await api("ops/daily-catalog");
+      holder.replaceChildren();
+      if(d.scope!=="catalog_metadata_only_no_media_copy"||
+         d.customerCutover!==false||d.mediaFilesCopied!==0)
+        throw Error("نطاق الاستجابة غير مطابق لفحص بيانات الفهرس.");
+      status.textContent=!d.enabled?
+        "⏸ الجدولة اليومية الخاصة عند 4:00 صباحًا غير مفعّلة. جدول التكرار اليدوي أعلاه مستقل.":
+        !d.sourceConfigured?
+        "⚠ النظام مفعّل لكن معرّف مصدر Xtream المعتمد غير مضبوط.":
+        !d.sourceApproved?
+        "⚠ المصدر غير معتمد أو متوقف عن النشر؛ لن تبدأ المزامنة التلقائية.":
+        "✅ الجدولة مفعّلة للمصدر saleh فقط عند 4:00–4:59 صباحًا بتوقيت السعودية. "+
+        "هذا فهرس بيانات، وليس نسخًا للأفلام إلى تخزين BLOFY.";
+      var receipts=Array.isArray(d.receipts)?d.receipts.slice(0,7):[];
+      if(!receipts.length){
+        var none=document.createElement("p");
+        none.textContent="لم تُسجّل مهمة يومية بعد. لا يُعد هذا دليلًا على اكتمال النسخ أو الفهرسة.";
+        holder.appendChild(none);return;
+      }
+      var labels={queued:"⏳ في الانتظار",running:"🔄 جار استيراد الفهرس",
+        completed:"✅ اكتمل",partial:"⚠ اكتمل جزئيًا",
+        failed:"❌ فشل",cancelled:"⏹ ألغي"};
+      receipts.forEach(function(row){
+        var item=document.createElement("p");
+        var day=String(row.day||"غير محدد").slice(0,12);
+        item.textContent=day+" — "+(labels[row.state]||"حالة غير معروفة")+
+          (row.finishedAt?" · انتهى: "+
+            new Date(row.finishedAt).toLocaleString("ar-SA"):"");
+        holder.appendChild(item);
+      });
+    }catch(e){
+      status.textContent="⚠ لا يمكن قراءة سجل المزامنة اليومية: "+
+        String(e.message||"غير متاح").slice(0,150);
+    }
+  }
+  $("library-daily-catalog-refresh").addEventListener("click",function(){
+    void refreshDailyCatalog();
+  });
   async function refreshSourceOps(){
     var sourceId=selectedOpsSource();
     if(!sourceId)return;

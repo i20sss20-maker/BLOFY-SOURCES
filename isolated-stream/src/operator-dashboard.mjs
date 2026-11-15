@@ -540,6 +540,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         sourceId:uri.searchParams.get('sourceId'),
         seriesId:uri.searchParams.get('seriesId')
       }),
+      '/operator/api/ops/daily-catalog':()=>portal.opsDailyCatalogStatus(),
       '/operator/api/ops/schedule':()=>portal.opsScheduleStatus({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/snapshots':()=>portal.opsSnapshots({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/source-stats':()=>portal.opsSourceStats({sourceId:uri.searchParams.get('sourceId')||''}),
