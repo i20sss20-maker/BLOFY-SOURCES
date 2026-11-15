@@ -156,6 +156,18 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       type:mediaType,cursor,limit:String(pageSize)}));
   }
 
+  // Owner-only HEAD of one exact catalog item, capped at eight private S3
+  // objects per click. No S3 URLs, credentials or media bytes in browser.
+  function opsPhysicalHeadAudit({kind,id,start=0}={}){
+    if(!['movie','episode'].includes(kind)||
+      !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+        /^[1-9][0-9]{0,9}$/).test(String(id||''))||
+       !Number.isSafeInteger(start)||start<0||start>504||start%8!==0)
+      return Promise.resolve({status:400,body:{ok:false,
+        code:'stream_head_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-physical-head?'+new URLSearchParams({
+      type:kind,id:String(id),start:String(start)}));
+  }
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
   const opsSourceStats=(args)=>opsRead('source-stats',args);
@@ -515,7 +527,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
