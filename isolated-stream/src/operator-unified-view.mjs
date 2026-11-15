@@ -887,6 +887,29 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p id="library-daily-catalog-status" class="muted" role="status" aria-live="polite">اختر تحديث السجل لفحص حالة جدول 4:00 صباحًا.</p>
   <div id="library-daily-catalog-receipts" class="log" style="display:grid;gap:6px" aria-live="polite"></div>
 </div>
+<div class="panel" id="library-mirror-inventory-panel" style="margin:12px 0;padding:14px;border:1px solid #39775e;background:rgba(9,28,36,.48)">
+  <div class="controls">
+    <h4 style="margin:0">📦 جرد المحتوى قبل النقل إلى سيرفر BLOFY</h4>
+    <div class="actions">
+      <label>نوع المحتوى
+      <select id="library-mirror-type">
+      <option value="movie">الأفلام</option>
+      <option value="episode">الحلقات المفهرسة سابقًا</option>
+      <option value="series">المسلسلات</option>
+      <option value="live">القنوات — فهرس فقط</option>
+      </select></label>
+      <button type="button" class="btn secondary" id="library-mirror-refresh">↻ قراءة أول 50 عنصرًا</button>
+      <button type="button" class="btn secondary" id="library-mirror-next" disabled>التالي (50)</button>
+    </div>
+  </div>
+  <p class="muted">هذه قائمة العناصر التي أعاد Xtream فهرستها في PostgreSQL، <strong>وليست ملفات منزّلة أو متحقّقًا من وجودها في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط، لا كل حلقات المسلسلات. لا يجري هذا الفحص أي نقل أو طلب فيديو من المصدر.</p>
+  <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
+  <div class="tablewrap"><table>
+   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th></tr></thead>
+   <tbody id="library-mirror-results"></tbody>
+  </table></div>
+  <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
+</div>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
 <p class="muted" id="library-live-capacity-status" role="status" aria-live="polite">سيعرض هذا التقرير قيود حساب Xtream الأصلي وأسباب انقطاع القنوات، دون قراءة بيانات دخول العملاء.</p>
 <div class="actions">
@@ -3527,6 +3550,87 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("library-daily-catalog-refresh").addEventListener("click",function(){
     void refreshDailyCatalog();
+  });
+  // Server pins source to approved saleh; no browser-controlled source URL.
+  var mirrorCursor="",mirrorBusy=false,mirrorPage=0;
+  async function refreshMirrorInventory(next){
+    if(mirrorBusy)return;
+    var type=$("library-mirror-type").value,
+      status=$("library-mirror-status"),
+      body=$("library-mirror-results"),
+      nextButton=$("library-mirror-next");
+    if(!["movie","episode","series","live"].includes(type))return;
+    var cursor=next?mirrorCursor:"";
+    if(next&&!cursor)return;
+    mirrorBusy=true;
+    $("library-mirror-refresh").disabled=true;
+    nextButton.disabled=true;
+    status.textContent="جار قراءة فهرس "+type+" الخاص بمصدر saleh. لا يتم تنزيل وسائط...";
+    try{
+      var response=await api("ops/mirror-inventory?"+
+        new URLSearchParams({type,cursor,limit:"50"}));
+      if($("library-mirror-type").value!==type)return;
+      if(response.ok!==true||response.mediaType!==type||
+        response.sourceName!=="saleh"||
+        response.dryRun!==true||response.transferQueued!==0||
+        response.providerRequests!==0||response.mediaBytesTransferred!==0||
+        response.storedCopiesVerified!==false||
+        response.customerCutover!==false)
+        throw Error("فشل التحقق من نطاق جرد الفهرس الآمن.");
+      var items=Array.isArray(response.items)?response.items.slice(0,50):[];
+      if(!next){body.replaceChildren();mirrorPage=0}
+      mirrorPage+=1;
+      items.forEach(function(item){
+        var row=document.createElement("tr");
+        var statusText=item.copyStatus==="metadata_only"?
+          "فهرس فقط — لا تخزين": "لم تتم مطابقة الملف مع S3";
+        [String(item.id||"").slice(0,128),
+         String(item.title||"").slice(0,220),
+         String(item.extension||"—").slice(0,20),
+         statusText].forEach(function(value){
+           var cell=document.createElement("td");
+           cell.textContent=value;row.appendChild(cell);
+         });
+        body.appendChild(row);
+      });
+      if(!items.length&&mirrorPage===1){
+        var row=document.createElement("tr"),cell=document.createElement("td");
+        cell.colSpan=4;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
+        row.appendChild(cell);body.appendChild(row);
+      }
+      mirrorCursor=response.hasMore===true?String(response.nextCursor||""):"";
+      nextButton.disabled=!mirrorCursor;
+      var counts=response.sourceReportedCounts||{};
+      status.textContent="✅ صفحة "+mirrorPage+
+        " | عناصر معروضة: "+body.querySelectorAll("tr").length+
+        " | الفهرس المسجل: أفلام "+Number(counts.movie||0)+
+        " / قنوات "+Number(counts.live||0)+
+        " / مسلسلات "+Number(counts.series||0)+
+        (type==="episode"?" | ⚠ الحلقات: مفهرسة جزئيًا فقط":"")+
+        " | نقل الملفات: صفر | مطابقة S3: لم تبدأ.";
+      $("library-mirror-note").textContent=
+        "آخر تحديث فهرس Xtream: "+
+        (response.latestXtreamSyncAt?
+          new Date(response.latestXtreamSyncAt).toLocaleString("ar-SA"):"غير معروف")+
+        ". يتطلب نقل VOD إثبات حق التخزين، فحص حجم المصدر، ثم التحقق من SHA في S3.";
+    }catch(error){
+      status.textContent="⚠ فشل الجرد الآمن: "+
+        String(error.message||"تعذر الاتصال").slice(0,170);
+      if(next)nextButton.disabled=false;
+    }finally{mirrorBusy=false;$("library-mirror-refresh").disabled=false}
+  }
+  $("library-mirror-refresh").addEventListener("click",function(){
+    void refreshMirrorInventory(false);
+  });
+  $("library-mirror-next").addEventListener("click",function(){
+    void refreshMirrorInventory(true);
+  });
+  $("library-mirror-type").addEventListener("change",function(){
+    mirrorCursor="";mirrorPage=0;
+    $("library-mirror-results").replaceChildren();
+    $("library-mirror-next").disabled=true;
+    $("library-mirror-status").textContent=
+      "تم تغيير النوع. اضغط قراءة أول 50 عنصرًا؛ لا يجري أي تنزيل تلقائي.";
   });
   async function refreshSourceOps(){
     var sourceId=selectedOpsSource();

@@ -144,6 +144,18 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   // Owner-only read-only 04:00 Riyadh daily metadata import receipts.
   // Server chooses the exact configured source, never a browser-provided ID.
   const opsDailyCatalogStatus=()=>call(ROOT+'/ops/daily-catalog');
+  function opsMirrorInventory({mediaType='movie',cursor='',pageSize=50}={}){
+    if(!['live','movie','series','episode'].includes(mediaType)||
+       typeof cursor!=='string'||cursor.length>128||
+       !/^[A-Za-z0-9._:-]*$/.test(cursor)||
+       (mediaType==='episode'&&!/^(0|[1-9][0-9]*)$/.test(cursor||'0'))||
+       !Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100)
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_inventory_query_invalid'}});
+    return call(ROOT+'/ops/mirror-inventory?'+new URLSearchParams({
+      type:mediaType,cursor,limit:String(pageSize)}));
+  }
+
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
   const opsSourceStats=(args)=>opsRead('source-stats',args);
@@ -503,7 +515,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
