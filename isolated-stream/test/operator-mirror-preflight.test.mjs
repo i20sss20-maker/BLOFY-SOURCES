@@ -168,6 +168,10 @@ test('operator private S3 audio/video canary requires exact verified run',async(
  assert.ok(ui.includes('verify-private-mirror-audio-video')===false);
  assert.ok(ui.includes('🎬 فحص صورة وصوت النسخة'));
  assert.ok(ui.includes('checked.audioVideoDecoded!==true'));
+ assert.ok(ui.includes('canary_private_sha256_mismatch'));
+ assert.ok(ui.includes('عُزلت النسخة من السجلات المعتمدة'));
+ assert.ok(ui.includes('button.remove()'));
+
 });
 
 test('owner source headroom report is read-only and does not request Xtream media',async()=>{
