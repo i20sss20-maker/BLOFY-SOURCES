@@ -121,3 +121,21 @@ test('daily readiness planner is strictly GET, owner-only and never copies video
  assert.ok(html.includes('api("ops/mirror-intake/daily-plan")'));
  assert.ok(html.includes('data.automaticDownload!==false'));
 });
+
+test('private copy history is signed GET and owner UI shows persisted progress',async()=>{
+ const {calls,portal}=fixture();
+ await portal.opsMirrorCopyHistory();
+ assert.equal(calls.length,1);
+ assert.equal(new URL(calls[0].url).pathname,
+  '/internal/blofy-stream/ops/mirror-intake/history');
+ assert.equal(calls[0].opts.method,'GET');
+ assert.equal(calls[0].opts.headers.authorization,'Bearer '+KEY);
+ assert.equal(calls[0].opts.body,undefined);
+ const src=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ assert.ok(src.includes("'/operator/api/ops/mirror-intake/history':()=>portal.opsMirrorCopyHistory()"));
+ const html=renderOperatorDashboard('history-ui-nonce');
+ for(const value of ['library-mirror-history-refresh',
+  'library-mirror-history-status','ops/mirror-intake/history',
+  'state.providerRequests!==0','state.customerCutover!==false'])
+  assert.ok(html.includes(value),value);
+});
