@@ -919,12 +919,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
       <button type="button" class="btn secondary" id="library-mirror-daily-plan-refresh">🗓 تقرير المزامنة اليومية</button>
+      <button type="button" class="btn secondary" id="library-mirror-headroom-refresh">📡 فحص سعة اتصال المصدر</button>
       <button type="button" class="btn secondary" id="library-mirror-history-refresh">📊 تقدم وأخطاء النقل</button>
       <button type="button" class="btn secondary" id="library-mirror-copy-pause">⏸ إيقاف النقل</button>
     </div>
     <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
     <p id="library-mirror-daily-plan-status" class="muted" role="status" aria-live="polite">لم يُفحص تقرير النقل اليومي بعد. المزامنة اليومية للفهرس لا تنسخ الأفلام تلقائيًا.</p>
+    <p id="library-mirror-headroom-status" class="muted" role="status" aria-live="polite">سعة Xtream لم تُراجع بعد. المؤشرات تعرض اتصال هذا الخادم ولقطة مزود قد تكون قديمة، وليست عدد المشاهدين الحقيقي.</p>
     <p id="library-mirror-history-status" class="muted" role="status" aria-live="polite">لم تُقرأ إحصاءات نقل الملفات بعد.</p>
     <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
@@ -3774,6 +3776,29 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       out.textContent="⚠ سجل النقل غير متاح: "+
         String(err.message||"غير متاح").slice(0,140);
     }finally{this.disabled=false}
+  });
+  $("library-mirror-headroom-refresh").addEventListener("click",async function(){
+    var msg=$("library-mirror-headroom-status");this.disabled=true;
+    msg.textContent="جار مراجعة لقطة اتصالات المصدر المحفوظة، بدون اتصال جديد بـ Xtream...";
+    try{
+      var out=await api("ops/mirror-intake/headroom");
+      if(out.ok!==true||out.readOnly!==true||
+         out.providerMediaRequests!==0||out.mediaBytesTransferred!==0||
+         out.customerCutover!==false||out.copyWorkerStarted!==false)
+        throw Error("استجابة سعة المصدر غير موثوقة");
+      var max=out.sourceReportedMaxConnections;
+      var active=out.sourceReportedActiveConnections;
+      var peak=out.sourceActiveDirectTransfers;
+      var problems=Array.isArray(out.blockedBy)?out.blockedBy.join("، "):"";
+      msg.textContent=(out.headroomCautiouslyClear===true?"✅ اتصال المصدر مبدئيًا يسمح بفحص محدود":"⚠ النقل محجوب لحماية المشتركين")+
+        " · الحد المبلغ: "+(max===null?"غير معروف":max)+
+        " · المستخدم حسب آخر لقطة: "+(active===null?"غير معروف":active)+
+        " · نقل HTTP مباشر بهذا الخادم: "+(peak===null?"غير معروف":peak)+
+        (problems?" · الأسباب: "+problems:"")+
+        " · هذه اللقطة لا تشمل كل المشاهدين أو اتصالات الشركات الأخرى، ولا تثبت ترخيص نقل المحتوى.";
+    }catch(err){msg.textContent="⚠ لا يمكن تحديد سعة المصدر: "+
+      String(err.message||"غير متاح").slice(0,140)}
+    finally{this.disabled=false}
   });
   $("library-mirror-daily-plan-refresh").addEventListener("click",async function(){
     var status=$("library-mirror-daily-plan-status");
