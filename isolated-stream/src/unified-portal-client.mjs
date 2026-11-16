@@ -8,7 +8,14 @@ const sourceActions=new Set(['test','sync','probe','pause','resume','publish','u
 const accountActions=new Set(['enable','disable']);
 export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=13500}={}){
   const configured=typeof secret==='string'&&secret.length>=40;
-  async function call(path,{method='GET',body}={}){
+  const ownerActions=new Map([
+    [ROOT+'/ops/mirror-intake','stage-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/cancel','cancel-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/preflight','probe-private-mirror-intake']
+  ]);
+  async function call(path,{method='GET',body,ownerAction=null}={}){
+    if(ownerAction!==null&&(method!=='POST'||ownerActions.get(path)!==ownerAction))
+      return {status:400,body:{ok:false,code:'owner_bridge_action_invalid'}};
     if(!configured)return {status:503,body:{ok:false,code:'unified_bridge_not_configured'}};
     if(!path.startsWith(ROOT+'/')||/[\\\r\n]/.test(path))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_path'}};
@@ -21,6 +28,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
       path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+      path===ROOT+'/ops/mirror-intake/preflight'&&method==='POST'?30000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
@@ -29,7 +37,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       const response=await fetchImpl(url,{
         method,redirect:'manual',signal:controller.signal,cache:'no-store',
         headers:{authorization:'Bearer '+secret,accept:'application/json',
-          ...(body!==undefined?{'content-type':'application/json'}:{})},
+          ...(body!==undefined?{'content-type':'application/json'}:{}),
+          ...(ownerAction?{'x-blofy-owner-action':ownerAction}:{})},
         ...(body!==undefined?{body:JSON.stringify(body)}:{})
       });
       if(response.status>=300&&response.status<400)
@@ -178,12 +187,29 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{
         ok:false,code:'mirror_intake_selection_invalid'}});
     return call(ROOT+'/ops/mirror-intake'+(cancel?'/cancel':''),{
-      method:'POST',body:{kind,id,ownerConfirmed:true}});
+      method:'POST',body:{kind,id,ownerConfirmed:true},
+      ownerAction:cancel?'cancel-private-mirror-intake':
+        'stage-private-mirror-intake'});
   }
   const opsMirrorIntakeStage=args=>opsMirrorIntakeChange(
     args?.kind,args?.id,args?.ownerConfirmed);
   const opsMirrorIntakeCancel=args=>opsMirrorIntakeChange(
     args?.kind,args?.id,args?.ownerConfirmed,{cancel:true});
+  // Explicit owner-only one-media 4KiB size and private bucket preflight.
+  // This cannot schedule or start copy workers.
+  function opsMirrorIntakePreflight({kind,id,ownerConfirmed,
+    licenseReference}={}){
+    if(!['movie','episode'].includes(kind)||
+       !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+         /^[1-9][0-9]{0,9}$/).test(String(id||''))||
+       ownerConfirmed!==true||
+       !/^[A-Za-z0-9_.:/-]{8,160}$/.test(String(licenseReference||'')))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_preflight_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/preflight',{
+      method:'POST',body:{kind,id,ownerConfirmed:true,licenseReference},
+      ownerAction:'probe-private-mirror-intake'});
+  }
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
   const opsSourceStats=(args)=>opsRead('source-stats',args);
@@ -543,7 +569,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
