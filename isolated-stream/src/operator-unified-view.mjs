@@ -919,11 +919,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
       <button type="button" class="btn secondary" id="library-mirror-daily-plan-refresh">🗓 تقرير المزامنة اليومية</button>
+      <button type="button" class="btn secondary" id="library-mirror-history-refresh">📊 تقدم وأخطاء النقل</button>
       <button type="button" class="btn secondary" id="library-mirror-copy-pause">⏸ إيقاف النقل</button>
     </div>
     <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
     <p id="library-mirror-daily-plan-status" class="muted" role="status" aria-live="polite">لم يُفحص تقرير النقل اليومي بعد. المزامنة اليومية للفهرس لا تنسخ الأفلام تلقائيًا.</p>
+    <p id="library-mirror-history-status" class="muted" role="status" aria-live="polite">لم تُقرأ إحصاءات نقل الملفات بعد.</p>
     <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
@@ -3712,6 +3714,34 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("library-mirror-intake-refresh").addEventListener("click",function(){
     void refreshMirrorIntakeOwner();
+  });
+  $("library-mirror-history-refresh").addEventListener("click",async function(){
+    var out=$("library-mirror-history-status");
+    this.disabled=true;out.textContent="جار قراءة سجل الأجزاء الموثق من PostgreSQL...";
+    try{
+      var state=await api("ops/mirror-intake/history");
+      if(state.ok!==true||state.privateOnly!==true||
+         state.customerCutover!==false||state.providerRequests!==0||
+         state.mediaBytesTransferred!==0||
+         !Array.isArray(state.items)||state.items.length>24)
+        throw Error("استجابة سجل النقل غير آمنة");
+      var total=state.counts||{};
+      var latest=state.items.slice(0,5).map(function(item){
+        return (item.kind==="episode"?"حلقة":"فيلم")+" "+
+          String(item.runId||"").slice(-6)+" · "+
+          Number(item.percent||0)+"% · "+String(item.state||"") +
+          (item.failureCode?" · "+String(item.failureCode):"");
+      }).join(" | ");
+      out.textContent="📊 مكتمل "+Number(total.verified||0)+
+        " · قيد النقل "+Number(total.staged||0)+
+        " · فشل "+Number(total.failed||0)+
+        " · مخزن "+(Number(state.storedBytes||0)/1073741824).toFixed(2)+
+        " GiB · "+(latest||"لا توجد عمليات نقل مسجلة")+
+        " · التحقق الفيزيائي المستقل على S3 يظل مطلوبًا قبل تسليم التطبيق.";
+    }catch(err){
+      out.textContent="⚠ سجل النقل غير متاح: "+
+        String(err.message||"غير متاح").slice(0,140);
+    }finally{this.disabled=false}
   });
   $("library-mirror-daily-plan-refresh").addEventListener("click",async function(){
     var status=$("library-mirror-daily-plan-status");
