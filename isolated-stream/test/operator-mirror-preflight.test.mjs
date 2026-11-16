@@ -69,3 +69,36 @@ test('owner UI has size probe action but NO automatic copy permission',async()=>
  assert.ok(code.indexOf("ops-mirror-preflight")>
   code.indexOf("if(req.method==='POST'&&path.startsWith('/operator/api/')"));
 });
+
+test('bounded mirror start and pause are owner-confirmed and strongly signed',async()=>{
+ const {calls,portal}=fixture();
+ const start=await portal.opsMirrorIntakeStart({
+  kind:'movie',id:'2222',ownerConfirmed:true});
+ const pause=await portal.opsMirrorIntakePause({ownerConfirmed:true});
+ assert.equal(start.status,200);assert.equal(pause.status,200);
+ assert.deepEqual(calls.slice(-2).map(x=>x.opts.headers['x-blofy-owner-action']),[
+  'start-licensed-private-mirror','pause-licensed-private-mirror']);
+ assert.deepEqual(calls.slice(-2).map(x=>new URL(x.url).pathname),[
+  '/internal/blofy-stream/ops/mirror-intake/start',
+  '/internal/blofy-stream/ops/mirror-intake/pause']);
+ for(const bad of [
+  {kind:'movie',id:'../../etc',ownerConfirmed:true},
+  {kind:'episode',id:'abc',ownerConfirmed:true},
+  {kind:'movie',id:'2222',ownerConfirmed:false}
+ ])assert.equal((await portal.opsMirrorIntakeStart(bad)).status,400);
+ assert.equal((await portal.opsMirrorIntakePause({ownerConfirmed:false})).status,400);
+ assert.equal(calls.length,2);
+});
+test('operator endpoint and UI never auto-trigger customer playback cutover',async()=>{
+ const code=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ for(const x of [
+  "path==='/operator/api/ops/mirror-intake/start'?'ops-mirror-start'",
+  "path==='/operator/api/ops/mirror-intake/pause'?'ops-mirror-pause'",
+  "portal.opsMirrorIntakeStart(data)",
+  "portal.opsMirrorIntakePause(data)"
+ ])assert.ok(code.includes(x),x);
+ const page=renderOperatorDashboard('test-nonce');
+ for(const x of ['ops-mirror-start','ops-mirror-pause',
+  'library-mirror-copy-pause','بدء نقل 16 جزءًا كحد أقصى',
+  'لا تتغير أكواد العملاء'])assert.ok(page.includes(x),x);
+});
