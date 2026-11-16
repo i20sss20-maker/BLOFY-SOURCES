@@ -197,6 +197,9 @@ test('owner source headroom report is read-only and does not request Xtream medi
   'library-mirror-headroom-status',
   'api("ops/mirror-intake/headroom")',
   'out.providerMediaRequests!==0',
-  'out.headroomCautiouslyClear===true'])
+  'out.headroomCautiouslyClear===true',
+  'mirror_source_recent_transport_failure',
+  'out.localTransportCooldownMs',
+  'رصد الانقطاعات محلي في هذه النسخة فقط'])
   assert.ok(html.includes(value),value);
 });
