@@ -3738,6 +3738,38 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         " · مخزن "+(Number(state.storedBytes||0)/1073741824).toFixed(2)+
         " GiB · "+(latest||"لا توجد عمليات نقل مسجلة")+
         " · التحقق الفيزيائي المستقل على S3 يظل مطلوبًا قبل تسليم التطبيق.";
+      state.items.filter(function(item){
+        return item.completed===true&&
+          /^mirror_[a-f0-9]{32}$/.test(String(item.runId||""))&&
+          ["movie","episode"].includes(item.kind);
+      }).slice(0,5).forEach(function(item){
+        var button=document.createElement("button");
+        button.type="button";button.className="btn secondary";
+        button.textContent="🎬 فحص صورة وصوت النسخة "+String(item.runId).slice(-6);
+        button.title="قراءة مقطع خاص من S3 وفحص ترميز الصوت والصورة فقط، دون اتصال بـ Xtream";
+        button.addEventListener("click",async function(){
+          if(!confirm("تشغيل فحص صوت وصورة من النسخة المحفوظة الخاصة؟ لن يُرسل شيء للمشتركين أو Xtream."))return;
+          button.disabled=true;
+          try{
+            var checked=await action("ops/mirror-intake/canary",
+              "ops-mirror-canary",{runId:item.runId,kind:item.kind,
+                ownerConfirmed:true});
+            if(checked.ok!==true||checked.privateOnly!==true||
+               checked.customerCutover!==false||checked.providerRequests!==0||
+               checked.audioVideoDecoded!==true||
+               Number(checked.videoFramesDecoded)<1||
+               Number(checked.audioFramesDecoded)<1)
+              throw Error(String(checked.code||"لم ينجح التحقق من الصوت والصورة"));
+            out.textContent="✅ تم فك ترميز صورة وصوت الملف المحفوظ "+
+              String(item.runId).slice(-6)+"، دون اتصال بمصدر Xtream أو تطبيقات العملاء."; 
+          }catch(error){
+            out.textContent="⚠ فحص الصورة والصوت غير مكتمل: "+
+              String(error.message||"غير متاح").slice(0,140);
+          }finally{button.disabled=false}
+        });
+        out.appendChild(document.createTextNode(" "));
+        out.appendChild(button);
+      });
     }catch(err){
       out.textContent="⚠ سجل النقل غير متاح: "+
         String(err.message||"غير متاح").slice(0,140);
