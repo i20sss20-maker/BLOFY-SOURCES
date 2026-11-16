@@ -102,3 +102,22 @@ test('operator endpoint and UI never auto-trigger customer playback cutover',asy
   'library-mirror-copy-pause','بدء نقل 16 جزءًا كحد أقصى',
   'لا تتغير أكواد العملاء'])assert.ok(page.includes(x),x);
 });
+
+test('daily readiness planner is strictly GET, owner-only and never copies video',async()=>{
+ const {calls,portal}=fixture();
+ const out=await portal.opsMirrorDailyPlan();
+ assert.equal(out.status,200);
+ assert.equal(calls.length,1);
+ assert.equal(new URL(calls[0].url).pathname,
+  '/internal/blofy-stream/ops/mirror-intake/daily-plan');
+ assert.equal(calls[0].opts.method,'GET');
+ assert.equal(calls[0].opts.headers.authorization,'Bearer '+KEY);
+ assert.equal(calls[0].opts.body,undefined);
+ const src=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ assert.ok(src.includes("'/operator/api/ops/mirror-intake/daily-plan':()=>portal.opsMirrorDailyPlan()"));
+ const html=renderOperatorDashboard('nonce-test-plan');
+ assert.ok(html.includes('library-mirror-daily-plan-refresh'));
+ assert.ok(html.includes('library-mirror-daily-plan-status'));
+ assert.ok(html.includes('api("ops/mirror-intake/daily-plan")'));
+ assert.ok(html.includes('data.automaticDownload!==false'));
+});
