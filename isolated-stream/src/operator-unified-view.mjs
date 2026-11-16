@@ -919,7 +919,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
     </div>
-    <p class="muted">عند اختيار «جهّز سجل النقل» يُحفظ اسم الفيلم أو الحلقة ومعرّفها فقط في PostgreSQL، بحد أقصى 24 عنصرًا للمصدر. <strong>لا يبدأ تحميل</strong> ولا تُحجز مساحة. كل عنصر يبقى بانتظار قياس حجم المصدر وتوثيق حقوق التخزين والتحقق من مساحة S3 وموافقة مستقلة على بدء العامل.</p>
+    <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
     <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
@@ -3605,6 +3605,41 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             "بانتظار فحص الحجم وتوثيق صلاحية التخزين");
         wrap.appendChild(caption);
         if(entry.state==="awaiting_size_and_license"){
+          var inspect=document.createElement("button");
+          inspect.type="button";inspect.className="btn secondary";
+          inspect.textContent="🔎 فحص الحجم والتخزين";
+          inspect.title="فحص 4 كيلوبايت من المصدر وميزانية S3 الخاصة، دون بدء تنزيل";
+          inspect.addEventListener("click",async function(){
+            if(!confirm("سيُقرأ 4 كيلوبايت من ملف مصدر Xtream. تأكد من خمول المصدر ووجود نافذة اختبار آمنة. هذا لا يبدأ نقل الملف."))return;
+            var reference=prompt("اكتب مرجع تصريح التخزين الدائم لهذا العنصر (ليس كلمة مرور أو بيانات عميل):");
+            if(reference===null)return;
+            reference=String(reference).trim();
+            if(!/^[A-Za-z0-9_.:/-]{8,160}$/.test(reference)){
+              status.textContent="⚠ مرجع صلاحية التخزين يجب أن يكون 8–160 حرفًا إنجليزيًا أو رقمًا أو ./:-_.";
+              return;
+            }
+            inspect.disabled=true;
+            try{
+              var out=await action("ops/mirror-intake/preflight",
+                "ops-mirror-preflight",{kind:entry.kind,id:entry.id,
+                  licenseReference:reference,ownerConfirmed:true});
+              if(out.ok!==true||out.copyWorkerEnabled!==false||
+                 out.mediaBytesTransferred!==0||out.customerCutover!==false||
+                 !Number.isSafeInteger(out.expectedBytes)||out.expectedBytes<8388608)
+                throw Error("لم يؤكد الخادم قياسًا صحيحًا بلا تنزيل.");
+              var gb=(out.expectedBytes/1073741824).toFixed(2);
+              status.textContent="✅ تم قياس حجم "+entry.kind+" رقم "+entry.id+
+                ": "+gb+" GiB. "+(out.eligibleForWorkerReview===true?
+                  "اجتاز فحص الميزانية والحقوق، لكنه ليس مهمة تنزيل.":
+                  "ما زالت بوابات الأمان تمنع بدء النقل: "+
+                  (Array.isArray(out.blockedBy)?out.blockedBy.join(", "):"غير جاهز"))+
+                " لم يبدأ تنزيل أي ملف.";
+            }catch(err){
+              status.textContent="⚠ فشل فحص الحجم أو الميزانية (قد يكون الخيار مغلقًا لحماية العملاء): "+
+                String(err.message||"غير متاح").slice(0,140);
+            }finally{inspect.disabled=false}
+          });
+          wrap.appendChild(inspect);
           var cancel=document.createElement("button");
           cancel.type="button";cancel.className="btn secondary";
           cancel.textContent="إلغاء تجهيز العنصر";
