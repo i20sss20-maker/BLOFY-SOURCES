@@ -544,6 +544,7 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/ops/mirror-inventory':()=>portal.opsMirrorInventory({mediaType:uri.searchParams.get('type')||'movie',cursor:uri.searchParams.get('cursor')||'',pageSize:Number(uri.searchParams.get('limit')||50)}),
       '/operator/api/ops/mirror-physical-head':()=>portal.opsPhysicalHeadAudit({kind:uri.searchParams.get('type')||'',id:uri.searchParams.get('id')||'',start:Number(uri.searchParams.get('start')||0)}),
       '/operator/api/ops/mirror-intake':()=>portal.opsMirrorIntakeList(),
+      '/operator/api/ops/mirror-intake/daily-plan':()=>portal.opsMirrorDailyPlan(),
       '/operator/api/ops/schedule':()=>portal.opsScheduleStatus({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/snapshots':()=>portal.opsSnapshots({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/source-stats':()=>portal.opsSourceStats({sourceId:uri.searchParams.get('sourceId')||''}),
