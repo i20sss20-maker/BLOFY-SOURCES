@@ -8,7 +8,17 @@ const sourceActions=new Set(['test','sync','probe','pause','resume','publish','u
 const accountActions=new Set(['enable','disable']);
 export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=13500}={}){
   const configured=typeof secret==='string'&&secret.length>=40;
-  async function call(path,{method='GET',body}={}){
+  const ownerActions=new Map([
+    [ROOT+'/ops/mirror-intake','stage-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/cancel','cancel-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/preflight','probe-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/start','start-licensed-private-mirror'],
+    [ROOT+'/ops/mirror-intake/pause','pause-licensed-private-mirror'],
+    [ROOT+'/ops/mirror-intake/canary','verify-private-mirror-audio-video']
+  ]);
+  async function call(path,{method='GET',body,ownerAction=null}={}){
+    if(ownerAction!==null&&(method!=='POST'||ownerActions.get(path)!==ownerAction))
+      return {status:400,body:{ok:false,code:'owner_bridge_action_invalid'}};
     if(!configured)return {status:503,body:{ok:false,code:'unified_bridge_not_configured'}};
     if(!path.startsWith(ROOT+'/')||/[\\\r\n]/.test(path))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_path'}};
@@ -21,6 +31,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
       path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+      path===ROOT+'/ops/mirror-intake/preflight'&&method==='POST'?30000:
+      path===ROOT+'/ops/mirror-intake/canary'&&method==='POST'?80000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
@@ -29,7 +41,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       const response=await fetchImpl(url,{
         method,redirect:'manual',signal:controller.signal,cache:'no-store',
         headers:{authorization:'Bearer '+secret,accept:'application/json',
-          ...(body!==undefined?{'content-type':'application/json'}:{})},
+          ...(body!==undefined?{'content-type':'application/json'}:{}),
+          ...(ownerAction?{'x-blofy-owner-action':ownerAction}:{})},
         ...(body!==undefined?{body:JSON.stringify(body)}:{})
       });
       if(response.status>=300&&response.status<400)
@@ -170,6 +183,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   }
   // Private VOD metadata-intake ledger (NOT an active copy queue).
   const opsMirrorIntakeList=()=>call(ROOT+'/ops/mirror-intake');
+  const opsMirrorDailyPlan=()=>call(ROOT+'/ops/mirror-intake/daily-plan');
+  const opsMirrorCopyHistory=()=>call(ROOT+'/ops/mirror-intake/history');
+  const opsMirrorSourceHeadroom=()=>call(ROOT+'/ops/mirror-intake/headroom');
   function opsMirrorIntakeChange(kind,id,ownerConfirmed,{cancel=false}={}){
     if(!['movie','episode'].includes(kind)||
        !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
@@ -178,12 +194,58 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{
         ok:false,code:'mirror_intake_selection_invalid'}});
     return call(ROOT+'/ops/mirror-intake'+(cancel?'/cancel':''),{
-      method:'POST',body:{kind,id,ownerConfirmed:true}});
+      method:'POST',body:{kind,id,ownerConfirmed:true},
+      ownerAction:cancel?'cancel-private-mirror-intake':
+        'stage-private-mirror-intake'});
   }
   const opsMirrorIntakeStage=args=>opsMirrorIntakeChange(
     args?.kind,args?.id,args?.ownerConfirmed);
   const opsMirrorIntakeCancel=args=>opsMirrorIntakeChange(
     args?.kind,args?.id,args?.ownerConfirmed,{cancel:true});
+  // Explicit owner-only one-media 4KiB size and private bucket preflight.
+  // This cannot schedule or start copy workers.
+  function opsMirrorIntakePreflight({kind,id,ownerConfirmed,
+    licenseReference}={}){
+    if(!['movie','episode'].includes(kind)||
+       !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+         /^[1-9][0-9]{0,9}$/).test(String(id||''))||
+       ownerConfirmed!==true||
+       !/^[A-Za-z0-9_.:/-]{8,160}$/.test(String(licenseReference||'')))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_preflight_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/preflight',{
+      method:'POST',body:{kind,id,ownerConfirmed:true,licenseReference},
+      ownerAction:'probe-private-mirror-intake'});
+  }
+  // Owner-triggered bounded session; no app playback or automatic startup.
+  function opsMirrorIntakeStart({kind,id,ownerConfirmed}={}){
+    if(ownerConfirmed!==true||!['movie','episode'].includes(kind)||
+      !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+        /^[1-9][0-9]{0,9}$/).test(String(id||'')))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_start_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/start',{method:'POST',
+      body:{kind,id,ownerConfirmed:true},
+      ownerAction:'start-licensed-private-mirror'});
+  }
+  function opsMirrorIntakePause({ownerConfirmed}={}){
+    if(ownerConfirmed!==true)return Promise.resolve({status:400,
+      body:{ok:false,code:'mirror_pause_confirmation_required'}});
+    return call(ROOT+'/ops/mirror-intake/pause',{method:'POST',
+      body:{ownerConfirmed:true},ownerAction:'pause-licensed-private-mirror'});
+  }
+  // Decode the audio and video of one already verified private S3 mirror
+  // without touching the provider or making content public.
+  function opsMirrorCanary({runId,kind,ownerConfirmed}={}){
+    if(ownerConfirmed!==true||
+       !/^mirror_[a-f0-9]{32}$/.test(String(runId||''))||
+       !['movie','episode'].includes(kind))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_canary_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/canary',{
+      method:'POST',body:{runId,kind,ownerConfirmed:true},
+      ownerAction:'verify-private-mirror-audio-video'});
+  }
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
   const opsSourceStats=(args)=>opsRead('source-stats',args);
@@ -543,7 +605,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorDailyPlan,opsMirrorCopyHistory,
+    opsMirrorSourceHeadroom,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,opsMirrorCanary,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,

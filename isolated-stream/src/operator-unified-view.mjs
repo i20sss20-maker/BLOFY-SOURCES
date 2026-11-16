@@ -918,9 +918,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="controls">
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
+      <button type="button" class="btn secondary" id="library-mirror-daily-plan-refresh">🗓 تقرير المزامنة اليومية</button>
+      <button type="button" class="btn secondary" id="library-mirror-headroom-refresh">📡 فحص سعة اتصال المصدر</button>
+      <button type="button" class="btn secondary" id="library-mirror-history-refresh">📊 تقدم وأخطاء النقل</button>
+      <button type="button" class="btn secondary" id="library-mirror-copy-pause">⏸ إيقاف النقل</button>
     </div>
-    <p class="muted">عند اختيار «جهّز سجل النقل» يُحفظ اسم الفيلم أو الحلقة ومعرّفها فقط في PostgreSQL، بحد أقصى 24 عنصرًا للمصدر. <strong>لا يبدأ تحميل</strong> ولا تُحجز مساحة. كل عنصر يبقى بانتظار قياس حجم المصدر وتوثيق حقوق التخزين والتحقق من مساحة S3 وموافقة مستقلة على بدء العامل.</p>
+    <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
+    <p id="library-mirror-daily-plan-status" class="muted" role="status" aria-live="polite">لم يُفحص تقرير النقل اليومي بعد. المزامنة اليومية للفهرس لا تنسخ الأفلام تلقائيًا.</p>
+    <p id="library-mirror-headroom-status" class="muted" role="status" aria-live="polite">سعة Xtream لم تُراجع بعد. المؤشرات تعرض اتصال هذا الخادم ولقطة مزود قد تكون قديمة، وليست عدد المشاهدين الحقيقي.</p>
+    <p id="library-mirror-history-status" class="muted" role="status" aria-live="polite">لم تُقرأ إحصاءات نقل الملفات بعد.</p>
     <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
@@ -3605,6 +3612,58 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             "بانتظار فحص الحجم وتوثيق صلاحية التخزين");
         wrap.appendChild(caption);
         if(entry.state==="awaiting_size_and_license"){
+          var startCopy=document.createElement("button");
+          startCopy.type="button";startCopy.className="btn secondary";
+          startCopy.textContent="▶ بدء نقل 16 جزءًا كحد أقصى";
+          startCopy.addEventListener("click",async function(){
+            if(!confirm("بدء نقل محدود بعد فحص الحجم والحقوق والمساحة؟ لا تتغير أكواد العملاء."))return;
+            startCopy.disabled=true;
+            try{
+              var result=await action("ops/mirror-intake/start","ops-mirror-start",{
+                kind:entry.kind,id:entry.id,ownerConfirmed:true});
+              if(result.ok!==true||result.customerCutover!==false||
+                 result.oneItemOnly!==true)throw Error("جلسة النقل غير جاهزة أو محجوبة.");
+              status.textContent="✅ بدأت جلسة نقل خاصة محدودة. افحص حالة Content Hub لمتابعة التقدم.";
+            }catch(err){
+              status.textContent="⚠ تعذر بدء النقل: "+String(err.message||"غير متاح").slice(0,130);
+            }finally{startCopy.disabled=false}
+          });
+          wrap.appendChild(startCopy);
+          var inspect=document.createElement("button");
+          inspect.type="button";inspect.className="btn secondary";
+          inspect.textContent="🔎 فحص الحجم والتخزين";
+          inspect.title="فحص 4 كيلوبايت من المصدر وميزانية S3 الخاصة، دون بدء تنزيل";
+          inspect.addEventListener("click",async function(){
+            if(!confirm("سيُقرأ 4 كيلوبايت من ملف مصدر Xtream. تأكد من خمول المصدر ووجود نافذة اختبار آمنة. هذا لا يبدأ نقل الملف."))return;
+            var reference=prompt("اكتب مرجع تصريح التخزين الدائم لهذا العنصر (ليس كلمة مرور أو بيانات عميل):");
+            if(reference===null)return;
+            reference=String(reference).trim();
+            if(!/^[A-Za-z0-9_.:/-]{8,160}$/.test(reference)){
+              status.textContent="⚠ مرجع صلاحية التخزين يجب أن يكون 8–160 حرفًا إنجليزيًا أو رقمًا أو ./:-_.";
+              return;
+            }
+            inspect.disabled=true;
+            try{
+              var out=await action("ops/mirror-intake/preflight",
+                "ops-mirror-preflight",{kind:entry.kind,id:entry.id,
+                  licenseReference:reference,ownerConfirmed:true});
+              if(out.ok!==true||out.copyWorkerEnabled!==false||
+                 out.mediaBytesTransferred!==0||out.customerCutover!==false||
+                 !Number.isSafeInteger(out.expectedBytes)||out.expectedBytes<8388608)
+                throw Error("لم يؤكد الخادم قياسًا صحيحًا بلا تنزيل.");
+              var gb=(out.expectedBytes/1073741824).toFixed(2);
+              status.textContent="✅ تم قياس حجم "+entry.kind+" رقم "+entry.id+
+                ": "+gb+" GiB. "+(out.eligibleForWorkerReview===true?
+                  "اجتاز فحص الميزانية والحقوق، لكنه ليس مهمة تنزيل.":
+                  "ما زالت بوابات الأمان تمنع بدء النقل: "+
+                  (Array.isArray(out.blockedBy)?out.blockedBy.join(", "):"غير جاهز"))+
+                " لم يبدأ تنزيل أي ملف.";
+            }catch(err){
+              status.textContent="⚠ فشل فحص الحجم أو الميزانية (قد يكون الخيار مغلقًا لحماية العملاء): "+
+                String(err.message||"غير متاح").slice(0,140);
+            }finally{inspect.disabled=false}
+          });
+          wrap.appendChild(inspect);
           var cancel=document.createElement("button");
           cancel.type="button";cancel.className="btn secondary";
           cancel.textContent="إلغاء تجهيز العنصر";
@@ -3657,6 +3716,159 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("library-mirror-intake-refresh").addEventListener("click",function(){
     void refreshMirrorIntakeOwner();
+  });
+  $("library-mirror-history-refresh").addEventListener("click",async function(){
+    var out=$("library-mirror-history-status");
+    this.disabled=true;out.textContent="جار قراءة سجل الأجزاء الموثق من PostgreSQL...";
+    try{
+      var state=await api("ops/mirror-intake/history");
+      if(state.ok!==true||state.privateOnly!==true||
+         state.customerCutover!==false||state.providerRequests!==0||
+         state.mediaBytesTransferred!==0||
+         !Array.isArray(state.items)||state.items.length>24)
+        throw Error("استجابة سجل النقل غير آمنة");
+      var total=state.counts||{};
+      var latest=state.items.slice(0,5).map(function(item){
+        return (item.kind==="episode"?"حلقة":"فيلم")+" "+
+          String(item.runId||"").slice(-6)+" · "+
+          Number(item.percent||0)+"% · "+String(item.state||"") +
+          (item.failureCode?" · "+String(item.failureCode):"")+
+          (item.avPrefixDecoded===true?
+            " · ✅ فُحصت عينة صوت وصورة":" · فحص العينة غير مسجل");
+      }).join(" | ");
+      out.textContent="📊 مكتمل "+Number(total.verified||0)+
+        " · قيد النقل "+Number(total.staged||0)+
+        " · فشل "+Number(total.failed||0)+
+        " · عينات صوت وصورة مفحوصة "+
+          state.items.filter(function(item){return item.avPrefixDecoded===true}).length+
+        " · مخزن "+(Number(state.storedBytes||0)/1073741824).toFixed(2)+
+        " GiB · "+(latest||"لا توجد عمليات نقل مسجلة")+
+        " · التحقق الفيزيائي المستقل على S3 يظل مطلوبًا قبل تسليم التطبيق.";
+      state.items.filter(function(item){
+        return item.completed===true&&
+          /^mirror_[a-f0-9]{32}$/.test(String(item.runId||""))&&
+          ["movie","episode"].includes(item.kind);
+      }).slice(0,5).forEach(function(item){
+        var button=document.createElement("button");
+        button.type="button";button.className="btn secondary";
+        button.textContent=(item.avPrefixDecoded===true?
+          "🔁 إعادة فحص عينة الصوت والصورة ":"🎬 فحص صورة وصوت النسخة ")+
+          String(item.runId).slice(-6);
+        button.title="قراءة مقطع خاص من S3 وفحص ترميز الصوت والصورة فقط، دون اتصال بـ Xtream";
+        button.addEventListener("click",async function(){
+          if(!confirm("تشغيل فحص صوت وصورة من النسخة المحفوظة الخاصة؟ لن يُرسل شيء للمشتركين أو Xtream."))return;
+          button.disabled=true;
+          try{
+            var checked=await action("ops/mirror-intake/canary",
+              "ops-mirror-canary",{runId:item.runId,kind:item.kind,
+                ownerConfirmed:true});
+            if(checked.ok!==true||checked.privateOnly!==true||
+               checked.customerCutover!==false||checked.providerRequests!==0||
+               checked.audioVideoDecoded!==true||
+               checked.avSamplePersisted!==true||
+               checked.avSampleOnly!==true||
+               checked.devicePlaybackVerified!==false||
+               Number(checked.videoFramesDecoded)<1||
+               Number(checked.audioFramesDecoded)<1)
+              throw Error(String(checked.code||"لم ينجح التحقق من الصوت والصورة"));
+            out.textContent="✅ فحص عينة صورة وصوت الملف المحفوظ وتوثيقها في PostgreSQL "+
+              String(item.runId).slice(-6)+
+              "؛ هذا لا يثبت تشغيل الفيلم كاملًا على أندرويد أو ويندوز."; 
+          }catch(error){
+            if(String(error.message||"")==="canary_private_sha256_mismatch"){
+              out.textContent="🛑 تلف مؤكد في ملف S3: عُزلت النسخة من السجلات المعتمدة ولم تُرسل للمشتركين. يلزم إعادة التحقق والنقل بموافقة جديدة.";
+              button.remove();
+            }else{
+              out.textContent="⚠ فحص الصورة والصوت غير مكتمل: "+
+                String(error.message||"غير متاح").slice(0,140);
+            }
+          }finally{button.disabled=false}
+        });
+        out.appendChild(document.createTextNode(" "));
+        out.appendChild(button);
+      });
+    }catch(err){
+      out.textContent="⚠ سجل النقل غير متاح: "+
+        String(err.message||"غير متاح").slice(0,140);
+    }finally{this.disabled=false}
+  });
+  $("library-mirror-headroom-refresh").addEventListener("click",async function(){
+    var msg=$("library-mirror-headroom-status");this.disabled=true;
+    msg.textContent="جار مراجعة لقطة اتصالات المصدر المحفوظة، بدون اتصال جديد بـ Xtream...";
+    try{
+      var out=await api("ops/mirror-intake/headroom");
+      if(out.ok!==true||out.readOnly!==true||
+         out.providerMediaRequests!==0||out.mediaBytesTransferred!==0||
+         out.customerCutover!==false||out.copyWorkerStarted!==false)
+        throw Error("استجابة سعة المصدر غير موثوقة");
+      var max=out.sourceReportedMaxConnections;
+      var active=out.sourceReportedActiveConnections;
+      var peak=out.sourceActiveDirectTransfers;
+      var risks=Array.isArray(out.blockedBy)?out.blockedBy:[];
+      var labels={
+        mirror_source_recent_transport_failure:"انقطاع أو مهلة اتصال حديثة بالمصدر",
+        mirror_source_reserved_customer_headroom_missing:"سعة الاتصالات المتبقية غير كافية",
+        mirror_source_limits_stale:"آخر فحص لحساب المصدر قديم",
+        mirror_direct_traffic_measurement_unreliable:"عداد الاتصالات المحلية غير موثوق",
+        mirror_source_direct_http_media_busy:"المصدر ينقل فيديو لمشترك حاليًا",
+        mirror_source_not_online:"المصدر غير متصل",
+        mirror_source_provider_snapshot_not_fresh:"لقطة حساب المصدر غير محدثة"
+      };
+      var problems=risks.slice(0,12).map(function(code){
+        return labels[code]||String(code).slice(0,80);
+      }).join("، ");
+      var cooldown=out.localTransportCooldownMs;
+      var cooldownText=Number.isSafeInteger(cooldown)&&cooldown>0?
+        " · تهدئة المصدر: "+Math.ceil(cooldown/60000)+" دقيقة":"";
+      msg.textContent=(out.headroomCautiouslyClear===true?"✅ اتصال المصدر مبدئيًا يسمح بفحص محدود":"⚠ النقل محجوب لحماية المشتركين")+
+        " · الحد المبلغ: "+(max===null?"غير معروف":max)+
+        " · المستخدم حسب آخر لقطة: "+(active===null?"غير معروف":active)+
+        " · نقل HTTP مباشر بهذا الخادم: "+(peak===null?"غير معروف":peak)+
+        cooldownText+
+        (problems?" · الأسباب: "+problems:"")+
+        " · تنبيه: رصد الانقطاعات محلي في هذه النسخة فقط ولا يشمل جميع الخوادم أو جلسات المشاهدة. لا يثبت صلاحية حفظ المحتوى.";
+    }catch(err){msg.textContent="⚠ لا يمكن تحديد سعة المصدر: "+
+      String(err.message||"غير متاح").slice(0,140)}
+    finally{this.disabled=false}
+  });
+  $("library-mirror-daily-plan-refresh").addEventListener("click",async function(){
+    var status=$("library-mirror-daily-plan-status");
+    this.disabled=true;status.textContent="جار فحص المزامنة اليومية وقائمة الملفات المصرح بها...";
+    try{
+      var data=await api("ops/mirror-intake/daily-plan");
+      if(data.ok!==true||data.readOnly!==true||data.automaticDownload!==false||
+         data.mediaBytesTransferred!==0||data.customerCutover!==false||
+         !Array.isArray(data.items)||data.items.length>24)
+        throw Error("استجابة الخطة اليومية ليست آمنة.");
+      var blockers={};
+      data.items.forEach(function(entry){
+        (entry.blockedBy||[]).forEach(function(reason){
+          blockers[reason]=(blockers[reason]||0)+1;
+        });
+      });
+      var reasons=Object.keys(blockers).map(function(key){
+        return key+": "+blockers[key];
+      }).join("، ");
+      status.textContent="🗓 "+data.day+" · فهرس اليوم: "+data.catalogSync+
+        " · ملفات مجّهزة: "+data.pending+" · مرشّحة للمراجعة: "+
+        data.eligibleForOwnerReview+" · محجوبة: "+data.blocked+
+        (reasons?" · أسباب الحجب: "+reasons:"")+
+        " · لم يبدأ نقل أي ملف تلقائيًا. اختيار أي ملف يتطلب موافقة مالك مستقلة."; 
+    }catch(err){
+      status.textContent="⚠ التقرير اليومي غير متاح: "+
+        String(err.message||"غير متاح").slice(0,140);
+    }finally{this.disabled=false}
+  });
+  $("library-mirror-copy-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف النقل مع حفظ الأجزاء المكتملة؟"))return;
+    this.disabled=true;
+    try{
+      var out=await action("ops/mirror-intake/pause","ops-mirror-pause",{ownerConfirmed:true});
+      if(out.customerCutover!==false)throw Error("استجابة غير موثوقة");
+      $("library-mirror-intake-status").textContent="تم طلب إيقاف الجلسة؛ الأجزاء المكتملة محفوظة.";
+    }catch(err){
+      $("library-mirror-intake-status").textContent="⚠ "+String(err.message||"تعذر الإيقاف").slice(0,120);
+    }finally{this.disabled=false}
   });
   // Server pins source to approved saleh; no browser-controlled source URL.
   var mirrorCursor="",mirrorBusy=false,mirrorPage=0;

@@ -544,6 +544,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/ops/mirror-inventory':()=>portal.opsMirrorInventory({mediaType:uri.searchParams.get('type')||'movie',cursor:uri.searchParams.get('cursor')||'',pageSize:Number(uri.searchParams.get('limit')||50)}),
       '/operator/api/ops/mirror-physical-head':()=>portal.opsPhysicalHeadAudit({kind:uri.searchParams.get('type')||'',id:uri.searchParams.get('id')||'',start:Number(uri.searchParams.get('start')||0)}),
       '/operator/api/ops/mirror-intake':()=>portal.opsMirrorIntakeList(),
+      '/operator/api/ops/mirror-intake/daily-plan':()=>portal.opsMirrorDailyPlan(),
+      '/operator/api/ops/mirror-intake/history':()=>portal.opsMirrorCopyHistory(),
+      '/operator/api/ops/mirror-intake/headroom':()=>portal.opsMirrorSourceHeadroom(),
       '/operator/api/ops/schedule':()=>portal.opsScheduleStatus({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/snapshots':()=>portal.opsSnapshots({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/source-stats':()=>portal.opsSourceStats({sourceId:uri.searchParams.get('sourceId')||''}),
@@ -603,6 +606,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
         path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
         path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
+        path==='/operator/api/ops/mirror-intake/start'?'ops-mirror-start':
+        path==='/operator/api/ops/mirror-intake/pause'?'ops-mirror-pause':
+        path==='/operator/api/ops/mirror-intake/canary'?'ops-mirror-canary':
+        path==='/operator/api/ops/mirror-intake/preflight'?'ops-mirror-preflight':
         path==='/operator/api/ops/mirror-intake'?'ops-mirror-stage':
         path==='/operator/api/ops/mirror-intake/cancel'?'ops-mirror-cancel':
         path==='/operator/api/ops/schedule'?'ops-schedule':
@@ -623,6 +630,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='ops-mirror-start')return portal.opsMirrorIntakeStart(data);
+        if(action==='ops-mirror-pause')return portal.opsMirrorIntakePause(data);
+        if(action==='ops-mirror-canary')return portal.opsMirrorCanary(data);
+        if(action==='ops-mirror-preflight')return portal.opsMirrorIntakePreflight(data);
         if(action==='ops-mirror-stage')return portal.opsMirrorIntakeStage(data);
         if(action==='ops-mirror-cancel')return portal.opsMirrorIntakeCancel(data);
         if(action==='season-retry')return portal.contentHubSeasonRetry(data);
