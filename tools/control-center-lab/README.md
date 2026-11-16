@@ -7,12 +7,12 @@ Production **BLOFY-STREAM** is not modified by this milestone.
 ## Delivered
 
 - A real Bun HTTP service on port 3000 with a browser dashboard in Arabic and a read-only API.
-- Basic authentication with the required Railway environment secret \`CONTROL_CENTER_PASSWORD\` (username \`admin\`).
-- \`GET /health\` remains public, minimal, and compatible with Railway health checks.
-- Protected \`GET /\` displays current HTTP checks and a separate **planned** roadmap.
-- Protected \`GET /api/status\` performs bounded checks of **fixed, allowlisted lab URLs only**. It reports HTTP status and latency; it never accepts user-supplied arbitrary URLs.
-- Protected \`GET /api/history\` exposes a short **in-memory** sample history. It resets on restart.
-- Protected \`GET /api/roadmap\` lists planned phases without marking them as implemented.
+- Basic authentication with the required Railway environment secret `CONTROL_CENTER_PASSWORD` (username `admin`).
+- `GET /health` remains public, minimal, and compatible with Railway health checks.
+- Protected `GET /` displays current HTTP checks and a separate **planned** roadmap.
+- Protected `GET /api/status` performs bounded checks of **fixed, allowlisted lab URLs only**. It reports HTTP status and latency; it never accepts user-supplied arbitrary URLs.
+- Protected `GET /api/history` exposes a short **in-memory** sample history. It resets on restart.
+- Protected `GET /api/roadmap` lists planned phases without marking them as implemented.
 - The probe interval is throttled to a minimum of 15 seconds and each target has a 4.5-second timeout.
 - No customer accounts, Xtream credentials, user playlists, distribution settings, media writes, or production reconfiguration.
 
@@ -23,14 +23,14 @@ The probe is a reachability test, not an audio/video quality check, HLS segment 
 ## Secure access
 
 1. Keep the dashboard domain on HTTPS.
-2. Read/rotate \`CONTROL_CENTER_PASSWORD\` using Railway variables (never put it in GitHub).
-3. Enter username \`admin\` and the password when the browser prompts.
+2. Read/rotate `CONTROL_CENTER_PASSWORD` using Railway variables (never put it in GitHub).
+3. Enter username `admin` and the password when the browser prompts.
 4. For API smoke tests, run (with your own secret supplied locally):
-   \`\`\`sh
+   ```sh
    curl -fsS https://blofy-control-center-lab-test.up.railway.app/health
    curl --fail -u "admin:$CONTROL_CENTER_PASSWORD" \
      https://blofy-control-center-lab-test.up.railway.app/api/status
-   \`\`\`
+   ```
 5. Unauthenticated requests to the dashboard/API must return HTTP 401; GET /health must return 200.
 
 ## Next execution milestones
@@ -45,4 +45,4 @@ The probe is a reachability test, not an audio/video quality check, HLS segment 
 
 ## Rollback
 
-Delete or stop **only** Railway service \`blofy-control-center-lab\` in the test project. Existing BLOFY-STREAM production services and credentials remain unchanged. The code is versioned on branch \`feature/blofy-control-center-lab-20261116\`.
+Delete or stop **only** Railway service `blofy-control-center-lab` in the test project. Existing BLOFY-STREAM production services and credentials remain unchanged. The code is versioned on branch `feature/blofy-control-center-lab-20261116`.
