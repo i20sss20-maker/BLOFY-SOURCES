@@ -11,7 +11,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   const ownerActions=new Map([
     [ROOT+'/ops/mirror-intake','stage-private-mirror-intake'],
     [ROOT+'/ops/mirror-intake/cancel','cancel-private-mirror-intake'],
-    [ROOT+'/ops/mirror-intake/preflight','probe-private-mirror-intake']
+    [ROOT+'/ops/mirror-intake/preflight','probe-private-mirror-intake'],
+    [ROOT+'/ops/mirror-intake/start','start-licensed-private-mirror'],
+    [ROOT+'/ops/mirror-intake/pause','pause-licensed-private-mirror']
   ]);
   async function call(path,{method='GET',body,ownerAction=null}={}){
     if(ownerAction!==null&&(method!=='POST'||ownerActions.get(path)!==ownerAction))
@@ -209,6 +211,23 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/ops/mirror-intake/preflight',{
       method:'POST',body:{kind,id,ownerConfirmed:true,licenseReference},
       ownerAction:'probe-private-mirror-intake'});
+  }
+  // Owner-triggered bounded session; no app playback or automatic startup.
+  function opsMirrorIntakeStart({kind,id,ownerConfirmed}={}){
+    if(ownerConfirmed!==true||!['movie','episode'].includes(kind)||
+      !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+        /^[1-9][0-9]{0,9}$/).test(String(id||'')))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_start_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/start',{method:'POST',
+      body:{kind,id,ownerConfirmed:true},
+      ownerAction:'start-licensed-private-mirror'});
+  }
+  function opsMirrorIntakePause({ownerConfirmed}={}){
+    if(ownerConfirmed!==true)return Promise.resolve({status:400,
+      body:{ok:false,code:'mirror_pause_confirmation_required'}});
+    return call(ROOT+'/ops/mirror-intake/pause',{method:'POST',
+      body:{ownerConfirmed:true},ownerAction:'pause-licensed-private-mirror'});
   }
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
@@ -569,7 +588,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
