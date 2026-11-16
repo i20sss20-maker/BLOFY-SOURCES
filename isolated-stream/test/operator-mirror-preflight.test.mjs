@@ -139,3 +139,33 @@ test('private copy history is signed GET and owner UI shows persisted progress',
   'state.providerRequests!==0','state.customerCutover!==false'])
   assert.ok(html.includes(value),value);
 });
+
+test('operator private S3 audio/video canary requires exact verified run',async()=>{
+ const {calls,portal}=fixture();
+ const runId='mirror_'+'a'.repeat(32);
+ const response=await portal.opsMirrorCanary({
+   runId,kind:'movie',ownerConfirmed:true});
+ assert.equal(response.status,200);
+ assert.equal(calls.length,1);
+ assert.equal(new URL(calls[0].url).pathname,
+  '/internal/blofy-stream/ops/mirror-intake/canary');
+ assert.equal(calls[0].opts.method,'POST');
+ assert.equal(calls[0].opts.headers['x-blofy-owner-action'],
+  'verify-private-mirror-audio-video');
+ assert.deepEqual(JSON.parse(calls[0].opts.body),{
+  runId,kind:'movie',ownerConfirmed:true});
+ for(const bad of [
+  {runId:'mirror_bogus',kind:'movie',ownerConfirmed:true},
+  {runId,kind:'live',ownerConfirmed:true},
+  {runId,kind:'episode',ownerConfirmed:false}
+ ])assert.equal((await portal.opsMirrorCanary(bad)).status,400);
+ assert.equal(calls.length,1);
+ const src=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ assert.ok(src.includes("path==='/operator/api/ops/mirror-intake/canary'?'ops-mirror-canary'"));
+ assert.ok(src.includes("portal.opsMirrorCanary(data)"));
+ const ui=renderOperatorDashboard('mirror-canary-nonce');
+ assert.ok(ui.includes('ops-mirror-canary'));
+ assert.ok(ui.includes('verify-private-mirror-audio-video')===false);
+ assert.ok(ui.includes('🎬 فحص صورة وصوت النسخة'));
+ assert.ok(ui.includes('checked.audioVideoDecoded!==true'));
+});
