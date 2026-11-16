@@ -3765,8 +3765,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             out.textContent="✅ تم فك ترميز صورة وصوت الملف المحفوظ "+
               String(item.runId).slice(-6)+"، دون اتصال بمصدر Xtream أو تطبيقات العملاء."; 
           }catch(error){
-            out.textContent="⚠ فحص الصورة والصوت غير مكتمل: "+
-              String(error.message||"غير متاح").slice(0,140);
+            if(String(error.message||"")==="canary_private_sha256_mismatch"){
+              out.textContent="🛑 تلف مؤكد في ملف S3: عُزلت النسخة من السجلات المعتمدة ولم تُرسل للمشتركين. يلزم إعادة التحقق والنقل بموافقة جديدة.";
+              button.remove();
+            }else{
+              out.textContent="⚠ فحص الصورة والصوت غير مكتمل: "+
+                String(error.message||"غير متاح").slice(0,140);
+            }
           }finally{button.disabled=false}
         });
         out.appendChild(document.createTextNode(" "));
