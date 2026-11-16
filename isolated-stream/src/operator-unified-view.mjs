@@ -918,10 +918,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="controls">
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
+      <button type="button" class="btn secondary" id="library-mirror-daily-plan-refresh">🗓 تقرير المزامنة اليومية</button>
       <button type="button" class="btn secondary" id="library-mirror-copy-pause">⏸ إيقاف النقل</button>
     </div>
     <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
+    <p id="library-mirror-daily-plan-status" class="muted" role="status" aria-live="polite">لم يُفحص تقرير النقل اليومي بعد. المزامنة اليومية للفهرس لا تنسخ الأفلام تلقائيًا.</p>
     <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
   </div>
   <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
@@ -3710,6 +3712,34 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("library-mirror-intake-refresh").addEventListener("click",function(){
     void refreshMirrorIntakeOwner();
+  });
+  $("library-mirror-daily-plan-refresh").addEventListener("click",async function(){
+    var status=$("library-mirror-daily-plan-status");
+    this.disabled=true;status.textContent="جار فحص المزامنة اليومية وقائمة الملفات المصرح بها...";
+    try{
+      var data=await api("ops/mirror-intake/daily-plan");
+      if(data.ok!==true||data.readOnly!==true||data.automaticDownload!==false||
+         data.mediaBytesTransferred!==0||data.customerCutover!==false||
+         !Array.isArray(data.items)||data.items.length>24)
+        throw Error("استجابة الخطة اليومية ليست آمنة.");
+      var blockers={};
+      data.items.forEach(function(entry){
+        (entry.blockedBy||[]).forEach(function(reason){
+          blockers[reason]=(blockers[reason]||0)+1;
+        });
+      });
+      var reasons=Object.keys(blockers).map(function(key){
+        return key+": "+blockers[key];
+      }).join("، ");
+      status.textContent="🗓 "+data.day+" · فهرس اليوم: "+data.catalogSync+
+        " · ملفات مجّهزة: "+data.pending+" · مرشّحة للمراجعة: "+
+        data.eligibleForOwnerReview+" · محجوبة: "+data.blocked+
+        (reasons?" · أسباب الحجب: "+reasons:"")+
+        " · لم يبدأ نقل أي ملف تلقائيًا. اختيار أي ملف يتطلب موافقة مالك مستقلة."; 
+    }catch(err){
+      status.textContent="⚠ التقرير اليومي غير متاح: "+
+        String(err.message||"غير متاح").slice(0,140);
+    }finally{this.disabled=false}
   });
   $("library-mirror-copy-pause").addEventListener("click",async function(){
     if(!confirm("إيقاف النقل مع حفظ الأجزاء المكتملة؟"))return;
