@@ -13,7 +13,8 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     [ROOT+'/ops/mirror-intake/cancel','cancel-private-mirror-intake'],
     [ROOT+'/ops/mirror-intake/preflight','probe-private-mirror-intake'],
     [ROOT+'/ops/mirror-intake/start','start-licensed-private-mirror'],
-    [ROOT+'/ops/mirror-intake/pause','pause-licensed-private-mirror']
+    [ROOT+'/ops/mirror-intake/pause','pause-licensed-private-mirror'],
+    [ROOT+'/ops/mirror-intake/canary','verify-private-mirror-audio-video']
   ]);
   async function call(path,{method='GET',body,ownerAction=null}={}){
     if(ownerAction!==null&&(method!=='POST'||ownerActions.get(path)!==ownerAction))
@@ -31,6 +32,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/ops/mirror-intake/preflight'&&method==='POST'?30000:
+      path===ROOT+'/ops/mirror-intake/canary'&&method==='POST'?80000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
@@ -230,6 +232,18 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       body:{ok:false,code:'mirror_pause_confirmation_required'}});
     return call(ROOT+'/ops/mirror-intake/pause',{method:'POST',
       body:{ownerConfirmed:true},ownerAction:'pause-licensed-private-mirror'});
+  }
+  // Decode the audio and video of one already verified private S3 mirror
+  // without touching the provider or making content public.
+  function opsMirrorCanary({runId,kind,ownerConfirmed}={}){
+    if(ownerConfirmed!==true||
+       !/^mirror_[a-f0-9]{32}$/.test(String(runId||''))||
+       !['movie','episode'].includes(kind))
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_canary_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake/canary',{
+      method:'POST',body:{runId,kind,ownerConfirmed:true},
+      ownerAction:'verify-private-mirror-audio-video'});
   }
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
@@ -590,7 +604,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorDailyPlan,opsMirrorCopyHistory,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorDailyPlan,opsMirrorCopyHistory,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,opsMirrorCanary,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
