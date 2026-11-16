@@ -169,3 +169,24 @@ test('operator private S3 audio/video canary requires exact verified run',async(
  assert.ok(ui.includes('🎬 فحص صورة وصوت النسخة'));
  assert.ok(ui.includes('checked.audioVideoDecoded!==true'));
 });
+
+test('owner source headroom report is read-only and does not request Xtream media',async()=>{
+ const {calls,portal}=fixture();
+ const response=await portal.opsMirrorSourceHeadroom();
+ assert.equal(response.status,200);
+ assert.equal(calls.length,1);
+ assert.equal(new URL(calls[0].url).pathname,
+  '/internal/blofy-stream/ops/mirror-intake/headroom');
+ assert.equal(calls[0].opts.method,'GET');
+ assert.equal(calls[0].opts.headers.authorization,'Bearer '+KEY);
+ assert.equal(calls[0].opts.body,undefined);
+ const api=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ assert.ok(api.includes("'/operator/api/ops/mirror-intake/headroom':()=>portal.opsMirrorSourceHeadroom()"));
+ const html=renderOperatorDashboard('nonce-mirror-headroom');
+ for(const value of ['library-mirror-headroom-refresh',
+  'library-mirror-headroom-status',
+  'api("ops/mirror-intake/headroom")',
+  'out.providerMediaRequests!==0',
+  'out.headroomCautiouslyClear===true'])
+  assert.ok(html.includes(value),value);
+});
