@@ -168,6 +168,12 @@ test('operator private S3 audio/video canary requires exact verified run',async(
  assert.ok(ui.includes('verify-private-mirror-audio-video')===false);
  assert.ok(ui.includes('🎬 فحص صورة وصوت النسخة'));
  assert.ok(ui.includes('checked.audioVideoDecoded!==true'));
+ assert.ok(ui.includes('checked.avSamplePersisted!==true'));
+ assert.ok(ui.includes('checked.devicePlaybackVerified!==false'));
+ assert.ok(ui.includes('عينات صوت وصورة مفحوصة'));
+ assert.ok(ui.includes('item.avPrefixDecoded===true'));
+ assert.ok(ui.includes('لا يثبت تشغيل الفيلم كاملًا على أندرويد أو ويندوز'));
+
  assert.ok(ui.includes('canary_private_sha256_mismatch'));
  assert.ok(ui.includes('عُزلت النسخة من السجلات المعتمدة'));
  assert.ok(ui.includes('button.remove()'));
