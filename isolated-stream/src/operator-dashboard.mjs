@@ -603,6 +603,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
         path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
         path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
+        path==='/operator/api/ops/mirror-intake/start'?'ops-mirror-start':
+        path==='/operator/api/ops/mirror-intake/pause'?'ops-mirror-pause':
         path==='/operator/api/ops/mirror-intake/preflight'?'ops-mirror-preflight':
         path==='/operator/api/ops/mirror-intake'?'ops-mirror-stage':
         path==='/operator/api/ops/mirror-intake/cancel'?'ops-mirror-cancel':
@@ -624,6 +626,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='ops-mirror-start')return portal.opsMirrorIntakeStart(data);
+        if(action==='ops-mirror-pause')return portal.opsMirrorIntakePause(data);
         if(action==='ops-mirror-preflight')return portal.opsMirrorIntakePreflight(data);
         if(action==='ops-mirror-stage')return portal.opsMirrorIntakeStage(data);
         if(action==='ops-mirror-cancel')return portal.opsMirrorIntakeCancel(data);
