@@ -182,6 +182,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
   // Private VOD metadata-intake ledger (NOT an active copy queue).
   const opsMirrorIntakeList=()=>call(ROOT+'/ops/mirror-intake');
   const opsMirrorDailyPlan=()=>call(ROOT+'/ops/mirror-intake/daily-plan');
+  const opsMirrorCopyHistory=()=>call(ROOT+'/ops/mirror-intake/history');
   function opsMirrorIntakeChange(kind,id,ownerConfirmed,{cancel=false}={}){
     if(!['movie','episode'].includes(kind)||
        !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
@@ -589,7 +590,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorDailyPlan,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorDailyPlan,opsMirrorCopyHistory,opsMirrorIntakeStage,opsMirrorIntakeCancel,opsMirrorIntakePreflight,opsMirrorIntakeStart,opsMirrorIntakePause,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
