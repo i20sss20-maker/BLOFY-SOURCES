@@ -3804,13 +3804,29 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var max=out.sourceReportedMaxConnections;
       var active=out.sourceReportedActiveConnections;
       var peak=out.sourceActiveDirectTransfers;
-      var problems=Array.isArray(out.blockedBy)?out.blockedBy.join("، "):"";
+      var risks=Array.isArray(out.blockedBy)?out.blockedBy:[];
+      var labels={
+        mirror_source_recent_transport_failure:"انقطاع أو مهلة اتصال حديثة بالمصدر",
+        mirror_source_reserved_customer_headroom_missing:"سعة الاتصالات المتبقية غير كافية",
+        mirror_source_limits_stale:"آخر فحص لحساب المصدر قديم",
+        mirror_direct_traffic_measurement_unreliable:"عداد الاتصالات المحلية غير موثوق",
+        mirror_source_direct_http_media_busy:"المصدر ينقل فيديو لمشترك حاليًا",
+        mirror_source_not_online:"المصدر غير متصل",
+        mirror_source_provider_snapshot_not_fresh:"لقطة حساب المصدر غير محدثة"
+      };
+      var problems=risks.slice(0,12).map(function(code){
+        return labels[code]||String(code).slice(0,80);
+      }).join("، ");
+      var cooldown=out.localTransportCooldownMs;
+      var cooldownText=Number.isSafeInteger(cooldown)&&cooldown>0?
+        " · تهدئة المصدر: "+Math.ceil(cooldown/60000)+" دقيقة":"";
       msg.textContent=(out.headroomCautiouslyClear===true?"✅ اتصال المصدر مبدئيًا يسمح بفحص محدود":"⚠ النقل محجوب لحماية المشتركين")+
         " · الحد المبلغ: "+(max===null?"غير معروف":max)+
         " · المستخدم حسب آخر لقطة: "+(active===null?"غير معروف":active)+
         " · نقل HTTP مباشر بهذا الخادم: "+(peak===null?"غير معروف":peak)+
+        cooldownText+
         (problems?" · الأسباب: "+problems:"")+
-        " · هذه اللقطة لا تشمل كل المشاهدين أو اتصالات الشركات الأخرى، ولا تثبت ترخيص نقل المحتوى.";
+        " · تنبيه: رصد الانقطاعات محلي في هذه النسخة فقط ولا يشمل جميع الخوادم أو جلسات المشاهدة. لا يثبت صلاحية حفظ المحتوى.";
     }catch(err){msg.textContent="⚠ لا يمكن تحديد سعة المصدر: "+
       String(err.message||"غير متاح").slice(0,140)}
     finally{this.disabled=false}
