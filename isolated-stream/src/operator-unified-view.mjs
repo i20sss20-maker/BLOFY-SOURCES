@@ -3732,11 +3732,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         return (item.kind==="episode"?"حلقة":"فيلم")+" "+
           String(item.runId||"").slice(-6)+" · "+
           Number(item.percent||0)+"% · "+String(item.state||"") +
-          (item.failureCode?" · "+String(item.failureCode):"");
+          (item.failureCode?" · "+String(item.failureCode):"")+
+          (item.avPrefixDecoded===true?
+            " · ✅ فُحصت عينة صوت وصورة":" · فحص العينة غير مسجل");
       }).join(" | ");
       out.textContent="📊 مكتمل "+Number(total.verified||0)+
         " · قيد النقل "+Number(total.staged||0)+
         " · فشل "+Number(total.failed||0)+
+        " · عينات صوت وصورة مفحوصة "+
+          state.items.filter(function(item){return item.avPrefixDecoded===true}).length+
         " · مخزن "+(Number(state.storedBytes||0)/1073741824).toFixed(2)+
         " GiB · "+(latest||"لا توجد عمليات نقل مسجلة")+
         " · التحقق الفيزيائي المستقل على S3 يظل مطلوبًا قبل تسليم التطبيق.";
@@ -3747,7 +3751,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       }).slice(0,5).forEach(function(item){
         var button=document.createElement("button");
         button.type="button";button.className="btn secondary";
-        button.textContent="🎬 فحص صورة وصوت النسخة "+String(item.runId).slice(-6);
+        button.textContent=(item.avPrefixDecoded===true?
+          "🔁 إعادة فحص عينة الصوت والصورة ":"🎬 فحص صورة وصوت النسخة ")+
+          String(item.runId).slice(-6);
         button.title="قراءة مقطع خاص من S3 وفحص ترميز الصوت والصورة فقط، دون اتصال بـ Xtream";
         button.addEventListener("click",async function(){
           if(!confirm("تشغيل فحص صوت وصورة من النسخة المحفوظة الخاصة؟ لن يُرسل شيء للمشتركين أو Xtream."))return;
@@ -3759,11 +3765,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             if(checked.ok!==true||checked.privateOnly!==true||
                checked.customerCutover!==false||checked.providerRequests!==0||
                checked.audioVideoDecoded!==true||
+               checked.avSamplePersisted!==true||
+               checked.avSampleOnly!==true||
+               checked.devicePlaybackVerified!==false||
                Number(checked.videoFramesDecoded)<1||
                Number(checked.audioFramesDecoded)<1)
               throw Error(String(checked.code||"لم ينجح التحقق من الصوت والصورة"));
-            out.textContent="✅ تم فك ترميز صورة وصوت الملف المحفوظ "+
-              String(item.runId).slice(-6)+"، دون اتصال بمصدر Xtream أو تطبيقات العملاء."; 
+            out.textContent="✅ فحص عينة صورة وصوت الملف المحفوظ وتوثيقها في PostgreSQL "+
+              String(item.runId).slice(-6)+
+              "؛ هذا لا يثبت تشغيل الفيلم كاملًا على أندرويد أو ويندوز."; 
           }catch(error){
             if(String(error.message||"")==="canary_private_sha256_mismatch"){
               out.textContent="🛑 تلف مؤكد في ملف S3: عُزلت النسخة من السجلات المعتمدة ولم تُرسل للمشتركين. يلزم إعادة التحقق والنقل بموافقة جديدة.";
