@@ -918,6 +918,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     <div class="controls">
       <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
       <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
+      <button type="button" class="btn secondary" id="library-mirror-copy-pause">⏸ إيقاف النقل</button>
     </div>
     <p class="muted">يمكن تجهيز 24 سجلًا فقط، ثم فحص حجم كل ملف (4 كيلوبايت) وميزانية S3 الخاصة عند خمول المصدر وبموافقة المالك. يتطلب الفحص مرجع تصريح تخزين للعنصر. <strong>لا يبدأ تحميل</strong> حتى لو نجح الفحص؛ عامل النقل ما زال متوقفًا.</p>
     <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
@@ -3605,6 +3606,23 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
             "بانتظار فحص الحجم وتوثيق صلاحية التخزين");
         wrap.appendChild(caption);
         if(entry.state==="awaiting_size_and_license"){
+          var startCopy=document.createElement("button");
+          startCopy.type="button";startCopy.className="btn secondary";
+          startCopy.textContent="▶ بدء نقل 16 جزءًا كحد أقصى";
+          startCopy.addEventListener("click",async function(){
+            if(!confirm("بدء نقل محدود بعد فحص الحجم والحقوق والمساحة؟ لا تتغير أكواد العملاء."))return;
+            startCopy.disabled=true;
+            try{
+              var result=await action("ops/mirror-intake/start","ops-mirror-start",{
+                kind:entry.kind,id:entry.id,ownerConfirmed:true});
+              if(result.ok!==true||result.customerCutover!==false||
+                 result.oneItemOnly!==true)throw Error("جلسة النقل غير جاهزة أو محجوبة.");
+              status.textContent="✅ بدأت جلسة نقل خاصة محدودة. افحص حالة Content Hub لمتابعة التقدم.";
+            }catch(err){
+              status.textContent="⚠ تعذر بدء النقل: "+String(err.message||"غير متاح").slice(0,130);
+            }finally{startCopy.disabled=false}
+          });
+          wrap.appendChild(startCopy);
           var inspect=document.createElement("button");
           inspect.type="button";inspect.className="btn secondary";
           inspect.textContent="🔎 فحص الحجم والتخزين";
@@ -3692,6 +3710,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("library-mirror-intake-refresh").addEventListener("click",function(){
     void refreshMirrorIntakeOwner();
+  });
+  $("library-mirror-copy-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف النقل مع حفظ الأجزاء المكتملة؟"))return;
+    this.disabled=true;
+    try{
+      var out=await action("ops/mirror-intake/pause","ops-mirror-pause",{ownerConfirmed:true});
+      if(out.customerCutover!==false)throw Error("استجابة غير موثوقة");
+      $("library-mirror-intake-status").textContent="تم طلب إيقاف الجلسة؛ الأجزاء المكتملة محفوظة.";
+    }catch(err){
+      $("library-mirror-intake-status").textContent="⚠ "+String(err.message||"تعذر الإيقاف").slice(0,120);
+    }finally{this.disabled=false}
   });
   // Server pins source to approved saleh; no browser-controlled source URL.
   var mirrorCursor="",mirrorBusy=false,mirrorPage=0;
