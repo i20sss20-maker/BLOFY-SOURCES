@@ -80,7 +80,8 @@ export function createOperatorLiveProbeQueue({
         completedAt:run.completedAt,
         results:run.results.map(row=>({...row}))
       })),
-      sourceConnectionsCreatedByQueue:0,customerRoutesModified:false,
+      newOperatorPathsCreated:0,upstreamSessionsCreated:null,
+      customerRoutesModified:false,
       probeMayReuseOnDemandWorker:true,
       note:'لا يتم فتح مسارات Xtream جديدة. عند فحص مسار MediaMTX نشط قد يبدأ عامل الاستعادة اتصاله مجددًا إن انقطع المصدر أثناء الفحص. لا يُثبت هذا الاختبار سماع الصوت أو فك الصورة على جهاز العميل، ولا يتجاوز حدود المصدر.'
     };
