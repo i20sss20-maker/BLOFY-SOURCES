@@ -13,6 +13,7 @@ import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
 import {createOperatorMediaWatchlist} from './operator-media-watchlist.mjs';
+import {createOperatorLiveProbeQueue} from './operator-live-probe-queue.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
@@ -71,6 +72,9 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   const smartPlayback=createSmartPlaybackMonitor({
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
+  const mediaProbeQueue=liveSupervisor&&typeof liveSupervisor.list==='function'&&
+    typeof liveSupervisor.probe==='function'?
+    createOperatorLiveProbeQueue({supervisor:liveSupervisor}):null;
   const mediaWatchlist=createOperatorMediaWatchlist({
     portal,playback:()=>smartPlayback.snapshot(),ops:streamOps
   });
@@ -305,6 +309,34 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,
           {ok:false,code:[400,413,415].includes(error?.status)?
             error.message:'unavailable_recheck_unavailable'}));
+      return true;
+    }
+    // Explicitly approved, max-two sequential HLS checks on existing active
+    // operator paths only. No background catalog sweep or new Xtream paths.
+    if(req.method==='GET'&&path==='/operator/api/media-scan/queue'){
+      json(res,200,mediaProbeQueue?mediaProbeQueue.snapshot():{
+        ok:false,code:'operator_live_probe_not_configured'
+      });
+      return true;
+    }
+    if(req.method==='POST'&&(path==='/operator/api/media-scan/queue/start'||
+      path==='/operator/api/media-scan/queue/cancel')){
+      const start=path.endsWith('/start');
+      if(req.headers['x-blofy-operator-action']!==
+        (start?'media-scan-start':'media-scan-cancel')){
+        json(res,403,{ok:false,code:'operator_action_header_required'});
+        return true;
+      }
+      if(!mediaProbeQueue){
+        json(res,503,{ok:false,code:'operator_live_probe_not_configured'});
+        return true;
+      }
+      void readAdminJson(req).then(body=>
+        start?mediaProbeQueue.start(body):mediaProbeQueue.cancel()
+      ).then(({status,body})=>json(res,status,body))
+       .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,{
+         ok:false,code:[400,413,415].includes(e?.status)?e.message:'operator_live_probe_unavailable'
+       }));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/media-scan/report'){

@@ -375,3 +375,47 @@ test('short or missing proxy credential is never an operator credential',async()
     assert.equal((await fetch(base+'/operator',{headers:{authorization:auth}})).status,200);
   });
 });
+
+
+test('bounded media probe queue is protected and inert without explicit approvals',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const anonymous=await fetch(base+'/operator/api/media-scan/queue');
+    assert.equal(anonymous.status,401);
+    const response=await fetch(base+'/operator/api/media-scan/queue',{
+      headers:{authorization:auth}
+    });
+    assert.equal(response.status,200);
+    const state=await response.json();
+    assert.equal(state.ok,true);
+    assert.equal(state.requiresExplicitStart,true);
+    assert.equal(state.maxPerRun,2);
+    assert.equal(state.concurrentProbes,1);
+    assert.equal(state.newOperatorPathsCreated,0);
+    assert.equal(state.upstreamSessionsCreated,null);
+    assert.equal(state.job,null);
+    const panel=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.match(await panel.text(),/id="media-probe-queue-start"/);
+    const noHeader=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+      body:'{}'
+    });
+    assert.equal(noHeader.status,403);
+    const noConsent=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'application/json',
+        'x-blofy-operator-action':'media-scan-start'},
+      body:JSON.stringify({paths:['live-123456abcdef']})
+    });
+    assert.equal(noConsent.status,403);
+    assert.equal((await noConsent.json()).code,'operator_live_probe_confirmation_required');
+    const noActive=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'application/json',
+        'x-blofy-operator-action':'media-scan-start'},
+      body:JSON.stringify({paths:['live-123456abcdef'],rightsConfirmed:true,
+        capacityAcknowledged:true})
+    });
+    assert.equal(noActive.status,409);
+    assert.equal((await noActive.json()).code,'operator_live_probe_path_not_active');
+  });
+});
