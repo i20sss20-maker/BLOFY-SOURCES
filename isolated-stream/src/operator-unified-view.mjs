@@ -1108,6 +1108,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  <button type="button" class="btn secondary" id="diagnostic-go-audio">🔊 تشخيص الصوت</button>
  <button type="button" class="btn secondary" id="diagnostic-go-failures">⚠️ سجل 404</button>
  </div></div>
+<div class="panel" id="transport-502-health-panel">
+ <div class="controls"><div><h3>📡 تشخيص الانقطاعات 502 والصوت والصورة</h3>
+ <p class="muted">يعرض عدادات تشغيل فعلية من بوابة BLOFY خلال آخر 60 دقيقة أو منذ آخر إعادة تشغيل (أيهما أقصر). يشمل أخطاء المصدر وانقطاع البيانات بعد بدء البث، وليس نتائج فك ترميز على جهاز العميل.</p></div>
+ <button type="button" class="btn secondary" id="transport-502-refresh">↻ تحديث حالة الاتصال</button></div>
+ <div class="cards">
+ <div class="stat"><small>استجابات بدأت بحزم وسائط</small><strong id="transport-502-started">—</strong></div>
+ <div class="stat"><small>محاولات فاشلة قبل التشغيل</small><strong id="transport-502-failed">—</strong></div>
+ <div class="stat"><small>انقطاعات بعد بدء التشغيل</small><strong id="transport-502-interrupted">—</strong></div>
+ <div class="stat"><small>انقطاعات اتصال المصدر</small><strong id="transport-502-resets">—</strong></div>
+ </div>
+ <p class="diag-inline-note" id="transport-502-status" role="status" aria-live="polite">لم تُقرأ مؤشرات اتصال المصدر بعد.</p>
+ <div class="tablewrap"><table><thead><tr><th>سبب المشكلة</th><th>القنوات</th><th>الأفلام</th><th>الحلقات</th><th>الإجمالي</th></tr></thead>
+ <tbody id="transport-502-reasons"></tbody></table></div>
+ <p class="muted">هذه إحصاءات مخزنة بالذاكرة فقط (بحد 400 حدث)، ولا ترسل طلبات وسائط جديدة، ولا تحفظ بيانات المشتركين. نجاح أول حزمة لا يثبت اكتمال التشغيل أو وجود صوت مسموع.</p>
+</div>
 <div class="panel" id="media-watchlist-panel">
 <div class="controls"><div><h3>🔎 سجل جودة القنوات والصوت والصورة</h3>
 <p class="muted">تقرير واحد من سجل 404 ومراقبة البث الفعلية المسجلة. لا يجلب مقاطع من المصدر ولا يفحص كل قنوات الفهرس.</p></div>
@@ -1437,6 +1452,85 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{ownerAudioBusy=false;this.disabled=false}
   });
   void loadOwnerAudioReadiness();
+  var transportQualityBusy=false;
+  var transportReasonNames={
+    xtream_transport_connection_reset:"إعادة ضبط اتصال المصدر (ECONNRESET)",
+    xtream_transport_timeout:"مهلة اتصال المصدر",
+    xtream_transport_unreachable:"المصدر غير قابل للوصول",
+    xtream_transport_dns_failed:"تعذّر حل عنوان المصدر",
+    xtream_transport_connection_refused:"المصدر رفض الاتصال",
+    xtream_transport_tls_invalid:"خطأ شهادة المصدر",
+    upstream_http_502:"خطأ 502 من المصدر",
+    upstream_http_503:"خطأ 503 من المصدر",
+    upstream_http_504:"خطأ 504 من المصدر",
+    upstream_http_404:"ملف غير متاح لدى المصدر",
+    upstream_http_509:"تقييد اتصالات من المصدر",
+    headers_timeout:"مهلة انتظار بداية الاستجابة",
+    media_read_timeout:"مهلة قراءة البث",
+    upstream_empty_media:"المصدر لم يرسل وسائط",
+    upstream_non_media_response:"المصدر أرسل بيانات ليست وسائط",
+    upstream_unreachable:"تعذّر الوصول للمصدر"
+  };
+  function setTransportValue(id,n){
+    $(id).textContent=Number.isSafeInteger(n)&&n>=0?count(n):"غير معروف";
+  }
+  async function loadTransportQuality(){
+    if(transportQualityBusy)return;
+    transportQualityBusy=true;
+    var btn=$("transport-502-refresh"),msg=$("transport-502-status"),
+      tbody=$("transport-502-reasons");
+    btn.disabled=true;
+    msg.textContent="جار قراءة العدادات دون طلب بث جديد...";
+    try{
+      var data=await api("media-quality");
+      if(data.ok!==true||data.scope!=="this_instance")
+        throw Error("مؤشرات النقل غير متاحة");
+      setTransportValue("transport-502-started",data.started);
+      setTransportValue("transport-502-failed",data.failed);
+      setTransportValue("transport-502-interrupted",data.interrupted);
+      var reason=data.byReason||{},
+          byKind=data.reasonByKind||{};
+      setTransportValue("transport-502-resets",
+        Number.isSafeInteger(reason.xtream_transport_connection_reset)?
+         reason.xtream_transport_connection_reset:0);
+      tbody.replaceChildren();
+      Object.entries(reason).filter(function(e){
+        return Object.prototype.hasOwnProperty.call(transportReasonNames,e[0])&&
+         Number.isSafeInteger(e[1])&&e[1]>0;
+      }).sort(function(a,b){return b[1]-a[1]}).slice(0,18)
+      .forEach(function(e){
+        var tr=document.createElement("tr");
+        var vals=[transportReasonNames[e[0]],
+          byKind.live?.[e[0]],byKind.movie?.[e[0]],
+          byKind.series?.[e[0]],e[1]];
+        vals.forEach(function(v,j){
+          var td=document.createElement("td");
+          td.textContent=j===0?v:Number.isSafeInteger(v)?count(v):"—";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      if(!tbody.children.length){
+        var tr=document.createElement("tr"),td=document.createElement("td");
+        td.colSpan=5;
+        td.textContent="لا توجد أخطاء معروفة في العينة المحدودة. هذا لا يثبت سلامة جميع القنوات.";
+        tr.appendChild(td);tbody.appendChild(tr);
+      }
+      var coverage=data.reasonCountWindow==="bounded_hourly_samples"?
+        "العدّ من عينات الساعة المحفوظة بالذاكرة":"العدّ من آخر أحداث محدودة فقط";
+      msg.textContent="✅ تم قراءة المؤشرات. "+coverage+
+        " — الجهاز العميل والصوت المسموع لم يتم اختباره هنا.";
+    }catch(e){
+      msg.textContent="تعذر قراءة بيانات الاتصال: "+String(e.message||"غير معروف").slice(0,90);
+      ["transport-502-started","transport-502-failed",
+       "transport-502-interrupted","transport-502-resets"].forEach(function(id){
+        $(id).textContent="—";
+      });
+      tbody.replaceChildren();
+    }finally{transportQualityBusy=false;btn.disabled=false}
+  }
+  $("transport-502-refresh").addEventListener("click",loadTransportQuality);
+  void loadTransportQuality();
   var hubState=null,hubLoading=false;
   var hubBytes=function(n){
     var val=Number(n||0);
