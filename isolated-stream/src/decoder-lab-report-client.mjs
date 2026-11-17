@@ -66,6 +66,19 @@ export function createDecoderLabReportClient({
       const verified=data.ok===true&&report.ok===true&&
         report.audioDecoderExecuted===true&&report.videoDecoderExecuted===true&&
         audioFrames!==null&&audioFrames>=2&&videoFrames!==null&&videoFrames>=2;
+      const expectedMatrix=['aac','ac3','eac3'];
+      const matrixRows=Array.isArray(report.codecMatrix)?report.codecMatrix:[];
+      const matrix=expectedMatrix.map(codec=>{
+        const matches=matrixRows.filter(row=>row?.codec===codec);
+        const row=matches.length===1?matches[0]:null;
+        const frames=limitedInteger(row?.audioFrames,1000);
+        const decoded=row?.ok===true&&row?.audioDecoded===true&&
+          row?.stage==='complete'&&frames!==null&&frames>=2;
+        return {codec,decoded,frames:decoded?frames:null,
+          state:row===null?'unknown':decoded?'synthetic_decoded':'not_verified'};
+      });
+      const codecMatrixVerified=report.codecMatrixAllVerified===true&&
+        matrixRows.length===3&&matrix.every(row=>row.decoded);
       return view({
         ok:verified,state:verified?'synthetic_verified':'synthetic_failed',
         message:verified?'فُكّ الصوت والصورة لعينة صناعية فقط.':'فشل فك العينة الصناعية أو لم يكتمل.',
@@ -74,6 +87,8 @@ export function createDecoderLabReportClient({
         audioFrames,videoFrames,
         audioCodec:VALID_AUDIO.has(report.audioCodec)?report.audioCodec:null,
         videoCodec:VALID_VIDEO.has(report.videoCodec)?report.videoCodec:null,
+        audioCodecMatrix:matrix,codecMatrixVerified,
+        allSyntheticCodecsVerified:verified&&codecMatrixVerified,
         productionStreamVerified:false,
         diagnosticsRequiresLicensedSample:true,
         noSourceContentTested:true
