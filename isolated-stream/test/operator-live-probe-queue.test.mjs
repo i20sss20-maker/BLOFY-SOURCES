@@ -74,7 +74,8 @@ test('one-at-a-time HLS probes preserve safe codec metadata and do not create pa
   assert.deepEqual(state.job.results[0].tracks.videoCodecs,['h264']);
   assert.equal(state.job.results[0].tracks.decodedAudioVerified,false);
   assert.equal(state.job.results[0].audioVideoDecoded,false);
-  assert.equal(state.sourceConnectionsCreatedByQueue,0);
+  assert.equal(state.newOperatorPathsCreated,0);
+  assert.equal(state.upstreamSessionsCreated,null);
   assert.equal(state.customerRoutesModified,false);
   assert.doesNotMatch(JSON.stringify(state),/provider.invalid|password=secret|key/);
 });
