@@ -55,6 +55,7 @@ function safeEnvironment({port,engineUrl}){
 export function createStreamServer({
   engineUrl=DEFAULT_ENGINE,
   adminToken='',
+  operatorProxyToken='',
   relaySharedToken='',
   relayFetchImpl=fetch,
   relayLookup=undefined,
@@ -154,7 +155,7 @@ export function createStreamServer({
     getReplicaSynthetic:()=>replicaBootProof,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
-    adminToken,engineOrigin:cfg.origin,fetchImpl,
+    adminToken,operatorProxyToken,engineOrigin:cfg.origin,fetchImpl,
     controlUsername:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_USER||'',
     controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     unifiedSecret:process.env.BLOFY_STREAM_UNIFIED_BRIDGE_KEY||'',
@@ -306,6 +307,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   const service=createStreamServer({
     engineUrl:process.env.BLOFY_RESTREAM_ENGINE_URL||DEFAULT_ENGINE,
     adminToken:process.env.BLOFY_STREAM_ADMIN_TOKEN||'',
+    operatorProxyToken:process.env.BLOFY_STREAM_OPERATOR_PROXY_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
     autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
