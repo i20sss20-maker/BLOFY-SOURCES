@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
-import {createStreamServer} from '../src/server.mjs';
+import {createServer} from 'node:http';
+import {createOperatorDashboard} from '../src/operator-dashboard.mjs';
 
 const ID='123e4567-e89b-42d3-a456-426614174000';
 const ID2='123e4567-e89b-42d3-a456-426614174001';
@@ -53,8 +54,12 @@ function fixture(){
  return {data,fetchImpl};
 }
 async function withSite(f,fn){
- const {app}=createStreamServer({adminToken:operator,
-  unifiedSecret:gateway,fetchImpl:f.fetchImpl});
+ const dashboard=createOperatorDashboard({adminToken:operator,
+  unifiedSecret:gateway,fetchImpl:f.fetchImpl,
+  engineOrigin:'http://blofy-stream-media.railway.internal:8888'});
+ const app=createServer((req,res)=>{
+  if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}
+ });
  app.listen(0,'127.0.0.1');await once(app,'listening');
  try{return await fn('http://127.0.0.1:'+app.address().port)}
  finally{await new Promise(resolve=>app.close(resolve))}
