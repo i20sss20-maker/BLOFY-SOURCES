@@ -485,3 +485,36 @@ test('shared tickets without licensed CDN scope still deny external redirect',as
    headers:{location:'https://unapproved-cdn.example/live.ts'}});
  }});
 });
+
+
+test('confirmed provider 509 is carried as a fixed no-secret diagnostic; relay does not retry or widen source sessions',async()=>{
+  let upstreamCalls=0;
+  await host(async origin=>{
+    const granted=await issue(origin,{
+      kind:'live',sourceUrl:'https://allowed.example/live/user/private-pass/3.ts'
+    });
+    assert.equal(granted.status,201);
+    const {path}=await granted.json();
+    const response=await fetch(origin+path);
+    assert.equal(response.status,502);
+    const result=await response.json();
+    assert.deepEqual({ok:result.ok,code:result.code,upstreamStatus:result.upstreamStatus},
+      {ok:false,code:'relay_provider_http_509',upstreamStatus:509});
+    assert.equal(upstreamCalls,1);
+    assert.doesNotMatch(JSON.stringify(result),/private-pass|allowed.example|secret|upstream capacity message/);
+  },{fetchImpl:async()=>{
+    upstreamCalls++;
+    return new Response('upstream capacity message password=SECRET',{status:509});
+  }});
+});
+test('provider 503 remains transient/unavailable, not mislabeled as 509',async()=>{
+  await host(async origin=>{
+    const grant=await issue(origin);
+    const {path}=await grant.json();
+    const response=await fetch(origin+path);
+    assert.equal(response.status,502);
+    const body=await response.json();
+    assert.equal(body.code,'relay_provider_unavailable');
+    assert.equal(body.upstreamStatus,503);
+  },{fetchImpl:async()=>new Response('secret body',{status:503})});
+});
