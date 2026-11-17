@@ -1103,6 +1103,26 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  <button type="button" class="btn secondary" id="diagnostic-go-audio">🔊 تشخيص الصوت</button>
  <button type="button" class="btn secondary" id="diagnostic-go-failures">⚠️ سجل 404</button>
  </div></div>
+<div class="panel" id="media-watchlist-panel">
+<div class="controls"><div><h3>🔎 سجل جودة القنوات والصوت والصورة</h3>
+<p class="muted">تقرير واحد من سجل 404 ومراقبة البث الفعلية المسجلة. لا يجلب مقاطع من المصدر ولا يفحص كل قنوات الفهرس.</p></div>
+<div class="actions"><button type="button" id="media-watchlist-refresh" class="btn">↻ قراءة التقرير</button>
+<button type="button" id="media-watchlist-export" class="btn secondary" disabled>نسخ النتائج</button></div></div>
+<p class="muted">التصفية بحسب المصدر المحدد في «سجل 404» أدناه تنطبق على سجلات الأخطاء فقط؛ مراقبة البث النشط مجمّعة للسيرفر وليست مرتبطة بمصدر محدد.</p>
+<div class="cards">
+<div class="stat"><small>قنوات مشاركة نشطة ضمن المراقبة</small><strong id="media-watchlist-feeds">—</strong></div>
+<div class="stat"><small>أخطاء 404 تاريخية مسجلة</small><strong id="media-watchlist-missing">—</strong></div>
+<div class="stat"><small>إشارات مشاكل الصوت</small><strong id="media-watchlist-audio">—</strong></div>
+<div class="stat"><small>إشارات مشاكل الصورة</small><strong id="media-watchlist-video">—</strong></div></div>
+<p class="diag-inline-note" id="media-watchlist-status" role="status" aria-live="polite">لم تُقرأ بيانات الفحص بعد؛ النتائج غير المعروفة لا تُعد سليمة.</p>
+<div class="controls"><h4>حالة قنوات المشاركة المرصودة فقط</h4><span class="muted">ليست جميع قنوات المصدر</span></div>
+<div class="tablewrap"><table><thead><tr><th>معرف القناة</th><th>حالة المسار</th><th>المشاهدون المتصلون</th><th>عمر آخر بيانات</th></tr></thead>
+<tbody id="media-watchlist-channels"></tbody></table></div>
+<div class="controls" style="margin-top:20px"><h4>إشارات الصوت والصورة</h4><span class="muted">مستمدة من بيانات تشغيل الخادم، وليست سماعًا أو مشاهدة على جهاز فعلي</span></div>
+<div class="tablewrap"><table><thead><tr><th>الفئة</th><th>المشكلة المرصودة</th><th>عدد الوقائع في نطاق الرصد</th></tr></thead>
+<tbody id="media-watchlist-signals"></tbody></table></div>
+<p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
+</div>
 <div class="panel" id="deep-audit-panel">
 <div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
 <div class="diag-actions"><label class="diag-source-label" for="deep-audit-source">المصدر <select id="deep-audit-source" aria-label="المصدر المراد فحصه"><option value="">كل المصادر</option></select></label>
@@ -5579,6 +5599,97 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       await loadLive();
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
+  });
+  var mediaWatchlistLatest=null,mediaWatchlistBusy=false;
+  var mediaWatchlistState={
+    ready:"يستقبل بيانات",reconnecting:"يعيد الاتصال",starting:"جار البدء",
+    failed:"فشل المسار",idle:"متوقف لعدم وجود مشاهدين",unknown:"غير محدد"};
+  var mediaWatchlistCodes={
+    operator_input_pmt_no_audio:"PMT لا يعلن مسارًا صوتيًا",
+    operator_audio_packets_not_seen_in_sample:"لم تُرصد حزم صوت في عينة المشرف",
+    operator_audio_ts_transport_anomaly:"اضطراب نقل TS للصوت في المشرف",
+    operator_audio_codec_support_review:"ترميز صوت المشرف يحتاج مراجعة",
+    relay_pmt_audio_missing:"غياب مسار الصوت في مشاركة Relay",
+    relay_audio_ts_transport_anomaly:"اضطراب حزم الصوت في Relay",
+    relay_audio_codec_support_review:"ترميز صوت Relay قد لا يناسب بعض الأجهزة",
+    operator_video_packets_not_seen_in_sample:"لم تُرصد حزم صورة في عينة المشرف",
+    operator_video_ts_transport_anomaly:"اضطراب نقل TS للصورة في المشرف",
+    relay_video_ts_transport_anomaly:"اضطراب حزم الصورة في Relay"};
+  async function loadMediaWatchlist(){
+    if(mediaWatchlistBusy)return;
+    mediaWatchlistBusy=true;
+    var button=$("media-watchlist-refresh"),status=$("media-watchlist-status"),
+      sourceId=$("diagnostic-failures-source").value||"";
+    button.disabled=true;$("media-watchlist-export").disabled=true;
+    status.textContent="جار قراءة السجلات المخزنة ومؤشرات التشغيل. لا يطلب تشغيل قناة جديدة.";
+    try{
+      var data=await api("media-scan/report"+(sourceId?"?sourceId="+encodeURIComponent(sourceId):""));
+      if(data?.ok!==true||data.noProviderRequestsTriggered!==true||
+          data.allChannelsScanned!==false)throw Error("نتيجة فحص الجودة غير مكتملة أو غير موثقة.");
+      mediaWatchlistLatest=data;
+      var counters=data.counters||{},stamp=data.observedAt?
+        new Date(data.observedAt).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"}):"غير متاح";
+      function display(n){return Number.isSafeInteger(n)?count(n):"غير معروف"}
+      value("media-watchlist-feeds",display(counters.activeSharedFeeds));
+      value("media-watchlist-missing",display(counters.historical404Missing));
+      value("media-watchlist-audio",display(counters.flaggedAudioSignals));
+      value("media-watchlist-video",display(counters.flaggedVideoSignals));
+      var unknown=Array.isArray(data.missingInputs)?data.missingInputs:[];
+      status.textContent="وقت الرصد: "+stamp+" · المراجعة الدورية لسجلات 404: "+
+        display(counters.historicalDueForRecheck)+" · تعافٍ مسجل: "+
+        display(counters.recordedRecovered)+
+        " · مصادر البيانات غير المكتملة: "+unknown.length+
+        (data.resultsMayBeTruncated?" · النتائج محدودة الصفوف":"")+
+        ". هذا رصد سلبي؛ لم يتم فحص جميع القنوات أو سماع الصوت.";
+      var tbody=$("media-watchlist-channels");tbody.replaceChildren();
+      (Array.isArray(data.channelObservations)?data.channelObservations:[]).slice(0,64)
+      .forEach(function(row){
+        var tr=node("tr");
+        cell(tr,String(row.channel));
+        cell(tr,mediaWatchlistState[row.state]||mediaWatchlistState.unknown);
+        cell(tr,display(row.viewers));
+        cell(tr,Number.isInteger(row.lastMediaAgeMs)?
+          Math.round(row.lastMediaAgeMs/1000)+" ثانية":"غير معروف");
+        tbody.appendChild(tr);
+      });
+      if(!tbody.children.length){
+        var tr=node("tr"),td=cell(tr,counters.activeSharedFeeds===0?
+          "لا توجد قنوات مشاركة نشطة ضمن نطاق المراقبة الحالي، ولا يعني هذا سلامة باقي القنوات.":
+          "لا توجد بيانات كافية للقنوات النشطة.");td.colSpan=4;tbody.appendChild(tr);
+      }
+      var sig=$("media-watchlist-signals");sig.replaceChildren();
+      (Array.isArray(data.signalCodes)?data.signalCodes:[]).slice(0,20)
+      .forEach(function(issue){
+        var tr=node("tr");cell(tr,issue.area==="audio"?"الصوت":"الصورة");
+        cell(tr,mediaWatchlistCodes[issue.code]||"إشارة تحتاج مراجعة");
+        cell(tr,display(issue.count));sig.appendChild(tr);
+      });
+      if(!sig.children.length){
+        var tr=node("tr"),td=cell(tr,counters.flaggedAudioSignals===null||
+          counters.flaggedVideoSignals===null?
+          "مؤشرات الصوت والصورة غير متاحة حاليًا؛ لا يُعَد ذلك نجاحًا للفحص.":
+          "لا تظهر إشارات مؤكدة ضمن العينات المحدودة؛ تجربة الجهاز ما زالت مطلوبة.");
+        td.colSpan=3;sig.appendChild(tr);
+      }
+      $("media-watchlist-export").disabled=false;
+    }catch(e){
+      mediaWatchlistLatest=null;
+      status.textContent="فشل قراءة تقرير الجودة؛ لا نفترض سلامة أي قناة: "+
+        String(e?.message||"غير متاح").slice(0,100);
+      ["media-watchlist-feeds","media-watchlist-missing",
+        "media-watchlist-audio","media-watchlist-video"].forEach(function(id){value(id,"—")});
+      $("media-watchlist-channels").replaceChildren();$("media-watchlist-signals").replaceChildren();
+    }finally{
+      mediaWatchlistBusy=false;button.disabled=false;
+    }
+  }
+  $("media-watchlist-refresh").addEventListener("click",loadMediaWatchlist);
+  $("media-watchlist-export").addEventListener("click",async function(){
+    if(!mediaWatchlistLatest)return;
+    try{
+      await navigator.clipboard.writeText(JSON.stringify(mediaWatchlistLatest,null,2));
+      show("نُسخ التقرير المحدود. لا يحتوي روابط للمزود أو كلمات مرور.",true);
+    }catch{show("تعذر النسخ من المتصفح؛ لا يتأثر التقرير.",false)}
   });
   async function loadFailureItems(sourceId){
     var tbody=$("diagnostic-failures-items"),status=$("diagnostic-failures-items-status");

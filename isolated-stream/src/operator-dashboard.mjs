@@ -12,6 +12,7 @@ import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
 import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs';
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
+import {createOperatorMediaWatchlist} from './operator-media-watchlist.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
@@ -70,6 +71,9 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   const smartPlayback=createSmartPlaybackMonitor({
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
+  const mediaWatchlist=createOperatorMediaWatchlist({
+    portal,playback:()=>smartPlayback.snapshot(),ops:streamOps
+  });
   const readReplica=createReadReplicaObserver({fetchImpl});
   const replicaProbe={running:false,lastAt:0,latest:null};
   function safeReplicaProof(proof){
@@ -301,6 +305,16 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,
           {ok:false,code:[400,413,415].includes(error?.status)?
             error.message:'unavailable_recheck_unavailable'}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-scan/report'){
+      const sourceId=uri.searchParams.get('sourceId')||'';
+      void mediaWatchlist.snapshot({sourceId}).then(report=>{
+        json(res,report?.ok===true?200:report?.code==='operator_media_watchlist_invalid_source'?400:503,report);
+      }).catch(()=>json(res,503,{
+        ok:false,code:'operator_media_watchlist_unavailable',
+        allChannelsScanned:false,noProviderRequestsTriggered:true
+      }));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
