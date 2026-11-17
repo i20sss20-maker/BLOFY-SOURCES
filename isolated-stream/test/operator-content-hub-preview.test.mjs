@@ -114,3 +114,29 @@ test('verified episode preview is Basic protected and routes only through fixed 
   '/internal/blofy-stream/content-hub/episodes/preview'));
  assert.equal(calls[0].opts.headers.authorization,'Bearer '+bridge);
 });
+
+test('operator episode playback reports verified S3 failure without leaking private details',async()=>{
+ await withServer({fetchImpl:async()=>new Response(JSON.stringify({
+  ok:false,code:'private_preview_verified_prefix_unavailable',
+  token:'PRIVATE_CREDENTIALS_SHOULD_NOT_APPEAR'
+ }),{status:503,headers:{'content-type':'application/json'}})},async base=>{
+  const res=await fetch(base+'/operator/api/content-hub/episodes/preview',{
+   headers:{authorization:auth}
+  });
+  assert.equal(res.status,503);
+  const body=await res.text();
+  assert.match(body,/private_preview_verified_prefix_unavailable/);
+  assert.doesNotMatch(body,/PRIVATE_CREDENTIALS/);
+ });
+});
+test('operator episode busy response stays 429, not a generic 503',async()=>{
+ await withServer({fetchImpl:async()=>new Response(JSON.stringify({
+  ok:false,code:'owner_preview_busy'
+ }),{status:429,headers:{'content-type':'application/json'}})},async base=>{
+  const res=await fetch(base+'/operator/api/content-hub/episodes/preview',{
+   headers:{authorization:auth}
+  });
+  assert.equal(res.status,429);
+  assert.equal((await res.json()).code,'owner_preview_busy');
+ });
+});
