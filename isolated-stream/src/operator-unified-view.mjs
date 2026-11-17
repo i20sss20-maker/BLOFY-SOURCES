@@ -1134,6 +1134,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="stat"><small>إطارات الصورة</small><strong id="decoder-lab-video-frames">—</strong></div>
 </div>
 <p class="diag-inline-note" id="decoder-lab-status" role="status" aria-live="polite">جار التحقق من حالة مختبر FFmpeg؛ لا نختبر محتوى العملاء.</p>
+<div class="controls"><h4>مصفوفة ترميزات الصوت — عينات صناعية فقط</h4><span class="muted">MP2 · AAC · AC3 · E-AC3</span></div>
+<div class="tablewrap"><table><thead><tr><th>ترميز الصوت</th><th>حالة فك الترميز داخل المختبر</th><th>الإطارات</th></tr></thead>
+<tbody id="decoder-lab-codec-rows"></tbody></table></div>
+<p class="muted">نجاح هذه المصفوفة لا يعني توافق الترميز مع Android 9 أو إثبات سماع صوت أي قناة حقيقية. الحكم على الجهاز يحتاج عينة فعلية مصرح بها.</p>
 <p class="muted">المختبر على خدمة اختبار مستقلة. واجهة BLOFY تقرأ النتيجة فقط؛ تشغيل اختبار جديد وإدارة المفاتيح ليسا متاحين من هنا. لا يُنفذ إصلاح أو تحويل صوت تلقائي.</p>
 </div>
 <div class="panel" id="media-probe-queue-panel">
@@ -5639,6 +5643,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     finally{this.disabled=false}
   });
   var decoderLabBusy=false;
+  function showDecoderLabCodecs(info){
+    var table=$("decoder-lab-codec-rows");table.replaceChildren();
+    var names={mp2:"MP2",aac:"AAC",ac3:"AC3",eac3:"E-AC3"};
+    var matrix=Array.isArray(info?.audioCodecMatrix)?info.audioCodecMatrix:[];
+    ["mp2","aac","ac3","eac3"].forEach(function(codec){
+      var row=node("tr");
+      var entry=codec==="mp2"?{
+        decoded:info?.ok===true&&info?.audioDecoded===true&&info?.audioCodec==="mp2",
+        frames:info?.audioFrames
+      }:matrix.find(function(x){return x?.codec===codec});
+      var pass=entry?.decoded===true&&Number.isInteger(entry.frames)&&entry.frames>=2;
+      cell(row,names[codec]);cell(row,pass?"تم فك عينة صناعية":"لم يثبت");
+      cell(row,pass?count(entry.frames):"—");
+      table.appendChild(row);
+    });
+  }
   async function loadDecoderLabStatus(){
     if(decoderLabBusy)return;
     decoderLabBusy=true;
@@ -5655,6 +5675,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("decoder-lab-video",verified?"فُكّ صناعيًا":"غير مثبت");
       value("decoder-lab-audio-frames",verified&&Number.isInteger(info.audioFrames)?count(info.audioFrames):"—");
       value("decoder-lab-video-frames",verified&&Number.isInteger(info.videoFrames)?count(info.videoFrames):"—");
+      showDecoderLabCodecs(info);
       status.textContent=(verified?
         "✅ نجح فك الصوت والصورة لعينة صناعية معزولة. ":"⚠ لم يثبت اختبار فك الصوت والصورة. ")+
         (info?.message||"نتيجة غير معروفة.")+
@@ -5662,6 +5683,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch{
       value("decoder-lab-audio","غير معروف");value("decoder-lab-video","غير معروف");
       value("decoder-lab-audio-frames","—");value("decoder-lab-video-frames","—");
+      showDecoderLabCodecs(null);
       status.textContent="تعذر الاتصال بالمختبر. لا تعتبر القنوات سليمة أو معطلة بناءً على ذلك.";
     }finally{button.disabled=false;decoderLabBusy=false;}
   }
