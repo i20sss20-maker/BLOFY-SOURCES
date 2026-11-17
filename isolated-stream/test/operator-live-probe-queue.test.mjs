@@ -147,6 +147,7 @@ test('unknown PMT and no declared audio never claim audible silence or decoded a
 
 test('queue snapshot exposes safe triage and bounded prior results for export',async()=>{
   const s=supervisorStub([P1]);
+  s.rows[0].mediaTracks={...s.rows[0].mediaTracks,audioContinuityGaps:0};
   const q=createOperatorLiveProbeQueue({
     supervisor:s,delay:async()=>s.finish(),pollIntervalMs:10,maxPollIterations:2
   });
