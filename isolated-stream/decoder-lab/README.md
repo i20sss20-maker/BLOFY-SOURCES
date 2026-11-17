@@ -46,3 +46,9 @@ Stop/delete only Railway lab service `blofy-decoder-lab`. No commits from this b
 The original BLOFY STREAM operator dashboard now provides `GET /operator/api/media-scan/decoder-lab`, behind its existing owner Basic authentication (or signed BLOFY website admin cookie through the proxy). It calls a **fixed** HTTPS lab report endpoint using a **view-only** token at the STREAM backend, caches for 45 seconds, strips unknown fields and source details, and displays synthetic codec/frame results at `https://blofyplayer.com/admin/control-center#diagnostics`.
 
 No browser sees either token. The operator page **cannot** start or repeat FFmpeg runs. A production channel remains unverified, even after a green synthetic result. A stale lab result or missing lab connection appears as unknown, not green.
+
+## Synthetic codec compatibility matrix
+
+On boot the isolated lab additionally generates short audio-only MPEG-TS fixtures for **AAC, AC3, and E-AC3**, then checks each with FFprobe and actually decodes its audio into frame CRC output using FFmpeg. The original **MP2 + MPEG-2 video** synthetic decode remains required. Each generated fixture stays inside a unique temporary directory, is limited to 900 KiB, and is deleted. Each FFmpeg call is limited to 15 seconds, one thread and bounded output. The new tests run **sequentially**.
+
+The dashboard reports codec-by-codec results only when the server-side lab has proved them; it never exposes the two lab credentials. **This proves decoding inside an FFmpeg Alpine test container, not support in the BLOFY Android app.** No source URL is supplied and no production IPTV channels are tested.
