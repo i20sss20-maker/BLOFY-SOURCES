@@ -139,7 +139,8 @@ export function createOperatorMediaWatchlist({
         counters:{
           historical404Missing:historicalMissing,recordedRecovered:recovered,
           historicalDueForRecheck:due,
-          activeSharedFeeds:monitorReady?channels.length:null,
+          activeSharedFeeds:monitorReady?number(opsSnapshot?.capacity?.activeFeeds,64):null,
+          observedSharedFeedRows:monitorReady?channels.length:null,
           flaggedAudioSignals:issueCounts.audio,flaggedVideoSignals:issueCounts.video,
           decodedAudioVerified:0,decodedVideoVerified:0,
           totalChannelCount:null,channelsScannedNow:0
