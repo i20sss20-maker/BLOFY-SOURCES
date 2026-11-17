@@ -1,10 +1,11 @@
 // Test-only worker. No upload, no arbitrary URL, no provider/stream API calls.
 import {createServer} from 'node:http';
-import {timingSafeEqual} from 'node:crypto';
+import {labBearerAuthorized} from './access.mjs';
 import {runSyntheticDecoder} from './decoder.mjs';
 
 const PORT=Number(process.env.PORT||3000);
-const SECRET=process.env.BLOFY_DECODER_LAB_TOKEN||'';
+const RUN_SECRET=process.env.BLOFY_DECODER_LAB_TOKEN||'';
+const VIEW_SECRET=process.env.BLOFY_DECODER_LAB_VIEW_TOKEN||'';
 const MIN_INTERVAL_MS=15*60*1000;
 const headers={
   'cache-control':'no-store',
@@ -14,15 +15,9 @@ const headers={
   'content-security-policy':"default-src 'none'; frame-ancestors 'none'"
 };
 let report=null,lastStarted=0,busy=false;
-const tokenConfigured=()=>SECRET.length>=40;
-function safeAuth(req){
-  if(!tokenConfigured())return false;
-  const input=req.headers.authorization||'';
-  if(!input.startsWith('Bearer '))return false;
-  const actual=Buffer.from(input.slice(7),'utf8');
-  const expected=Buffer.from(SECRET,'utf8');
-  return actual.length===expected.length&&timingSafeEqual(actual,expected);
-}
+const tokenConfigured=()=>RUN_SECRET.length>=40&&VIEW_SECRET.length>=40;
+const reportAuth=req=>labBearerAuthorized(req.headers.authorization,VIEW_SECRET);
+const runAuth=req=>labBearerAuthorized(req.headers.authorization,RUN_SECRET);
 function respond(res,status,body){
   const buffer=Buffer.from(JSON.stringify(body));
   res.writeHead(status,{
@@ -58,8 +53,8 @@ const server=createServer(async(req,res)=>{
       });
     }
     if(!tokenConfigured())return respond(res,503,{ok:false,code:'lab_token_not_configured'});
-    if(!safeAuth(req))return respond(res,401,{ok:false,code:'lab_auth_required'});
     if(path==='/api/report'&&req.method==='GET'){
+      if(!reportAuth(req))return respond(res,401,{ok:false,code:'lab_view_auth_required'});
       return respond(res,report?.ok===true?200:report===null?202:503,{
         ok:report?.ok===true,scope:'synthetic_local_only',
         running:busy,lastStartedAt:lastStarted?new Date(lastStarted).toISOString():null,
@@ -68,6 +63,7 @@ const server=createServer(async(req,res)=>{
       });
     }
     if(path==='/api/synthetic-run'&&req.method==='POST'){
+      if(!runAuth(req))return respond(res,401,{ok:false,code:'lab_run_auth_required'});
       // Accept zero user-controlled inputs. No uploads, media URLs or query
       // strings can be injected into the synthetic binary invocation.
       if(req.url!=='/api/synthetic-run'||

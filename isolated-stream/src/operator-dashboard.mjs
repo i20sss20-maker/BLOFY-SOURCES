@@ -13,6 +13,7 @@ import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
 import {createOperatorMediaWatchlist} from './operator-media-watchlist.mjs';
+import {createDecoderLabReportClient} from './decoder-lab-report-client.mjs';
 import {createOperatorLiveProbeQueue} from './operator-live-probe-queue.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
@@ -75,6 +76,9 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   const mediaProbeQueue=liveSupervisor&&typeof liveSupervisor.list==='function'&&
     typeof liveSupervisor.probe==='function'?
     createOperatorLiveProbeQueue({supervisor:liveSupervisor}):null;
+  const decoderLabReport=createDecoderLabReportClient({
+    fetchImpl,viewToken:process.env.BLOFY_DECODER_LAB_VIEW_TOKEN||''
+  });
   const mediaWatchlist=createOperatorMediaWatchlist({
     portal,playback:()=>smartPlayback.snapshot(),ops:streamOps
   });
@@ -313,6 +317,13 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
     }
     // Explicitly approved, max-two sequential HLS checks on existing active
     // operator paths only. No background catalog sweep or new Xtream paths.
+    if(req.method==='GET'&&path==='/operator/api/media-scan/decoder-lab'){
+      void decoderLabReport.snapshot().then(data=>json(res,200,data))
+        .catch(()=>json(res,503,{ok:false,readOnly:true,
+          scope:'synthetic_local_only',state:'unavailable',
+          productionStreamVerified:false}));
+      return true;
+    }
     if(req.method==='GET'&&path==='/operator/api/media-scan/queue'){
       json(res,200,mediaProbeQueue?mediaProbeQueue.snapshot():{
         ok:false,code:'operator_live_probe_not_configured'
