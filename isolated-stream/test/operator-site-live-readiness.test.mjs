@@ -69,3 +69,12 @@ test('missing required authenticated client is refused before any calls',async()
  await assert.rejects(()=>readOnlyOperatorSiteProof({client:{overview:async()=>{}}}),
   /site_readiness_client_missing/);
 });
+
+test('HTTP success without explicit application ok is reachable only',async()=>{
+ const f=fixture({radio_source_catalog:()=>({status:200,body:{status:'unknown'}})});
+ const r=await readOnlyOperatorSiteProof({client:f.client});
+ assert.equal(r.ok,false);
+ assert.equal(r.connected,5);
+ assert.equal(r.reachable,1);
+ assert.equal(r.checks.at(-1).state,'reachable');
+});
