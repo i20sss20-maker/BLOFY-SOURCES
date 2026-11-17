@@ -22,6 +22,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
       path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
+      path===ROOT+'/audio/probe'&&method==='POST'?18000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
@@ -65,6 +66,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
+  const audioReadiness=()=>call(ROOT+'/audio/readiness');
+  const audioProbe=({ids}={})=>{
+    if(!Array.isArray(ids)||ids.length<1||ids.length>2||
+       new Set(ids).size!==ids.length||ids.some(id=>
+       typeof id!=='string'||!/^anis-[a-z0-9-]{1,54}$/.test(id)))
+      return Promise.resolve({status:400,body:{ok:false,code:'audio_probe_tracks_invalid'}});
+    return call(ROOT+'/audio/probe',{method:'POST',body:{ids}});
+  };
   const overview=()=>call(ROOT+'/overview');
   // Cached, provider-reported connection metadata. This endpoint makes NO
   // source requests and cannot return subscriber identities or source URLs.
@@ -560,6 +569,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     contentHubSeasonRetry,
     contentHubSeasonHealth,contentHubSeasonAudit,
     contentHubConcurrentRead,
+    audioReadiness,audioProbe,
     contentHubSeasonAVStatus,contentHubSeasonProbe,
     contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
     contentHubSeasonAVConfirm};
