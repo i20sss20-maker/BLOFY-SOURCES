@@ -10,7 +10,8 @@ const CHECKS=Object.freeze([
  Object.freeze({id:'private_content_hub',run:p=>p.contentHubStatus()}),
  Object.freeze({id:'season_queue_health',run:p=>p.contentHubSeasonHealth()}),
  Object.freeze({id:'daily_catalog_metadata',run:p=>p.opsDailyCatalogStatus()}),
- Object.freeze({id:'radio_source_catalog',run:p=>p.audioReadiness()})
+ Object.freeze({id:'radio_source_catalog',run:p=>p.audioReadiness()}),
+ Object.freeze({id:'code_distributor_store',run:p=>p.ownerAdminReadiness()})
 ]);
 
 const cleanStatus=status=>Number.isInteger(status)&&status>=100&&status<=599?status:null;
@@ -41,7 +42,8 @@ export async function readOnlyOperatorSiteProof({
   private_content_hub:'contentHubStatus',
   season_queue_health:'contentHubSeasonHealth',
   daily_catalog_metadata:'opsDailyCatalogStatus',
-  radio_source_catalog:'audioReadiness'
+  radio_source_catalog:'audioReadiness',
+  code_distributor_store:'ownerAdminReadiness'
  }[c.id]]!=='function'))throw Error('site_readiness_client_missing');
  const checks=[];
  // Limit concurrency to two to avoid a thundering herd against Portal.
