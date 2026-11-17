@@ -390,7 +390,8 @@ test('bounded media probe queue is protected and inert without explicit approval
     assert.equal(state.requiresExplicitStart,true);
     assert.equal(state.maxPerRun,2);
     assert.equal(state.concurrentProbes,1);
-    assert.equal(state.sourceConnectionsCreatedByQueue,0);
+    assert.equal(state.newOperatorPathsCreated,0);
+    assert.equal(state.upstreamSessionsCreated,null);
     assert.equal(state.job,null);
     const panel=await fetch(base+'/operator',{headers:{authorization:auth}});
     assert.match(await panel.text(),/id="media-probe-queue-start"/);
