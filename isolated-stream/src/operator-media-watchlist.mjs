@@ -80,6 +80,7 @@ export function createOperatorMediaWatchlist({
         if(area){issueCounts[area]++;codeCounts.push({code,area,count:n});}
       }
       const monitorReady=opsSnapshot?.ok===true&&Array.isArray(opsSnapshot?.channels);
+      const activeSharedFeedCount=monitorReady?number(opsSnapshot?.capacity?.activeFeeds,64):null;
       const channels=monitorReady?opsSnapshot.channels.slice(0,64).map(row=>{
         const channel=number(row?.channel,100000000);
         if(!channel||channel===0)return null;
@@ -114,7 +115,7 @@ export function createOperatorMediaWatchlist({
       const coverage={
         historicalRecordGroups:groups!==null,
         historicalItems:rows!==null,
-        liveTelemetry:monitorReady,
+        liveTelemetry:monitorReady&&activeSharedFeedCount!==null,
         recentAudioVideoSignals:fresh,
         fullCatalogChannelScan:false,
         providerAudioDecoded:false,
@@ -139,7 +140,7 @@ export function createOperatorMediaWatchlist({
         counters:{
           historical404Missing:historicalMissing,recordedRecovered:recovered,
           historicalDueForRecheck:due,
-          activeSharedFeeds:monitorReady?number(opsSnapshot?.capacity?.activeFeeds,64):null,
+          activeSharedFeeds:activeSharedFeedCount,
           observedSharedFeedRows:monitorReady?channels.length:null,
           flaggedAudioSignals:issueCounts.audio,flaggedVideoSignals:issueCounts.video,
           decodedAudioVerified:0,decodedVideoVerified:0,
