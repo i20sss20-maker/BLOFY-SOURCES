@@ -1140,6 +1140,23 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted">نجاح هذه المصفوفة لا يعني توافق الترميز مع Android 9 أو إثبات سماع صوت أي قناة حقيقية. الحكم على الجهاز يحتاج عينة فعلية مصرح بها.</p>
 <p class="muted">المختبر على خدمة اختبار مستقلة. واجهة BLOFY تقرأ النتيجة فقط؛ تشغيل اختبار جديد وإدارة المفاتيح ليسا متاحين من هنا. لا يُنفذ إصلاح أو تحويل صوت تلقائي.</p>
 </div>
+<div class="panel" id="owner-ts-sample-panel">
+<div class="controls"><div><h3>🎧 تحليل عينة صوت وصورة من قناة متأثرة</h3>
+<p class="muted">اختر ملف MPEG-TS بصيغة .ts، بحجم لا يتجاوز 2 ميجابايت، من قناة تملك حق اختبارها. لا تستخدم رابط Xtream أو ملف M3U. لا يفتح النظام اتصالًا جديدًا بالمصدر؛ يُحلّل الملف الذي تختاره فقط في مختبر معزول.</p></div></div>
+<div class="inline" style="margin:12px 0">
+<label for="owner-ts-sample-file">ملف العينة <input id="owner-ts-sample-file" type="file" accept=".ts,video/mp2t" aria-label="اختر ملف TS لاختبار الصوت والصورة"></label>
+<label><input type="checkbox" id="owner-ts-sample-consent"> أؤكد أني أملك صلاحية اختبار هذه العينة ولا تحتوي بيانات دخول أو معلومات خاصة</label>
+<button type="button" id="owner-ts-sample-submit" class="btn">اختبار العينة في مختبر FFmpeg</button>
+</div>
+<p id="owner-ts-sample-status" role="status" aria-live="polite" class="diag-inline-note">لا توجد عينة مرسلة بعد. لن تُسحب القناة تلقائيًا ولن تُخزن العينة بعد اكتمال الاختبار.</p>
+<div class="cards">
+<div class="stat"><small>مسار الصوت في الملف</small><strong id="owner-ts-sample-audio-track">—</strong></div>
+<div class="stat"><small>فك ترميز الصوت في FFmpeg</small><strong id="owner-ts-sample-audio-decoded">—</strong></div>
+<div class="stat"><small>فك ترميز الفيديو في FFmpeg</small><strong id="owner-ts-sample-video-decoded">—</strong></div>
+<div class="stat"><small>ترميز الصوت المرصود</small><strong id="owner-ts-sample-codec">—</strong></div>
+</div>
+<p id="owner-ts-sample-explanation" class="muted">تخص النتيجة الملف القصير وليس جميع القنوات. لا تثبت سماع الصوت أو ظهور الصورة على أجهزة Android وWindows.</p>
+</div>
 <div class="panel" id="media-probe-queue-panel">
 <div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
 <p class="muted">يفحص مقاطع HLS الحقيقية على مسارات المشرف الموجودة مسبقًا فقط. مسار واحد في كل مرة، وبحد مسارين لكل تشغيل؛ لا ينشئ قناة أو يغيّر بث العملاء.</p></div>
@@ -5689,6 +5706,55 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("decoder-lab-refresh").addEventListener("click",function(){void loadDecoderLabStatus()});
   setTimeout(function(){void loadDecoderLabStatus()},1800);
+  var ownerSampleBusy=false;
+  $("owner-ts-sample-submit").addEventListener("click",async function(){
+    if(ownerSampleBusy)return;
+    var file=$("owner-ts-sample-file").files?.[0],
+      consent=$("owner-ts-sample-consent").checked,
+      message=$("owner-ts-sample-status");
+    if(!file||!file.name.toLowerCase().endsWith(".ts")||
+      file.size<2256||file.size>2000000||file.size%188!==0){
+      message.textContent="اختر ملف MPEG-TS قصيرًا بحجم أقصاه 2 ميجابايت، وعدد بايتات مناسب لحزم TS.";
+      return;
+    }
+    if(!consent){
+      message.textContent="يلزم التأكيد على حق اختبار الملف وعدم احتوائه على بيانات دخول خاصة.";
+      return;
+    }
+    if(!confirm("سيُرفع ملف TS القصير إلى مختبر FFmpeg المعزول، ثم يُحذف بعد التحليل. هل تريد المتابعة؟"))return;
+    ownerSampleBusy=true;this.disabled=true;
+    message.textContent="جار رفع العينة القصيرة وفحص الصوت والصورة؛ لا تُرسل روابط Xtream.";
+    var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},55000);
+    try{
+      var response=await fetch("/operator/api/media-scan/owner-sample",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"video/mp2t",
+          "x-blofy-operator-action":"media-scan-owner-sample",
+          "x-blofy-sample-rights":"confirmed"},
+        body:file,signal:controller.signal
+      });
+      if(response.status===401){message.textContent="انتهت جلسة الإدارة. أعد تسجيل الدخول.";return;}
+      var result=await response.json();
+      if(!response.ok||result.scope!=="approved_short_ts_sample"){
+        message.textContent="تعذّر تحليل العينة: "+String(result.code||"sample_unavailable").slice(0,75)+
+          " · لم يتم تغيير بث المشتركين.";
+        return;
+      }
+      value("owner-ts-sample-audio-track",result.hasAudio?"معلن في الملف":"غير موجود في العينة");
+      value("owner-ts-sample-audio-decoded",result.decodedAudio===true?"نجح على FFmpeg":
+        result.decodedAudio===false?"فشل على FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-video-decoded",result.decodedVideo===true?"نجح على FFmpeg":
+        result.decodedVideo===false?"فشل على FFmpeg":"غير موجود/غير مؤكد");
+      value("owner-ts-sample-codec",result.audioCodec||"غير معروف");
+      message.textContent="نتيجة الملف: "+String(result.code||"unknown")+
+        " · عدد بايتات العينة: "+(result.bytesExamined??"غير معروف")+
+        " · لا تمثل اختبار تشغيل على جهاز العميل.";
+      value("owner-ts-sample-explanation",String(result.explanation||"")+
+        " العينة تُحذف بعد التحليل ولا يوجد تحويل صوت تلقائي.");
+    }catch{
+      message.textContent="انتهى الوقت أو تعذر تحليل العينة بأمان. لم تُنفذ تغييرات على القنوات.";
+    }finally{clearTimeout(timeout);ownerSampleBusy=false;this.disabled=false;}
+  });
   var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false,mediaProbeQueueLatest=null;
   var mediaProbeQueueState={
     queued:"بانتظار الدور",running:"فحص HLS جار",
