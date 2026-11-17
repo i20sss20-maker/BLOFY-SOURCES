@@ -302,6 +302,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 .diag-ai-card[data-state="loading"] .diag-ai-glow{animation:diagAiPulse 1.4s ease-in-out infinite alternate}
 @keyframes diagAiPulse{from{box-shadow:0 0 0 #6b8dfe00}to{box-shadow:0 0 22px #718fff77}}
 @media(prefers-reduced-motion:reduce){.diag-ai-glow{animation:none!important}}
+.blofy-top-website-link,.blofy-nav-back{display:inline-flex;align-items:center;gap:6px;justify-content:center;font-size:12px;border:1px solid #4b6582;background:#1b324c;color:#e5f5ff;border-radius:11px;padding:9px 12px;text-decoration:none;font-weight:750;line-height:1.4}
+.blofy-top-website-link:hover,.blofy-nav-back:hover{background:#284962;border-color:#7cbbd7;color:#fff}
+.blofy-top-website-link:focus-visible,.blofy-nav-back:focus-visible{outline:2px solid #93e1ff;outline-offset:2px}
+.blofy-nav-back{margin-top:5px;width:100%;padding:8px 10px;justify-content:flex-start;text-align:right}
+@media(max-width:680px){.blofy-top-website-link{font-size:11px;padding:7px 9px}}
 </style>
 </head><body><div class="layout"><aside id="app-sidebar" class="app-sidebar" aria-label="القائمة الجانبية">
 <div class="sidebar-top"><div class="logo"><div class="logo-icon">B</div><div class="logo-copy"><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
@@ -320,10 +325,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="navtitle">مراقبة النظام</div>
 <button type="button" class="navlink" data-tab="diagnostics" aria-label="الفحص والصيانة" title="الفحص والصيانة"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V7l8-4z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="nav-label">الفحص والصيانة</span></button>
 </nav></div>
-<div class="sidebar-bottom"><span class="sidebar-version">واجهة الإدارة الموحدة</span><span class="sidebar-version-detail">BLOFY STREAM • 2026</span></div>
+<div class="sidebar-bottom"><a href="https://blofyplayer.com/admin" class="blofy-nav-back">↩ إدارة موقع BLOFY</a><a href="https://blofyplayer.com/admin/control-center/health" class="blofy-nav-back">◉ حالة خدمات BLOFY</a><a href="https://updates.blofyplayer.com/downloads" class="blofy-nav-back">↓ مركز التطبيقات</a><span class="sidebar-version">واجهة الإدارة الموحدة</span><span class="sidebar-version-detail">BLOFY STREAM • 2026</span></div>
 </aside><button type="button" id="sidebar-scrim" class="sidebar-scrim" aria-label="إغلاق القائمة" hidden></button><div class="content">
 <header class="top"><div class="top-title-wrap"><button type="button" id="sidebar-open" class="sidebar-open" aria-label="فتح قائمة الأقسام" aria-controls="app-sidebar" aria-expanded="false">☰</button><div><div class="top-crumb">BLOFY STREAM <span> / </span><span id="top-section">الرئيسية</span></div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div></div>
-<div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
+<div class="tools"><a class="blofy-top-website-link" href="https://blofyplayer.com/admin" aria-label="العودة لإدارة موقع BLOFY">↩ موقع BLOFY</a><a class="blofy-top-website-link" href="https://blofyplayer.com/admin/control-center/health" aria-label="فحص اتصال خدمات BLOFY">◉ حالة الخدمات</a><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
 <main><div id="notice" class="status" role="status" hidden></div>
 <section class="view active" id="page-home">
 <div class="heading"><div><h2>مركز القيادة</h2><p>إدارة البث والمشتركين والمحتوى من لوحة واحدة.</p></div><button class="btn secondary" id="home-refresh" type="button">↻ تحديث الحالة</button></div>
