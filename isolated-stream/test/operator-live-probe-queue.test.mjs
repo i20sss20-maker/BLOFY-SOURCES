@@ -108,12 +108,15 @@ test('concurrency, duplicate selections, and cooldown reject without more probes
 });
 test('cancel stops future work only, not currently running HLS sample',async()=>{
   const s=supervisorStub([P1,P2]);
+  let release;
+  const gate=new Promise(resolve=>{release=resolve});
   const q=createOperatorLiveProbeQueue({
-    supervisor:s,delay:async()=>s.finish(),pollIntervalMs:10,maxPollIterations:2
+    supervisor:s,delay:async()=>{await gate;s.finish()},pollIntervalMs:10,maxPollIterations:2
   });
   assert.equal(q.start({paths:[P1,P2],rightsConfirmed:true,capacityAcknowledged:true}).status,202);
   await tick();
   assert.equal(q.cancel().status,202);
+  release();
   await finishQueue(q);
   assert.equal(q.snapshot().job.state,'cancelled');
   assert.equal(s.metrics.probes,1);
