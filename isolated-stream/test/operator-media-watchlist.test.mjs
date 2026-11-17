@@ -18,7 +18,7 @@ const playback=()=>({dataFresh:true,assessment:{ok:true,incidents:[
   {code:'operator_video_packets_not_seen_in_sample',area:'video',count:1},
   {code:'not_approved',area:'audio',count:999}
 ]}});
-const ops=()=>({ok:true,channels:[{channel:35,state:'reconnecting',
+const ops=()=>({ok:true,capacity:{activeFeeds:1},channels:[{channel:35,state:'reconnecting',
   viewers:2,lastMediaAgeMs:39000,sourceUrl:'https://private.example/?pass=secret'}]});
 test('merges existing historical failures and fresh audio/video observations without source reads',async()=>{
   const calls=[];
@@ -37,6 +37,7 @@ test('merges existing historical failures and fresh audio/video observations wit
   assert.equal(r.counters.flaggedAudioSignals,1);
   assert.equal(r.counters.flaggedVideoSignals,1);
   assert.equal(r.counters.activeSharedFeeds,1);
+  assert.equal(r.counters.observedSharedFeedRows,1);
   assert.deepEqual(calls,['failures:','items:']);
   assert.deepEqual(r.channelObservations,[{channel:35,state:'reconnecting',viewers:2,lastMediaAgeMs:39000}]);
   assert.equal(r.historicalItems[0].itemId,'4321');
@@ -94,7 +95,7 @@ test('empty recorded errors are explicitly zero, but never equal full catalog ve
       mediaFailureItems:async()=>({status:200,body:{ok:true,items:[]}})
     },
     playback:()=>({dataFresh:true,assessment:{ok:true,incidents:[]}}),
-    ops:()=>({ok:true,channels:[]})
+    ops:()=>({ok:true,capacity:{activeFeeds:0},channels:[]})
   });
   const r=await scan.snapshot();
   assert.equal(r.counters.historical404Missing,0);
@@ -119,4 +120,21 @@ test('invalid history items and long untrusted media fields are dropped',async()
   assert.equal(r.historicalItems.length,2);
   assert.equal(r.counters.historical404Missing,0);
   assert.doesNotMatch(JSON.stringify(r),/secret.example|SECRET/);
+});
+
+
+test('idle historical rows never count as active feed capacity',async()=>{
+  const scanner=createOperatorMediaWatchlist({
+    portal:{
+      mediaFailures:async()=>({status:200,body:{ok:true,entries:[]}}),
+      mediaFailureItems:async()=>({status:200,body:{ok:true,items:[]}})
+    },
+    ops:()=>({ok:true,capacity:{activeFeeds:0},
+      channels:[{channel:12,state:'idle',viewers:0,lastMediaAgeMs:null}]}),
+    playback:()=>({dataFresh:true,assessment:{ok:true,incidents:[]}})
+  });
+  const result=await scanner.snapshot();
+  assert.equal(result.counters.activeSharedFeeds,0);
+  assert.equal(result.counters.observedSharedFeedRows,1);
+  assert.equal(result.channelObservations[0].state,'idle');
 });
