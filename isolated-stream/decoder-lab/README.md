@@ -52,3 +52,20 @@ No browser sees either token. The operator page **cannot** start or repeat FFmpe
 On boot the isolated lab additionally generates short audio-only MPEG-TS fixtures for **AAC, AC3, and E-AC3**, then checks each with FFprobe and actually decodes its audio into frame CRC output using FFmpeg. The original **MP2 + MPEG-2 video** synthetic decode remains required. Each generated fixture stays inside a unique temporary directory, is limited to 900 KiB, and is deleted. Each FFmpeg call is limited to 15 seconds, one thread and bounded output. The new tests run **sequentially**.
 
 The dashboard reports codec-by-codec results only when the server-side lab has proved them; it never exposes the two lab credentials. **This proves decoding inside an FFmpeg Alpine test container, not support in the BLOFY Android app.** No source URL is supplied and no production IPTV channels are tested.
+
+## Authorized short MPEG-TS sample (manual, opt-in)
+
+The next diagnostic step lets the owner manually choose one licensed, short **.ts MPEG-TS file** from the original BLOFY admin dashboard (#diagnostics). No Xtream URL, M3U playlist, stream URL, remote file path, or provider credentials are accepted.
+
+- Browser: existing signed BLOFY admin session, same-origin POST, and explicit checkbox confirming rights. No automatic source capture or catalog sweep.
+- Website reverse proxy: only the owner-sample API receives up to **2,000,000 bytes**. Other admin endpoints remain limited to 64 KiB.
+- STREAM server: validates authenticated operator, distinct action/rights headers, MIME and Content-Length, 90-second cooldown; then forwards bytes to one fixed HTTPS lab origin with a dedicated server-only secret.
+- Lab: third token BLOFY_DECODER_LAB_SAMPLE_TOKEN distinct from synthetic-run and read-only tokens; strict MPEG-TS synchronization, exact length, one upload at a time and 60-second cooldown.
+- Decode: one temporary local sample.ts file, FFprobe for audio/video stream presence and codec, separate FFmpeg framecrc decodes, max 8 frames each. Temp directory deleted even on error. No source URLs or raw media in responses or logs.
+- Results: sample stream presence, codec, frame counts, and sanitized diagnostic code only. An absent audio track in a *short sample* is not proof the entire channel is silent, and FFmpeg success does not prove sound output on Android 9.
+- Verification: unit tests of auth/limits, invalid files, bounded reads, safe argv and delete-on-error. Docker CI decodes an actual locally generated MPEG-TS file. No customer app or subscriber playback changes.
+- Rollback: pin lab and STREAM to the prior Railway commits; do not alter customer routes.
+
+**Only upload a sample you have permission to inspect.** Do not include passwords, playlist URLs, private customer information or login tokens. A real channel issue requires comparing the same authorized sample between Windows and Android 9 after the lab reports its codec.
+
+Configure the new, dedicated BLOFY_DECODER_LAB_SAMPLE_TOKEN identically on the isolated Railway decoder-lab service and the STREAM API. Neither should ever be shown to the browser.
