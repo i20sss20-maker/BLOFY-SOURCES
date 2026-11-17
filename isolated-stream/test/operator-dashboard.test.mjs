@@ -435,3 +435,30 @@ test('media scan result UI describes diagnosed audio/video status and safe JSON/
     assert.doesNotMatch(page,/localStorage\.setItem\([^)]*media-probe-queue/);
   });
 });
+
+
+test('synthetic decoder lab status is owner-only and cannot trigger any decoder action',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const noAuth=await fetch(base+'/operator/api/media-scan/decoder-lab');
+    assert.equal(noAuth.status,401);
+    const allowed=await fetch(base+'/operator/api/media-scan/decoder-lab',{
+      headers:{authorization:auth}
+    });
+    assert.equal(allowed.status,200);
+    const report=await allowed.json();
+    assert.equal(report.readOnly,true);
+    assert.equal(report.scope,'synthetic_local_only');
+    assert.equal(report.productionStreamVerified,false);
+    assert.ok(['not_configured','unavailable','synthetic_verified'].includes(report.state));
+    assert.equal((await fetch(base+'/operator/api/media-scan/decoder-lab',{
+      method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+      body:'{}'
+    })).status,404);
+    const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+    const html=await page.text();
+    assert.match(html,/id="decoder-lab-panel"/);
+    assert.match(html,/id="decoder-lab-audio-frames"/);
+    assert.match(html,/api\("media-scan\/decoder-lab"\)/);
+    assert.match(html,/productionStreamVerified===false/);
+  });
+});
