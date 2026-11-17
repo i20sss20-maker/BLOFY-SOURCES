@@ -72,7 +72,8 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   const smartPlayback=createSmartPlaybackMonitor({
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
-  const mediaProbeQueue=liveSupervisor?
+  const mediaProbeQueue=liveSupervisor&&typeof liveSupervisor.list==='function'&&
+    typeof liveSupervisor.probe==='function'?
     createOperatorLiveProbeQueue({supervisor:liveSupervisor}):null;
   const mediaWatchlist=createOperatorMediaWatchlist({
     portal,playback:()=>smartPlayback.snapshot(),ops:streamOps
