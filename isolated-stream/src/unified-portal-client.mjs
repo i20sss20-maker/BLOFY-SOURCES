@@ -15,8 +15,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const url=new URL(ORIGIN+path);
     if(url.origin!==ORIGIN||!url.pathname.startsWith(ROOT+'/'))
       return {status:400,body:{ok:false,code:'unified_bridge_invalid_origin'}};
-    const budget=path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
+    const budget=path.startsWith(ROOT+'/content-hub/site-qa/timeline/')&&method==='GET'?65000:
+      path.startsWith(ROOT+'/content-hub/seasons/series/')&&method==='GET'?70000:
+      path===ROOT+'/content-hub/seasons/probe'&&method==='POST'?60000:
+      path===ROOT+'/content-hub/seasons/audit'&&method==='POST'?80000:
+      path===ROOT+'/content-hub/seasons/concurrent-read'&&method==='POST'?65000:
+      path===ROOT+'/content-hub/episodes/next'&&method==='POST'?15000:
       path===ROOT+'/content-hub/episodes/probe'&&method==='POST'?60000:
+      path===ROOT+'/audio/probe'&&method==='POST'?18000:
       path===ROOT+'/media-failures/recheck-now'&&method==='POST'?60000:
       (path===ROOT+'/library-ai'||path===ROOT+'/library-ai/connection-test'||path===ROOT+'/library-ai/chat')&&method==='POST'?25000:timeoutMs;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
@@ -60,6 +66,14 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
+  const audioReadiness=()=>call(ROOT+'/audio/readiness');
+  const audioProbe=({ids}={})=>{
+    if(!Array.isArray(ids)||ids.length<1||ids.length>2||
+       new Set(ids).size!==ids.length||ids.some(id=>
+       typeof id!=='string'||!/^anis-[a-z0-9-]{1,54}$/.test(id)))
+      return Promise.resolve({status:400,body:{ok:false,code:'audio_probe_tracks_invalid'}});
+    return call(ROOT+'/audio/probe',{method:'POST',body:{ids}});
+  };
   const overview=()=>call(ROOT+'/overview');
   // Cached, provider-reported connection metadata. This endpoint makes NO
   // source requests and cannot return subscriber identities or source URLs.
@@ -71,6 +85,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     new URLSearchParams({offset:String(Math.max(0,Math.min(100000,Number(offset)||0)))}));
   const salesSummary=()=>call(ROOT+'/codes/sales-summary');
   const mediaQuality=()=>call(ROOT+'/media-quality');
+  const ownerAdminReadiness=()=>call(ROOT+'/ops/admin-readiness');
   const codeReveal=id=>UUID.test(String(id||''))
     ?call(ROOT+'/codes/'+id+'/reveal')
     :Promise.resolve({status:400,body:{ok:false,code:'invalid_code_id'}});
@@ -136,6 +151,49 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'stream_snapshot_confirmation_required'}});
     return call(ROOT+'/ops/snapshot',{method:'POST',body:{sourceId,label,confirmed:true}});
   }
+  // Owner-only read-only 04:00 Riyadh daily metadata import receipts.
+  // Server chooses the exact configured source, never a browser-provided ID.
+  const opsDailyCatalogStatus=()=>call(ROOT+'/ops/daily-catalog');
+  function opsMirrorInventory({mediaType='movie',cursor='',pageSize=50}={}){
+    if(!['live','movie','series','episode'].includes(mediaType)||
+       typeof cursor!=='string'||cursor.length>128||
+       !/^[A-Za-z0-9._:-]*$/.test(cursor)||
+       (mediaType==='episode'&&!/^(0|[1-9][0-9]*)$/.test(cursor||'0'))||
+       !Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100)
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_inventory_query_invalid'}});
+    return call(ROOT+'/ops/mirror-inventory?'+new URLSearchParams({
+      type:mediaType,cursor,limit:String(pageSize)}));
+  }
+
+  // Owner-only HEAD of one exact catalog item, capped at eight private S3
+  // objects per click. No S3 URLs, credentials or media bytes in browser.
+  function opsPhysicalHeadAudit({kind,id,start=0}={}){
+    if(!['movie','episode'].includes(kind)||
+      !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+        /^[1-9][0-9]{0,9}$/).test(String(id||''))||
+       !Number.isSafeInteger(start)||start<0||start>504||start%8!==0)
+      return Promise.resolve({status:400,body:{ok:false,
+        code:'stream_head_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-physical-head?'+new URLSearchParams({
+      type:kind,id:String(id),start:String(start)}));
+  }
+  // Private VOD metadata-intake ledger (NOT an active copy queue).
+  const opsMirrorIntakeList=()=>call(ROOT+'/ops/mirror-intake');
+  function opsMirrorIntakeChange(kind,id,ownerConfirmed,{cancel=false}={}){
+    if(!['movie','episode'].includes(kind)||
+       !(kind==='movie'?/^[A-Za-z0-9._:-]{1,128}$/:
+         /^[1-9][0-9]{0,9}$/).test(String(id||''))||
+       ownerConfirmed!==true)
+      return Promise.resolve({status:400,body:{
+        ok:false,code:'mirror_intake_selection_invalid'}});
+    return call(ROOT+'/ops/mirror-intake'+(cancel?'/cancel':''),{
+      method:'POST',body:{kind,id,ownerConfirmed:true}});
+  }
+  const opsMirrorIntakeStage=args=>opsMirrorIntakeChange(
+    args?.kind,args?.id,args?.ownerConfirmed);
+  const opsMirrorIntakeCancel=args=>opsMirrorIntakeChange(
+    args?.kind,args?.id,args?.ownerConfirmed,{cancel:true});
   const opsScheduleStatus=(args)=>opsRead('schedule',args);
   const opsSnapshots=(args)=>opsRead('snapshots',args);
   const opsSourceStats=(args)=>opsRead('source-stats',args);
@@ -231,6 +289,20 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // The run ID is a non-secret durable queue key. Only the private portal
+  // may select verified media. STREAM proxies bytes, never exposes S3.
+  async function contentHubSeasonEpisodePreviewRaw({runId,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+      throw Error('season_episode_preview_invalid_run');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/seasons/episodes/'+
+      String(runId)+'/preview',{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(85000)]):
+        AbortSignal.timeout(85000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
   async function contentHubPreviewRaw({signal}={}){
     if(!configured)throw Error('unified_bridge_not_configured');
     return fetchImpl(ORIGIN+ROOT+'/content-hub/preview',{
@@ -240,6 +312,146 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
     });
   }
+  // Exact website owner original-file Range path, behind HTTPS Portal bridge.
+  // No source URL, S3 bucket details, customer routing, or mutable actions.
+  async function contentHubOriginalRangeRaw({mediaKind,runId,range='',method='GET',signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!['movie','episode'].includes(mediaKind)||
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||
+       !['GET','HEAD'].includes(method)||
+       typeof range!=='string'||range.length>90)
+      throw Error('content_hub_site_qa_selection_invalid');
+    const route=ORIGIN+ROOT+'/content-hub/site-qa/files/'+mediaKind+'/'+runId;
+    return fetchImpl(route,{
+      method,redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(55000)]):
+        AbortSignal.timeout(55000),
+      headers:{authorization:'Bearer '+secret,accept:'*/*',
+        ...(range?{range}:{})}
+    });
+  }
+  // Private owner-only 10s MP4 seek samples, backed by the verified S3
+  // original. Never allow a URL or source path from the browser.
+  async function contentHubSeekPreviewRaw({mediaKind,runId,position,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!['movie','episode'].includes(mediaKind)||
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||
+       !['start','middle','near_end'].includes(position))
+      throw Error('site_qa_seek_selection_invalid');
+    return fetchImpl(ORIGIN+ROOT+'/content-hub/site-qa/seek-preview/'+
+      mediaKind+'/'+runId+'/'+position,{
+        method:'GET',redirect:'manual',cache:'no-store',
+        signal:signal?AbortSignal.any([signal,AbortSignal.timeout(110000)]):
+          AbortSignal.timeout(110000),
+        headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+      });
+  }
+  // On-demand 30-second owner video windows from an exact VERIFIED S3
+  // movie/episode, via signed Portal fixed paths. Never return source URLs.
+  function timelinePath({mediaKind,runId}={}){
+    if(!['movie','episode'].includes(mediaKind)||
+      !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+      throw Error('private_timeline_selection_invalid');
+    return ROOT+'/content-hub/site-qa/timeline/'+mediaKind+'/'+runId;
+  }
+  function contentHubTimelineMeta({mediaKind,runId}={}){
+    try{return call(timelinePath({mediaKind,runId})+'/meta')}
+    catch{return Promise.resolve({status:400,body:{
+      ok:false,code:'private_timeline_selection_invalid'}})}
+  }
+  async function contentHubTimelineClipRaw({mediaKind,runId,index,signal}={}){
+    if(!configured)throw Error('unified_bridge_not_configured');
+    if(!Number.isSafeInteger(index)||index<0||index>1199)
+      throw Error('private_timeline_segment_invalid');
+    const path=timelinePath({mediaKind,runId})+'/clip/'+index+'.mp4';
+    return fetchImpl(ORIGIN+path,{
+      method:'GET',redirect:'manual',cache:'no-store',
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(158000)]):
+        AbortSignal.timeout(158000),
+      headers:{authorization:'Bearer '+secret,accept:'video/mp4'}
+    });
+  }
+  // Native season controls for /operator#library. All calls stay on the
+  // signed STREAM -> Portal bridge (the browser never touches the old site).
+  const SEASONS=ROOT+'/content-hub/seasons/';
+  const contentHubSeasonSeries=()=>call(SEASONS+'series');
+  const contentHubSeasonPilot=()=>call(SEASONS+'pilot');
+  const contentHubSeasonMetadata=id=>{
+   const n=Number(id);
+   if(!Number.isSafeInteger(n)||n<1)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_id_invalid'}});
+   return call(SEASONS+'series/'+n);
+  };
+  const contentHubConcurrentRead=({runIds,confirmed}={})=>{
+   if(confirmed!==true||!Array.isArray(runIds)||runIds.length!==2||
+     runIds[0]===runIds[1]||runIds.some(x=>
+       !/^[A-Za-z0-9_-]{8,80}$/.test(String(x||''))))
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'private_read_canary_owner_confirmation_required'}});
+   return call(SEASONS+'concurrent-read',{method:'POST',
+    body:{runIds,confirmed:true}});
+  };
+  const contentHubSeasonRetry=({runId,confirmed,licensedStorage,sourceIdle}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      !/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||'')))
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_retry_manual_review_required'}});
+   return call(SEASONS+'retry',{method:'POST',body:{
+    runId,confirmed:true,licensedStorage:true,sourceIdle:true}});
+  };
+  const contentHubSeasonQueue=()=>call(SEASONS+'queue');
+  const contentHubSeasonQueuePage=(page,{state='all'}={})=>{
+   const n=Number(page);
+   if(!Number.isSafeInteger(n)||n<1||n>20000||
+      !['all','pending','queued','running','paused','verified','failed'].includes(state))
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_queue_page_invalid'}});
+   return call(SEASONS+'queue/status/'+state+'/page/'+n);
+  };
+  const contentHubSeasonHealth=()=>call(SEASONS+'health');
+  const contentHubSeasonAudit=({runId,confirmed}={})=>{
+   if(!/^[A-Za-z0-9_-]{8,80}$/.test(String(runId||''))||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_storage_audit_owner_confirmation_required'}});
+   return call(SEASONS+'audit',{method:'POST',body:{runId,confirmed:true}});
+  };
+  const contentHubSeasonAVStatus=()=>call(SEASONS+'confirmation');
+  const contentHubSeasonProbe=({gatewayId,confirmed}={})=>{
+   const n=Number(gatewayId);
+   if(!Number.isSafeInteger(n)||n<1||confirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,code:'season_probe_confirmation_required'}});
+   return call(SEASONS+'probe',{method:'POST',
+    body:{gatewayId:n,confirmed:true}});
+  };
+  const contentHubSeasonEnqueue=data=>{
+   if(data?.confirmed!==true||data?.licensedStorage!==true||
+     !Array.isArray(data?.episodes)||data.episodes.length<1||
+     data.episodes.length>12)
+    return Promise.resolve({status:400,body:{ok:false,
+      code:'season_enqueue_owner_confirmation_required'}});
+   return call(SEASONS+'enqueue',{method:'POST',body:data});
+  };
+  const contentHubSeasonStart=({confirmed,licensedStorage,sourceIdle,maxBatches=12}={})=>{
+   if(confirmed!==true||licensedStorage!==true||sourceIdle!==true||
+      ![12,60,120].includes(Number(maxBatches)))
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_start_operator_confirmation_required'}});
+   return call(SEASONS+'start',{method:'POST',
+    body:{confirmed:true,licensedStorage:true,sourceIdle:true,
+     maxBatches:Number(maxBatches)}});
+  };
+  const contentHubSeasonPause=({confirmed}={})=>{
+   if(confirmed!==true)return Promise.resolve({status:400,
+    body:{ok:false,code:'season_pause_confirmation_required'}});
+   return call(SEASONS+'pause',{method:'POST',body:{confirmed:true}});
+  };
+  const contentHubSeasonAVConfirm=({confirmed,videoConfirmed,audioConfirmed}={})=>{
+   if(confirmed!==true||videoConfirmed!==true||audioConfirmed!==true)
+    return Promise.resolve({status:400,body:{ok:false,
+     code:'season_browser_av_confirmation_required'}});
+   return call(SEASONS+'confirm',{method:'POST',
+    body:{confirmed:true,videoConfirmed:true,audioConfirmed:true}});
+  };
   const contentHubStatus=()=>call(ROOT+'/content-hub/status');
   const contentHubEpisodeCandidates=()=>call(ROOT+'/content-hub/episodes/candidates');
   const contentHubStartEpisodeCopy=({gatewayId,confirmed}={})=>{
@@ -341,12 +553,25 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,
+  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,ownerAdminReadiness,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
     contentHubPauseEpisodeCopy,contentHubPreflight,contentHubNextBatch,
     contentHubStartCopy,contentHubPauseCopy,contentHubDiagnosePlayback,
     contentHubDiagnoseEpisode,
-    contentHubPreviewRaw,contentHubEpisodePreviewRaw};
+    contentHubPreviewRaw,contentHubEpisodePreviewRaw,
+    contentHubOriginalRangeRaw,
+    contentHubSeekPreviewRaw,
+    contentHubTimelineMeta,contentHubTimelineClipRaw,
+    contentHubSeasonEpisodePreviewRaw,
+    contentHubSeasonSeries,contentHubSeasonPilot,contentHubSeasonMetadata,
+    contentHubSeasonQueue,contentHubSeasonQueuePage,
+    contentHubSeasonRetry,
+    contentHubSeasonHealth,contentHubSeasonAudit,
+    contentHubConcurrentRead,
+    audioReadiness,audioProbe,
+    contentHubSeasonAVStatus,contentHubSeasonProbe,
+    contentHubSeasonEnqueue,contentHubSeasonStart,contentHubSeasonPause,
+    contentHubSeasonAVConfirm};
 }

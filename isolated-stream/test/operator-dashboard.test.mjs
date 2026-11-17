@@ -355,3 +355,215 @@ test('authenticated security dashboard has anonymous per-channel stream diagnost
   assert.doesNotThrow(()=>new Function(script[1]));
  });
 });
+
+
+test('website proxy credential works independently and cannot replace the original operator secret',async()=>{
+  const proxyToken='dedicated-private-website-proxy-credential-1234567890';
+  const proxyAuth='Basic '+Buffer.from('operator:'+proxyToken).toString('base64');
+  await withServer({adminToken:secret,operatorProxyToken:proxyToken},async base=>{
+    assert.equal((await fetch(base+'/operator')).status,401);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:auth}})).status,200);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:proxyAuth}})).status,200);
+    assert.equal((await fetch(base+'/operator/api/state',{headers:{authorization:proxyAuth}})).status,200);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:'Basic '+Buffer.from('operator:invalid').toString('base64')}})).status,401);
+  });
+});
+test('short or missing proxy credential is never an operator credential',async()=>{
+  await withServer({adminToken:secret,operatorProxyToken:'short'},async base=>{
+    const denied=await fetch(base+'/operator',{headers:{authorization:'Basic '+Buffer.from('operator:short').toString('base64')}});
+    assert.equal(denied.status,401);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:auth}})).status,200);
+  });
+});
+
+
+test('bounded media probe queue is protected and inert without explicit approvals',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const anonymous=await fetch(base+'/operator/api/media-scan/queue');
+    assert.equal(anonymous.status,401);
+    const response=await fetch(base+'/operator/api/media-scan/queue',{
+      headers:{authorization:auth}
+    });
+    assert.equal(response.status,200);
+    const state=await response.json();
+    assert.equal(state.ok,true);
+    assert.equal(state.requiresExplicitStart,true);
+    assert.equal(state.maxPerRun,2);
+    assert.equal(state.concurrentProbes,1);
+    assert.equal(state.newOperatorPathsCreated,0);
+    assert.equal(state.upstreamSessionsCreated,null);
+    assert.equal(state.job,null);
+    const panel=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.match(await panel.text(),/id="media-probe-queue-start"/);
+    const noHeader=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+      body:'{}'
+    });
+    assert.equal(noHeader.status,403);
+    const noConsent=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'application/json',
+        'x-blofy-operator-action':'media-scan-start'},
+      body:JSON.stringify({paths:['live-123456abcdef']})
+    });
+    assert.equal(noConsent.status,403);
+    assert.equal((await noConsent.json()).code,'operator_live_probe_confirmation_required');
+    const noActive=await fetch(base+'/operator/api/media-scan/queue/start',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'application/json',
+        'x-blofy-operator-action':'media-scan-start'},
+      body:JSON.stringify({paths:['live-123456abcdef'],rightsConfirmed:true,
+        capacityAcknowledged:true})
+    });
+    assert.equal(noActive.status,409);
+    assert.equal((await noActive.json()).code,'operator_live_probe_path_not_active');
+  });
+});
+
+
+test('media scan result UI describes diagnosed audio/video status and safe JSON/CSV exports',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const page=await response.text();
+    assert.match(page,/id="media-probe-queue-export-json"/);
+    assert.match(page,/id="media-probe-queue-export-csv"/);
+    assert.match(page,/id="media-probe-queue-history"/);
+    assert.match(page,/id="media-probe-queue-summary"/);
+    assert.match(page,/diagnosis\.nextStep/);
+    assert.match(page,/completeCatalogVerified|decodedVideo|videoDecoded/);
+    assert.doesNotMatch(page,/localStorage\.setItem\([^)]*media-probe-queue/);
+  });
+});
+
+
+test('synthetic decoder lab status is owner-only and cannot trigger any decoder action',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const noAuth=await fetch(base+'/operator/api/media-scan/decoder-lab');
+    assert.equal(noAuth.status,401);
+    const allowed=await fetch(base+'/operator/api/media-scan/decoder-lab',{
+      headers:{authorization:auth}
+    });
+    assert.equal(allowed.status,200);
+    const report=await allowed.json();
+    assert.equal(report.readOnly,true);
+    assert.equal(report.scope,'synthetic_local_only');
+    assert.equal(report.productionStreamVerified,false);
+    assert.ok(['not_configured','unavailable','synthetic_verified'].includes(report.state));
+    assert.equal((await fetch(base+'/operator/api/media-scan/decoder-lab',{
+      method:'POST',headers:{authorization:auth,'content-type':'application/json'},
+      body:'{}'
+    })).status,404);
+    const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+    const html=await page.text();
+    assert.match(html,/id="decoder-lab-panel"/);
+    assert.match(html,/id="decoder-lab-audio-frames"/);
+    assert.match(html,/api\("media-scan\/decoder-lab"\)/);
+    assert.match(html,/productionStreamVerified===false/);
+  });
+});
+
+
+test('decoder audio matrix is visible as explicit synthetic-only observations',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/id="decoder-lab-codec-rows"/);
+    assert.match(html,/showDecoderLabCodecs/);
+    assert.match(html,/MP2 · AAC · AC3 · E-AC3/);
+    assert.match(html,/توافق الترميز مع Android 9/);
+  });
+});
+
+
+test('manual owner TS analyzer remains protected, inactive without confirmation, and never auto-fetches a channel',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const bytes=Buffer.alloc(188*12);
+    for(let i=0;i<12;i++){bytes[188*i]=0x47;bytes[188*i+3]=0x10;}
+    const unauth=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample',
+        'x-blofy-sample-rights':'confirmed'},body:bytes
+    });
+    assert.equal(unauth.status,401);
+    const noRights=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample'},body:bytes
+    });
+    assert.equal(noRights.status,403);
+    assert.equal((await noRights.json()).code,'operator_sample_rights_required');
+    const noLab=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample',
+        'x-blofy-sample-rights':'confirmed'},body:bytes
+    });
+    assert.equal(noLab.status,503);
+    assert.equal((await noLab.json()).code,'sample_lab_not_configured');
+    const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+    const html=await page.text();
+    assert.match(html,/id="owner-ts-sample-panel"/);
+    assert.match(html,/id="owner-ts-sample-file"/);
+    assert.match(html,/id="owner-ts-sample-consent"/);
+    assert.match(html,/x-blofy-sample-rights/);
+    assert.match(html,/لا يفتح النظام اتصالًا جديدًا بالمصدر/);
+  });
+});
+
+
+test('passive sample remains owner-only, opt-in, and does not start disconnected channels',async()=>{
+  const previous=process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN;
+  process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN='TEST_ONLY_PASSIVE_CAPTURE_TOKEN_NOT_PUBLIC_OR_REAL_1234567';
+  try{
+    await withServer({adminToken:secret},async base=>{
+      const url=base+'/operator/api/media-scan/passive-sample';
+      const body=JSON.stringify({path:'live-123456abcdef',rightsConfirmed:true});
+      const unauthorized=await fetch(url,{method:'POST',
+        headers:{'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},body});
+      assert.equal(unauthorized.status,401);
+      const noAction=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json'},body});
+      assert.equal(noAction.status,403);
+      const noConsent=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},
+        body:JSON.stringify({path:'live-123456abcdef',rightsConfirmed:false})});
+      assert.equal(noConsent.status,403);
+      assert.equal((await noConsent.json()).code,'passive_sample_rights_required');
+      const disconnected=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},body});
+      assert.equal(disconnected.status,404);
+      assert.equal((await disconnected.json()).code,'passive_capture_path_not_found');
+      const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+      assert.equal(page.status,200);
+      const html=await page.text();
+      for(const id of ['passive-ts-refresh','passive-ts-path','passive-ts-rights',
+        'passive-ts-run','passive-ts-status'])assert.ok(html.includes('id="'+id+'"'));
+      assert.match(html,/media-scan\/passive-sample/);
+      assert.match(html,/لا يفتح مسار Xtream أو HLS جديدًا/);
+    });
+  }finally{
+    if(previous===undefined)delete process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN;
+    else process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN=previous;
+  }
+});
+
+
+test('original STREAM admin remains navigable to entire BLOFY website from same-origin portal',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/class="blofy-top-website-link" href="https:\/\/blofyplayer\.com\/admin"/);
+    assert.match(html,/href="https:\/\/blofyplayer\.com\/admin\/control-center\/health"/);
+    assert.match(html,/href="https:\/\/updates\.blofyplayer\.com\/downloads"/);
+    for(const tab of ['sources','restream','library','accounts','codes','distributors','diagnostics']){
+      assert.match(html,new RegExp('data-tab="'+tab+'"'));
+    }
+    assert.doesNotMatch(html,/<iframe\s/i);
+  });
+});

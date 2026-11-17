@@ -114,3 +114,69 @@ test('verified episode preview is Basic protected and routes only through fixed 
   '/internal/blofy-stream/content-hub/episodes/preview'));
  assert.equal(calls[0].opts.headers.authorization,'Bearer '+bridge);
 });
+
+test('operator episode playback reports verified S3 failure without leaking private details',async()=>{
+ await withServer({fetchImpl:async()=>new Response(JSON.stringify({
+  ok:false,code:'private_preview_verified_prefix_unavailable',
+  token:'PRIVATE_CREDENTIALS_SHOULD_NOT_APPEAR'
+ }),{status:503,headers:{'content-type':'application/json'}})},async base=>{
+  const res=await fetch(base+'/operator/api/content-hub/episodes/preview',{
+   headers:{authorization:auth}
+  });
+  assert.equal(res.status,503);
+  const body=await res.text();
+  assert.match(body,/private_preview_verified_prefix_unavailable/);
+  assert.doesNotMatch(body,/PRIVATE_CREDENTIALS/);
+ });
+});
+test('operator episode busy response stays 429, not a generic 503',async()=>{
+ await withServer({fetchImpl:async()=>new Response(JSON.stringify({
+  ok:false,code:'owner_preview_busy'
+ }),{status:429,headers:{'content-type':'application/json'}})},async base=>{
+  const res=await fetch(base+'/operator/api/content-hub/episodes/preview',{
+   headers:{authorization:auth}
+  });
+  assert.equal(res.status,429);
+  assert.equal((await res.json()).code,'owner_preview_busy');
+ });
+});
+
+test('authorized owner preview without Content-Length is bounded and reissues exact size',async()=>{
+ const mp4=Buffer.concat([Buffer.alloc(4),Buffer.from('ftyp'),Buffer.alloc(3200,0x40)]);
+ const requests=[];
+ await withServer({fetchImpl:async(url,opts)=>{
+  requests.push({url,opts});
+  return new Response(new ReadableStream({start(ctrl){
+   ctrl.enqueue(mp4.subarray(0,4));
+   ctrl.enqueue(mp4.subarray(4,1500));
+   ctrl.enqueue(mp4.subarray(1500));
+   ctrl.close();
+  }}),{status:200,headers:{'content-type':'video/mp4'}});
+ }},async base=>{
+  const response=await fetch(base+'/operator/api/content-hub/episodes/preview',{
+   headers:{authorization:auth}});
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('content-length'),String(mp4.length));
+  assert.equal(response.headers.get('cross-origin-resource-policy'),'same-origin');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),mp4);
+ });
+ assert.equal(requests.length,1);
+ assert.ok(requests[0].url.endsWith('/internal/blofy-stream/content-hub/episodes/preview'));
+ assert.equal(requests[0].opts.headers.authorization,'Bearer '+bridge);
+});
+test('chunked private response rejects oversized or malformed MP4 without exposing bytes',async()=>{
+ await withServer({fetchImpl:async()=>new Response(new ReadableStream({start(c){
+  c.enqueue(Buffer.alloc(12*1024*1024+1));c.close()
+ }}),{status:200,headers:{'content-type':'video/mp4'}})},async base=>{
+  const r=await fetch(base+'/operator/api/content-hub/preview',{headers:{authorization:auth}});
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).code,'owner_preview_payload_invalid');
+ });
+ await withServer({fetchImpl:async()=>new Response(new ReadableStream({start(c){
+  c.enqueue(Buffer.alloc(3200,0x66));c.close()
+ }}),{status:200,headers:{'content-type':'video/mp4'}})},async base=>{
+  const r=await fetch(base+'/operator/api/content-hub/preview',{headers:{authorization:auth}});
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).code,'owner_preview_payload_invalid');
+ });
+});

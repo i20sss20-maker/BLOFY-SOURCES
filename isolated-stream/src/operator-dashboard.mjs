@@ -3,6 +3,7 @@
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
+import {streamOperatorOriginalRange} from './operator-original-range.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
@@ -11,6 +12,10 @@ import {buildOperatorSupportBundle} from './platform-support-bundle.mjs';
 import {createStreamCrossServiceDiagnosis} from './cross-service-diagnostics.mjs';
 import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
+import {createOperatorMediaWatchlist} from './operator-media-watchlist.mjs';
+import {createDecoderLabReportClient} from './decoder-lab-report-client.mjs';
+import {createOwnerSampleBridge,readOperatorSample} from './owner-ts-sample-bridge.mjs';
+import {createOperatorLiveProbeQueue} from './operator-live-probe-queue.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
@@ -51,7 +56,7 @@ async function readAdminJson(req){
     return body;
   }catch{throw Object.assign(new Error('invalid_json'),{status:400})}
 }
-export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
+export function createOperatorDashboard({adminToken='',operatorProxyToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',edgeObservabilityKey='',
   playbackGroqApiKey='',getReplicaSynthetic=()=>null,
@@ -69,6 +74,18 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
   const smartPlayback=createSmartPlaybackMonitor({
     collect:()=>crossService.snapshot()});
   const playbackAi=createSmartPlaybackAi({key:playbackGroqApiKey,fetchImpl});
+  const mediaProbeQueue=liveSupervisor&&typeof liveSupervisor.list==='function'&&
+    typeof liveSupervisor.probe==='function'?
+    createOperatorLiveProbeQueue({supervisor:liveSupervisor}):null;
+  const ownerSampleBridge=createOwnerSampleBridge({
+    fetchImpl,uploadToken:process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN||''
+  });
+  const decoderLabReport=createDecoderLabReportClient({
+    fetchImpl,viewToken:process.env.BLOFY_DECODER_LAB_VIEW_TOKEN||''
+  });
+  const mediaWatchlist=createOperatorMediaWatchlist({
+    portal,playback:()=>smartPlayback.snapshot(),ops:streamOps
+  });
   const readReplica=createReadReplicaObserver({fetchImpl});
   const replicaProbe={running:false,lastAt:0,latest:null};
   function safeReplicaProof(proof){
@@ -130,17 +147,93 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     const path=uri.pathname;
     if(!(path==='/operator'||path==='/operator/'||path.startsWith('/operator/api/')))return false;
     if(!enabled){json(res,404,{ok:false,code:'operator_console_not_configured'});return true;}
-    if(!authorized(req,adminToken)){
+    // Same-origin BLOFY website forwards a dedicated backend-only credential.
+    // Keep the existing operator login unchanged; never return either token to browsers.
+    if(!authorized(req,adminToken) && !authorized(req,operatorProxyToken)){
       rejectInvalidOperator(req,res);return true;
     }
     if(req.method==='GET'&&(path==='/operator'||path==='/operator/')){
       const nonce=randomBytes(16).toString('base64');
       const body=Buffer.from(renderOperatorDashboard(nonce));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store',
-        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-"+nonce+"'; connect-src 'self'; media-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         'x-frame-options':'DENY','x-content-type-options':'nosniff',
         'referrer-policy':'no-referrer','content-length':body.length});
       res.end(body);return true;
+    }
+    // Private S3 30-second video windows address the whole verified source
+    // timeline, for manually authenticated owner QA. NOT subscriber HLS.
+    const timeline=path.match(
+      /^\/operator\/api\/content-hub\/timeline\/(movie|episode)\/([A-Za-z0-9_-]{8,80})\/(meta|clip\/(0|[1-9][0-9]{0,3})\.mp4)$/);
+    if(timeline){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'private_timeline_method_denied'});
+        return true;
+      }
+      const mediaKind=timeline[1],runId=timeline[2],segment=timeline[4];
+      if(segment===undefined){
+        void portal.contentHubTimelineMeta({mediaKind,runId})
+          .then(result=>json(res,result.status,result.body))
+          .catch(()=>{if(!res.headersSent)json(res,503,{
+            ok:false,code:'private_timeline_metadata_unavailable'})});
+        return true;
+      }
+      void streamOperatorOwnerPreview({req,res,timeoutMs:155000,
+        maxBytes:18*1024*1024,
+        getUpstream:({signal})=>portal.contentHubTimelineClipRaw({
+          mediaKind,runId,index:Number(segment),signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'private_timeline_segment_unavailable'})});
+      return true;
+    }
+    // Browser-compatible 10s sample extracted by FFmpeg at an owner-selected
+    // point in the FULL verified S3 original, never an Xtream source URL.
+    const seekPreview=path.match(
+      /^\/operator\/api\/content-hub\/site-qa\/seek-preview\/(movie|episode)\/([A-Za-z0-9_-]{8,80})\/(start|middle|near_end)$/);
+    if(seekPreview){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'site_qa_seek_method_denied'});return true;
+      }
+      void streamOperatorOwnerPreview({
+        req,res,seekPosition:seekPreview[3],timeoutMs:115000,
+        getUpstream:({signal})=>portal.contentHubSeekPreviewRaw({
+          mediaKind:seekPreview[1],runId:seekPreview[2],
+          position:seekPreview[3],signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'site_qa_seek_preview_failed'})});
+      return true;
+    }
+    // Original verified S3 bytes for owner SITE QA only. This is the
+    // website /operator Basic-authenticated control plane, not an app/API.
+    const privateOriginal=path.match(
+      /^\/operator\/api\/content-hub\/site-qa\/files\/(movie|episode)\/([A-Za-z0-9_-]{8,80})$/);
+    if(privateOriginal){
+      if(uri.search){json(res,400,{ok:false,code:'site_qa_query_denied'});return true;}
+      void streamOperatorOriginalRange({req,res,
+        mediaKind:privateOriginal[1],runId:privateOriginal[2],
+        getUpstream:({signal,method,range})=>
+          portal.contentHubOriginalRangeRaw({
+            mediaKind:privateOriginal[1],runId:privateOriginal[2],
+            method,range,signal})
+      }).catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'site_qa_original_stream_failed'})});
+      return true;
+    }
+    // Signed, run-scoped private video preview for a verified queued
+    // episode. No full video URL, source credentials or S3 data in browser.
+    const selectedSeasonPreview=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/episodes\/([A-Za-z0-9_-]{8,80})\/preview$/);
+    if(selectedSeasonPreview){
+      if(req.method!=='GET'||uri.search){
+        json(res,405,{ok:false,code:'season_preview_method_or_query_denied'});
+        return true;
+      }
+      void streamOperatorOwnerPreview({req,res,
+        getUpstream:({signal})=>portal.contentHubSeasonEpisodePreviewRaw({
+          runId:selectedSeasonPreview[1],signal})})
+       .catch(()=>{if(!res.headersSent)json(res,503,{
+        ok:false,code:'season_preview_stream_failed'})});
+      return true;
     }
     // This route is reachable only after the exact operator Basic auth
     // above; never expose a private S3 or internal portal URL to browsers.
@@ -224,6 +317,98 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         .catch(error=>json(res,[400,413,415].includes(error?.status)?error.status:503,
           {ok:false,code:[400,413,415].includes(error?.status)?
             error.message:'unavailable_recheck_unavailable'}));
+      return true;
+    }
+    // Explicitly approved, max-two sequential HLS checks on existing active
+    // operator paths only. No background catalog sweep or new Xtream paths.
+    if(req.method==='POST'&&path==='/operator/api/media-scan/passive-sample'){
+      if(req.headers['x-blofy-operator-action']!=='media-scan-passive-sample'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      if(typeof liveSupervisor?.captureActiveTs!=='function'||
+        String(process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN||'').length<40){
+        json(res,503,{ok:false,code:'passive_capture_not_configured'});return true;
+      }
+      void readAdminJson(req).then(async body=>{
+        const sample=await liveSupervisor.captureActiveTs({
+          name:body.path,rightsConfirmed:body.rightsConfirmed===true
+        });
+        if(sample.status!==200||!Buffer.isBuffer(sample.bytes))
+          return {status:sample.status||503,body:{
+            ok:false,code:sample.code||'passive_capture_unavailable',
+            passiveCapture:true,providerConnectionsCreated:0,
+            customerRoutesChanged:false
+          }};
+        try{
+          const report=await ownerSampleBridge.submit(sample.bytes);
+          return {status:report.status,body:{
+            ...report.body,passiveCapture:true,
+            source:'existing_operator_publisher_input',
+            captureComplete:sample.code==='passive_sample_complete',
+            capturedBytes:sample.bytes.length,providerConnectionsCreated:0,
+            customerRoutesChanged:false
+          }};
+        }finally{sample.bytes.fill(0);}
+      }).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'passive_sample_unavailable',
+          customerRoutesChanged:false}));
+      return true;
+    }
+    if(req.method==='POST'&&path==='/operator/api/media-scan/owner-sample'){
+      if(req.headers['x-blofy-operator-action']!=='media-scan-owner-sample'||
+        req.headers['x-blofy-sample-rights']!=='confirmed'){
+        json(res,403,{ok:false,code:'operator_sample_rights_required'});return true;
+      }
+      void readOperatorSample(req)
+        .then(async data=>data.ok?ownerSampleBridge.submit(data.bytes):
+          {status:data.status||400,body:{
+            ok:false,scope:'approved_short_ts_sample',code:data.code
+          }})
+        .then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'sample_bridge_unavailable'}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-scan/decoder-lab'){
+      void decoderLabReport.snapshot().then(data=>json(res,200,data))
+        .catch(()=>json(res,503,{ok:false,readOnly:true,
+          scope:'synthetic_local_only',state:'unavailable',
+          productionStreamVerified:false}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-scan/queue'){
+      json(res,200,mediaProbeQueue?mediaProbeQueue.snapshot():{
+        ok:false,code:'operator_live_probe_not_configured'
+      });
+      return true;
+    }
+    if(req.method==='POST'&&(path==='/operator/api/media-scan/queue/start'||
+      path==='/operator/api/media-scan/queue/cancel')){
+      const start=path.endsWith('/start');
+      if(req.headers['x-blofy-operator-action']!==
+        (start?'media-scan-start':'media-scan-cancel')){
+        json(res,403,{ok:false,code:'operator_action_header_required'});
+        return true;
+      }
+      if(!mediaProbeQueue){
+        json(res,503,{ok:false,code:'operator_live_probe_not_configured'});
+        return true;
+      }
+      void readAdminJson(req).then(body=>
+        start?mediaProbeQueue.start(body):mediaProbeQueue.cancel()
+      ).then(({status,body})=>json(res,status,body))
+       .catch(e=>json(res,[400,413,415].includes(e?.status)?e.status:503,{
+         ok:false,code:[400,413,415].includes(e?.status)?e.message:'operator_live_probe_unavailable'
+       }));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-scan/report'){
+      const sourceId=uri.searchParams.get('sourceId')||'';
+      void mediaWatchlist.snapshot({sourceId}).then(report=>{
+        json(res,report?.ok===true?200:report?.code==='operator_media_watchlist_invalid_source'?400:503,report);
+      }).catch(()=>json(res,503,{
+        ok:false,code:'operator_media_watchlist_unavailable',
+        allChannelsScanned:false,noProviderRequestsTriggered:true
+      }));
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
@@ -407,12 +592,48 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         return true;
       }
     }
+    // Native season management in STREAM. All requests require the
+    // operator's existing Basic auth (checked before this branch).
+    const seriesRoute=path.match(/^\/operator\/api\/content-hub\/seasons\/series\/([1-9][0-9]{0,14})$/);
+    if(req.method==='GET'&&seriesRoute){
+      void portal.contentHubSeasonMetadata(Number(seriesRoute[1]))
+       .then(({status,body})=>json(res,status,body))
+       .catch(()=>json(res,503,{ok:false,code:'season_bridge_unavailable'}));
+      return true;
+    }
+    const seasonQueuePageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/page\/([1-9][0-9]{0,4})$/);
+    const seasonFilterPageRoute=path.match(
+      /^\/operator\/api\/content-hub\/seasons\/queue\/status\/(all|pending|queued|running|paused|verified|failed)\/page\/([1-9][0-9]{0,4})$/);
+    if(req.method==='GET'&&(seasonQueuePageRoute||seasonFilterPageRoute)){
+      const page=Number(seasonQueuePageRoute?.[1]||seasonFilterPageRoute?.[2]);
+      const state=seasonFilterPageRoute?.[1]||'all';
+      if(page>20000){
+        json(res,400,{ok:false,code:'season_queue_page_invalid'});
+        return true;
+      }
+      if(uri.search){
+        json(res,400,{ok:false,code:'season_queue_query_denied'});
+        return true;
+      }
+      void portal.contentHubSeasonQueuePage(page,{state})
+       .then(({status,body})=>json(res,status,body))
+       .catch(()=>json(res,503,{
+        ok:false,code:'season_queue_page_unavailable'}));
+      return true;
+    }
     const readable={
       '/operator/api/overview':()=>portal.overview(),
       // Operator Basic auth enforced above; portal Bearer key never returned
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
+      '/operator/api/audio/readiness':()=>portal.audioReadiness(),
       '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
+      '/operator/api/content-hub/seasons/series':()=>portal.contentHubSeasonSeries(),
+      '/operator/api/content-hub/seasons/pilot':()=>portal.contentHubSeasonPilot(),
+      '/operator/api/content-hub/seasons/queue':()=>portal.contentHubSeasonQueue(),
+      '/operator/api/content-hub/seasons/health':()=>portal.contentHubSeasonHealth(),
+      '/operator/api/content-hub/seasons/confirmation':()=>portal.contentHubSeasonAVStatus(),
       '/operator/api/content-hub/episodes/candidates':()=>portal.contentHubEpisodeCandidates(),
       '/operator/api/content-hub/preflight':()=>portal.contentHubPreflight(),
       '/operator/api/sources':()=>portal.sources(),
@@ -420,6 +641,8 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/distributors':()=>portal.distributorAdmins(),
       '/operator/api/sales-summary':()=>portal.salesSummary(),
+      '/operator/api/media-quality':()=>portal.mediaQuality(),
+      '/operator/api/ops/admin-readiness':()=>portal.ownerAdminReadiness(),
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
       }),
@@ -430,6 +653,10 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         sourceId:uri.searchParams.get('sourceId'),
         seriesId:uri.searchParams.get('seriesId')
       }),
+      '/operator/api/ops/daily-catalog':()=>portal.opsDailyCatalogStatus(),
+      '/operator/api/ops/mirror-inventory':()=>portal.opsMirrorInventory({mediaType:uri.searchParams.get('type')||'movie',cursor:uri.searchParams.get('cursor')||'',pageSize:Number(uri.searchParams.get('limit')||50)}),
+      '/operator/api/ops/mirror-physical-head':()=>portal.opsPhysicalHeadAudit({kind:uri.searchParams.get('type')||'',id:uri.searchParams.get('id')||'',start:Number(uri.searchParams.get('start')||0)}),
+      '/operator/api/ops/mirror-intake':()=>portal.opsMirrorIntakeList(),
       '/operator/api/ops/schedule':()=>portal.opsScheduleStatus({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/snapshots':()=>portal.opsSnapshots({sourceId:uri.searchParams.get('sourceId')||''}),
       '/operator/api/ops/source-stats':()=>portal.opsSourceStats({sourceId:uri.searchParams.get('sourceId')||''}),
@@ -472,7 +699,15 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
       const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
-      const action=path==='/operator/api/content-hub/episodes/playback/diagnose'?'content-hub-episode-diagnose':
+      const action=path==='/operator/api/content-hub/seasons/retry'?'season-retry':
+        path==='/operator/api/content-hub/seasons/concurrent-read'?'season-concurrent-read':
+        path==='/operator/api/content-hub/seasons/audit'?'season-audit':
+        path==='/operator/api/content-hub/seasons/probe'?'season-probe':
+        path==='/operator/api/content-hub/seasons/enqueue'?'season-enqueue':
+        path==='/operator/api/content-hub/seasons/start'?'season-start':
+        path==='/operator/api/content-hub/seasons/pause'?'season-pause':
+        path==='/operator/api/content-hub/seasons/confirm'?'season-confirm':
+        path==='/operator/api/content-hub/episodes/playback/diagnose'?'content-hub-episode-diagnose':
         path==='/operator/api/content-hub/episodes/start'?'content-hub-episode-start':
         path==='/operator/api/content-hub/episodes/pause'?'content-hub-episode-pause':
         path==='/operator/api/content-hub/episodes/next'?'content-hub-episode-next':
@@ -481,6 +716,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
         path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
         path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
         path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
+        path==='/operator/api/audio/probe'?'audio-probe':
+        path==='/operator/api/ops/mirror-intake'?'ops-mirror-stage':
+        path==='/operator/api/ops/mirror-intake/cancel'?'ops-mirror-cancel':
         path==='/operator/api/ops/schedule'?'ops-schedule':
         path==='/operator/api/ops/snapshot'?'ops-snapshot':
         path==='/operator/api/library-ai/rollback'?'library-ai-rollback':
@@ -499,6 +737,17 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='audio-probe')return portal.audioProbe(data);
+        if(action==='ops-mirror-stage')return portal.opsMirrorIntakeStage(data);
+        if(action==='ops-mirror-cancel')return portal.opsMirrorIntakeCancel(data);
+        if(action==='season-retry')return portal.contentHubSeasonRetry(data);
+        if(action==='season-concurrent-read')return portal.contentHubConcurrentRead(data);
+        if(action==='season-audit')return portal.contentHubSeasonAudit(data);
+        if(action==='season-probe')return portal.contentHubSeasonProbe(data);
+        if(action==='season-enqueue')return portal.contentHubSeasonEnqueue(data);
+        if(action==='season-start')return portal.contentHubSeasonStart(data);
+        if(action==='season-pause')return portal.contentHubSeasonPause(data);
+        if(action==='season-confirm')return portal.contentHubSeasonAVConfirm(data);
         if(action==='content-hub-episode-start')return portal.contentHubStartEpisodeCopy(data);
         if(action==='content-hub-episode-pause')return portal.contentHubPauseEpisodeCopy();
         if(action==='content-hub-episode-next')return portal.contentHubNextEpisodeChunk(data);

@@ -95,3 +95,115 @@ test('operator catalog and code/account pagination cannot mix stale responses or
  const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
  assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
 });
+
+
+test('season health is protected read-only and SHA audit requires explicit owner action',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(input,init)=>{
+   seen.push({path:new URL(input).pathname,method:init.method,
+    auth:init.headers.authorization,body:init.body});
+   return new Response(JSON.stringify({ok:true,alerts:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const data=await client.contentHubSeasonHealth();
+ assert.equal(data.status,200);
+ assert.equal(seen[0].path,'/internal/blofy-stream/content-hub/seasons/health');
+ assert.equal(seen[0].method,'GET');
+ const bad=await client.contentHubSeasonAudit({
+  runId:'saleh_episode_127434_20261114',confirmed:false});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,1);
+ const runId='saleh_episode_127434_20261114';
+ const ok=await client.contentHubSeasonAudit({runId,confirmed:true});
+ assert.equal(ok.status,200);
+ assert.equal(seen[1].method,'POST');
+ assert.equal(seen[1].path,'/internal/blofy-stream/content-hub/seasons/audit');
+ assert.equal(seen[1].auth,'Bearer '+secret);
+ assert.deepEqual(JSON.parse(seen[1].body),{runId,confirmed:true});
+});
+
+
+test('manual season queue budget and dual-S3 read remain on the signed fixed bridge',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   seen.push({url:String(url),method:init.method,
+    header:init.headers.authorization,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,code:'test'}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const bad=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:999});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,0);
+ const good=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:12});
+ assert.equal(good.status,200);
+ assert.equal(seen[0].body.maxBatches,12);
+ assert.equal(seen[0].method,'POST');
+ const runIds=['saleh_episode_127434_20261114',
+  'season_0123456789abcdef01234567'];
+ assert.equal((await client.contentHubConcurrentRead({
+  runIds:[runIds[0],runIds[0]],confirmed:true})).status,400);
+ assert.equal(seen.length,1);
+ const read=await client.contentHubConcurrentRead({
+  runIds,confirmed:true});
+ assert.equal(read.status,200);
+ assert.equal(seen[1].url,'https://blofy-activation-portal-production.up.railway.app'+
+  '/internal/blofy-stream/content-hub/seasons/concurrent-read');
+ assert.deepEqual(seen[1].body,{runIds,confirmed:true});
+ assert.equal(seen[1].header,'Bearer '+secret);
+});
+
+
+test('manual failed-episode requeue requires source-idle and owner rights; never starts copy',async()=>{
+ const observed=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   observed.push({url,method:init.method,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,automaticStart:false}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const runId='season_0123456789abcdef01234567';
+ const denied=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:false});
+ assert.equal(denied.status,400);
+ assert.equal(observed.length,0);
+ const result=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:true});
+ assert.equal(result.status,200);
+ assert.equal(result.body.automaticStart,false);
+ assert.equal(observed.length,1);
+ assert.equal(observed[0].method,'POST');
+ assert.equal(new URL(observed[0].url).pathname,
+  '/internal/blofy-stream/content-hub/seasons/retry');
+ assert.deepEqual(observed[0].body,{runId,confirmed:true,
+  licensedStorage:true,sourceIdle:true});
+});
+
+
+test('paged season queue never permits unbounded query or malformed page',async()=>{
+ const calls=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   calls.push({path:new URL(url).pathname,method:init.method,
+    auth:init.headers.authorization});
+   return new Response(JSON.stringify({ok:true,page:{number:2,pages:4,
+     pageSize:50,totalEpisodes:180},episodes:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ for(const page of [0,-1,20001,'2?token=bad',0.5]){
+  const bad=await client.contentHubSeasonQueuePage(page);
+  assert.equal(bad.status,400);
+ }
+ assert.equal(calls.length,0);
+ const result=await client.contentHubSeasonQueuePage(2);
+ assert.equal(result.status,200);
+ assert.equal(result.body.page.totalEpisodes,180);
+ assert.deepEqual(calls,[{path:'/internal/blofy-stream/content-hub/seasons/queue/status/all/page/2',
+  method:'GET',auth:'Bearer '+secret}]);
+ const failed=await client.contentHubSeasonQueuePage(3,{state:'failed'});
+ assert.equal(failed.status,200);
+ assert.equal(calls[1].path,
+  '/internal/blofy-stream/content-hub/seasons/queue/status/failed/page/3');
+ const invalid=await client.contentHubSeasonQueuePage(1,{state:'verified%2Fanything'});
+ assert.equal(invalid.status,400);
+ assert.equal(calls.length,2);
+});

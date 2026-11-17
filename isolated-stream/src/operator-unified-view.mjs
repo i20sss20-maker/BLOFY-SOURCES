@@ -302,6 +302,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 .diag-ai-card[data-state="loading"] .diag-ai-glow{animation:diagAiPulse 1.4s ease-in-out infinite alternate}
 @keyframes diagAiPulse{from{box-shadow:0 0 0 #6b8dfe00}to{box-shadow:0 0 22px #718fff77}}
 @media(prefers-reduced-motion:reduce){.diag-ai-glow{animation:none!important}}
+.blofy-top-website-link,.blofy-nav-back{display:inline-flex;align-items:center;gap:6px;justify-content:center;font-size:12px;border:1px solid #4b6582;background:#1b324c;color:#e5f5ff;border-radius:11px;padding:9px 12px;text-decoration:none;font-weight:750;line-height:1.4}
+.blofy-top-website-link:hover,.blofy-nav-back:hover{background:#284962;border-color:#7cbbd7;color:#fff}
+.blofy-top-website-link:focus-visible,.blofy-nav-back:focus-visible{outline:2px solid #93e1ff;outline-offset:2px}
+.blofy-nav-back{margin-top:5px;width:100%;padding:8px 10px;justify-content:flex-start;text-align:right}
+@media(max-width:680px){.blofy-top-website-link{font-size:11px;padding:7px 9px}}
 </style>
 </head><body><div class="layout"><aside id="app-sidebar" class="app-sidebar" aria-label="القائمة الجانبية">
 <div class="sidebar-top"><div class="logo"><div class="logo-icon">B</div><div class="logo-copy"><strong>BLOFY <b>STREAM</b></strong><small>مركز الإدارة المتكامل</small></div></div>
@@ -320,10 +325,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="navtitle">مراقبة النظام</div>
 <button type="button" class="navlink" data-tab="diagnostics" aria-label="الفحص والصيانة" title="الفحص والصيانة"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V7l8-4z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="nav-label">الفحص والصيانة</span></button>
 </nav></div>
-<div class="sidebar-bottom"><span class="sidebar-version">واجهة الإدارة الموحدة</span><span class="sidebar-version-detail">BLOFY STREAM • 2026</span></div>
+<div class="sidebar-bottom"><a href="https://blofyplayer.com/admin" class="blofy-nav-back">↩ إدارة موقع BLOFY</a><a href="https://blofyplayer.com/admin/control-center/health" class="blofy-nav-back">◉ حالة خدمات BLOFY</a><a href="https://updates.blofyplayer.com/downloads" class="blofy-nav-back">↓ مركز التطبيقات</a><span class="sidebar-version">واجهة الإدارة الموحدة</span><span class="sidebar-version-detail">BLOFY STREAM • 2026</span></div>
 </aside><button type="button" id="sidebar-scrim" class="sidebar-scrim" aria-label="إغلاق القائمة" hidden></button><div class="content">
 <header class="top"><div class="top-title-wrap"><button type="button" id="sidebar-open" class="sidebar-open" aria-label="فتح قائمة الأقسام" aria-controls="app-sidebar" aria-expanded="false">☰</button><div><div class="top-crumb">BLOFY STREAM <span> / </span><span id="top-section">الرئيسية</span></div><h1 id="title">الرئيسية</h1><p>السيرفر والمكتبة والمشتركون وإعادة البث</p></div></div>
-<div class="tools"><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
+<div class="tools"><a class="blofy-top-website-link" href="https://blofyplayer.com/admin" aria-label="العودة لإدارة موقع BLOFY">↩ موقع BLOFY</a><a class="blofy-top-website-link" href="https://blofyplayer.com/admin/control-center/health" aria-label="فحص اتصال خدمات BLOFY">◉ حالة الخدمات</a><span id="system-pill" class="pill warn" role="status">جار الاتصال</span><span class="top-status-secondary" id="last-updated">—</span><button class="btn secondary sm density-toggle" id="density-toggle" aria-pressed="false" type="button">عرض مكثف</button><button class="btn secondary sm" id="open-command" type="button" aria-keyshortcuts="Control+K">⌕ الأوامر</button><button class="btn secondary sm" id="refresh">↻ تحديث</button></div></header>
 <main><div id="notice" class="status" role="status" hidden></div>
 <section class="view active" id="page-home">
 <div class="heading"><div><h2>مركز القيادة</h2><p>إدارة البث والمشتركين والمحتوى من لوحة واحدة.</p></div><button class="btn secondary" id="home-refresh" type="button">↻ تحديث الحالة</button></div>
@@ -608,6 +613,116 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
+<div class="panel" id="content-hub-season-entry" style="border:1px solid #38bdf8;background:linear-gradient(120deg,#102941,#13233b);margin-bottom:18px">
+  <div class="controls">
+   <div><h3 style="margin:0">📚 إدارة المواسم والحلقات — داخل BLOFY STREAM</h3>
+    <p class="muted" style="margin:4px 0">اختيار المسلسلات، النقل الآمن، النسب، الإيقاف والاستكمال من نفس المكتبة. دون فتح الموقع القديم.</p></div>
+   <div class="actions"><button class="btn secondary" id="season-refresh" type="button">↻ تحديث المواسم</button>
+    <span class="pill" id="season-online">جار فحص الاتصال</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px;margin-top:12px">
+   <div>
+    <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
+     <h4>① اختر المسلسل والموسم</h4>
+     <div class="actions">
+      <button id="season-pilot" class="btn secondary" type="button">🔍 مسلسل الحلقة المحفوظة</button>
+      <button id="season-series-load" class="btn secondary" type="button">عرض المسلسلات</button>
+     </div>
+     <label for="season-series-select">المسلسل</label>
+     <select id="season-series-select" style="width:100%;max-width:100%;margin:7px 0"><option value="">اختر مسلسلًا</option></select>
+     <div class="actions">
+      <input id="season-series-id" type="number" min="1" step="1" placeholder="أو رقم المسلسل" aria-label="معرف المسلسل" style="max-width:220px">
+      <button class="btn secondary" id="season-series-open" type="button">فتح بالرقم</button>
+      <button class="btn" id="season-series-episodes" type="button" disabled>عرض المواسم</button>
+     </div>
+     <label for="season-season-select">الموسم</label>
+     <select id="season-season-select" disabled style="width:100%;max-width:100%;margin:7px 0"><option value="">اختر الموسم</option></select>
+     <div class="actions">
+      <button class="btn secondary" id="season-select-batch" type="button" disabled>تحديد أول 12 حلقة</button>
+      <button class="btn" id="season-enqueue" type="button" disabled>＋ إضافة إلى الانتظار</button>
+     </div>
+     <p class="muted" id="season-candidates-note" role="status">اختر مسلسلًا ثم موسمًا. فحص حجم الحلقة يقرأ 4 كيلوبايت فقط.</p>
+     <div id="season-candidates" style="max-height:460px;overflow:auto;display:grid;gap:10px" aria-live="polite"></div>
+    </div>
+   </div>
+   <div>
+    <div class="panel" style="margin:0;background:rgba(5,15,30,.3)">
+     <h4>② قائمة النقل ونسب الحلقات</h4>
+     <p id="season-queue-note" class="muted" role="status">جارٍ قراءة قائمة الانتظار...</p>
+     <p id="season-transfer-live" class="muted" role="status" aria-live="polite">السرعة والوقت المتبقي يظهران بعد حفظ جزءين متتاليين أثناء النقل. لا توجد حركة بث تلقائية.</p>
+     <label for="season-state-filter">تصفية قائمة الحلقات حسب الحالة</label>
+     <select id="season-state-filter" style="width:100%;margin:8px 0">
+      <option value="all">كل الحلقات</option>
+      <option value="pending">بانتظار النقل / موقوفة / قيد النقل</option>
+      <option value="queued">بانتظار النقل فقط</option>
+      <option value="running">قيد النقل</option>
+      <option value="paused">موقوفة</option>
+      <option value="verified">مكتملة</option>
+      <option value="failed">فاشلة (تحتاج مراجعة)</option>
+     </select>
+     <label for="season-max-batches">ميزانية الجلسة الواحدة (نقل متسلسل، حد الجزء 8 MB)</label>
+     <select id="season-max-batches" style="width:100%;margin:7px 0">
+      <option value="12" selected>آمن — حتى 12 جزءًا (96 MB)</option>
+      <option value="60">متوسط — حتى 60 جزءًا (480 MB)</option>
+      <option value="120">موسع — حتى 120 جزءًا (960 MB)</option>
+     </select>
+     <p class="muted">تُطبّق الميزانية عند الضغط على بدء فقط، مع حد زمني مستقل 45 دقيقة. لا تشغيل تلقائي، ويمكن إيقاف النقل يدويًا.</p>
+     <div class="actions">
+      <button class="btn" id="season-start" type="button" disabled>▶ بدء / استكمال النقل</button>
+      <button class="btn secondary" id="season-pause" type="button" disabled>⏸ إيقاف آمن</button>
+     </div>
+     <div class="actions" style="margin-top:12px;justify-content:space-between">
+      <button id="season-page-previous" class="btn secondary" type="button" disabled>→ السابق</button>
+      <span id="season-page-label" class="muted" role="status">الصفحة 1 · قراءة بحد 50 حلقة</span>
+      <button id="season-page-next" class="btn secondary" type="button" disabled>التالي ←</button>
+     </div>
+     <p class="muted" style="margin:6px 0">تظهر هنا 50 حلقة بحد أقصى في كل صفحة؛ النسب المجمعّة للصفحة فقط. إجمالي تقدم المكتبة بالكامل يظهر في صحة التخزين.</p>
+     <div id="season-queue-list" aria-live="polite" style="display:grid;gap:12px;margin-top:12px"></div>
+     <div id="season-episode-preview-wrap" style="display:none;margin-top:14px">
+      <p id="season-episode-preview-note" class="muted" role="status">لم يتم اختيار حلقة للمعاينة بعد.</p>
+      <video id="season-episode-preview-player" controls playsinline preload="none" style="width:100%;max-height:320px;background:#000;border-radius:12px"></video>
+     </div>
+     <p class="muted" style="margin:10px 0 0">يُحفظ التقدم في PostgreSQL والتخزين الخاص. لا تُحوّل قنوات أو أكواد المشتركين تلقائيًا.</p>
+    </div>
+    <div class="panel" id="season-health-panel" style="margin-top:14px;background:rgba(5,15,30,.3);border:1px solid #35577a">
+     <div class="controls"><h4 style="margin:0">🛡 صحة التخزين والتنبيهات</h4>
+      <button id="season-health-refresh" class="btn secondary" type="button">↻ تحديث فحص التخزين</button></div>
+     <p id="season-health-summary" class="muted" role="status" aria-live="polite">جارٍ قراءة سجلات المساحة والحلقات…</p>
+     <progress id="season-storage-progress" value="0" max="100" style="width:100%;height:15px;accent-color:#34d399" aria-label="نسبة البايتات المسجلة في قائمة النقل"></progress>
+     <p id="season-storage-note" class="muted">المساحة محسوبة من سجلات PostgreSQL، ولا تمثل المساحة الفارغة لدى مزود التخزين.</p>
+     <div id="season-health-alerts" role="status" aria-live="polite" style="display:grid;gap:7px;margin:10px 0"></div>
+     <label for="season-audit-select">فحص سلامة أجزاء حلقة مكتملة (تخزين BLOFY الخاص)</label>
+     <select id="season-audit-select" style="width:100%;margin:8px 0"><option value="">اختر حلقة مكتملة</option></select>
+     <div class="actions">
+      <button id="season-audit-run" type="button" class="btn secondary" disabled>🔎 فحص SHA-256 لثلاثة أجزاء</button>
+     </div>
+     <p class="muted" id="season-audit-status" role="status">فحص يدوي يقرأ حتى 24 ميجابايت من التخزين الخاص فقط؛ لا يحمّل من مزود القنوات ولا يغيّر الملفات.</p>
+     <div id="season-health-audit-list" class="muted" style="margin-top:9px"></div>
+     <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2b4b6d">
+      <h4>⚡ اختبار قراءتين متزامنتين من التخزين الخاص</h4>
+      <p class="muted">اختبار يدوي لحلقتين مكتملتين مختلفتين: يقرأ جزءًا واحدًا (حتى 8 MB) من كل حلقة بالتزامن ويتحقق من SHA-256. هذا اختبار أداء التخزين فقط، وليس اختبار تشغيل مشتركين فعليين أو فك فيديو.</p>
+      <div class="actions">
+       <select id="season-concurrent-first" aria-label="الحلقة الأولى" style="max-width:270px"><option value="">الحلقة الأولى</option></select>
+       <select id="season-concurrent-second" aria-label="الحلقة الثانية" style="max-width:270px"><option value="">الحلقة الثانية</option></select>
+      </div>
+      <button id="season-concurrent-run" type="button" class="btn secondary" disabled>▶ فحص قراءتين متزامنتين</button>
+      <p class="muted" id="season-concurrent-status" role="status">يتطلب حلقتين مختلفتين مكتملتين ومصرّحًا بتخزينهما. لا يبدأ تلقائيًا.</p>
+     </div>
+    </div>
+    <div class="panel" style="margin-top:14px;background:rgba(5,15,30,.3)">
+     <h4>③ اعتماد تشغيل الحلقة بالصوت والصورة</h4>
+     <p class="muted">بعد تشغيل العينة من التخزين تأكد من الصورة والصوت في متصفحك؛ بدون ذلك لن يبدأ نقل الموسم.</p>
+     <button id="season-play-preview" type="button" class="btn secondary">▶ تشغيل عينة الحلقة المحفوظة</button>
+     <video id="season-preview-video" controls playsinline preload="none" style="width:100%;max-height:320px;display:block;background:black;border-radius:12px;margin:12px 0"></video>
+     <label style="display:block;margin-top:8px"><input type="checkbox" id="season-video-okay"> شاهدت الصورة بوضوح</label>
+     <label style="display:block;margin-top:8px"><input type="checkbox" id="season-audio-okay"> سمعت الصوت بشكل صحيح</label>
+     <div class="actions" style="margin-top:12px"><button id="season-av-confirm" type="button" class="btn" disabled>✓ اعتماد اختبار التشغيل</button></div>
+     <p class="muted" id="season-av-note" role="status">لم يُسجّل تأكيد المتصفح بعد.</p>
+    </div>
+   </div>
+  </div>
+  <p class="muted" id="season-action-note" role="status" style="margin-top:14px">جميع عمليات النقل تتطلب صلاحية تخزين المحتوى وخمول المصدر، ولا تبدأ تلقائيًا.</p>
+</div>
 <div class="panel" id="content-hub-batches">
 <h3>⬇ تنزيل أفلام BLOFY على دفعات آمنة</h3>
 <p class="muted">ينقل كل طلب جزءًا واحدًا فقط (8 ميجابايت)، ويحفظه في التخزين الخاص مع التحقق من سلامته. يمكن استكمال الأجزاء المحفوظة دون تنزيلها مجددًا. لا يتم تحويل تشغيل المشتركين تلقائيًا.</p>
@@ -639,7 +754,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <p class="muted" id="content-hub-notice">النقل يبقى مقفلاً إذا لم تتأكد صلاحية تخزين الفيلم وخمول مصدر saleh.</p>
 </div>
 <div class="panel" id="content-hub-episodes">
-<h3>📺 المرحلة التالية: تجهيز نقل حلقات المسلسلات</h3>
+<h3>📺 الحلقات المخزنة والمواسم</h3>
+<p class="muted">يمكنك إدارة المواسم من القسم الجديد بأعلى هذه الصفحة دون الانتقال لأي لوحة أخرى.</p>
 <p class="muted">اختر حلقة من الفهرس للمراجعة لاحقًا. هذا الفحص يقرأ بيانات الحلقات من مصدر saleh فقط، ولا يحمّل أي فيديو أو يبدأ نقل المواسم.</p>
 <div class="actions">
 <button class="btn secondary" id="content-hub-episodes-check" type="button">↻ عرض أول 8 حلقات متاحة</button>
@@ -655,6 +771,87 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <video id="content-hub-episode-preview-player" controls playsinline preload="none"
  style="display:block;width:min(100%,750px);max-height:420px;margin-top:12px;background:#000;border-radius:12px"></video>
 <p class="muted" id="content-hub-episode-preview-note">متاحة بعد اكتمال الحلقة والتحقق من سلامة بياناتها.</p>
+</div>
+<div class="panel" id="hub-original-range-panel">
+<h3>📁 فحص الملف الأصلي المحفوظ على BLOFY — وليس عينة 12 ثانية</h3>
+<p class="muted">اختبار قراءة حقيقية من تخزين BLOFY الخاص لملف الفيلم أو الحلقة <strong>كامل الحجم</strong>، عبر HTTP Range من بداية الملف ووسطه ونهايته. لا توجد طلبات لمصدر Xtream ولا تتغير أكواد العملاء. هذه قراءة عينات موزعة من الملف الأصلي، ولا تعني تشغيله كاملًا بالصوت والصورة.</p>
+<div class="actions">
+<button type="button" class="btn secondary" id="hub-original-movie-check">📁 فحص الملف الأصلي للفيلم</button>
+<button type="button" class="btn secondary" id="hub-original-episode-check">📁 فحص الملف الأصلي للحلقة</button>
+<button type="button" class="btn secondary" id="hub-original-movie-play">▶ تجربة تشغيل الفيلم الأصلي في المتصفح (MP4 فقط)</button>
+<button type="button" class="btn secondary" id="hub-original-episode-play">▶ تجربة تشغيل الحلقة الأصلية في المتصفح (MP4 فقط)</button>
+</div>
+<video id="hub-original-browser-player" controls playsinline preload="none"
+ style="display:none;width:min(100%,850px);max-height:420px;background:black;border-radius:12px;margin-top:12px"></video>
+<p class="muted" id="hub-original-range-status" role="status" aria-live="polite">الفحص مقفل من Content Hub افتراضيًا حتى يتم تفعيل تجربة المالك الآمنة. ملفات MKV لا تصبح MP4 تلقائيًا؛ تشغيلها داخل Chrome قد لا يكون مدعومًا.</p>
+<div id="hub-private-seek-sample" style="margin-top:18px;padding:14px;border:1px solid #37597c;border-radius:14px">
+<strong>🎬 اختبار الصوت والصورة من بداية / منتصف / نهاية الملف الأصلي</strong>
+<p class="muted">يقرأ الخادم أجزاء من الملف <strong>المكتمل والمتحقق منه في تخزين BLOFY</strong>، ثم ينشئ عينة MP4 مدتها 10 ثوانٍ من الموضع المختار. مناسب لفحص ملفات MKV في المتصفح. لا يشغّل الفيلم كاملًا ولا يسحب من Xtream.</p>
+<div class="actions">
+<label for="hub-seek-media" style="min-width:160px;flex:1">اختر الملف
+<select id="hub-seek-media"><option value="movie">الفيلم المحفوظ</option><option value="episode">الحلقة المحفوظة</option></select></label>
+<label for="hub-seek-position" style="min-width:160px;flex:1">موضع الفحص
+<select id="hub-seek-position"><option value="start">بداية الملف</option><option value="middle">منتصف الملف</option><option value="near_end">قرب النهاية</option></select></label>
+<button type="button" class="btn" id="hub-seek-preview-play">▶ إنشاء وتشغيل عينة من S3</button>
+</div>
+<video id="hub-seek-preview-player" controls playsinline preload="none"
+  style="display:none;width:min(100%,750px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
+<p id="hub-seek-preview-status" class="muted" role="status" aria-live="polite">لم يتم إنشاء أي عينة. قد يستغرق التحويل وقتًا؛ إذا لم يستطع FFmpeg الوصول لموضع الملف فسوف يفشل الفحص بدل إعلان نجاح غير حقيقي.</p>
+</div>
+<div id="hub-owner-timeline" style="margin-top:18px;padding:16px;border:1px solid #39775e;border-radius:14px">
+<h3>🎥 تشغيل متسلسل تجريبي للفيلم أو الحلقة المحفوظة</h3>
+<p class="muted">يعرض نافذة MP4 مدتها 30 ثانية من الملف الأصلي المتحقق منه في تخزين BLOFY. ينتقل إلى التالية عند الانتهاء، ويمكن التقديم لأي دقيقة باستخدام الشريط. يحوّل الخادم MKV إلى H.264/AAC عند الطلب؛ قد يحدث توقف بين المقاطع. هذا <strong>ليس إثبات مشاهدة كاملة ولا تشغيلًا جاهزًا للمشتركين</strong>.</p>
+<div class="actions">
+<label for="hub-timeline-media" style="min-width:180px">نوع الملف
+<select id="hub-timeline-media"><option value="movie">الفيلم المحفوظ</option><option value="episode">الحلقة المحفوظة</option></select></label>
+<button type="button" id="hub-timeline-start" class="btn">▶ ابدأ التجربة من البداية</button>
+<button type="button" id="hub-timeline-previous" class="btn secondary" disabled>⏮ السابق</button>
+<button type="button" id="hub-timeline-next" class="btn secondary" disabled>التالي ⏭</button>
+<button type="button" id="hub-timeline-stop" class="btn secondary" disabled>■ إيقاف</button>
+</div>
+<video id="hub-timeline-player" controls playsinline preload="none"
+ style="display:none;width:min(100%,850px);max-height:420px;background:#000;border-radius:12px;margin-top:12px"></video>
+<label for="hub-timeline-seek" style="display:block;margin-top:12px">التقديم إلى أي موضع في الملف الأصلي</label>
+<input type="range" id="hub-timeline-seek" min="0" max="0" value="0" step="1" disabled style="width:100%" />
+<div class="muted" id="hub-timeline-clock">00:00 / --:--</div>
+<p id="hub-timeline-status" class="muted" role="status" aria-live="polite">لم يبدأ تشغيل متسلسل. يلزم اعتماد المالك لملف خاص واحد مكتمل، وتفعيل فحص Windows/Android TV قبل نشره.</p>
+<div style="padding:12px;margin-top:12px;border:1px solid #315875;border-radius:10px">
+  <strong>📊 متابعة تشغيل النوافذ وحالات التوقف</strong>
+  <p id="hub-timeline-qos" class="muted" aria-live="polite">لم تبدأ جلسة تشغيل بعد. إحصائيات المتصفح لا تثبت جودة الصوت أو مشاهدة الفيلم كاملًا.</p>
+  <label style="display:block"><input id="hub-timeline-picture" type="checkbox"> تأكدت بنفسي من ظهور صورة متحركة</label>
+  <label style="display:block"><input id="hub-timeline-audio" type="checkbox"> تأكدت بنفسي من سماع الصوت</label>
+  <div class="actions" style="margin-top:10px">
+    <button id="hub-timeline-retry" type="button" class="btn secondary" disabled>↻ إعادة محاولة آخر مقطع</button>
+    <button id="hub-timeline-export" type="button" class="btn secondary" disabled>📋 تنزيل تقرير تجربة التشغيل</button>
+  </div>
+  <p class="muted">التقرير محلي على جهاز المدير فقط، ولا يتضمن رابط التخزين أو بيانات مصدر Xtream، ولا يُعد موافقة لنشر المحتوى للمشتركين.</p>
+</div>
+</div>
+</div>
+<div style="margin-top:18px;padding:18px;border:1px solid #4f5376;border-radius:14px" id="hub-browser-qa">
+<h3>🧪 إثبات تشغيل مكتبة BLOFY STREAM على المتصفح</h3>
+<p class="muted">شغّل عينة الفيلم وعينة الحلقة أعلاه من التخزين الخاص، ثم اختبرهما على متصفح Windows أو Android TV. الأداة تراقب إطارات الفيديو ومرور وقت التشغيل وتطلب منك تأكيد سماع الصوت ورؤية الصورة بنفسك. هذه <strong>عينات 12 ثانية فقط</strong> ولا تثبت مشاهدة الملف كاملًا أو توافق تطبيقات العملاء.</p>
+<div class="field" style="max-width:350px"><label for="hub-qa-platform">الجهاز الذي تُجري عليه الاختبار الآن</label>
+<select id="hub-qa-platform"><option value="">اختر الجهاز</option><option value="windows_browser">Windows — المتصفح</option><option value="android_tv_browser">Android TV — المتصفح</option></select></div>
+<div class="grid" style="margin-top:14px">
+<div class="code-tile"><strong>🎞 الفيلم المحفوظ</strong><p class="muted" role="status" id="hub-qa-movie-status">لم يبدأ تشغيل الفيلم في المتصفح.</p>
+<label style="display:block"><input type="checkbox" id="hub-qa-movie-picture"> رأيت الصورة تتحرك فعليًا</label>
+<label style="display:block"><input type="checkbox" id="hub-qa-movie-audio"> سمعت الصوت فعليًا من الجهاز</label></div>
+<div class="code-tile"><strong>📺 الحلقة المحفوظة</strong><p class="muted" role="status" id="hub-qa-episode-status">لم يبدأ تشغيل الحلقة في المتصفح.</p>
+<label style="display:block"><input type="checkbox" id="hub-qa-episode-picture"> رأيت الصورة تتحرك فعليًا</label>
+<label style="display:block"><input type="checkbox" id="hub-qa-episode-audio"> سمعت الصوت فعليًا من الجهاز</label></div>
+</div>
+<p class="muted">للاختبار الصحيح: اختر الجهاز <strong>قبل</strong> التشغيل، شغّل الفيلم والحلقة، قدّم داخل كل عينة ثم تأكد من استئناف الفيديو والصوت، وحدد مربعي التأكيد يدويًا. كرّر على الجهاز الثاني بشكل مستقل.</p>
+<div class="actions" style="margin-top:12px"><button class="btn secondary" id="hub-qa-export" type="button">📋 تنزيل تقرير اختبار الجهاز (JSON)</button></div>
+<p class="muted" id="hub-qa-verdict" role="status" aria-live="polite">لم تكتمل مشاهدة أي عينة. لا توجد موافقة نشر.</p>
+<div style="margin-top:14px;padding:12px;border:1px solid #405b80;border-radius:10px">
+<strong>📂 مقارنة نتائج Windows وAndroid TV</strong>
+<label for="hub-qa-import" style="display:block;margin-top:6px">اختر ملفي تقرير الاختبار من الجهازين، ليجري المتصفح مقارنة محلية لهوية الفيلم والحلقة والنتائج.</label>
+<input id="hub-qa-import" type="file" accept=".json,application/json" multiple style="margin-top:8px">
+<p id="hub-qa-pair-status" class="muted" role="status" aria-live="polite">لم تتم مقارنة جهازين. لا يتصل هذا الاختبار بالمصدر أو بخوادم إضافية.</p>
+<p class="muted">هوية الجهاز مُدخلة يدويًا وليست إثباتًا عتاديًا. نجاح العينات لا يثبت تشغيل الفيلم كاملًا أو يمنح موافقة نشر.</p>
+</div>
+<p class="muted">التقرير يُنشأ محليًا على جهازك فقط؛ لا يحتوي روابط الفيديو أو مفاتيح الاتصال أو بيانات المشتركين ولا يُرسل تلقائيًا للخادم.</p>
 </div>
 <p class="muted" role="status" id="content-hub-episodes-status">لم يبدأ فحص الحلقات بعد.</p>
 <p class="muted" role="status" id="content-hub-episode-copy-progress">تنزيل الحلقات متوقف. لن يتأثر تشغيل القنوات أو أكواد المشتركين.</p>
@@ -686,6 +883,53 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button class="btn secondary" id="library-ops-refresh" type="button">فحص حالة المصدر والأكواد</button>
 </div></div>
 <p class="muted" id="library-auto-status" role="status" aria-live="polite">اختر مصدرًا ثم افحص المزامنة التلقائية.</p>
+<div class="panel" id="library-daily-catalog-panel" style="margin:12px 0;padding:14px;background:rgba(6,30,44,.4);border:1px solid #25506e">
+  <div class="controls">
+    <h4 style="margin:0">🕓 مزامنة فهرس Xtream اليومية — 4:00 صباحًا بتوقيت السعودية</h4>
+    <button id="library-daily-catalog-refresh" class="btn secondary" type="button">↻ تحديث سجل الأيام</button>
+  </div>
+  <p class="muted">هذه المزامنة تُحدّث بيانات قنوات وأفلام ومسلسلات مصدر saleh المعتمد فقط، ولا تنقل ملفات الأفلام والحلقات إلى S3. لا تخلط بين طلب المزامنة واكتمالها؛ حالة «مكتمل» تظهر فقط بعد نجاح استيراد الفهرس فعلًا.</p>
+  <p id="library-daily-catalog-status" class="muted" role="status" aria-live="polite">اختر تحديث السجل لفحص حالة جدول 4:00 صباحًا.</p>
+  <div id="library-daily-catalog-receipts" class="log" style="display:grid;gap:6px" aria-live="polite"></div>
+</div>
+<div class="panel" id="library-mirror-inventory-panel" style="margin:12px 0;padding:14px;border:1px solid #39775e;background:rgba(9,28,36,.48)">
+  <div class="controls">
+    <h4 style="margin:0">📦 جرد المحتوى قبل النقل إلى سيرفر BLOFY</h4>
+    <div class="actions">
+      <label>نوع المحتوى
+      <select id="library-mirror-type">
+      <option value="movie">الأفلام</option>
+      <option value="episode">الحلقات المفهرسة سابقًا</option>
+      <option value="series">المسلسلات</option>
+      <option value="live">القنوات — فهرس فقط</option>
+      </select></label>
+      <button type="button" class="btn secondary" id="library-mirror-refresh">↻ قراءة أول 50 عنصرًا</button>
+      <button type="button" class="btn secondary" id="library-mirror-next" disabled>التالي (50)</button>
+    </div>
+  </div>
+  <p class="muted">هذه قائمة العناصر المفهرسة في PostgreSQL. حالة «✅ نسخة مكتملة في سجل SHA» تعني تطابق سجل القطع والبصمة والبايتات في قاعدة بيانات Content Hub <strong>ولا تعني التحقق المباشر من وجود جميع القطع في S3</strong>. الحلقات المعروضة تمثل ما فهرسناه سابقًا فقط. لا يجري الفحص أي نقل أو طلب فيديو من المصدر.</p>
+  <p id="library-mirror-status" class="muted" role="status" aria-live="polite">اختر النوع ثم اضغط قراءة الجرد. حالة النسخ لكل عنصر غير مقاسة حتى تتم المطابقة مع التخزين الخاص.</p>
+  <div class="tablewrap"><table>
+   <thead><tr><th>معرف المورد</th><th>العنوان</th><th>الامتداد</th><th>حالة التخزين الخاص</th><th>فحص S3</th><th>تجهيز للنقل</th></tr></thead>
+   <tbody id="library-mirror-results"></tbody>
+  </table></div>
+  <div id="library-mirror-head-panel" style="border:1px solid #296c6e;border-radius:12px;padding:12px;margin:12px 0">
+    <strong>🔍 اختبار فعلي لوجود أجزاء الملف في S3</strong>
+    <p class="muted">بعد ظهور «نسخة مكتملة في سجل SHA» اختر فحص S3 من صف الفيلم أو الحلقة. يفحص السيرفر حتى 8 أجزاء بطلبات HEAD فقط، ويتحقق من وجودها وأحجامها دون تنزيل الفيديو أو قراءة Xtream. فحص الحجم <strong>لا يعيد حساب بصمة SHA-256</strong>، ولا يثبت أجزاء لم تُفحص.</p>
+    <button type="button" class="btn secondary" id="library-head-next" disabled>فحص 8 أجزاء تالية من نفس الملف</button>
+    <p id="library-head-status" class="muted" role="status" aria-live="polite">لم يبدأ فحص S3 فعلي. النتائج في الجدول مستمدة من قاعدة بيانات النسخ فقط.</p>
+  </div>
+  <div id="library-mirror-intake-panel" style="padding:12px;margin-top:12px;border:1px solid #a68439;border-radius:12px;background:rgba(63,41,8,.28)">
+    <div class="controls">
+      <strong>📋 قائمة تجهيز النقل الخاص — ليست مهام تنزيل</strong>
+      <button type="button" class="btn secondary" id="library-mirror-intake-refresh">↻ تحديث قائمة التجهيز</button>
+    </div>
+    <p class="muted">عند اختيار «جهّز سجل النقل» يُحفظ اسم الفيلم أو الحلقة ومعرّفها فقط في PostgreSQL، بحد أقصى 24 عنصرًا للمصدر. <strong>لا يبدأ تحميل</strong> ولا تُحجز مساحة. كل عنصر يبقى بانتظار قياس حجم المصدر وتوثيق حقوق التخزين والتحقق من مساحة S3 وموافقة مستقلة على بدء العامل.</p>
+    <p id="library-mirror-intake-status" class="muted" role="status" aria-live="polite">لم تُقرأ قائمة التجهيز بعد. لم يتم جدولة أي تنزيل تلقائي.</p>
+    <div id="library-mirror-intake-items" class="log" style="display:grid;gap:8px" aria-live="polite"></div>
+  </div>
+  <p id="library-mirror-note" class="muted">النقل الفعلي يتطلب صلاحية حفظ فردية، فحص حجم الملف وتوفر المساحة قبل إضافته لطابور التنزيل.</p>
+</div>
 <p class="muted" id="library-ops-stats" role="status" aria-live="polite">لم تُقرأ إحصائيات المصدر بعد.</p>
 <p class="muted" id="library-live-capacity-status" role="status" aria-live="polite">سيعرض هذا التقرير قيود حساب Xtream الأصلي وأسباب انقطاع القنوات، دون قراءة بيانات دخول العملاء.</p>
 <div class="actions">
@@ -864,6 +1108,133 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
  <button type="button" class="btn secondary" id="diagnostic-go-audio">🔊 تشخيص الصوت</button>
  <button type="button" class="btn secondary" id="diagnostic-go-failures">⚠️ سجل 404</button>
  </div></div>
+<div class="panel" id="transport-502-health-panel">
+ <div class="controls"><div><h3>📡 تشخيص الانقطاعات 502 والصوت والصورة</h3>
+ <p class="muted">يعرض عدادات تشغيل فعلية من بوابة BLOFY خلال آخر 60 دقيقة أو منذ آخر إعادة تشغيل (أيهما أقصر). يشمل أخطاء المصدر وانقطاع البيانات بعد بدء البث، وليس نتائج فك ترميز على جهاز العميل.</p></div>
+ <button type="button" class="btn secondary" id="transport-502-refresh">↻ تحديث حالة الاتصال</button></div>
+ <div class="cards">
+ <div class="stat"><small>استجابات بدأت بحزم وسائط</small><strong id="transport-502-started">—</strong></div>
+ <div class="stat"><small>محاولات فاشلة قبل التشغيل</small><strong id="transport-502-failed">—</strong></div>
+ <div class="stat"><small>انقطاعات بعد بدء التشغيل</small><strong id="transport-502-interrupted">—</strong></div>
+ <div class="stat"><small>انقطاعات اتصال المصدر</small><strong id="transport-502-resets">—</strong></div>
+ </div>
+ <p class="diag-inline-note" id="transport-502-status" role="status" aria-live="polite">لم تُقرأ مؤشرات اتصال المصدر بعد.</p>
+ <div class="tablewrap"><table><thead><tr><th>سبب المشكلة</th><th>القنوات</th><th>الأفلام</th><th>الحلقات</th><th>الإجمالي</th></tr></thead>
+ <tbody id="transport-502-reasons"></tbody></table></div>
+ <p class="muted">هذه إحصاءات مخزنة بالذاكرة فقط (بحد 400 حدث)، ولا ترسل طلبات وسائط جديدة، ولا تحفظ بيانات المشتركين. نجاح أول حزمة لا يثبت اكتمال التشغيل أو وجود صوت مسموع.</p>
+</div>
+<div class="panel" id="media-watchlist-panel">
+<div class="controls"><div><h3>🔎 سجل جودة القنوات والصوت والصورة</h3>
+<p class="muted">تقرير واحد من سجل 404 ومراقبة البث الفعلية المسجلة. لا يجلب مقاطع من المصدر ولا يفحص كل قنوات الفهرس.</p></div>
+<div class="actions"><button type="button" id="media-watchlist-refresh" class="btn">↻ قراءة التقرير</button>
+<button type="button" id="media-watchlist-export" class="btn secondary" disabled>نسخ النتائج</button></div></div>
+<p class="muted">التصفية بحسب المصدر المحدد في «سجل 404» أدناه تنطبق على سجلات الأخطاء فقط؛ مراقبة البث النشط مجمّعة للسيرفر وليست مرتبطة بمصدر محدد.</p>
+<div class="cards">
+<div class="stat"><small>قنوات مشاركة نشطة ضمن المراقبة</small><strong id="media-watchlist-feeds">—</strong></div>
+<div class="stat"><small>أخطاء 404 تاريخية مسجلة</small><strong id="media-watchlist-missing">—</strong></div>
+<div class="stat"><small>إشارات مشاكل الصوت</small><strong id="media-watchlist-audio">—</strong></div>
+<div class="stat"><small>إشارات مشاكل الصورة</small><strong id="media-watchlist-video">—</strong></div></div>
+<p class="diag-inline-note" id="media-watchlist-status" role="status" aria-live="polite">لم تُقرأ بيانات الفحص بعد؛ النتائج غير المعروفة لا تُعد سليمة.</p>
+<div class="controls"><h4>حالة قنوات المشاركة المرصودة فقط</h4><span class="muted">ليست جميع قنوات المصدر</span></div>
+<div class="tablewrap"><table><thead><tr><th>معرف القناة</th><th>حالة المسار</th><th>المشاهدون المتصلون</th><th>عمر آخر بيانات</th></tr></thead>
+<tbody id="media-watchlist-channels"></tbody></table></div>
+<div class="controls" style="margin-top:20px"><h4>إشارات الصوت والصورة</h4><span class="muted">مستمدة من بيانات تشغيل الخادم، وليست سماعًا أو مشاهدة على جهاز فعلي</span></div>
+<div class="tablewrap"><table><thead><tr><th>الفئة</th><th>المشكلة المرصودة</th><th>عدد الوقائع في نطاق الرصد</th></tr></thead>
+<tbody id="media-watchlist-signals"></tbody></table></div>
+<p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
+</div>
+<div class="panel" id="owner-code-distributor-qa-panel">
+ <div class="controls"><div><h3>🔎 فحص أكواد BLOFY ولوحات الموزعين — قراءة حقيقية آمنة</h3>
+ <p class="muted">يفحص وجود الجداول والأعمدة الأساسية وصلاحية قراءة PostgreSQL الفعلية فقط. لا يصدر أكوادًا، ولا يكشف بيانات العملاء والموزعين، ولا يغيّر الأرصدة أو ينفذ ترقية الجداول.</p></div>
+ <button type="button" class="btn secondary" id="owner-data-qa-refresh">↻ فحص قاعدة البيانات</button></div>
+ <p class="diag-inline-note" id="owner-data-qa-status" role="status" aria-live="polite">لم يُتحقق من قاعدة الأكواد والموزعين بعد.</p>
+ <div class="cards">
+ <div class="stat"><small>قاعدة أكواد الاشتراك</small><strong id="owner-data-qa-codes">—</strong></div>
+ <div class="stat"><small>قاعدة لوحات الموزعين</small><strong id="owner-data-qa-distributors">—</strong></div>
+ </div>
+ <p class="muted">نجاح قراءة الجداول لا يثبت إصدار كود أو استرداده أو تعديل رصيد موزع؛ تلك اختبارات معاملات مستقلة، ولا تنفذها هذه الصفحة.</p>
+</div>
+<div class="panel" id="owner-radio-audio-qa-panel">
+ <div class="controls"><div><h3>🎧 فحص مصدر الصوت — للمالك فقط</h3>
+ <p class="muted">افحص محطتين فقط من القائمة المعتمدة. الفحص يدوي، يقرأ حدًا أقصى 4 كيلوبايت لكل محطة ولا ينقل الصوت للمشتركين. يفصل بين بيانات صوت حقيقية وHTML/HLS وخطأ المصدر؛ لا يثبت سماع الصوت على الجهاز.</p></div>
+ <button id="owner-audio-qa-refresh" type="button" class="btn secondary">↻ قراءة قائمة المحطات</button></div>
+ <div class="inline">
+ <label for="owner-audio-qa-track-1">المحطة الأولى</label><select id="owner-audio-qa-track-1" aria-label="المحطة الأولى"></select>
+ <label for="owner-audio-qa-track-2">الثانية (اختيارية)</label><select id="owner-audio-qa-track-2" aria-label="المحطة الثانية"></select>
+ <button id="owner-audio-qa-probe" type="button" class="btn" disabled>▶ فحص المحطتين الآن</button>
+ </div>
+ <p id="owner-audio-qa-status" class="diag-inline-note" role="status" aria-live="polite">لم يُجرَ فحص من هذه الصفحة بعد.</p>
+ <pre id="owner-audio-qa-output" class="log" aria-label="نتائج فحص الصوت">لا توجد نتائج حتى الآن.</pre>
+ <p class="muted">حماية: تسجيل دخول المسؤول، طلب مؤكد، محطتان كحد أقصى، وتبريد 120 ثانية بين المحاولات. لن تُعرض روابط المصدر أو مفاتيحه.</p>
+</div>
+<div class="panel" id="decoder-lab-panel">
+<div class="controls"><div><h3>🧪 مختبر FFmpeg — فك الترميز الحقيقي</h3>
+<p class="muted">هذا فحص لملف صناعي ينشئه المختبر المعزول. النتيجة لا تثبت تشغيل أي قناة Xtream أو وجود صوت مسموع على Android 9 أو Windows.</p></div>
+<button type="button" id="decoder-lab-refresh" class="btn secondary">↻ قراءة نتيجة المختبر</button></div>
+<div class="cards">
+<div class="stat"><small>فك ترميز الصوت الصناعي</small><strong id="decoder-lab-audio">غير معروف</strong></div>
+<div class="stat"><small>فك ترميز الصورة الصناعية</small><strong id="decoder-lab-video">غير معروف</strong></div>
+<div class="stat"><small>إطارات الصوت</small><strong id="decoder-lab-audio-frames">—</strong></div>
+<div class="stat"><small>إطارات الصورة</small><strong id="decoder-lab-video-frames">—</strong></div>
+</div>
+<p class="diag-inline-note" id="decoder-lab-status" role="status" aria-live="polite">جار التحقق من حالة مختبر FFmpeg؛ لا نختبر محتوى العملاء.</p>
+<div class="controls"><h4>مصفوفة ترميزات الصوت — عينات صناعية فقط</h4><span class="muted">MP2 · AAC · AC3 · E-AC3</span></div>
+<div class="tablewrap"><table><thead><tr><th>ترميز الصوت</th><th>حالة فك الترميز داخل المختبر</th><th>الإطارات</th></tr></thead>
+<tbody id="decoder-lab-codec-rows"></tbody></table></div>
+<p class="muted">نجاح هذه المصفوفة لا يعني توافق الترميز مع Android 9 أو إثبات سماع صوت أي قناة حقيقية. الحكم على الجهاز يحتاج عينة فعلية مصرح بها.</p>
+<p class="muted">المختبر على خدمة اختبار مستقلة. واجهة BLOFY تقرأ النتيجة فقط؛ تشغيل اختبار جديد وإدارة المفاتيح ليسا متاحين من هنا. لا يُنفذ إصلاح أو تحويل صوت تلقائي.</p>
+</div>
+<div class="panel" id="owner-ts-sample-panel">
+<div class="controls"><div><h3>🎧 تحليل عينة صوت وصورة من قناة متأثرة</h3>
+<p class="muted">اختر ملف MPEG-TS بصيغة .ts، بحجم لا يتجاوز 2 ميجابايت، من قناة تملك حق اختبارها. لا تستخدم رابط Xtream أو ملف M3U. لا يفتح النظام اتصالًا جديدًا بالمصدر؛ يُحلّل الملف الذي تختاره فقط في مختبر معزول.</p></div></div>
+<div class="inline" style="margin:12px 0">
+<label for="owner-ts-sample-file">ملف العينة <input id="owner-ts-sample-file" type="file" accept=".ts,video/mp2t" aria-label="اختر ملف TS لاختبار الصوت والصورة"></label>
+<label><input type="checkbox" id="owner-ts-sample-consent"> أؤكد أني أملك صلاحية اختبار هذه العينة ولا تحتوي بيانات دخول أو معلومات خاصة</label>
+<button type="button" id="owner-ts-sample-submit" class="btn">اختبار العينة في مختبر FFmpeg</button>
+</div>
+<p id="owner-ts-sample-status" role="status" aria-live="polite" class="diag-inline-note">لا توجد عينة مرسلة بعد. لن تُسحب القناة تلقائيًا ولن تُخزن العينة بعد اكتمال الاختبار.</p>
+<div class="cards">
+<div class="stat"><small>مسار الصوت في الملف</small><strong id="owner-ts-sample-audio-track">—</strong></div>
+<div class="stat"><small>فك ترميز الصوت في FFmpeg</small><strong id="owner-ts-sample-audio-decoded">—</strong></div>
+<div class="stat"><small>فك ترميز الفيديو في FFmpeg</small><strong id="owner-ts-sample-video-decoded">—</strong></div>
+<div class="stat"><small>ترميز الصوت المرصود</small><strong id="owner-ts-sample-codec">—</strong></div>
+</div>
+<p id="owner-ts-sample-explanation" class="muted">تخص النتيجة الملف القصير وليس جميع القنوات. لا تثبت سماع الصوت أو ظهور الصورة على أجهزة Android وWindows.</p>
+<div class="controls" style="margin-top:18px"><h4>📡 أخذ عينة من الاتصال النشط مباشرة — دون تجهيز ملف</h4>
+<button type="button" class="btn secondary sm" id="passive-ts-refresh">↻ عرض اتصالات المشرف النشطة</button></div>
+<p class="muted">يستمع الفاحص مؤقتًا لبايتات TS المارة في اتصال المشرف الموجود أصلًا، ولا يفتح مسار Xtream أو HLS جديدًا. لا يعمل إذا كانت القناة متوقفة، ولا يختبر القنوات تلقائيًا.</p>
+<div class="inline" style="margin:12px 0">
+<label for="passive-ts-path">قناة المشرف النشطة
+<select id="passive-ts-path" aria-label="مسار المشرف النشط"><option value="">اضغط تحديث لعرض المسارات</option></select></label>
+<label><input type="checkbox" id="passive-ts-rights"> أؤكد أن لدي حق أخذ عينة قصيرة من هذا البث، وأوافق على تحليلها في المختبر المعزول</label>
+<button type="button" id="passive-ts-run" class="btn" disabled>🎧 فحص الصوت والصورة من الاتصال القائم</button></div>
+<p class="diag-inline-note" id="passive-ts-status" role="status" aria-live="polite">لم يبدأ أخذ عينة. يُسمح بعينة واحدة فقط، مع مهلة وحدود آمنة بين كل تشغيل.</p>
+</div>
+<div class="panel" id="media-probe-queue-panel">
+<div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
+<p class="muted">يفحص مقاطع HLS الحقيقية على مسارات المشرف الموجودة مسبقًا فقط. مسار واحد في كل مرة، وبحد مسارين لكل تشغيل؛ لا ينشئ قناة أو يغيّر بث العملاء.</p></div>
+<div class="actions"><button type="button" class="btn secondary sm" id="media-probe-queue-refresh">↻ تحديث المسارات والنتائج</button>
+<button type="button" class="btn secondary sm" id="media-probe-queue-export-json" disabled>⬇ حفظ JSON</button>
+<button type="button" class="btn secondary sm" id="media-probe-queue-export-csv" disabled>⬇ حفظ CSV</button></div></div>
+<p class="diag-inline-note" id="media-probe-queue-status" role="status" aria-live="polite">لم تُقرأ المسارات المؤهلة بعد.</p>
+<p class="muted" id="media-probe-queue-summary">الأعداد تخص آخر خمس عمليات يدوية محفوظة في الذاكرة، وليس كل القنوات.</p>
+<div class="tablewrap"><table><thead><tr><th>اختيار</th><th>مسار المشرف</th><th>اتصال المصدر</th></tr></thead>
+<tbody id="media-probe-queue-candidates"></tbody></table></div>
+<p class="muted">الفحص متاح لمسارات المشرف النشطة التي لديها اتصال سحب قائم فقط؛ المسارات الخاملة مستبعدة. قد يُعاد فتح الاتصال إذا انقطع أثناء الاختبار. لا توجد عملية فحص لجميع قنوات Xtream.</p>
+<div class="inline" style="margin:12px 0">
+<label><input type="checkbox" id="media-probe-queue-rights"> أؤكد أن لدي حق فحص المسارات المحددة</label>
+<label><input type="checkbox" id="media-probe-queue-capacity"> أقر بأن الفحص قد يعيد فتح اتصال مصدر منقطع وأتحمل حدود اتصالات المزود</label>
+</div>
+<div class="actions">
+<button type="button" class="btn" id="media-probe-queue-start">▶ فحص المسارات المحددة</button>
+<button type="button" class="btn secondary" id="media-probe-queue-cancel" disabled>⏹ إيقاف جدولة الباقي</button>
+</div>
+<p class="muted" style="margin-top:12px">نجاح HLS يعني وصول بيانات TS، وليس ظهور صورة مفكوكة أو سماع صوت على Android 9 أو Windows. مؤشرات PMT والحزم تساعد في التشخيص ولا تعالج القناة تلقائيًا.</p>
+<div class="tablewrap"><table><thead><tr><th>المسار</th><th>حالة الفحص</th><th>الوصول إلى البيانات</th><th>مسار الصوت / الترميز</th><th>مسار الفيديو / الترميز</th><th>التشخيص حسب العينة</th><th>الإجراء المقترح</th></tr></thead>
+<tbody id="media-probe-queue-results"></tbody></table></div>
+<div class="controls" style="margin-top:16px"><h4>آخر خمس عمليات فحص يدوية</h4><span class="muted">سجل مؤقت داخل خدمة STREAM؛ احفظ نسخة JSON أو CSV قبل أي إعادة نشر.</span></div>
+<div class="tablewrap"><table><thead><tr><th>رقم المهمة</th><th>المسار</th><th>حالة العينة</th><th>السبب</th></tr></thead><tbody id="media-probe-queue-history"></tbody></table></div>
+</div>
 <div class="panel" id="deep-audit-panel">
 <div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
 <div class="diag-actions"><label class="diag-source-label" for="deep-audit-source">المصدر <select id="deep-audit-source" aria-label="المصدر المراد فحصه"><option value="">كل المصادر</option></select></label>
@@ -1032,6 +1403,193 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
       headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
     var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+
+  var ownerAdminQaBusy=false;
+  function ownerAdminStoreLabel(row){
+    var names={
+      readable:"✅ القراءة متاحة",
+      table_missing:"⚠️ الجدول غير موجود",
+      columns_incomplete:"⚠️ أعمدة أساسية ناقصة",
+      database_unavailable:"❌ تعذر قراءة قاعدة البيانات",
+      unavailable:"❌ غير متاح"
+    };
+    return names[String(row?.state||"")]||"غير مؤكد";
+  }
+  async function loadOwnerAdminReadiness(){
+    if(ownerAdminQaBusy)return;
+    ownerAdminQaBusy=true;
+    var button=$("owner-data-qa-refresh"),status=$("owner-data-qa-status");
+    button.disabled=true;
+    status.textContent="جار التحقق من الجداول وصلاحية قراءة البيانات دون أي تعديل...";
+    try{
+      var response=await fetch("/operator/api/ops/admin-readiness",{
+        cache:"no-store",credentials:"same-origin",redirect:"error"
+      });
+      if(![200,503].includes(response.status))throw Error("HTTP "+response.status);
+      var report=await response.json();
+      if(report.scope!=="authoritative_owner_postgresql_read_only"||
+         report.schemaMutations!==0||report.customerWrites!==0||
+         report.tableRowsReturned!==false||report.providerMediaRequests!==0||
+         !Array.isArray(report.stores))
+        throw Error("نتيجة فحص البنية غير موثوقة.");
+      var byId=Object.fromEntries(report.stores.filter(function(x){
+        return x&&["codes","distributors"].includes(x.id)
+      }).map(function(x){return [x.id,x]}));
+      value("owner-data-qa-codes",ownerAdminStoreLabel(byId.codes));
+      value("owner-data-qa-distributors",ownerAdminStoreLabel(byId.distributors));
+      status.textContent=report.ok===true&&response.status===200?
+        "✅ تأكدت القراءة الحقيقية لجداول الأكواد والموزعين، دون تعديل بيانات أي مشترك.":
+        "⚠️ توجد مشكلة في بنية أو صلاحيات إحدى الجداول؛ لا تعتبر معاملات الأكواد مكتملة.";
+    }catch(e){
+      ["owner-data-qa-codes","owner-data-qa-distributors"].forEach(function(id){
+        value(id,"—");
+      });
+      status.textContent="تعذر فحص قاعدة الأكواد والموزعين: "+
+        String(e.message||"غير معروف").slice(0,110);
+    }finally{
+      ownerAdminQaBusy=false;button.disabled=false;
+    }
+  }
+  $("owner-data-qa-refresh").addEventListener("click",loadOwnerAdminReadiness);
+  void loadOwnerAdminReadiness();
+  var ownerAudioBusy=false;
+  function ownerAudioStatus(message){$("owner-audio-qa-status").textContent=message}
+  function ownerAudioOptions(select,rows,optional){
+    var previous=select.value;
+    select.replaceChildren();
+    if(optional)select.append(new Option("بدون محطة ثانية",""));
+    (rows||[]).forEach(function(item){
+      if(/^anis-[a-z0-9-]{1,54}$/.test(String(item.id||"")))
+        select.append(new Option(String(item.label||item.id).slice(0,80),item.id));
+    });
+    if(Array.from(select.options).some(function(x){return x.value===previous}))
+      select.value=previous;
+  }
+  async function loadOwnerAudioReadiness(){
+    if(ownerAudioBusy)return;
+    var refresh=$("owner-audio-qa-refresh");
+    refresh.disabled=true;$("owner-audio-qa-probe").disabled=true;
+    try{
+      var d=await api("audio/readiness"),rows=Array.isArray(d.tracks)?d.tracks:[];
+      ownerAudioOptions($("owner-audio-qa-track-1"),rows,false);
+      ownerAudioOptions($("owner-audio-qa-track-2"),rows,true);
+      $("owner-audio-qa-probe").disabled=rows.length===0;
+      if(!rows.length)ownerAudioStatus("محطات الصوت غير مهيأة في الخادم.");
+      else ownerAudioStatus("المحطات المتاحة: "+rows.length+
+        ". اختر محطة أو محطتين واضغط فحص عند الحاجة.");
+      if(Array.isArray(d.latest)&&d.latest.length){
+        $("owner-audio-qa-output").textContent=d.latest.map(function(x){
+          return x.id+" — "+x.reason+" / "+x.payloadClass+
+            " / "+x.receivedBytes+" B";
+        }).join("\n");
+      }
+    }catch(e){ownerAudioStatus("تعذر قراءة المحطات: "+String(e.message||"غير معروف"))}
+    finally{refresh.disabled=false}
+  }
+  $("owner-audio-qa-refresh").addEventListener("click",loadOwnerAudioReadiness);
+  $("owner-audio-qa-probe").addEventListener("click",async function(){
+    if(ownerAudioBusy)return;
+    var ids=[$("owner-audio-qa-track-1").value,
+      $("owner-audio-qa-track-2").value].filter(Boolean);
+    if(!ids.length||new Set(ids).size!==ids.length){
+      ownerAudioStatus("اختر محطة واحدة أو محطتين مختلفتين.");return;
+    }
+    if(!confirm("فحص مباشر لبيانات أول محطتين من المصدر المعتمد فقط، بحد 4KB لكل محطة؟"))return;
+    ownerAudioBusy=true;this.disabled=true;
+    ownerAudioStatus("جار قراءة عينة صغيرة من المصدر دون التأثير على العملاء...");
+    try{
+      var d=await action("audio/probe","audio-probe",{ids:ids});
+      $("owner-audio-qa-output").textContent=(d.results||[]).map(function(x){
+        return x.id+" — "+x.reason+" — "+x.payloadClass+
+          " — "+x.receivedBytes+" B"+
+          (x.httpStatus?" — HTTP "+x.httpStatus:"")+
+          " — "+(x.progressiveAudioDetected?"حزم صوت/TS معرّفة":
+            "لم تُثبت حزم صوت متوافقة");
+      }).join("\n");
+      ownerAudioStatus("✅ تم فحص "+d.checked+" محطة. هذا لا يثبت وجود صوت مسموع على الجهاز.");
+    }catch(e){ownerAudioStatus("تعذر الفحص: "+String(e.message||"غير معروف"))}
+    finally{ownerAudioBusy=false;this.disabled=false}
+  });
+  void loadOwnerAudioReadiness();
+  var transportQualityBusy=false;
+  var transportReasonNames={
+    xtream_transport_connection_reset:"إعادة ضبط اتصال المصدر (ECONNRESET)",
+    xtream_transport_timeout:"مهلة اتصال المصدر",
+    xtream_transport_unreachable:"المصدر غير قابل للوصول",
+    xtream_transport_dns_failed:"تعذّر حل عنوان المصدر",
+    xtream_transport_connection_refused:"المصدر رفض الاتصال",
+    xtream_transport_tls_invalid:"خطأ شهادة المصدر",
+    upstream_http_502:"خطأ 502 من المصدر",
+    upstream_http_503:"خطأ 503 من المصدر",
+    upstream_http_504:"خطأ 504 من المصدر",
+    upstream_http_404:"ملف غير متاح لدى المصدر",
+    upstream_http_509:"تقييد اتصالات من المصدر",
+    headers_timeout:"مهلة انتظار بداية الاستجابة",
+    media_read_timeout:"مهلة قراءة البث",
+    upstream_empty_media:"المصدر لم يرسل وسائط",
+    upstream_non_media_response:"المصدر أرسل بيانات ليست وسائط",
+    upstream_unreachable:"تعذّر الوصول للمصدر"
+  };
+  function setTransportValue(id,n){
+    $(id).textContent=Number.isSafeInteger(n)&&n>=0?count(n):"غير معروف";
+  }
+  async function loadTransportQuality(){
+    if(transportQualityBusy)return;
+    transportQualityBusy=true;
+    var btn=$("transport-502-refresh"),msg=$("transport-502-status"),
+      tbody=$("transport-502-reasons");
+    btn.disabled=true;
+    msg.textContent="جار قراءة العدادات دون طلب بث جديد...";
+    try{
+      var data=await api("media-quality");
+      if(data.ok!==true||data.scope!=="this_instance")
+        throw Error("مؤشرات النقل غير متاحة");
+      setTransportValue("transport-502-started",data.started);
+      setTransportValue("transport-502-failed",data.failed);
+      setTransportValue("transport-502-interrupted",data.interrupted);
+      var reason=data.byReason||{},
+          byKind=data.reasonByKind||{};
+      setTransportValue("transport-502-resets",
+        Number.isSafeInteger(reason.xtream_transport_connection_reset)?
+         reason.xtream_transport_connection_reset:0);
+      tbody.replaceChildren();
+      Object.entries(reason).filter(function(e){
+        return Object.prototype.hasOwnProperty.call(transportReasonNames,e[0])&&
+         Number.isSafeInteger(e[1])&&e[1]>0;
+      }).sort(function(a,b){return b[1]-a[1]}).slice(0,18)
+      .forEach(function(e){
+        var tr=document.createElement("tr");
+        var vals=[transportReasonNames[e[0]],
+          byKind.live?.[e[0]],byKind.movie?.[e[0]],
+          byKind.series?.[e[0]],e[1]];
+        vals.forEach(function(v,j){
+          var td=document.createElement("td");
+          td.textContent=j===0?v:Number.isSafeInteger(v)?count(v):"—";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      if(!tbody.children.length){
+        var tr=document.createElement("tr"),td=document.createElement("td");
+        td.colSpan=5;
+        td.textContent="لا توجد أخطاء معروفة في العينة المحدودة. هذا لا يثبت سلامة جميع القنوات.";
+        tr.appendChild(td);tbody.appendChild(tr);
+      }
+      var coverage=data.reasonCountWindow==="bounded_hourly_samples"?
+        "العدّ من عينات الساعة المحفوظة بالذاكرة":"العدّ من آخر أحداث محدودة فقط";
+      msg.textContent="✅ تم قراءة المؤشرات. "+coverage+
+        " — الجهاز العميل والصوت المسموع لم يتم اختباره هنا.";
+    }catch(e){
+      msg.textContent="تعذر قراءة بيانات الاتصال: "+String(e.message||"غير معروف").slice(0,90);
+      ["transport-502-started","transport-502-failed",
+       "transport-502-interrupted","transport-502-resets"].forEach(function(id){
+        $(id).textContent="—";
+      });
+      tbody.replaceChildren();
+    }finally{transportQualityBusy=false;btn.disabled=false}
+  }
+  $("transport-502-refresh").addEventListener("click",loadTransportQuality);
+  void loadTransportQuality();
   var hubState=null,hubLoading=false;
   var hubBytes=function(n){
     var val=Number(n||0);
@@ -1318,6 +1876,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("content-hub-episode-preview").addEventListener("click",async function(){
     if(this.disabled)return;
+    resetHubBrowserQa("episode");
     var player=$("content-hub-episode-preview-player");
     player.pause();player.removeAttribute("src");player.load();
     player.src="/operator/api/content-hub/episodes/preview";
@@ -1396,6 +1955,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   });
   $("content-hub-owner-preview").addEventListener("click",async function(){
     if(this.disabled)return;
+    resetHubBrowserQa("movie");
     var player=$("content-hub-preview-player");
     // The browser requests a fixed same-origin owner-only route. It never
     // receives Railway internal URLs, bearer tokens or upstream credentials.
@@ -1482,6 +2042,780 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){show("تعذّر بدء الدفعة: "+e.message,false)}
     finally{this.disabled=false;await loadContentHub();}
   });
+  // Season operations are rendered and executed right here in STREAM;
+  // no redirect to the legacy BLOFY PLAYER administrator.
+  var seasonData=null,seasonRows=[],seasonAVConfirmed=false;
+  var seasonPreviewWatched=false,seasonQueueBusy=false;
+  var seasonPage=1,seasonPages=1,seasonTotalEpisodes=0;
+  function seasonMessage(msg){$("season-action-note").textContent=String(msg||"");}
+  function seasonButtonAV(){
+    $("season-av-confirm").disabled=seasonAVConfirmed||
+      !seasonPreviewWatched||!$("season-video-okay").checked||
+      !$("season-audio-okay").checked;
+  }
+  function seasonNode(tag,cls,text){
+    var el=document.createElement(tag);
+    if(cls)el.className=cls;
+    if(text!==undefined)el.textContent=String(text);
+    return el;
+  }
+  function seasonMeter(percentage){
+    var p=seasonNode("progress");p.max=100;
+    p.value=Math.min(100,Math.max(0,Number(percentage)||0));
+    p.style.cssText="width:100%;height:14px;accent-color:#60a5fa";
+    return p;
+  }
+  var seasonHealthBusy=false,seasonStorageSafe=false,seasonLastQueueData=null;
+  var seasonHealthDescriptions={
+    season_episodes_failed:"حلقات فشلت وتحتاج مراجعة يدوية",
+    season_worker_interrupted:"حلقات توقفت بعد إعادة تشغيل الخدمة، ويمكن استكمالها يدويًا",
+    season_checkpoint_no_progress:"تنبيه: لم يُحفظ تقدم جديد للحلقة الجارية منذ أكثر من ثلاث دقائق (قد يكون جزء كبير قيد النقل)",
+    season_storage_budget_near_threshold:"اقتربت البايتات المسجلة من الحد التخطيطي الذي حدده المسؤول",
+    season_storage_integrity_mismatch:"فحص SHA-256 اكتشف اختلافًا حقيقيًا في جزء مخزّن",
+    season_storage_audit_unavailable:"تعذر قراءة بعض الأجزاء من التخزين أثناء الفحص"
+  };
+  var seasonAuditDescriptions={
+    season_storage_sample_verified:"✓ الأجزاء المختبرة سليمة (فحص جزئي فقط)",
+    season_storage_checksum_mismatch:"❌ اختلفت بصمة SHA-256: يحتاج الملف إلى مراجعة",
+    season_storage_read_unavailable:"⚠ تعذر قراءة جزء من التخزين: تحقق من الاتصال",
+    season_storage_manifest_unavailable:"⚠ لا يوجد سجل مكتمل وصالح لهذه الحلقة"
+  };
+  function seasonFormatAuditTime(value){
+    var date=new Date(value||0);
+    return Number.isFinite(date.getTime())?
+      date.toLocaleString("ar-SA"):"—";
+  }
+  async function refreshSeasonHealth(){
+    if(seasonHealthBusy)return;
+    seasonHealthBusy=true;
+    $("season-health-refresh").disabled=true;
+    try{
+      var data=await api("content-hub/seasons/health");
+      if(data.ok!==true)throw Error("season_health_unavailable");
+      seasonStorageSafe=!(Array.isArray(data.alerts)&&data.alerts.some(function(a){
+        return ["season_storage_integrity_mismatch",
+          "season_storage_audit_unavailable"].includes(a.code)&&Number(a.count)>0;
+      }));
+      if(seasonLastQueueData)seasonRefreshButtons(seasonLastQueueData);
+      $("season-health-summary").textContent="إجمالي الحلقات في قائمة النقل: "+
+        Number(data.episodeCount||0)+" · المكتملة: "+
+        Number(data.verifiedCount||0)+" · الفاشلة: "+
+        Number(data.failedCount||0)+" · قيد الانتظار: "+
+        Number(data.queuedCount||0)+
+        " · البايتات المحفوظة وفق السجلات: "+hubBytes(data.storedBytes);
+      $("season-storage-progress").value=Math.min(100,
+        Math.max(0,Number(data.percent)||0));
+      $("season-storage-note").textContent=
+        "البايتات المؤكدة في المواسم: "+hubBytes(data.verifiedBytes)+
+        " · إجمالي حجم الحلقات المحددة: "+hubBytes(data.expectedBytes)+
+        " · نسبة النقل: "+Number(data.percent||0)+"%."+
+        (data.budgetBytes?
+         " الحد التخطيطي: "+hubBytes(data.budgetBytes)+
+          " ("+data.budgetUtilization+"% من الحد).":"")+
+        " المساحة المتبقية الحقيقية في S3 غير معروفة، والبيانات من PostgreSQL.";
+      var alerts=$("season-health-alerts");alerts.replaceChildren();
+      if(!Array.isArray(data.alerts)||!data.alerts.length){
+        var good=seasonNode("p","muted",
+          "✅ لا تظهر تنبيهات مسجلة في حالة المواسم الحالية.");
+        good.style.color="#70e3bc";alerts.append(good);
+      }else{
+        data.alerts.slice(0,10).forEach(function(a){
+          var item=seasonNode("p","muted",
+            (a.severity==="error"?"❌ ":"⚠️ ")+
+            (seasonHealthDescriptions[a.code]||"تنبيه من النظام")+
+            (a.code==="season_checkpoint_no_progress"&&
+              Number(a.ageSeconds)>=180?" · "+
+              seasonTransferSeconds(a.ageSeconds):"")+
+            " ("+Number(a.count||0)+")");
+          item.style.cssText="margin:3px 0;color:"+
+            (a.severity==="error"?"#ff9a9a":"#ffcf87");
+          alerts.append(item);
+        });
+      }
+      var select=$("season-audit-select"),before=select.value;
+      select.replaceChildren(new Option("اختر حلقة مكتملة",""));
+      var seen=new Set();
+      if(/^[A-Za-z0-9_-]{8,80}$/.test(String(data.verifiedPilotRunId||""))){
+        select.add(new Option("الحلقة التجريبية المحفوظة",
+          String(data.verifiedPilotRunId)));
+        seen.add(data.verifiedPilotRunId);
+      }
+      seasonRows.filter(function(r){
+        return r.state==="verified"&&
+          /^[A-Za-z0-9_-]{8,80}$/.test(String(r.runId||""))&&
+          !seen.has(r.runId);
+      }).forEach(function(r){
+        select.add(new Option("حلقة "+r.episodeNumber+" · "+
+          String(r.title||"").slice(0,60),String(r.runId)));
+        seen.add(r.runId);
+      });
+      if(seen.has(before))select.value=before;
+      $("season-audit-run").disabled=!select.value;
+      var first=$("season-concurrent-first"),second=$("season-concurrent-second");
+      var firstBefore=first.value,secondBefore=second.value;
+      first.replaceChildren(new Option("الحلقة الأولى",""));
+      second.replaceChildren(new Option("الحلقة الثانية",""));
+      Array.from(select.options).filter(function(option){return option.value}).forEach(
+        function(option){
+          first.add(new Option(option.textContent,option.value));
+          second.add(new Option(option.textContent,option.value));
+        });
+      if(seen.has(firstBefore))first.value=firstBefore;
+      if(seen.has(secondBefore))second.value=secondBefore;
+      $("season-concurrent-run").disabled=!
+        (first.value&&second.value&&first.value!==second.value);
+      if(seen.size<2)$("season-concurrent-status").textContent=
+        "لا تتوفر حلقتان مكتملتان مختلفتان حتى الآن. الاختبار مقفل لحماية المصدر.";
+      var audits=$("season-health-audit-list");audits.replaceChildren();
+      (Array.isArray(data.latestAudits)?data.latestAudits:[])
+        .slice(0,8).forEach(function(record){
+          audits.append(seasonNode("div","",
+            (seasonAuditDescriptions[record.code]||"فحص غير محدد")+
+            " · "+record.checkedParts+"/"+record.totalParts+
+            " أجزاء · "+seasonFormatAuditTime(record.checkedAt)));
+        });
+    }catch(e){
+      seasonStorageSafe=false;
+      if(seasonLastQueueData)seasonRefreshButtons(seasonLastQueueData);
+      $("season-health-summary").textContent=
+       "تعذّر قراءة صحة التخزين حاليًا؛ لا يمكن تأكيد سلامة الملفات من هذه القراءة.";
+      $("season-audit-run").disabled=true;
+      $("season-concurrent-run").disabled=true;
+    }finally{
+      seasonHealthBusy=false;$("season-health-refresh").disabled=false;
+    }
+  }
+  $("season-health-refresh").addEventListener("click",refreshSeasonHealth);
+  $("season-audit-select").addEventListener("change",function(){
+    $("season-audit-run").disabled=!this.value;
+  });
+  $("season-audit-run").addEventListener("click",async function(){
+    var selected=$("season-audit-select").value;
+    if(!/^[A-Za-z0-9_-]{8,80}$/.test(selected))return;
+    if(!confirm("فحص بصمة SHA-256 لعينة من أول ووسط وآخر أجزاء الحلقة؟ يقرأ حدًا أقصى 24 ميجابايت من S3، ولا يفحص جميع أجزاء الملف."))return;
+    this.disabled=true;
+    $("season-audit-status").textContent=
+      "جارٍ التحقق من الأجزاء المحددة من التخزين الخاص…";
+    try{
+      var result=await action("content-hub/seasons/audit","season-audit",
+        {confirmed:true,runId:selected});
+      $("season-audit-status").textContent=
+        (seasonAuditDescriptions[result.code]||result.code)+
+        " · عدد الأجزاء المختبرة "+Number(result.checkedParts||0)+
+        " من "+Number(result.totalParts||0)+
+        " · بايتات تم فحصها "+hubBytes(result.checkedBytes)+
+        ". لا يعني هذا فحص الملف كاملًا.";
+    }catch(error){
+      $("season-audit-status").textContent=
+        "تعذر إكمال الفحص: "+String(error.message||"غير متاح")+
+        " — إن كررت الطلب خلال دقيقة، انتظر انتهاء فترة الحماية.";
+    }
+    await refreshSeasonHealth();
+  });
+  function seasonConcurrentEnable(){
+    var first=$("season-concurrent-first").value;
+    var second=$("season-concurrent-second").value;
+    $("season-concurrent-run").disabled=!first||!second||first===second;
+  }
+  $("season-concurrent-first").addEventListener("change",seasonConcurrentEnable);
+  $("season-concurrent-second").addEventListener("change",seasonConcurrentEnable);
+  $("season-concurrent-run").addEventListener("click",async function(){
+    var a=$("season-concurrent-first").value,b=$("season-concurrent-second").value;
+    if(!a||!b||a===b||!confirm("تشغيل قراءتين متزامنتين من S3 فقط، بحد أقصى 16 ميجابايت في الإجمالي؟ لا يتضمن بث مشتركين."))return;
+    this.disabled=true;
+    $("season-concurrent-status").textContent="جارٍ اختبار قراءة حلقتين معًا من التخزين الخاص…";
+    try{
+      var result=await action("content-hub/seasons/concurrent-read",
+        "season-concurrent-read",{confirmed:true,runIds:[a,b]});
+      $("season-concurrent-status").textContent=result.ok?
+        "✅ نجحت قراءتان متزامنتان من التخزين: "+
+        result.checkedChunks+"/2 جزء · "+hubBytes(result.requestedBytes)+
+        " · "+Number(result.durationMs||0)+" مللي ثانية. هذا لا يثبت تحمّل المشتركين أو تشغيل الفيديو.":
+        "فشل فحص التخزين المتزامن: "+String(result.code||"غير معروف");
+    }catch(error){
+      $("season-concurrent-status").textContent=
+        "تعذر الفحص: "+String(error.message||"غير متاح")+
+        ". يوجد حد حماية: محاولة واحدة كل دقيقتين.";
+    }finally{seasonConcurrentEnable()}
+  });
+  // Read-only browser calculation from actual persisted PostgreSQL byte
+  // checkpoints. No guessed source bitrate or full-file ETA before two
+  // positive observations; no history is uploaded or written to provider.
+  var seasonTransferSamples=new Map();
+  function seasonTransferSeconds(seconds){
+    var n=Math.max(0,Math.ceil(Number(seconds)||0));
+    if(n>=3600)return Math.ceil(n/3600)+" ساعة تقريبًا";
+    if(n>=60)return Math.ceil(n/60)+" دقيقة تقريبًا";
+    return n+" ثانية تقريبًا";
+  }
+  function seasonTransferProgress(row,worker){
+    if(!row||!worker||row.state!=="running"||
+       worker.active!==true||String(worker.currentRunId||"")!==String(row.runId||"")){
+      if(row?.runId)seasonTransferSamples.delete(row.runId);
+      return "";
+    }
+    var id=String(row.runId),now=Date.now();
+    var copied=Math.max(0,Number(row.bytesCopied)||0);
+    var expected=Math.max(copied,Number(row.expectedBytes)||0);
+    var prev=seasonTransferSamples.get(id);
+    var next={at:now,bytes:copied,rate:0,lastPositive:0};
+    if(prev&&copied>=prev.bytes&&now>prev.at&&now-prev.at<=90000){
+      var instant=(copied-prev.bytes)*1000/(now-prev.at);
+      if(instant>0){
+        next.rate=prev.rate>0?0.6*instant+0.4*prev.rate:instant;
+        next.lastPositive=now;
+      }else if(now-prev.lastPositive<30000){
+        next.rate=prev.rate;next.lastPositive=prev.lastPositive;
+      }
+    }
+    seasonTransferSamples.set(id,next);
+    // A long in-flight chunk may not yet be checkpointed. Warn about
+    // checkpoint age only. Never claim the source or playback is down.
+    var age=Number(row.checkpointAgeSeconds);
+    if(Number.isFinite(age)&&age>=180){
+      return "⚠️ لم يُحفظ جزء جديد منذ "+seasonTransferSeconds(age)+
+        ". راجع اتصال النقل إن استمر؛ لا يعني ذلك توقف بث المشتركين.";
+    }
+    if(next.rate>0&&now-next.lastPositive<30000&&expected>copied){
+      var eta=(expected-copied)/next.rate;
+      return "سرعة الحفظ المقاسة: "+hubBytes(next.rate)+
+        "/ثانية · الوقت المتبقي تقديريًا: "+
+        (Number.isFinite(eta)&&eta<=86400?seasonTransferSeconds(eta):
+          "غير محدد");
+    }
+    return "جارٍ النقل، بانتظار تسجيل جزء جديد لحساب السرعة والوقت المتبقي.";
+  }
+  function seasonRefreshButtons(data){
+    seasonLastQueueData=data;
+    var active=data?.worker?.active===true;
+    var ready=data?.readiness?.ready===true;
+    $("season-start").disabled=!ready||active||!seasonAVConfirmed||
+      !seasonStorageSafe||
+      !(Number(data?.page?.pendingEpisodes)>0||
+        (data?.episodes||[]).some(function(x){
+          // After a restart the DB may retain "running" with no worker.
+          // A new explicit start safely restores its checkpoint under PG lock.
+          return ["queued","paused","running"].includes(x.state);
+        }));
+    $("season-pause").disabled=!active;
+    $("season-enqueue").disabled=!ready||active||!seasonData;
+    $("season-online").textContent=active?"جارٍ النقل":ready?"النظام جاهز":"النقل مقفل";
+    $("season-online").className="pill "+(active||ready?"good":"bad");
+    var blocked=(data?.readiness?.blockedBy||[]).map(function(x){
+      return ({
+        season_queue_disabled:"تفعيل قائمة النقل",episode_copy_disabled:"تفعيل نسخ الحلقات",
+        storage_upload_disabled:"السماح بالتخزين الخاص",
+        storage_rights_unconfirmed:"تأكيد صلاحية التخزين",
+        episode_rights_unconfirmed:"تأكيد حقوق الحلقات",
+        source_idle_unconfirmed:"التأكد من خمول المصدر",
+        quiet_window_unconfirmed:"نافذة نقل خالية من البث",
+        source_bridge_not_configured:"اتصال المصدر الداخلي"
+      })[x]||x;
+    });
+    $("season-queue-note").textContent=active?"النقل جارٍ بحلقة واحدة في كل مرة. "+
+      "سيُحفظ التقدم عند الإيقاف.":!ready?
+      "النقل متوقف بسبب الإعدادات: "+blocked.join("، "):
+      !seasonAVConfirmed?"قبل النقل شغّل عينة الحلقة وأكد الصوت والصورة.":
+      !seasonStorageSafe?"البدء متوقف لحين التحقق من سلامة التخزين: راجع التنبيهات أدناه.":
+      "جاهز لاستكمال الحلقات التي أضفتها لقائمة الانتظار.";
+  }
+  $("season-state-filter").addEventListener("change",function(){
+    seasonPage=1;
+    $("season-page-previous").disabled=true;
+    $("season-page-next").disabled=true;
+    void refreshSeasonQueue();
+  });
+  $("season-page-previous").addEventListener("click",function(){
+    if(seasonQueueBusy||seasonPage<=1)return;
+    seasonPage--;void refreshSeasonQueue();
+  });
+  $("season-page-next").addEventListener("click",function(){
+    if(seasonQueueBusy||seasonPage>=seasonPages)return;
+    seasonPage++;void refreshSeasonQueue();
+  });
+  // The preview service can return JSON 409/429/503 instead of MP4. Fetch
+  // once and only hand a verified, size-bounded same-origin Blob to <video>.
+  // This avoids a second FFmpeg conversion and surfaces safe failure codes.
+  var ownerPreviewJobs=new Map();
+  var ownerPreviewBlobs=new Map();
+  function ownerPreviewMessage(code,status){
+    var messages={
+      owner_preview_busy:"المعاينة مشغولة الآن؛ حاول بعد قليل.",
+      owner_preview_cooldown:"المعاينة قيد التهدئة؛ حاول بعد قليل.",
+      owner_preview_disabled:"معاينة المالك غير مفعلة في التخزين.",
+      private_preview_episode_not_verified:"الحلقة غير مكتملة أو لم يتم التحقق من تخزينها.",
+      season_episode_not_verified:"الحلقة غير معتمدة للمعاينة بعد.",
+      private_preview_verified_prefix_unavailable:"تعذّر التحقق من سلامة أجزاء الملف المحفوظ في S3.",
+      private_preview_manifest_unavailable:"تعذّر قراءة سجل الملف المحفوظ.",
+      private_preview_encode_failed:"فشل تحويل الملف إلى عينة صوت وصورة متوافقة.",
+      private_preview_output_unavailable:"تعذّر تجهيز ملف المعاينة النهائي.",
+      owner_preview_not_ready:"المعاينة ليست جاهزة في Content Hub.",
+      owner_preview_private_media_unavailable:"لم يتمكن الموقع من الحصول على ملف المعاينة الداخلي.",
+      owner_preview_bridge_not_configured:"ربط المعاينة الخاص غير مهيأ.",
+      owner_preview_invalid_media_response:"استجابة المعاينة لا تحتوي ملف MP4 صالحًا."
+    };
+    if(status===401)return "جلسة المسؤول غير مخوّلة. أعد تسجيل الدخول."; 
+    return (messages[code]||"المعاينة غير متاحة في هذه اللحظة.")+
+      (code?" ["+code+"]":"");
+  }
+  async function loadOwnerPreview(playerId,url,showStatus){
+    var video=$(playerId);
+    var oldJob=ownerPreviewJobs.get(playerId);if(oldJob)oldJob.abort();
+    var oldBlob=ownerPreviewBlobs.get(playerId);
+    video.pause();video.removeAttribute("src");video.load();
+    if(oldBlob){URL.revokeObjectURL(oldBlob);ownerPreviewBlobs.delete(playerId)}
+    var job=new AbortController();ownerPreviewJobs.set(playerId,job);
+    showStatus("يجري تجهيز معاينة خاصة من التخزين المتحقق منه...");
+    try{
+      var response=await fetch(url,{credentials:"same-origin",cache:"no-store",
+        redirect:"error",signal:job.signal});
+      if(!response.ok){
+        var code="";
+        try{
+          var errorType=String(response.headers.get("content-type")||"");
+          if(errorType.includes("application/json")){
+            var result=await response.json();
+            code=String(result&&result.code||"").slice(0,80);
+          }
+        }catch(e){}
+        if(ownerPreviewJobs.get(playerId)===job)
+          showStatus("❌ "+ownerPreviewMessage(code,response.status));
+        return;
+      }
+      var mime=String(response.headers.get("content-type")||"");
+      var header=response.headers.get("content-length");
+      var expected=header===null?null:Number(header);
+      if(mime!=="video/mp4"||(expected!==null&&
+        (!Number.isSafeInteger(expected)||expected<2048||
+        expected>12*1024*1024)))throw Error("owner_preview_invalid_mp4");
+      if(!response.body)throw Error("owner_preview_invalid_mp4");
+      // A proxy may strip Content-Length. Do not reject a valid chunked
+      // response, but never use unbounded Response.blob().
+      var reader=response.body.getReader(),chunks=[],bytes=0;
+      try{
+        for(;;){
+          var next=await reader.read();
+          if(next.done)break;
+          if(job.signal.aborted)return;
+          bytes+=next.value.byteLength;
+          if(bytes>12*1024*1024)throw Error("owner_preview_invalid_mp4");
+          chunks.push(next.value);
+        }
+      }finally{
+        try{await reader.cancel()}catch(e){}
+        try{reader.releaseLock()}catch(e){}
+      }
+      if(job.signal.aborted)return;
+      if(bytes<2048||(expected!==null&&bytes!==expected))
+        throw Error("owner_preview_invalid_mp4");
+      var blob=new Blob(chunks,{type:"video/mp4"});
+      if(await blob.slice(4,8).text()!=="ftyp")
+        throw Error("owner_preview_invalid_mp4");
+      var objectUrl=URL.createObjectURL(blob);
+      if(ownerPreviewJobs.get(playerId)!==job){
+        URL.revokeObjectURL(objectUrl);return;
+      }
+      ownerPreviewBlobs.set(playerId,objectUrl);
+      video.src=objectUrl;video.load();
+      showStatus("✅ عينة MP4 جاهزة؛ شغّلها وتحقق من الصورة والصوت يدويًا.");
+    }catch(e){
+      if(!job.signal.aborted&&ownerPreviewJobs.get(playerId)===job)
+        showStatus("❌ تعذّر تحميل المعاينة؛ تحقق من الاتصال والخدمة.");
+    }finally{
+      if(ownerPreviewJobs.get(playerId)===job)ownerPreviewJobs.delete(playerId);
+    }
+  }
+  window.addEventListener("pagehide",function(){
+    ownerPreviewJobs.forEach(function(job){job.abort()});
+    ownerPreviewBlobs.forEach(function(url){URL.revokeObjectURL(url)});
+    ownerPreviewBlobs.clear();
+  });
+  async function refreshSeasonQueue(){
+    if(seasonQueueBusy)return;
+    seasonQueueBusy=true;
+    try{
+      var proof=await api("content-hub/seasons/confirmation");
+      seasonAVConfirmed=proof.confirmed===true;
+      $("season-av-note").textContent=seasonAVConfirmed?
+        "✅ تم اعتماد سماع الصوت ورؤية الصورة من المسؤول.":
+        "لم يتم تسجيل التأكيد. شغّل العينة في الأعلى ثم أكد الصوت والصورة.";
+      seasonButtonAV();
+      var selectedState=$("season-state-filter").value;
+      if(!["all","pending","queued","running","paused","verified","failed"].includes(selectedState))
+        throw Error("season_filter_invalid");
+      var data=await api("content-hub/seasons/queue/status/"+
+        selectedState+"/page/"+seasonPage);
+      if(data.ok!==true||!data.page)throw Error("season_page_metadata_unavailable");
+      seasonPages=Math.max(1,Number(data.page.pages)||1);
+      seasonTotalEpisodes=Math.max(0,Number(data.page.totalEpisodes)||0);
+      if(data.page.outOfRange&&seasonPage>seasonPages){
+        seasonPage=seasonPages;
+        data=await api("content-hub/seasons/queue/status/"+
+          selectedState+"/page/"+seasonPage);
+      }
+      seasonRows=Array.isArray(data.episodes)?data.episodes:[];
+      var current=(data.worker?.active===true)?String(data.worker.currentRunId||""):"";
+      $("season-transfer-live").textContent=current?
+        "نقل حلقة واحدة متسلسلًا؛ تُقاس السرعة بعد حفظ الأجزاء (كل جزء حتى 8 MB). لا تؤثر القراءة على المشتركين.":
+        "لا توجد عملية نقل نشطة. السرعة والوقت المتبقي يظهران بعد تسجيل تقدم فعلي.";
+      // Prevent keeping stale measurement samples forever when navigating.
+      if(seasonTransferSamples.size>50){
+        seasonTransferSamples.forEach(function(v,key){
+          if(Date.now()-v.at>120000)seasonTransferSamples.delete(key);
+        });
+      }
+      $("season-page-previous").disabled=seasonPage<=1;
+      $("season-page-next").disabled=seasonPage>=seasonPages;
+      $("season-page-label").textContent="الصفحة "+seasonPage+" من "+seasonPages+
+        " · عدد الحلقات المطابقة "+seasonTotalEpisodes+
+        " · تنتظر النقل "+Number(data.page.pendingEpisodes||0)+
+        " · عرض "+seasonRows.length+" حلقة";
+      seasonRefreshButtons(data);
+      var parent=$("season-queue-list");
+      parent.replaceChildren();
+      var seasons=Array.isArray(data.seasons)?data.seasons:[];
+      if(!seasons.length){
+        parent.append(seasonNode("p","muted",selectedState==="all"?
+          "لا توجد حلقات في قائمة النقل إلى الآن.":
+          "لا توجد حلقات مطابقة لحالة التصفية المختارة."));
+      }
+      seasons.forEach(function(group){
+        var card=seasonNode("div","panel");
+        card.style.cssText="margin:0;background:#0a1a31;padding:14px;border:1px solid #29476b";
+        var label=seasonNode("strong","",group.seasonKey+" · "+
+          (Number(group.verifiedCount)||0)+"/"+(Number(group.episodeCount)||0)+" حلقة");
+        card.append(label,seasonMeter(group.percent),
+          seasonNode("p","muted",(Number(group.percent)||0)+"% · "+
+           hubBytes(group.bytesCopied)+" / "+hubBytes(group.expectedBytes)));
+        seasonRows.filter(function(r){return r.seasonKey===group.seasonKey})
+          .forEach(function(r){
+            var item=seasonNode("div","muted","حلقة "+r.episodeNumber+
+              " — "+String(r.title||"").slice(0,80)+" · "+
+              (Number(r.percent)||0)+"% · "+({
+                verified:"مكتملة",failed:"تحتاج مراجعة",queued:"بانتظار النقل",
+                paused:"موقوفة",running:data?.worker?.active?
+                  "جار نقلها":"بانتظار استكمال بعد إعادة التشغيل"
+              }[r.state]||"قيد المعالجة"));
+            item.style.marginTop="8px";
+            card.append(item,seasonMeter(r.percent));
+            var transfer=seasonTransferProgress(r,data?.worker||{});
+            if(transfer){
+              var speed=seasonNode("p","muted",transfer);
+              speed.style.cssText="margin:5px 0 10px;color:"+
+                (transfer.startsWith("⚠️")?"#ffcf87":"#9eead4");
+              card.append(speed);
+              if(String(data.worker?.currentRunId||"")===String(r.runId))
+                $("season-transfer-live").textContent=transfer;
+            }
+            if(r.state==="failed"){
+              var why=({
+                episode_retryable_error:"فشل اتصال مؤقت بالمصدر",
+                episode_source_busy:"المصدر مشغول",
+                episode_source_version_changed:"تغير الملف الأصلي؛ يلزم إعادة فهرسة وفحص",
+                episode_source_fingerprint_changed:"تغيرت بصمة الملف؛ لا يمكن استكماله بأمان",
+                episode_private_sha256_mismatch:"اختلاف بصمة جزء محفوظ؛ يلزم مراجعة سلامة التخزين"
+              })[r.code]||"فشل نقل يتطلب مراجعة السبب";
+              var failure=seasonNode("p","muted","السبب: "+why+
+                " · المحاولات اليدوية: "+Number(r.manualRetries||0)+"/2");
+              failure.style.cssText="color:#ffb1aa;margin:6px 0";
+              card.append(failure);
+              if(r.retryable===true&&!data?.worker?.active){
+                var retry=seasonNode("button","btn secondary",
+                 "↻ إعادة محاولة يدوية للحلقة "+r.episodeNumber);
+                retry.type="button";
+                retry.style.margin="8px 0";
+                retry.addEventListener("click",async function(){
+                  if(!confirm("هل راجعت فشل الاتصال، وحقوق التخزين، وخمول المصدر؟ ستعود الحلقة إلى قائمة الانتظار فقط، ولن يبدأ أي نقل تلقائي."))return;
+                  retry.disabled=true;
+                  try{
+                    var result=await action("content-hub/seasons/retry",
+                     "season-retry",{confirmed:true,licensedStorage:true,
+                      sourceIdle:true,runId:r.runId});
+                    seasonMessage(result.ok?
+                      "✅ أُعيدت الحلقة "+r.episodeNumber+
+                      " إلى الانتظار. اختر بدء النقل يدويًا عندما يكون المصدر خاملًا.":
+                      "تعذرت إعادة المحاولة: "+String(result.code||"غير متاح"));
+                    await refreshSeasonQueue();
+                    await refreshSeasonHealth();
+                  }catch(error){
+                    seasonMessage("تعذرت إعادة المحاولة: "+
+                     String(error.message||"غير متاح"));
+                    retry.disabled=false;
+                  }
+                });
+                card.append(retry);
+              }
+            }
+            if(r.state==="verified"&&
+              /^[A-Za-z0-9_-]{8,80}$/.test(String(r.runId||""))){
+              var view=seasonNode("button","btn secondary","▶ اختبار تشغيل الحلقة "+r.episodeNumber);
+              view.type="button";view.style.marginTop="8px";
+              view.dataset.seasonRunId=String(r.runId);
+              view.addEventListener("click",function(){
+                $("season-episode-preview-wrap").style.display="block";
+                void loadOwnerPreview("season-episode-preview-player",
+                  "/operator/api/content-hub/seasons/episodes/"+
+                  encodeURIComponent(String(r.runId))+"/preview",
+                  function(message){
+                    $("season-episode-preview-note").textContent=
+                      "الحلقة "+r.episodeNumber+" — "+message;
+                  });
+              });
+              card.append(view);
+            }
+          });
+        parent.append(card);
+      });
+    }catch(e){
+      $("season-online").textContent="المركز غير متاح";
+      $("season-online").className="pill bad";
+      $("season-queue-note").textContent="تعذر قراءة مركز المواسم: "+String(e.message||"غير متاح");
+      $("season-start").disabled=true;$("season-pause").disabled=true;
+      $("season-enqueue").disabled=true;
+      $("season-page-previous").disabled=true;
+      $("season-page-next").disabled=true;
+    }finally{seasonQueueBusy=false}
+  }
+  function clearSeasonSelection(){
+    seasonData=null;
+    $("season-season-select").disabled=true;
+    $("season-season-select").replaceChildren(new Option("اختر الموسم",""));
+    $("season-candidates").replaceChildren();
+    $("season-select-batch").disabled=true;
+    $("season-enqueue").disabled=true;
+  }
+  $("season-episode-preview-player").addEventListener("error",function(){
+    $("season-episode-preview-note").textContent=
+      "تعذر تشغيل معاينة الحلقة. قد تكون لم تكتمل أو حدث خطأ في ترميز المعاينة.";
+  });
+  $("season-refresh").addEventListener("click",refreshSeasonQueue);
+  $("season-series-select").addEventListener("change",function(){
+    clearSeasonSelection();
+    $("season-series-episodes").disabled=!/^[0-9]+$/.test(this.value);
+  });
+  $("season-series-load").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var response=await api("content-hub/seasons/series");
+      var list=Array.isArray(response.series)?response.series:[];
+      var select=$("season-series-select");
+      select.replaceChildren(new Option("اختر مسلسلًا",""));
+      list.forEach(function(x){
+        if(Number.isSafeInteger(x.seriesGatewayId)&&x.seriesGatewayId>0)
+          select.add(new Option(String(x.title||"مسلسل")+" · #"+x.seriesGatewayId,
+            String(x.seriesGatewayId)));
+      });
+      clearSeasonSelection();
+      seasonMessage("تم تحميل "+list.length+" مسلسلًا. اختر مسلسلًا ثم عرض المواسم.");
+    }catch(e){seasonMessage("فشل تحميل المسلسلات: "+e.message)}
+    finally{this.disabled=false}
+  });
+  async function openSeasonSeries(id){
+    var n=Number(id);
+    if(!Number.isSafeInteger(n)||n<1){seasonMessage("رقم المسلسل غير صحيح.");return}
+    $("season-series-episodes").disabled=true;
+    $("season-candidates-note").textContent="جار جلب المواسم والحلقات من الفهرس…";
+    try{
+      var response=await api("content-hub/seasons/series/"+n);
+      seasonData=response;
+      var select=$("season-series-select"),key=String(n);
+      if(!Array.from(select.options).some(function(o){return o.value===key}))
+        select.add(new Option(String(response.title||"مسلسل")+" · #"+n,key));
+      select.value=key;
+      if(select.selectedOptions[0])select.selectedOptions[0].textContent=
+        String(response.title||"مسلسل")+" · #"+n;
+      var seasons=Array.isArray(response.seasons)?response.seasons:[];
+      var seasonSelect=$("season-season-select");
+      seasonSelect.replaceChildren(new Option("اختر الموسم",""));
+      seasons.forEach(function(x){
+        seasonSelect.add(new Option("الموسم "+x.seasonNumber+
+          " — "+x.episodeCount+" حلقة",String(x.seasonNumber)));
+      });
+      seasonSelect.disabled=seasons.length===0;
+      $("season-candidates").replaceChildren();
+      $("season-candidates-note").textContent=seasons.length?
+       "اختر الموسم، ثم فحص الأحجام بدقة قبل الإضافة.":
+       "لم يُعثر على مواسم مفهرسة لهذا المسلسل.";
+    }catch(e){
+      clearSeasonSelection();
+      $("season-candidates-note").textContent=
+       "تعذر قراءة مواسم هذا المسلسل: "+e.message;
+    }finally{$("season-series-episodes").disabled=false}
+  }
+  $("season-series-episodes").addEventListener("click",function(){
+    void openSeasonSeries($("season-series-select").value);
+  });
+  $("season-series-open").addEventListener("click",function(){
+    var n=Number($("season-series-id").value);
+    if(Number.isSafeInteger(n)&&n>0)void openSeasonSeries(n);
+    else seasonMessage("أدخل رقم مسلسل صحيحًا.");
+  });
+  $("season-pilot").addEventListener("click",async function(){
+    this.disabled=true;
+    try{
+      var pilot=await api("content-hub/seasons/pilot");
+      var id=Number(pilot.seriesGatewayId),episodeId=Number(pilot.episodeGatewayId);
+      await openSeasonSeries(id);
+      var seasons=seasonData?.seasons||[];
+      var matched=seasons.find(function(season){
+        return (season.episodes||[]).some(function(ep){return ep.gatewayId===episodeId});
+      });
+      if(matched){
+        $("season-season-select").value=String(matched.seasonNumber);
+        $("season-season-select").dispatchEvent(new Event("change"));
+        seasonMessage("وجدت مسلسل الحلقة المحفوظة وموسمها الفعلي. حدد الحلقات التالية.");
+      }else seasonMessage("تم العثور على المسلسل، لكن الحلقة ليست في الفهرس المفصّل.");
+    }catch(e){seasonMessage("لم أتمكن من ربط الحلقة المحفوظة: "+e.message)}
+    finally{this.disabled=false}
+  });
+  $("season-season-select").addEventListener("change",function(){
+    var group=seasonData?.seasons?.find(function(s){
+      return String(s.seasonNumber)===$("season-season-select").value;
+    });
+    var rows=group?.episodes||[];
+    var box=$("season-candidates");box.replaceChildren();
+    rows.forEach(function(item,index){
+      var card=seasonNode("div","panel");
+      card.style.cssText="margin:0;padding:12px;background:#0d213b;border:1px solid #365778";
+      var line=seasonNode("label","");
+      line.style.cssText="display:flex;align-items:center;gap:10px";
+      var check=seasonNode("input");check.type="checkbox";
+      check.dataset.gatewayId=String(item.gatewayId);
+      check.className="season-check";
+      line.append(check,seasonNode("strong","",item.episodeNumber+
+        ". "+String(item.title||"الحلقة").slice(0,120)));
+      var row=seasonNode("div","actions");
+      var size=seasonNode("input");size.type="number";size.step="1";
+      size.readOnly=true;size.placeholder="الحجم بالبايت بعد الفحص";
+      size.className="season-size";size.style.maxWidth="220px";
+      var btn=seasonNode("button","btn secondary","فحص الحجم (4 KB)");
+      btn.type="button";
+      btn.addEventListener("click",async function(){
+        if(!confirm("هل تسمح بفحص 4 كيلوبايت فقط من مصدر هذه الحلقة؟"))return;
+        btn.disabled=true;
+        try{
+          var data=await action("content-hub/seasons/probe","season-probe",
+            {confirmed:true,gatewayId:item.gatewayId});
+          var bytes=Number(data.expectedBytes);
+          if(!Number.isSafeInteger(bytes)||bytes<8388608||bytes>4294967296)
+            throw Error("لم يثبت حجم الحلقة بدقة");
+          size.value=String(bytes);
+          btn.textContent="✓ تم فحص "+hubBytes(bytes);
+        }catch(e){seasonMessage("تعذر فحص الحلقة "+item.episodeNumber+": "+e.message)}
+        finally{btn.disabled=false}
+      });
+      row.append(btn,size);
+      card.append(line,row);box.append(card);
+    });
+    $("season-select-batch").disabled=rows.length===0;
+    $("season-candidates-note").textContent=rows.length?
+      "عدد حلقات الموسم "+rows.length+". اختر ما يصل إلى 12 حلقة. يجب فحص حجم كل حلقة.":
+      "لا توجد حلقات مفهرسة في الموسم.";
+    void refreshSeasonQueue();
+  });
+  $("season-select-batch").addEventListener("click",function(){
+    var list=$("season-candidates").querySelectorAll(".season-check");
+    list.forEach(function(c,i){c.checked=i<12});
+    seasonMessage("تم تحديد "+Math.min(12,list.length)+" حلقة؛ افحص أحجامها ثم أضفها.");
+  });
+  $("season-enqueue").addEventListener("click",async function(){
+    var seasons=seasonData?.seasons||[];
+    var season=seasons.find(function(s){
+      return String(s.seasonNumber)===$("season-season-select").value;
+    });
+    if(!season){seasonMessage("اختر موسمًا أولًا.");return}
+    var chosen=Array.from($("season-candidates").querySelectorAll(".season-check"))
+      .filter(function(c){return c.checked});
+    if(chosen.length<1||chosen.length>12){
+      seasonMessage("اختر بين حلقة واحدة و12 حلقة في الدفعة.");return;
+    }
+    var episodeMap=new Map(season.episodes.map(function(x){return [x.gatewayId,x]}));
+    var jobs=chosen.map(function(c){
+      var id=Number(c.dataset.gatewayId),episode=episodeMap.get(id);
+      return {gatewayId:id,episodeNumber:episode?.episodeNumber,
+       expectedBytes:Number(c.closest(".panel").querySelector(".season-size").value)};
+    });
+    if(jobs.some(function(x){return !Number.isSafeInteger(x.expectedBytes)||
+      x.expectedBytes<8388608||x.expectedBytes>4294967296||
+      !Number.isSafeInteger(x.episodeNumber)})){
+      seasonMessage("افحص الحجم الدقيق لجميع الحلقات المختارة قبل الإضافة.");return;
+    }
+    if(!confirm("تأكيد امتلاك حقوق تخزين كل حلقة مختارة؟ ستُضاف إلى الانتظار ولن يبدأ النقل تلقائيًا."))return;
+    this.disabled=true;
+    try{
+      var result=await action("content-hub/seasons/enqueue","season-enqueue",
+        {confirmed:true,licensedStorage:true,
+         seriesGatewayId:seasonData.seriesGatewayId,
+         seasonNumber:season.seasonNumber,episodes:jobs});
+      seasonMessage("أُضيفت "+result.added+" حلقة. تمت إعادة استخدام المحفوظة: "+
+        (result.reusedExisting||0)+". لم يبدأ نقل جديد بعد.");
+      await refreshSeasonQueue();
+    }catch(e){seasonMessage("تعذرت إضافة الحلقات: "+e.message)}
+    finally{this.disabled=false}
+  });
+  $("season-start").addEventListener("click",async function(){
+    if(!confirm("تأكيد وجود حقوق التخزين، وعدم انشغال مصدر البث حاليًا؟ سيبدأ النقل المتسلسل بحلقة واحدة في كل مرة."))return;
+    this.disabled=true;
+    try{
+      var budget=Number($("season-max-batches").value);
+      if(![12,60,120].includes(budget))throw Error("ميزانية النقل غير صالحة");
+      await action("content-hub/seasons/start","season-start",
+        {confirmed:true,licensedStorage:true,sourceIdle:true,
+         maxBatches:budget});
+      seasonMessage("بدأت جلسة نقل متسلسلة بحد أقصى "+budget+
+        " جزءًا (حتى "+hubBytes(budget*8388608)+"). راقب نسب الحلقات أدناه.");
+    }catch(e){seasonMessage("تعذر بدء النقل: "+e.message)}
+    finally{await refreshSeasonQueue()}
+  });
+  $("season-pause").addEventListener("click",async function(){
+    if(!confirm("إيقاف جلسة النقل مع الاحتفاظ بالأجزاء المكتملة؟"))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/seasons/pause","season-pause",{confirmed:true});
+      seasonMessage("تم طلب الإيقاف، وسيحتفظ النظام بالأجزاء المكتملة.");
+    }catch(e){seasonMessage("تعذر إيقاف النقل: "+e.message)}
+    finally{await refreshSeasonQueue()}
+  });
+  $("season-play-preview").addEventListener("click",function(){
+    seasonPreviewWatched=false;
+    $("season-video-okay").checked=false;$("season-audio-okay").checked=false;
+    seasonButtonAV();
+    void loadOwnerPreview("season-preview-video",
+      "/operator/api/content-hub/episodes/preview",seasonMessage);
+  });
+  $("season-preview-video").addEventListener("timeupdate",function(){
+    if(this.currentTime>=0.6)seasonPreviewWatched=true;
+    seasonButtonAV();
+  });
+  $("season-preview-video").addEventListener("error",function(){
+    seasonMessage("المعاينة غير متاحة. تحقق من اكتمال الحلقة وصلاحيات المراجعة.");
+  });
+  $("season-video-okay").addEventListener("change",seasonButtonAV);
+  $("season-audio-okay").addEventListener("change",seasonButtonAV);
+  $("season-av-confirm").addEventListener("click",async function(){
+    if(!seasonPreviewWatched||!$("season-video-okay").checked||
+       !$("season-audio-okay").checked)return;
+    if(!confirm("هل شاهدت الفيديو وسمعت الصوت فعليًا من العينة المحفوظة؟"))return;
+    this.disabled=true;
+    try{
+      await action("content-hub/seasons/confirm","season-confirm",
+        {confirmed:true,videoConfirmed:true,audioConfirmed:true});
+      seasonAVConfirmed=true;
+      $("season-av-note").textContent="✅ تم حفظ تأكيد الصورة والصوت.";
+      seasonMessage("تم اعتماد اختبار التشغيل. بقيت شروط الحقوق وخمول المصدر.");
+    }catch(e){seasonMessage("تعذّر تسجيل اعتماد التشغيل: "+e.message)}
+    await refreshSeasonQueue();
+  });
+  refreshSeasonQueue();
+  refreshSeasonHealth();
+  setInterval(function(){
+    if(!document.hidden&&$("page-library")?.classList.contains("active"))
+      refreshSeasonQueue();
+  },11000);
+  setInterval(function(){
+    if(!document.hidden&&$("page-library")?.classList.contains("active"))
+      refreshSeasonHealth();
+  },30000);
   loadContentHub();
   setInterval(function(){
     var page=$("page-library");
@@ -2602,6 +3936,361 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     if(!id){$("library-auto-status").textContent="اختر مصدرًا واحدًا أولًا؛ لن نغيّر إعدادات جميع المصادر دفعة واحدة.";}
     return id;
   }
+  async function refreshDailyCatalog(){
+    var status=$("library-daily-catalog-status"),
+      holder=$("library-daily-catalog-receipts");
+    status.textContent="جار فحص سجل المزامنة اليومية من PostgreSQL...";
+    try{
+      var d=await api("ops/daily-catalog");
+      holder.replaceChildren();
+      if(d.scope!=="catalog_metadata_only_no_media_copy"||
+         d.customerCutover!==false||d.mediaFilesCopied!==0)
+        throw Error("نطاق الاستجابة غير مطابق لفحص بيانات الفهرس.");
+      status.textContent=!d.enabled?
+        "⏸ الجدولة اليومية الخاصة عند 4:00 صباحًا غير مفعّلة. جدول التكرار اليدوي أعلاه مستقل.":
+        !d.sourceConfigured?
+        "⚠ النظام مفعّل لكن معرّف مصدر Xtream المعتمد غير مضبوط.":
+        !d.sourceApproved?
+        "⚠ المصدر غير معتمد أو متوقف عن النشر؛ لن تبدأ المزامنة التلقائية.":
+        "✅ الجدولة مفعّلة للمصدر saleh فقط عند 4:00–4:59 صباحًا بتوقيت السعودية. "+
+        "هذا فهرس بيانات، وليس نسخًا للأفلام إلى تخزين BLOFY.";
+      var receipts=Array.isArray(d.receipts)?d.receipts.slice(0,7):[];
+      // PostgreSQL receipts are not a progress stream: a stale queued or
+      // running row is only evidence that manual review is needed.
+      if(receipts.some(function(row){return row.needsOperatorReview===true;}))
+        status.textContent="⚠ يوجد طلب مزامنة طال دون إثبات اكتماله. تحقق من سجلات الاستيراد والمصدر قبل إعادة المحاولة؛ لم يبدأ فحص السجل أي استيراد جديد.";
+      if(!receipts.length){
+        var none=document.createElement("p");
+        none.textContent="لم تُسجّل مهمة يومية بعد. لا يُعد هذا دليلًا على اكتمال النسخ أو الفهرسة.";
+        holder.appendChild(none);return;
+      }
+      var labels={queued:"⏳ في الانتظار",running:"🔄 جار استيراد الفهرس",
+        completed:"✅ اكتمل",partial:"⚠ اكتمل جزئيًا",
+        failed:"❌ فشل",cancelled:"⏹ ألغي"};
+      receipts.forEach(function(row){
+        var item=document.createElement("p");
+        var day=String(row.day||"غير محدد").slice(0,12);
+        var attention={
+          queued_over_one_hour_review_required:" ⚠ بانتظار أكثر من ساعة؛ راجع الخدمة",
+          running_over_six_hours_review_required:" ⚠ قيد التشغيل أكثر من 6 ساعات؛ راجع التقدم"
+        };
+        item.textContent=day+" — "+(labels[row.state]||"حالة غير معروفة")+
+          (row.finishedAt?" · انتهى: "+
+            new Date(row.finishedAt).toLocaleString("ar-SA"):"")+
+          (attention[row.attentionCode]||"");
+        holder.appendChild(item);
+      });
+    }catch(e){
+      status.textContent="⚠ لا يمكن قراءة سجل المزامنة اليومية: "+
+        String(e.message||"غير متاح").slice(0,150);
+    }
+  }
+  $("library-daily-catalog-refresh").addEventListener("click",function(){
+    void refreshDailyCatalog();
+  });
+  var mirrorIntakeBusy=false;
+  async function refreshMirrorIntakeOwner(){
+    if(mirrorIntakeBusy)return;
+    var status=$("library-mirror-intake-status"),
+      host=$("library-mirror-intake-items");
+    status.textContent="جار قراءة سجلات تجهيز النقل من PostgreSQL...";
+    try{
+      var info=await api("ops/mirror-intake");
+      if(info.ok!==true||info.copyWorkerEnabled!==false||
+        info.mediaCopyStarted!==false||
+        info.mediaBytesTransferred!==0||
+        info.customerCutover!==false||
+        info.stateScope!=="metadata_only_awaiting_preflight"||
+        !Array.isArray(info.items)||info.items.length>24)
+        throw Error("استجابة حالة التجهيز لا تطابق قيود النقل الآمن.");
+      host.replaceChildren();
+      status.textContent="سجلات التجهيز: "+info.pending+
+        " / "+info.maxStaged+
+        " — لا توجد تنزيلات فعلية أو حجز مساحة. جميع العناصر تنتظر إثبات الحقوق والحجم.";
+      if(info.items.length===0){
+        var empty=document.createElement("p");
+        empty.textContent="لم تُجهّز أي عناصر للنقل حتى الآن.";
+        host.appendChild(empty);
+      }
+      info.items.forEach(function(entry){
+        if(!["movie","episode"].includes(entry.kind)||
+          !["awaiting_size_and_license","cancelled"].includes(entry.state))
+          return;
+        var wrap=document.createElement("div");
+        wrap.style.cssText="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px;border:1px solid #4c554a;border-radius:8px";
+        var caption=document.createElement("span");
+        caption.textContent=
+          (entry.kind==="movie"?"فيلم":"حلقة")+" · "+
+          String(entry.title||"").slice(0,120)+" · رقم "+
+          String(entry.id||"").slice(0,128)+" — "+
+          (entry.state==="cancelled"?"ملغى":
+            "بانتظار فحص الحجم وتوثيق صلاحية التخزين");
+        wrap.appendChild(caption);
+        if(entry.state==="awaiting_size_and_license"){
+          var cancel=document.createElement("button");
+          cancel.type="button";cancel.className="btn secondary";
+          cancel.textContent="إلغاء تجهيز العنصر";
+          cancel.addEventListener("click",async function(){
+            if(!confirm("إلغاء تجهيز هذا العنصر؟ لا توجد ملفات قيد التنزيل من هذه القائمة."))return;
+            cancel.disabled=true;
+            try{
+              var out=await action("ops/mirror-intake/cancel",
+                "ops-mirror-cancel",{kind:entry.kind,id:entry.id,
+                  ownerConfirmed:true});
+              if(out.mediaBytesTransferred!==0||out.copyWorkerEnabled!==false)
+                throw Error("استجابة الإلغاء ليست من قائمة التجهيز الخاصة.");
+              await refreshMirrorIntakeOwner();
+            }catch(error){
+              status.textContent="تعذر إلغاء سجل التجهيز: "+
+                String(error.message||"خطأ").slice(0,135);
+            }finally{cancel.disabled=false}
+          });
+          wrap.appendChild(cancel);
+        }
+        host.appendChild(wrap);
+      });
+    }catch(error){
+      status.textContent="⚠ سجل التجهيز غير متاح: "+
+        String(error.message||"تعذر قراءة القائمة").slice(0,150);
+    }
+  }
+  async function stageMirrorIntakeOwner(kind,id,button){
+    if(!["movie","episode"].includes(kind)||
+      (kind==="movie"?!/^[A-Za-z0-9._:-]{1,128}$/.test(id):
+        !/^[1-9][0-9]{0,9}$/.test(id)))return;
+    if(!confirm("هل تريد حفظ هذا العنصر في قائمة تجهيز النقل فقط؟ لن يبدأ تحميل الفيديو ولن تُحجز مساحة. يجب فحص حجم المصدر وصلاحية تخزينه قبل أي نقل."))return;
+    button.disabled=true;
+    try{
+      var out=await action("ops/mirror-intake","ops-mirror-stage",{
+        kind:kind,id:id,ownerConfirmed:true});
+      if(out.ok!==true||out.copyWorkerEnabled!==false||
+         out.mediaCopyStarted!==false||
+         out.mediaBytesTransferred!==0||out.customerCutover!==false)
+        throw Error("لم يؤكد الخادم أن هذا إعداد بيانات فقط.");
+      $("library-mirror-intake-status").textContent=
+        "✅ تم تجهيز سجل العنصر "+id+
+        " كبيانات فقط. لا يعمل عامل نقل حتى اكتمال الشروط.";
+      await refreshMirrorIntakeOwner();
+    }catch(error){
+      $("library-mirror-intake-status").textContent=
+        "⚠ تعذر تجهيز العنصر: "+
+        String(error.message||"غير متاح").slice(0,165);
+    }finally{button.disabled=false}
+  }
+  $("library-mirror-intake-refresh").addEventListener("click",function(){
+    void refreshMirrorIntakeOwner();
+  });
+  // Server pins source to approved saleh; no browser-controlled source URL.
+  var mirrorCursor="",mirrorBusy=false,mirrorPage=0;
+  var mirrorHeadBusy=false,mirrorHeadSelection=null;
+  function resetPhysicalHeadSession(message){
+    mirrorHeadSelection=null;
+    $("library-head-next").disabled=true;
+    $("library-head-status").textContent=message||
+      "لم يبدأ فحص أجزاء S3. البيانات المعروضة من PostgreSQL فقط.";
+  }
+  async function inspectPhysicalHead(kind,id,start){
+    if(mirrorHeadBusy)return;
+    if(!["movie","episode"].includes(kind)||
+       (kind==="movie"?!/^[A-Za-z0-9._:-]{1,128}$/.test(id):
+         !/^[1-9][0-9]{0,9}$/.test(id))||
+       !Number.isSafeInteger(start)||start<0||start>504||start%8!==0)return;
+    var panel=$("library-head-status"),
+      next=$("library-head-next");
+    if(start===0){
+      mirrorHeadSelection={kind:kind,id:id,nextStart:null,total:0,
+        matched:0,failures:0,sha:null,seen:0};
+    }else if(!mirrorHeadSelection||
+      mirrorHeadSelection.kind!==kind||
+      mirrorHeadSelection.id!==id||
+      mirrorHeadSelection.nextStart!==start)return;
+    mirrorHeadBusy=true;next.disabled=true;
+    panel.textContent="جار فحص وجود وحجم حتى 8 أجزاء فعلية في S3 للملف "+
+      id+"؛ دون تنزيل فيديو أو الاتصال بالمصدر.";
+    try{
+      var info=await api("ops/mirror-physical-head?"+
+       new URLSearchParams({type:kind,id:id,start:String(start)}));
+      if(info?.ok!==true||info.kind!==kind||info.id!==id||
+        info.partStart!==start||
+        info.physicalProof!=="HEAD_object_size_only"||
+        info.contentSha256Recomputed!==false||
+        info.mediaBytesTransferred!==0||info.providerRequests!==0||
+        info.customerCutover!==false||
+        !/^[a-f0-9]{64}$/.test(String(info.manifestSha256||""))||
+        !Number.isInteger(info.totalParts)||info.totalParts<1||
+        info.totalParts>512||!Number.isInteger(info.checkedParts)||
+        info.checkedParts<1||info.checkedParts>8||
+        !Number.isInteger(info.matchedParts)||!Number.isInteger(info.failures)||
+        info.matchedParts+info.failures!==info.checkedParts)
+        throw Error("الاستجابة لا تثبت إجراء HEAD محدود على تخزين BLOFY.");
+      var s=mirrorHeadSelection;
+      if(!s||s.id!==id||s.kind!==kind)return;
+      if(s.sha&&s.sha!==info.manifestSha256)
+        throw Error("تغيرت بصمة الملف المحفوظ أثناء الفحص؛ أعد الاختبار من البداية.");
+      s.sha=info.manifestSha256;
+      s.total=info.totalParts;
+      if(s.nextStart===start||start===0){
+        // A retried partial 8-part window must not be counted as
+        // new file coverage until this entire window was inspected.
+        if(info.checkedParts===Math.min(8,s.total-start)){
+          s.seen=start+info.checkedParts;
+          s.matched+=info.matchedParts;
+          s.failures+=info.failures;
+        }
+      }
+      s.nextStart=info.nextPartStart;
+      next.disabled=!(Number.isInteger(s.nextStart)&&
+        s.nextStart>=0&&s.nextStart<=504);
+      var complete=s.seen===s.total&&s.failures===0&&
+        info.nextPartStart===null;
+      panel.textContent="نتيجة S3 للملف "+id+
+       ": تم فحص "+info.checkedParts+" أجزاء بهذه الدفعة، "+
+       info.matchedParts+" مطابقة الحجم، "+info.failures+" بها مشكلة. "+
+       "الموضع المدقق: "+s.seen+" من أصل "+s.total+" جزء. "+
+       (complete?"✅ راجعنا وجود وأحجام كل الأجزاء بطلبات HEAD عبر هذه الجلسة. ":
+        "فحص الأجزاء المتبقية لم يكتمل بعد. ")+
+       "⚠️ لم نعد حساب SHA-256 من بايتات S3، ولا نعتبر هذا اختبار تشغيل فيديو.";
+    }catch(error){
+      panel.textContent="❌ تعذر فحص S3 الحقيقي: "+
+       String(error?.message||"خطأ اتصال").slice(0,175)+
+       ". لن نعلن أن القطع موجودة دون إثبات.";
+    }finally{
+      mirrorHeadBusy=false;
+      if(mirrorHeadSelection&&
+         Number.isInteger(mirrorHeadSelection.nextStart)&&
+         mirrorHeadSelection.nextStart<=504)
+        next.disabled=false;
+    }
+  }
+  $("library-head-next").addEventListener("click",function(){
+    var s=mirrorHeadSelection;
+    if(!s||!Number.isInteger(s.nextStart))return;
+    void inspectPhysicalHead(s.kind,s.id,s.nextStart);
+  });
+  async function refreshMirrorInventory(next){
+    if(mirrorBusy)return;
+    var type=$("library-mirror-type").value,
+      status=$("library-mirror-status"),
+      body=$("library-mirror-results"),
+      nextButton=$("library-mirror-next");
+    if(!["movie","episode","series","live"].includes(type))return;
+    var cursor=next?mirrorCursor:"";
+    if(next&&!cursor)return;
+    mirrorBusy=true;
+    $("library-mirror-refresh").disabled=true;
+    nextButton.disabled=true;
+    status.textContent="جار قراءة فهرس "+type+" الخاص بمصدر saleh. لا يتم تنزيل وسائط...";
+    try{
+      var response=await api("ops/mirror-inventory?"+
+        new URLSearchParams({type,cursor,limit:"50"}));
+      if($("library-mirror-type").value!==type)return;
+      if(response.ok!==true||response.mediaType!==type||
+        response.sourceName!=="saleh"||
+        response.dryRun!==true||response.transferQueued!==0||
+        response.providerRequests!==0||response.mediaBytesTransferred!==0||
+        response.storedCopiesVerified!==false||
+        response.customerCutover!==false)
+        throw Error("فشل التحقق من نطاق جرد الفهرس الآمن.");
+      var items=Array.isArray(response.items)?response.items.slice(0,50):[];
+      if(!next){
+        body.replaceChildren();mirrorPage=0;
+        resetPhysicalHeadSession("قائمة جديدة؛ اختر فحص S3 من صف له سجل نسخ مكتمل.");
+      }
+      mirrorPage+=1;
+      items.forEach(function(item){
+        var row=document.createElement("tr");
+        var statuses={
+          metadata_only:"فهرس فقط — لا تخزين",
+          not_assessed:"لم يتم فحص سجل النسخ الخاص بعد",
+          not_recorded:"لا يوجد سجل نسخة في Content Hub",
+          copy_incomplete:"نسخ غير مكتمل — بيانات تقدم محفوظة",
+          copy_failed:"نسخ متوقف/فشل — يحتاج مراجعة",
+          verification_inconsistent:"⚠ سجل التحقق غير متطابق",
+          verified_manifest:"✅ نسخة مكتملة في سجل SHA — وجود S3 الفعلي لم يُفحص"
+        };
+        var statusText=statuses[item.copyStatus]||
+          "حالة الملف غير معروفة — لا يُعد محفوظًا";
+        [String(item.id||"").slice(0,128),
+         String(item.title||"").slice(0,220),
+         String(item.extension||"—").slice(0,20),
+         statusText].forEach(function(value){
+           var cell=document.createElement("td");
+           cell.textContent=value;row.appendChild(cell);
+         });
+        var headCell=document.createElement("td");
+        if((type==="movie"||type==="episode")&&
+           item.copyStatus==="verified_manifest"){
+          var button=document.createElement("button");
+          button.type="button";button.className="btn secondary";
+          button.textContent="🔍 فحص أول 8 أجزاء في S3";
+          button.addEventListener("click",function(){
+            void inspectPhysicalHead(type,String(item.id||""),0);
+          });
+          headCell.appendChild(button);
+        }else{
+          headCell.textContent="يلزم سجل نسخة مكتملة أولًا";
+        }
+        row.appendChild(headCell);
+        var intakeCell=document.createElement("td");
+        if(response.manifestCheckAvailable===true&&
+           (type==="movie"||type==="episode")&&
+           ["not_recorded","copy_incomplete","copy_failed"].includes(
+             String(item.copyStatus||""))){
+          var queueButton=document.createElement("button");
+          queueButton.type="button";queueButton.className="btn secondary";
+          queueButton.textContent="📋 جهّز سجل النقل";
+          queueButton.addEventListener("click",function(){
+            void stageMirrorIntakeOwner(type,String(item.id||""),queueButton);
+          });
+          intakeCell.appendChild(queueButton);
+        }else intakeCell.textContent="غير مؤهل للتجهيز الحالي";
+        row.appendChild(intakeCell);
+        body.appendChild(row);
+      });
+      if(!items.length&&mirrorPage===1){
+        var row=document.createElement("tr"),cell=document.createElement("td");
+        cell.colSpan=6;cell.textContent="لا توجد عناصر مفهرسة لهذا النوع حاليًا.";
+        row.appendChild(cell);body.appendChild(row);
+      }
+      mirrorCursor=response.hasMore===true?String(response.nextCursor||""):"";
+      nextButton.disabled=!mirrorCursor;
+      var counts=response.sourceReportedCounts||{};
+      status.textContent="✅ صفحة "+mirrorPage+
+        " | عناصر معروضة: "+body.querySelectorAll("tr").length+
+        " | الفهرس المسجل: أفلام "+Number(counts.movie||0)+
+        " / قنوات "+Number(counts.live||0)+
+        " / مسلسلات "+Number(counts.series||0)+
+        (type==="episode"?" | ⚠ الحلقات: مفهرسة جزئيًا فقط":"")+
+        " | نقل الملفات: صفر | سجلات نسخ مكتملة: "+
+        Number(response.manifestVerifiedCount||0)+
+        " في الصفحة | فحص S3 الفعلي: لم يبدأ | "+
+        (response.manifestCheckAvailable===true?
+          "مطابقة PostgreSQL: جاهزة":"مطابقة PostgreSQL: غير متاحة");
+      $("library-mirror-note").textContent=
+        "آخر تحديث فهرس Xtream: "+
+        (response.latestXtreamSyncAt?
+          new Date(response.latestXtreamSyncAt).toLocaleString("ar-SA"):"غير معروف")+
+        ". يتطلب نقل VOD إثبات حق التخزين، فحص حجم المصدر، ثم التحقق من SHA في S3.";
+    }catch(error){
+      status.textContent="⚠ فشل الجرد الآمن: "+
+        String(error.message||"تعذر الاتصال").slice(0,170);
+      if(next)nextButton.disabled=false;
+    }finally{mirrorBusy=false;$("library-mirror-refresh").disabled=false}
+  }
+  $("library-mirror-refresh").addEventListener("click",function(){
+    void refreshMirrorInventory(false);
+  });
+  $("library-mirror-next").addEventListener("click",function(){
+    void refreshMirrorInventory(true);
+  });
+  $("library-mirror-type").addEventListener("change",function(){
+    resetPhysicalHeadSession("تم تغيير نوع المحتوى؛ يلزم تحديد ملف مكتمل جديد.");
+    mirrorCursor="";mirrorPage=0;
+    $("library-mirror-results").replaceChildren();
+    $("library-mirror-next").disabled=true;
+    $("library-mirror-status").textContent=
+      "تم تغيير النوع. اضغط قراءة أول 50 عنصرًا؛ لا يجري أي تنزيل تلقائي.";
+  });
   async function refreshSourceOps(){
     var sourceId=selectedOpsSource();
     if(!sourceId)return;
@@ -4313,6 +6002,463 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
   });
+  var decoderLabBusy=false;
+  function showDecoderLabCodecs(info){
+    var table=$("decoder-lab-codec-rows");table.replaceChildren();
+    var names={mp2:"MP2",aac:"AAC",ac3:"AC3",eac3:"E-AC3"};
+    var matrix=Array.isArray(info?.audioCodecMatrix)?info.audioCodecMatrix:[];
+    ["mp2","aac","ac3","eac3"].forEach(function(codec){
+      var row=node("tr");
+      var entry=codec==="mp2"?{
+        decoded:info?.ok===true&&info?.audioDecoded===true&&info?.audioCodec==="mp2",
+        frames:info?.audioFrames
+      }:matrix.find(function(x){return x?.codec===codec});
+      var pass=entry?.decoded===true&&Number.isInteger(entry.frames)&&entry.frames>=2;
+      cell(row,names[codec]);cell(row,pass?"تم فك عينة صناعية":"لم يثبت");
+      cell(row,pass?count(entry.frames):"—");
+      table.appendChild(row);
+    });
+  }
+  async function loadDecoderLabStatus(){
+    if(decoderLabBusy)return;
+    decoderLabBusy=true;
+    var button=$("decoder-lab-refresh");
+    var status=$("decoder-lab-status");
+    button.disabled=true;
+    status.textContent="جار قراءة نتيجة الاختبار الصناعي فقط...";
+    try{
+      var info=await api("media-scan/decoder-lab");
+      var verified=info?.state==="synthetic_verified"&&info?.ok===true&&
+        info?.audioDecoded===true&&info?.videoDecoded===true&&
+        info?.productionStreamVerified===false;
+      value("decoder-lab-audio",verified?"فُكّ صناعيًا":"غير مثبت");
+      value("decoder-lab-video",verified?"فُكّ صناعيًا":"غير مثبت");
+      value("decoder-lab-audio-frames",verified&&Number.isInteger(info.audioFrames)?count(info.audioFrames):"—");
+      value("decoder-lab-video-frames",verified&&Number.isInteger(info.videoFrames)?count(info.videoFrames):"—");
+      showDecoderLabCodecs(info);
+      status.textContent=(verified?
+        "✅ نجح فك الصوت والصورة لعينة صناعية معزولة. ":"⚠ لم يثبت اختبار فك الصوت والصورة. ")+
+        (info?.message||"نتيجة غير معروفة.")+
+        " · فحص قنوات المشتركين: لم يجرَ · لا تغيير لمسارات المشاهدة.";
+    }catch{
+      value("decoder-lab-audio","غير معروف");value("decoder-lab-video","غير معروف");
+      value("decoder-lab-audio-frames","—");value("decoder-lab-video-frames","—");
+      showDecoderLabCodecs(null);
+      status.textContent="تعذر الاتصال بالمختبر. لا تعتبر القنوات سليمة أو معطلة بناءً على ذلك.";
+    }finally{button.disabled=false;decoderLabBusy=false;}
+  }
+  $("decoder-lab-refresh").addEventListener("click",function(){void loadDecoderLabStatus()});
+  setTimeout(function(){void loadDecoderLabStatus()},1800);
+  var ownerSampleBusy=false;
+  $("owner-ts-sample-submit").addEventListener("click",async function(){
+    if(ownerSampleBusy)return;
+    var file=$("owner-ts-sample-file").files?.[0],
+      consent=$("owner-ts-sample-consent").checked,
+      message=$("owner-ts-sample-status");
+    if(!file||!file.name.toLowerCase().endsWith(".ts")||
+      file.size<2256||file.size>2000000||file.size%188!==0){
+      message.textContent="اختر ملف MPEG-TS قصيرًا بحجم أقصاه 2 ميجابايت، وعدد بايتات مناسب لحزم TS.";
+      return;
+    }
+    if(!consent){
+      message.textContent="يلزم التأكيد على حق اختبار الملف وعدم احتوائه على بيانات دخول خاصة.";
+      return;
+    }
+    if(!confirm("سيُرفع ملف TS القصير إلى مختبر FFmpeg المعزول، ثم يُحذف بعد التحليل. هل تريد المتابعة؟"))return;
+    ownerSampleBusy=true;this.disabled=true;
+    message.textContent="جار رفع العينة القصيرة وفحص الصوت والصورة؛ لا تُرسل روابط Xtream.";
+    var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},55000);
+    try{
+      var response=await fetch("/operator/api/media-scan/owner-sample",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"video/mp2t",
+          "x-blofy-operator-action":"media-scan-owner-sample",
+          "x-blofy-sample-rights":"confirmed"},
+        body:file,signal:controller.signal
+      });
+      if(response.status===401){message.textContent="انتهت جلسة الإدارة. أعد تسجيل الدخول.";return;}
+      var result=await response.json();
+      if(!response.ok||result.scope!=="approved_short_ts_sample"){
+        message.textContent="تعذّر تحليل العينة: "+String(result.code||"sample_unavailable").slice(0,75)+
+          " · لم يتم تغيير بث المشتركين.";
+        return;
+      }
+      value("owner-ts-sample-audio-track",result.hasAudio?"معلن في الملف":"غير موجود في العينة");
+      value("owner-ts-sample-audio-decoded",result.decodedAudio===true?"نجح على FFmpeg":
+        result.decodedAudio===false?"فشل على FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-video-decoded",result.decodedVideo===true?"نجح على FFmpeg":
+        result.decodedVideo===false?"فشل على FFmpeg":"غير موجود/غير مؤكد");
+      value("owner-ts-sample-codec",result.audioCodec||"غير معروف");
+      message.textContent="نتيجة الملف: "+String(result.code||"unknown")+
+        " · عدد بايتات العينة: "+(result.bytesExamined??"غير معروف")+
+        " · لا تمثل اختبار تشغيل على جهاز العميل.";
+      value("owner-ts-sample-explanation",String(result.explanation||"")+
+        " العينة تُحذف بعد التحليل ولا يوجد تحويل صوت تلقائي.");
+    }catch{
+      message.textContent="انتهى الوقت أو تعذر تحليل العينة بأمان. لم تُنفذ تغييرات على القنوات.";
+    }finally{clearTimeout(timeout);ownerSampleBusy=false;this.disabled=false;}
+  });
+  var passiveSampleBusy=false,passiveSampleLoading=false;
+  async function refreshPassiveSamples(){
+    if(passiveSampleBusy||passiveSampleLoading)return;
+    passiveSampleLoading=true;
+    var select=$("passive-ts-path"),status=$("passive-ts-status"),
+      button=$("passive-ts-run");
+    button.disabled=true;
+    select.replaceChildren();
+    status.textContent="جار قراءة المسارات النشطة فقط؛ لا تُفتح قنوات جديدة.";
+    try{
+      var data=await api("live");
+      var eligible=(Array.isArray(data.items)?data.items:[])
+        .filter(function(item){return /^live-[a-f0-9]{12}$/.test(item.path||"")&&
+          item.connections===1&&item.probePending!==true;}).slice(0,3);
+      var empty=document.createElement("option");empty.value="";
+      empty.textContent=eligible.length?"اختر قناة المشرف":"لا يوجد اتصال مشرف نشط مؤهل";
+      select.appendChild(empty);
+      eligible.forEach(function(item){
+        var option=document.createElement("option");
+        option.value=item.path;
+        option.textContent=String(item.title||"قناة المشرف").slice(0,60)+" · "+item.path;
+        select.appendChild(option);
+      });
+      button.disabled=!eligible.length;
+      status.textContent=eligible.length?
+        "عدد مسارات المشرف النشطة: "+eligible.length+
+        ". اختر مسارًا ووافق على الفحص قبل بدء العينة.":
+        "لا يوجد مسار مشرف نشط. افتح قناة مصرحًا بها من قسم إعادة البث أولًا؛ لن يُنشئ الفاحص اتصالًا بدلًا عنك.";
+    }catch{
+      status.textContent="تعذر قراءة حالة اتصالات المشرف. لم يتم طلب أي بث.";
+      button.disabled=true;
+    }finally{passiveSampleLoading=false;}
+  }
+  $("passive-ts-refresh").addEventListener("click",function(){void refreshPassiveSamples()});
+  $("passive-ts-run").addEventListener("click",async function(){
+    if(passiveSampleBusy)return;
+    var selected=$("passive-ts-path").value,rights=$("passive-ts-rights").checked;
+    var status=$("passive-ts-status");
+    if(!/^live-[a-f0-9]{12}$/.test(selected)){
+      status.textContent="اختر مسار مشرف نشطًا أولًا.";return;
+    }
+    if(!rights){
+      status.textContent="يلزم تأكيد حق فحص العينة قبل البدء.";return;
+    }
+    if(!confirm("سيقرأ المختبر جزءًا قصيرًا من بيانات قناة المشرف الجارية أصلًا، دون طلب قناة جديدة، وسيحذف العينة بعد التحليل. متابعة؟"))return;
+    passiveSampleBusy=true;this.disabled=true;
+    status.textContent="جار انتظار بايتات عينة من الاتصال الموجود ثم تحليلها. قد يستغرق ذلك وقتًا محدودًا، دون تغيير بث المشتركين.";
+    var controller=new AbortController();
+    var timer=setTimeout(function(){controller.abort()},100000);
+    try{
+      var response=await fetch("/operator/api/media-scan/passive-sample",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"application/json",
+          "x-blofy-operator-action":"media-scan-passive-sample"},
+        body:JSON.stringify({path:selected,rightsConfirmed:true}),
+        signal:controller.signal
+      });
+      var data=await response.json();
+      if(response.status===401){
+        status.textContent="انتهت جلسة المشرف. سجل الدخول مرة أخرى.";return;
+      }
+      if(response.status!==200||data.scope!=="approved_short_ts_sample"||
+        data.passiveCapture!==true){
+        var causes={
+          passive_capture_no_active_publisher:"المسار لم يعد نشطًا؛ لا يُفتح اتصال جديد تلقائيًا.",
+          passive_capture_busy:"يوجد فحص آخر جارٍ حاليًا.",
+          passive_capture_cooldown:"انتظر فترة الحماية قبل إعادة الفحص.",
+          passive_capture_timeout:"لم تصل بيانات كافية خلال مهلة الفحص.",
+          passive_feed_session_ended:"انتهى اتصال المشرف أثناء أخذ العينة.",
+          passive_ts_alignment_failed:"لم تُرصد حزم TS محاذية في العينة.",
+          passive_ts_sync_lost:"تغير ترتيب حزم TS أثناء العينة.",
+          sample_lab_cooldown:"المختبر في فترة حماية بين العمليات."
+        };
+        status.textContent=(causes[data.code]||
+          "تعذر فحص القناة ضمن الحدود الآمنة: "+String(data.code||"unknown").slice(0,70))+
+          " · لم تُنشأ جلسة جديدة للمصدر.";
+        return;
+      }
+      value("owner-ts-sample-audio-track",data.hasAudio?"مرصود في العينة":"غير مرصود في العينة");
+      value("owner-ts-sample-audio-decoded",data.decodedAudio===true?"نجح داخل FFmpeg":
+        data.decodedAudio===false?"فشل داخل FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-video-decoded",data.decodedVideo===true?"نجح داخل FFmpeg":
+        data.decodedVideo===false?"فشل داخل FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-codec",data.audioCodec||"غير معروف");
+      value("owner-ts-sample-explanation",String(data.explanation||"")+
+        " النتائج تخص عينة من دخل المشرف، ولا تثبت سماع الصوت على جهاز العميل.");
+      status.textContent="عينة من اتصال المشرف القائم: "+String(data.code||"غير معروف")+
+        " · حجمها: "+(data.capturedBytes??"—")+
+        " بايت · لم يتم فتح اتصال جديد أو تعديل بث المشتركين.";
+    }catch{
+      status.textContent="فشل الاتصال بالفاحص أو انتهت مهلة الطلب، دون إنشاء اتصال جديد بالمصدر.";
+    }finally{
+      clearTimeout(timer);passiveSampleBusy=false;this.disabled=false;
+      void refreshPassiveSamples();
+    }
+  });
+  var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false,mediaProbeQueueLatest=null;
+  var mediaProbeQueueState={
+    queued:"بانتظار الدور",running:"فحص HLS جار",
+    transport_verified:"وصلت مقاطع HLS",transport_failed:"تعذر وصول مقطع HLS",
+    failed:"فشل الفحص",skipped:"لم يعد المسار نشطًا",
+    unknown:"انتهت المهلة دون نتيجة",cancelled:"أُلغي قبل البدء"
+  };
+  function mediaProbeQueueCell(row,v){cell(row,String(v))}
+  function mediaProbeQueueRender(data){
+    var status=$("media-probe-queue-status");
+    var candidates=$("media-probe-queue-candidates"),results=$("media-probe-queue-results");
+    var isRunning=data.job?.state==="running";
+    var selected=new Set(Array.from(candidates.querySelectorAll("input:checked"))
+      .map(function(input){return input.value}));
+    mediaProbeQueueLatest=data;
+    candidates.replaceChildren();results.replaceChildren();
+    (Array.isArray(data.eligiblePaths)?data.eligiblePaths:[]).forEach(function(item){
+      var row=node("tr"),td=node("td"),check=node("input");
+      check.type="checkbox";check.value=String(item.path);
+      check.className="media-probe-queue-option";
+      check.checked=selected.has(check.value);check.disabled=isRunning;
+      check.setAttribute("aria-label","تحديد "+check.value);
+      td.appendChild(check);row.appendChild(td);
+      mediaProbeQueueCell(row,item.path);
+      mediaProbeQueueCell(row,item.currentFeedConnections===1?
+        "نشط • اتصال واحد":"غير مؤكد");
+      candidates.appendChild(row);
+    });
+    if(!candidates.children.length){
+      var empty=node("tr"),td=cell(empty,data.available===false?
+        "تعذر قراءة حالة المسارات.":"لا توجد مسارات مشرف نشطة مؤهلة. افتح قناة مرخصة من قسم إعادة البث أولًا.");
+      td.colSpan=3;candidates.appendChild(empty);
+    }
+    (Array.isArray(data.job?.results)?data.job.results:[]).forEach(function(item){
+      var row=node("tr");
+      mediaProbeQueueCell(row,item.path);
+      mediaProbeQueueCell(row,mediaProbeQueueState[item.state]||"غير محدد");
+      mediaProbeQueueCell(row,item.transportVerified?"تم التحقق من النقل":
+        item.state==="running"?"قيد الفحص":"غير مثبت");
+      var tracks=item.tracks||{};
+      mediaProbeQueueCell(row,tracks.audioTrackDeclared===true?
+        "PMT: موجود • "+(tracks.audioCodecs||[]).join(", ")+
+        " • حزم الصوت "+(tracks.audioPayloadPackets??"غير معروف"):
+        tracks.audioTrackDeclared===false?"PMT: لا يعلن صوتًا":"غير مؤكد");
+      mediaProbeQueueCell(row,Array.isArray(tracks.videoCodecs)&&tracks.videoCodecs.length?
+        tracks.videoCodecs.join(", ")+" • حزم الصورة "+(tracks.videoPayloadPackets??"غير معروف"):
+        "غير مؤكد");
+      var diagnosis=item.diagnosis||{};
+      mediaProbeQueueCell(row,diagnosis.title||"لا توجد بيانات كافية");
+      mediaProbeQueueCell(row,diagnosis.nextStep||"لا يتم إصلاح القناة تلقائيًا.");
+      results.appendChild(row);
+    });
+    if(!results.children.length){var empty=node("tr"),td=cell(empty,"لم يبدأ أي فحص HLS من هذا الطابور بعد.");td.colSpan=7;results.appendChild(empty);}
+    var history=$("media-probe-queue-history");history.replaceChildren();
+    (Array.isArray(data.previous)?data.previous:[]).slice(0,5).forEach(function(run){
+      (Array.isArray(run.results)?run.results:[]).slice(0,2).forEach(function(item){
+        var row=node("tr");mediaProbeQueueCell(row,run.id||"—");
+        mediaProbeQueueCell(row,item.path||"—");
+        mediaProbeQueueCell(row,mediaProbeQueueState[item.state]||"غير محدد");
+        mediaProbeQueueCell(row,item.diagnosis?.title||"غير معروف");
+        history.appendChild(row);
+      });
+    });
+    if(!history.children.length){var tr=node("tr"),td=cell(tr,"لم تُحفظ نتائج فحص مكتملة منذ تشغيل الخدمة.");td.colSpan=4;history.appendChild(tr);}
+    var past=data.historicalSummary||{};
+    value("media-probe-queue-summary","آخر "+(past.runs??0)+" عمليات يدويّة · "+
+      "العينات التي تحتاج مراجعة: "+(past.review??0)+" · "+
+      "نقل مع حزم صوت وصورة مرصودة: "+(past.observed??0)+" · "+
+      "غير مؤكدة: "+(past.unknown??0)+
+      ". هذا ليس فحصًا لجميع قنوات Xtream ولا يثبت فك الصوت أو الصورة.");
+    $("media-probe-queue-export-json").disabled=!(data.job||data.previous?.length);
+    $("media-probe-queue-export-csv").disabled=!(data.job||data.previous?.length);
+    var cooldown=Number(data.cooldownRemainingMs)||0;
+    status.textContent="المهمة: "+(data.job?.id||"لا توجد")+
+      " · المنجز: "+(data.job?.completed??0)+"/"+(data.job?.requested??0)+
+      " · الفحوصات المتزامنة: 1"+(cooldown>0?
+        " · فترة الحماية المتبقية: "+Math.ceil(cooldown/1000)+" ثانية":"")+
+      " · نتائج الطابور مؤقتة وتُفقد عند إعادة تشغيل السيرفر.";
+    $("media-probe-queue-start").disabled=isRunning||data.available!==true;
+    $("media-probe-queue-cancel").disabled=!isRunning;
+    if(mediaProbeQueueTimer){clearTimeout(mediaProbeQueueTimer);mediaProbeQueueTimer=null;}
+    if(isRunning)mediaProbeQueueTimer=setTimeout(function(){void mediaProbeQueueLoad()},3500);
+  }
+  async function mediaProbeQueueLoad(){
+    if(mediaProbeQueueBusy)return;
+    mediaProbeQueueBusy=true;
+    try{var data=await api("media-scan/queue");mediaProbeQueueRender(data)}
+    catch(e){mediaProbeQueueLatest=null;
+      $("media-probe-queue-export-json").disabled=true;
+      $("media-probe-queue-export-csv").disabled=true;
+      value("media-probe-queue-status","تعذر قراءة الطابور: "+e.message+
+      " • الحالة غير معروفة، ولم يبدأ فحص جديد.")}
+    finally{mediaProbeQueueBusy=false;}
+  }
+  function mediaProbeQueueDownload(data,name,type){
+    var blob=new Blob([data],{type:type+";charset=utf-8"});
+    var url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download=name;document.body.appendChild(link);
+    link.click();link.remove();setTimeout(function(){URL.revokeObjectURL(url)},5000);
+  }
+  function mediaProbeQueueRows(){
+    var state=mediaProbeQueueLatest;
+    if(!state)return [];
+    var runs=(Array.isArray(state.previous)?state.previous:[]).slice(0,5);
+    // Include a running or latest task not yet entered into history; do not
+    // duplicate the newest completed run already represented in history.
+    if(state.job&&!runs.some(function(r){return r.id===state.job.id}))
+      runs.unshift(state.job);
+    var rows=[];
+    runs.slice(0,6).forEach(function(run){
+      (Array.isArray(run.results)?run.results:[]).slice(0,2).forEach(function(item){
+        rows.push({
+          taskId:String(run.id||""),path:String(item.path||""),
+          state:String(item.state||""),transportVerified:item.transportVerified===true,
+          issueCode:String(item.diagnosis?.code||"result_unavailable"),
+          issue:String(item.diagnosis?.title||"غير معروف"),
+          guidance:String(item.diagnosis?.nextStep||""),
+          audioDecoded:false,videoDecoded:false
+        });
+      });
+    });
+    return rows;
+  }
+  $("media-probe-queue-export-json").addEventListener("click",function(){
+    if(!mediaProbeQueueLatest)return;
+    var payload={
+      product:"BLOFY STREAM",scope:"owner_only_bounded_hls",
+      exportedAt:new Date().toISOString(),
+      data:mediaProbeQueueRows(),
+      note:"عينات HLS لمسارات مشرف نشطة فقط، بدون كلمات مرور أو إثبات فك الصوت أو الصورة."
+    };
+    mediaProbeQueueDownload(JSON.stringify(payload,null,2),
+      "blofy-hls-samples-"+Date.now()+".json","application/json");
+  });
+  $("media-probe-queue-export-csv").addEventListener("click",function(){
+    if(!mediaProbeQueueLatest)return;
+    var columns=["taskId","path","state","transportVerified","issueCode","issue","guidance",
+      "audioDecoded","videoDecoded"];
+    function csv(v){
+      // Escape spreadsheet formula prefixes, delimiters and newlines.
+      var s=String(v??"").replace(/^[\s]*[=+\-@]/,function(m){return "'"+m;});
+      return '"'+s.replace(/"/g,'""').replace(/\r?\n/g," ")+'"';
+    }
+    var rows=[columns.map(csv).join(",")];
+    mediaProbeQueueRows().forEach(function(item){
+      rows.push(columns.map(function(k){return csv(item[k])}).join(","));
+    });
+    mediaProbeQueueDownload("\ufeff"+rows.join("\r\n"),
+      "blofy-hls-samples-"+Date.now()+".csv","text/csv");
+  });
+  $("media-probe-queue-refresh").addEventListener("click",function(){void mediaProbeQueueLoad()});
+  $("media-probe-queue-start").addEventListener("click",async function(){
+    var paths=Array.from(document.querySelectorAll(".media-probe-queue-option:checked"))
+      .map(function(input){return input.value});
+    if(!paths.length||paths.length>2){show("اختر مسارًا واحدًا أو مسارين نشطين فقط.",false);return;}
+    if(!$("media-probe-queue-rights").checked||
+       !$("media-probe-queue-capacity").checked){
+      show("يلزم تأكيد صلاحية الفحص وحدود اتصال المزود.",false);return;
+    }
+    if(!confirm("سيفحص النظام مسارات المشرف الموجودة واحدًا بعد الآخر، وقد يُعاد فتح الاتصال إذا انقطع أثناء الفحص. لا تُفحص قنوات أخرى. متابعة؟"))return;
+    this.disabled=true;
+    try{
+      var response=await action("media-scan/queue/start","media-scan-start",{
+        paths:paths,rightsConfirmed:true,capacityAcknowledged:true});
+      show(response.started?"بدأ فحص HLS. النتيجة ستظهر داخل الجدول.":"لم يبدأ الفحص.",response.started);
+    }catch(e){show("لم يبدأ الفحص: "+e.message,false)}
+    finally{await mediaProbeQueueLoad();}
+  });
+  $("media-probe-queue-cancel").addEventListener("click",async function(){
+    try{await action("media-scan/queue/cancel","media-scan-cancel",{});
+      show("توقفت جدولة المسارات التالية؛ الفحص الجاري قد يستمر حتى ينتهي.",true)}
+    catch(e){show("تعذر إيقاف الجدولة: "+e.message,false)}
+    finally{await mediaProbeQueueLoad()}
+  });
+  var mediaWatchlistLatest=null,mediaWatchlistBusy=false;
+  var mediaWatchlistState={
+    ready:"يستقبل بيانات",reconnecting:"يعيد الاتصال",starting:"جار البدء",
+    failed:"فشل المسار",idle:"متوقف لعدم وجود مشاهدين",unknown:"غير محدد"};
+  var mediaWatchlistCodes={
+    operator_input_pmt_no_audio:"PMT لا يعلن مسارًا صوتيًا",
+    operator_audio_packets_not_seen_in_sample:"لم تُرصد حزم صوت في عينة المشرف",
+    operator_audio_ts_transport_anomaly:"اضطراب نقل TS للصوت في المشرف",
+    operator_audio_codec_support_review:"ترميز صوت المشرف يحتاج مراجعة",
+    relay_pmt_audio_missing:"غياب مسار الصوت في مشاركة Relay",
+    relay_audio_ts_transport_anomaly:"اضطراب حزم الصوت في Relay",
+    relay_audio_codec_support_review:"ترميز صوت Relay قد لا يناسب بعض الأجهزة",
+    operator_video_packets_not_seen_in_sample:"لم تُرصد حزم صورة في عينة المشرف",
+    operator_video_ts_transport_anomaly:"اضطراب نقل TS للصورة في المشرف",
+    relay_video_ts_transport_anomaly:"اضطراب حزم الصورة في Relay"};
+  async function loadMediaWatchlist(){
+    if(mediaWatchlistBusy)return;
+    mediaWatchlistBusy=true;
+    var button=$("media-watchlist-refresh"),status=$("media-watchlist-status"),
+      sourceId=$("diagnostic-failures-source").value||"";
+    button.disabled=true;$("media-watchlist-export").disabled=true;
+    status.textContent="جار قراءة السجلات المخزنة ومؤشرات التشغيل. لا يطلب تشغيل قناة جديدة.";
+    try{
+      var data=await api("media-scan/report"+(sourceId?"?sourceId="+encodeURIComponent(sourceId):""));
+      if(data?.ok!==true||data.noProviderRequestsTriggered!==true||
+          data.allChannelsScanned!==false)throw Error("نتيجة فحص الجودة غير مكتملة أو غير موثقة.");
+      mediaWatchlistLatest=data;
+      var counters=data.counters||{},stamp=data.observedAt?
+        new Date(data.observedAt).toLocaleString("ar-SA-u-nu-latn",{timeZone:"Asia/Riyadh"}):"غير متاح";
+      function display(n){return Number.isSafeInteger(n)?count(n):"غير معروف"}
+      value("media-watchlist-feeds",display(counters.activeSharedFeeds));
+      value("media-watchlist-missing",display(counters.historical404Missing));
+      value("media-watchlist-audio",display(counters.flaggedAudioSignals));
+      value("media-watchlist-video",display(counters.flaggedVideoSignals));
+      var unknown=Array.isArray(data.missingInputs)?data.missingInputs:[];
+      status.textContent="وقت الرصد: "+stamp+" · المراجعة الدورية لسجلات 404: "+
+        display(counters.historicalDueForRecheck)+" · تعافٍ مسجل: "+
+        display(counters.recordedRecovered)+
+        " · مصادر البيانات غير المكتملة: "+unknown.length+
+        (data.resultsMayBeTruncated?" · النتائج محدودة الصفوف":"")+
+        ". هذا رصد سلبي؛ لم يتم فحص جميع القنوات أو سماع الصوت.";
+      var tbody=$("media-watchlist-channels");tbody.replaceChildren();
+      (Array.isArray(data.channelObservations)?data.channelObservations:[]).slice(0,64)
+      .forEach(function(row){
+        var tr=node("tr");
+        cell(tr,String(row.channel));
+        cell(tr,mediaWatchlistState[row.state]||mediaWatchlistState.unknown);
+        cell(tr,display(row.viewers));
+        cell(tr,Number.isInteger(row.lastMediaAgeMs)?
+          Math.round(row.lastMediaAgeMs/1000)+" ثانية":"غير معروف");
+        tbody.appendChild(tr);
+      });
+      if(!tbody.children.length){
+        var tr=node("tr"),td=cell(tr,counters.activeSharedFeeds===0?
+          "لا توجد قنوات مشاركة نشطة ضمن نطاق المراقبة الحالي، ولا يعني هذا سلامة باقي القنوات.":
+          "لا توجد بيانات كافية للقنوات النشطة.");td.colSpan=4;tbody.appendChild(tr);
+      }
+      var sig=$("media-watchlist-signals");sig.replaceChildren();
+      (Array.isArray(data.signalCodes)?data.signalCodes:[]).slice(0,20)
+      .forEach(function(issue){
+        var tr=node("tr");cell(tr,issue.area==="audio"?"الصوت":"الصورة");
+        cell(tr,mediaWatchlistCodes[issue.code]||"إشارة تحتاج مراجعة");
+        cell(tr,display(issue.count));sig.appendChild(tr);
+      });
+      if(!sig.children.length){
+        var tr=node("tr"),td=cell(tr,counters.flaggedAudioSignals===null||
+          counters.flaggedVideoSignals===null?
+          "مؤشرات الصوت والصورة غير متاحة حاليًا؛ لا يُعَد ذلك نجاحًا للفحص.":
+          "لا تظهر إشارات مؤكدة ضمن العينات المحدودة؛ تجربة الجهاز ما زالت مطلوبة.");
+        td.colSpan=3;sig.appendChild(tr);
+      }
+      $("media-watchlist-export").disabled=false;
+    }catch(e){
+      mediaWatchlistLatest=null;
+      status.textContent="فشل قراءة تقرير الجودة؛ لا نفترض سلامة أي قناة: "+
+        String(e?.message||"غير متاح").slice(0,100);
+      ["media-watchlist-feeds","media-watchlist-missing",
+        "media-watchlist-audio","media-watchlist-video"].forEach(function(id){value(id,"—")});
+      $("media-watchlist-channels").replaceChildren();$("media-watchlist-signals").replaceChildren();
+    }finally{
+      mediaWatchlistBusy=false;button.disabled=false;
+    }
+  }
+  $("media-watchlist-refresh").addEventListener("click",loadMediaWatchlist);
+  $("media-watchlist-export").addEventListener("click",async function(){
+    if(!mediaWatchlistLatest)return;
+    try{
+      await navigator.clipboard.writeText(JSON.stringify(mediaWatchlistLatest,null,2));
+      show("نُسخ التقرير المحدود. لا يحتوي روابط للمزود أو كلمات مرور.",true);
+    }catch{show("تعذر النسخ من المتصفح؛ لا يتأثر التقرير.",false)}
+  });
   async function loadFailureItems(sourceId){
     var tbody=$("diagnostic-failures-items"),status=$("diagnostic-failures-items-status");
     tbody.replaceChildren();status.textContent="جار قراءة العناصر المسجلة بدون طلب بث جديد.";
@@ -4408,6 +6554,841 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       value("diagnostic-failures-recheck-result",hints[code]||"تعذر تنفيذ الفحص: "+code.slice(0,80));
     }finally{btn.disabled=!$("diagnostic-failures-source").value}
   });
+  // Website-only, authenticated owner evidence. This NEVER declares
+  // full-duration playback, hardware attestation, licensed rights or release.
+  var HUB_QA_SCHEMA="blofy.stream.website.private-clip-qa.v2";
+  var HUB_QA_PLATFORMS=["windows_browser","android_tv_browser"];
+  var HUB_QA_RUN=/^[A-Za-z0-9_-]{8,80}$/;
+  var hubQaFrameWatch={movie:0,episode:0};
+  function newHubQa(kind){
+    return {platform:$("hub-qa-platform").value||"",
+      identity:hubQaIdentity(kind),playedSeconds:0,lastMediaTime:null,
+      videoFrame:false,frameEvidence:"none",renderedFrameSteps:0,
+      lastRenderedMediaTime:null,errors:0,buffering:0,
+      seekPending:false,seekCompleted:0,seekResumeAt:null,
+      resumedAfterSeek:false};
+  }
+  // A report can be compared only to a unique COMPLETE server-verified
+  // manifest. Never infer its identity from the requested upstream title.
+  function hubQaIdentity(kind){
+    var records=kind==="movie"?hubState?.runs:hubState?.episodeRuns;
+    var format=kind==="movie"?"private_chunks":"private_episode_chunks";
+    if(!Array.isArray(records)||hubState?.ok!==true)return null;
+    if(kind==="movie"&&hubState.ownerPreviewEnabled!==true)return null;
+    if(kind==="episode"&&hubState.ownerEpisodePreviewEnabled!==true)return null;
+    var verified=records.filter(function(run){
+      var total=Number(run.expectedBytes),done=Number(run.bytesCopied);
+      return run.format===format&&run.state==="verified"&&
+        HUB_QA_RUN.test(String(run.runId||""))&&
+        Number.isSafeInteger(total)&&total>0&&done===total;
+    });
+    // Multiple verified runs require a future exact-run selection contract
+    // from the server; never guess which source the pinned preview served.
+    if(verified.length!==1)return null;
+    return {runId:String(verified[0].runId),
+      expectedBytes:Number(verified[0].expectedBytes)};
+  }
+  var hubBrowserQa={movie:newHubQa("movie"),episode:newHubQa("episode")};
+  function hubQaPlayer(kind){
+    return $(kind==="movie"?
+      "content-hub-preview-player":"content-hub-episode-preview-player");
+  }
+  function hubBrowserQaVerdict(kind){
+    var q=hubBrowserQa[kind],player=hubQaPlayer(kind);
+    var manifest=hubQaIdentity(kind);
+    var expected=kind==="movie"?"/operator/api/content-hub/preview":
+      "/operator/api/content-hub/episodes/preview";
+    return Boolean(manifest&&q.identity&&q.identity.runId===manifest.runId&&
+      q.identity.expectedBytes===manifest.expectedBytes&&
+      HUB_QA_PLATFORMS.includes(q.platform)&&
+      q.platform===$("hub-qa-platform").value&&
+      String(player.getAttribute("src")||"")===expected&&
+      q.videoFrame&&q.playedSeconds>=2&&q.seekCompleted>=1&&
+      q.resumedAfterSeek&&q.errors===0&&
+      $("hub-qa-"+kind+"-picture").checked&&
+      $("hub-qa-"+kind+"-audio").checked&&
+      !player.muted&&Number(player.volume)>0);
+  }
+  function refreshHubBrowserQa(){
+    ["movie","episode"].forEach(function(kind){
+      var q=hubBrowserQa[kind];
+      var state=!q.identity?
+        "لا توجد هوية وحيدة لملف مكتمل ومصرّح بمعاينته. حدّث حالة التخزين.":
+        q.errors?"❌ أبلغ المتصفح عن خطأ تشغيل.":
+        q.videoFrame&&q.playedSeconds>=2?
+        "رُصد تقدم "+Math.floor(q.playedSeconds)+" ثانية ("
+        +(q.frameEvidence==="rendered_frames"?"إطارات معروضة":
+        "تقدم وقت وبيانات فيديو فقط")+") · التنقل: "+
+        (q.resumedAfterSeek?"✅ استؤنف بعد التقديم":"لم يثبت الاستئناف")+
+        " · أكّد الصورة والصوت بنفسك.": "⏳ لم تُرصد ثانيتان من فيديو متحرك بعد.";
+      $("hub-qa-"+kind+"-status").textContent=state;
+    });
+    var platform=$("hub-qa-platform").value;
+    var ready=hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode");
+    $("hub-qa-verdict").textContent=!HUB_QA_PLATFORMS.includes(platform)?
+      "حدد الجهاز قبل تشغيل أي عينة. لا توجد موافقة نشر.":
+      ready?"✅ اجتازت عينتا الفيلم والحلقة هذا المتصفح بالتأكيد اليدوي. صدّر التقرير، واختبر الجهاز الثاني. لا توجد موافقة نشر أو إثبات تشغيل الملف كاملًا.":
+      "الفيلم والحلقة لم يجتازا فحص هذا المتصفح مع التقديم والاستئناف والصوت والصورة. لا توجد موافقة نشر.";
+  }
+  function resetHubBrowserQa(kind){
+    hubQaFrameWatch[kind]++;
+    hubBrowserQa[kind]=newHubQa(kind);
+    $("hub-qa-"+kind+"-picture").checked=false;
+    $("hub-qa-"+kind+"-audio").checked=false;
+    refreshHubBrowserQa();
+  }
+  function observeHubQaRenderedFrames(kind,player){
+    if(typeof player.requestVideoFrameCallback!=="function")return;
+    var generation=hubQaFrameWatch[kind];
+    function nextFrame(timestamp,metadata){
+      if(generation!==hubQaFrameWatch[kind])return;
+      var q=hubBrowserQa[kind];
+      var mediaTime=Number(metadata?.mediaTime);
+      if(!player.paused&&!player.seeking&&player.readyState>=2&&
+         Number.isFinite(mediaTime)&&player.videoWidth>0&&player.videoHeight>0){
+        if(q.lastRenderedMediaTime!==null&&
+          mediaTime>q.lastRenderedMediaTime&&
+          mediaTime-q.lastRenderedMediaTime<=1.5)q.renderedFrameSteps++;
+        q.lastRenderedMediaTime=mediaTime;
+        if(q.renderedFrameSteps>=2){
+          q.frameEvidence="rendered_frames";q.videoFrame=true;
+        }
+      }else q.lastRenderedMediaTime=null;
+      if(!player.paused&&!player.seeking)
+        player.requestVideoFrameCallback(nextFrame);
+      refreshHubBrowserQa();
+    }
+    player.requestVideoFrameCallback(nextFrame);
+  }
+  [["movie","content-hub-preview-player"],["episode","content-hub-episode-preview-player"]]
+    .forEach(function(pair){
+      var kind=pair[0],player=$(pair[1]);
+      player.addEventListener("playing",function(){
+        // Restart callbacks after pause/seek only once per playing event.
+        hubQaFrameWatch[kind]++;
+        observeHubQaRenderedFrames(kind,player);
+      });
+      player.addEventListener("timeupdate",function(){
+        var q=hubBrowserQa[kind];
+        if(!player.paused&&!player.seeking&&player.readyState>=2&&
+           player.videoWidth>0&&player.videoHeight>0){
+          var now=Number(player.currentTime)||0;
+          if(q.lastMediaTime!==null){
+            var delta=now-q.lastMediaTime;
+            if(delta>0&&delta<=1.5)q.playedSeconds+=delta;
+          }
+          q.lastMediaTime=now;
+          if(typeof player.requestVideoFrameCallback!=="function"&&
+             q.playedSeconds>=2){
+            q.videoFrame=true;q.frameEvidence="metadata_progress";
+          }
+          if(q.seekResumeAt!==null&&q.playedSeconds-q.seekResumeAt>=0.4){
+            q.resumedAfterSeek=true;q.seekResumeAt=null;
+          }
+        }else q.lastMediaTime=null;
+        refreshHubBrowserQa();
+      });
+      player.addEventListener("seeking",function(){
+        var q=hubBrowserQa[kind];q.seekPending=true;
+        q.lastMediaTime=null;q.lastRenderedMediaTime=null;
+      });
+      player.addEventListener("seeked",function(){
+        var q=hubBrowserQa[kind];
+        if(q.seekPending){
+          q.seekCompleted++;q.seekResumeAt=q.playedSeconds;q.seekPending=false;
+        }
+        if(!player.paused){
+          hubQaFrameWatch[kind]++;
+          observeHubQaRenderedFrames(kind,player);
+        }
+        refreshHubBrowserQa();
+      });
+      player.addEventListener("pause",function(){
+        hubBrowserQa[kind].lastMediaTime=null;hubQaFrameWatch[kind]++;
+      });
+      player.addEventListener("error",function(){
+        hubBrowserQa[kind].errors++;
+        hubBrowserQa[kind].lastMediaTime=null;
+        hubQaFrameWatch[kind]++;
+        refreshHubBrowserQa();
+      });
+      player.addEventListener("waiting",function(){
+        hubBrowserQa[kind].buffering++;refreshHubBrowserQa();
+      });
+    });
+  ["movie","episode"].forEach(function(kind){
+    ["picture","audio"].forEach(function(check){
+      $("hub-qa-"+kind+"-"+check).addEventListener("change",refreshHubBrowserQa);
+    });
+  });
+  $("hub-qa-platform").addEventListener("change",function(){
+    ["movie","episode"].forEach(resetHubBrowserQa);
+  });
+  function hubQaReportRow(kind){
+    var q=hubBrowserQa[kind],player=hubQaPlayer(kind);
+    return {mediaKind:kind,privateClipSeconds:12,
+      storedManifest:q.identity?{runId:q.identity.runId,
+        expectedBytes:q.identity.expectedBytes}:null,
+      videoFrameObserved:q.videoFrame,videoFrameEvidence:q.frameEvidence,
+      playedSeconds:Math.round(q.playedSeconds*10)/10,
+      browserErrors:q.errors,bufferEvents:q.buffering,
+      seekCompleted:q.seekCompleted,resumedAfterSeek:q.resumedAfterSeek,
+      muted:!!player.muted,volume:Number(player.volume)||0,
+      pictureConfirmedByHuman:$("hub-qa-"+kind+"-picture").checked,
+      audibleAudioConfirmedByHuman:$("hub-qa-"+kind+"-audio").checked,
+      clipPass:hubBrowserQaVerdict(kind),fullLengthPlaybackVerified:false};
+  }
+  $("hub-qa-export").addEventListener("click",function(){
+    var platform=$("hub-qa-platform").value;
+    if(!HUB_QA_PLATFORMS.includes(platform)){
+      $("hub-qa-verdict").textContent="اختر Windows أو Android TV قبل تصدير التقرير.";
+      return;
+    }
+    var report={schema:HUB_QA_SCHEMA,platform,
+      checkedAt:new Date().toISOString(),
+      movie:hubQaReportRow("movie"),episode:hubQaReportRow("episode"),
+      bothClipsPassed:hubBrowserQaVerdict("movie")&&hubBrowserQaVerdict("episode"),
+      sourceRightsProvenByThisReport:false,
+      fullFilePlaybackVerified:false,
+      otherPlatformProvenByThisReport:false,
+      customerReleaseApproved:false,
+      hardwarePlatformAttested:false};
+    var url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],
+      {type:"application/json"}));
+    var link=document.createElement("a");
+    link.href=url;link.download="blofy-stream-browser-qa-"+platform+".json";
+    document.body.append(link);link.click();link.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    refreshHubBrowserQa();
+  });
+  // Read-only cross-platform comparison. This is human-submitted
+  // observation data, NOT a cryptographically attested device test.
+  function compareHubQaReports(reports){
+    if(!Array.isArray(reports)||reports.length!==2)
+      return {ok:false,code:"need_two_reports"};
+    var platforms=reports.map(function(report){return report?.platform}).sort();
+    if(platforms.join("|")!==HUB_QA_PLATFORMS.slice().sort().join("|"))
+      return {ok:false,code:"need_windows_and_android_tv"};
+    var now=Date.now();
+    for(var report of reports){
+      var at=Date.parse(report?.checkedAt||"");
+      if(report?.schema!==HUB_QA_SCHEMA||!Number.isFinite(at)||
+         at>now+5*60000||now-at>7*86400000||
+         report.bothClipsPassed!==true||
+         report.customerReleaseApproved!==false||
+         report.sourceRightsProvenByThisReport!==false||
+         report.fullFilePlaybackVerified!==false||
+         report.otherPlatformProvenByThisReport!==false||
+         report.hardwarePlatformAttested!==false)
+        return {ok:false,code:"report_unverified_or_expired"};
+      for(var kind of ["movie","episode"]){
+        var clip=report[kind],manifest=clip?.storedManifest;
+        if(clip?.clipPass!==true||clip?.videoFrameObserved!==true||
+           clip?.playedSeconds<2||clip?.browserErrors!==0||
+           clip?.seekCompleted<1||clip?.resumedAfterSeek!==true||
+           clip?.muted!==false||!(clip.volume>0)||
+           clip?.pictureConfirmedByHuman!==true||
+           clip?.audibleAudioConfirmedByHuman!==true||
+           clip?.fullLengthPlaybackVerified!==false||
+           !HUB_QA_RUN.test(String(manifest?.runId||""))||
+           !Number.isSafeInteger(manifest?.expectedBytes)||
+           manifest.expectedBytes<=0)
+          return {ok:false,code:"incomplete_video_audio_seek_test"};
+      }
+    }
+    for(var kind of ["movie","episode"]){
+      var a=reports[0][kind].storedManifest,b=reports[1][kind].storedManifest;
+      if(a.runId!==b.runId||a.expectedBytes!==b.expectedBytes)
+        return {ok:false,code:"different_stored_media"};
+      var live=hubQaIdentity(kind);
+      if(!live||live.runId!==a.runId||live.expectedBytes!==a.expectedBytes)
+        return {ok:false,code:"stored_media_changed_since_test"};
+    }
+    return {ok:true,code:"same_private_clips_tested_on_both_browsers"};
+  }
+  $("hub-qa-import").addEventListener("change",async function(){
+    var files=Array.from(this.files||[]);
+    this.value="";
+    if(files.length!==2||files.some(function(f){return f.size>65536||f.size<10})){
+      $("hub-qa-pair-status").textContent=
+        "❌ اختر ملفين فقط، لا يتجاوز كل ملف 64 KB.";
+      return;
+    }
+    try{
+      var reports=await Promise.all(files.map(async function(file){
+        return JSON.parse(await file.text());
+      }));
+      var check=compareHubQaReports(reports);
+      $("hub-qa-pair-status").textContent=check.ok?
+        "✅ تطابق تقريرا عينتي الفيلم والحلقة على متصفحي Windows وAndroid TV، مع تأكيد بشري لكل جهاز. ما زال تشغيل الملف الكامل غير مثبت، ولا توجد موافقة نشر.":
+        "❌ لا يمكن جمع التقريرين: "+check.code+
+        ". صحّح الاختبار أو أعده على الجهازين.";
+    }catch{
+      $("hub-qa-pair-status").textContent=
+        "❌ تعذر قراءة التقريرين. استخدم ملفات JSON الأصلية من لوحة الاختبار.";
+    }
+  });
+  // The original-file check intentionally uses sparse 64KiB seeks, NOT
+  // full-file download, FFmpeg conversion or any provider request.
+  var hubOriginalBusy=false;
+  function originalUrl(kind){
+    var identity=hubQaIdentity(kind);
+    return identity?"/operator/api/content-hub/site-qa/files/"+
+      kind+"/"+encodeURIComponent(identity.runId):null;
+  }
+  async function originalHead(kind){
+    var identity=hubQaIdentity(kind),url=originalUrl(kind);
+    if(!identity||!url)throw Error("لا يوجد ملف وحيد مكتمل ومتحقق منه.");
+    var head=await fetch(url,{method:"HEAD",credentials:"same-origin",cache:"no-store"});
+    if(head.status===404)throw Error("فحص الملفات الأصلية غير مفعل في الخادم.");
+    if(!head.ok)throw Error("فشل قراءة معلومات الملف من تخزين BLOFY: "+head.status);
+    var total=Number(head.headers.get("content-length"));
+    var type=String(head.headers.get("content-type")||"");
+    if(!Number.isSafeInteger(total)||total<1||total!==identity.expectedBytes)
+      throw Error("حجم الملف لا يطابق بيانات النسخة المحفوظة.");
+    if(!["video/x-matroska","video/mp4","video/mp2t","video/x-msvideo"].includes(type))
+      throw Error("صيغة الملف الأصلي غير معروفة.");
+    return {url,total,type};
+  }
+  function hubOriginalText(t){
+    $("hub-original-range-status").textContent=t;
+  }
+  async function testHubOriginalRanges(kind){
+    if(hubOriginalBusy)return;
+    hubOriginalBusy=true;
+    var button=$("hub-original-"+kind+"-check");
+    button.disabled=true;
+    hubOriginalText("جار فحص أصل "+(kind==="movie"?"الفيلم":"الحلقة")+
+      " من S3، دون طلب محتوى جديد من المصدر...");
+    try{
+      var file=await originalHead(kind);
+      var chunk=64*1024,offsets=[0,Math.floor(file.total/2),
+        Math.max(0,file.total-chunk)];
+      var results=[];
+      for(var index=0;index<offsets.length;index++){
+        var from=Math.min(file.total-1,offsets[index]);
+        var to=Math.min(file.total-1,from+chunk-1);
+        var range="bytes="+from+"-"+to;
+        var started=performance.now();
+        var reply=await fetch(file.url,{credentials:"same-origin",cache:"no-store",
+          headers:{"range":range}});
+        var expected="bytes "+from+"-"+to+"/"+file.total;
+        if(reply.status!==206||
+          reply.headers.get("content-range")!==expected||
+          Number(reply.headers.get("content-length"))!==to-from+1)
+          throw Error("فشل طلب Range عند الموضع "+String(index+1)+
+            " (HTTP "+reply.status+").");
+        var bytes=await reply.arrayBuffer();
+        if(bytes.byteLength!==to-from+1)
+          throw Error("طول الجزء المحفوظ لا يطابق طلب القراءة.");
+        results.push({position:from,bytes:bytes.byteLength,
+          milliseconds:Math.round(performance.now()-started)});
+        hubOriginalText("✅ مواضع التخزين الأصلية التي اجتازت التحقق: "+
+          results.length+" من 3. جار متابعة الفحص...");
+      }
+      hubOriginalText("✅ نجحت 3 قراءات حقيقية من بداية ووسط ونهاية أصل "+
+        (kind==="movie"?"الفيلم":"الحلقة")+" المحفوظ على BLOFY ("+
+        hubBytes(file.total)+"، "+file.type+
+        "). القراءة وحدها لا تثبت تشغيل الصورة والصوت أو الملف كاملًا.");
+    }catch(e){
+      hubOriginalText("❌ فحص الملف الأصلي لم يكتمل: "+
+        String(e.message||"غير متاح").slice(0,220));
+    }finally{hubOriginalBusy=false;button.disabled=false}
+  }
+  ["movie","episode"].forEach(function(kind){
+    $("hub-original-"+kind+"-check").addEventListener("click",function(){
+      void testHubOriginalRanges(kind);
+    });
+    $("hub-original-"+kind+"-play").addEventListener("click",async function(){
+      var video=$("hub-original-browser-player");
+      video.pause();video.removeAttribute("src");video.load();
+      video.style.display="none";
+      try{
+        var file=await originalHead(kind);
+        if(file.type!=="video/mp4"||!video.canPlayType("video/mp4")){
+          hubOriginalText("الملف الأصلي بصيغة "+file.type+
+            "؛ المتصفح لا يضمن تشغيله مباشرة. يجب توفير مسار تحويل MP4/HLS منفصل قبل اعتماد تشغيل الملف كاملًا.");
+          return;
+        }
+        video.src=file.url;video.style.display="block";video.load();
+        hubOriginalText("تشغيل تجريبي للملف الأصلي MP4 من S3. يجب تأكيد الصورة والصوت فعليًا؛ لا يوجد اعتماد تلقائي.");
+        try{await video.play()}catch{
+          hubOriginalText("اضغط تشغيل في المشغل بعد تحميل معلومات ملف MP4 الأصلي.");
+        }
+      }catch(e){hubOriginalText("تعذّر فتح الأصل: "+String(e.message||"غير متاح").slice(0,180))}
+    });
+  });
+  $("hub-original-browser-player").addEventListener("error",function(){
+    hubOriginalText("❌ المتصفح لم يستطع فك أو تحميل الملف الأصلي. نجاح Range وحده لا يكفي.");
+  });
+  var hubSeekBusy=false,hubSeekPlayedSeconds=0;
+  var hubSeekPlayer=$("hub-seek-preview-player");
+  function setHubSeekStatus(s){$("hub-seek-preview-status").textContent=s}
+  $("hub-seek-preview-play").addEventListener("click",async function(){
+    if(hubSeekBusy)return;
+    var kind=$("hub-seek-media").value,position=$("hub-seek-position").value;
+    if(!["movie","episode"].includes(kind)||
+       !["start","middle","near_end"].includes(position)){
+      setHubSeekStatus("❌ اختيار غير صالح.");return;
+    }
+    var id=hubQaIdentity(kind);
+    if(!id){setHubSeekStatus("لا يوجد ملف واحد مكتمل ومتحقق منه ومحدد للمعاينة في Content Hub.");return}
+    hubSeekBusy=true;this.disabled=true;
+    hubSeekPlayedSeconds=0;
+    hubSeekPlayer.pause();
+    hubSeekPlayer.removeAttribute("src");
+    hubSeekPlayer.load();
+    hubSeekPlayer.style.display="none";
+    var route="/operator/api/content-hub/site-qa/seek-preview/"+
+      kind+"/"+encodeURIComponent(id.runId)+"/"+position;
+    setHubSeekStatus("جار تجهيز عينة صوت وصورة مدتها 10 ثوانٍ من "+
+      (kind==="movie"?"الفيلم":"الحلقة")+" — "+
+      (position==="start"?"بداية الملف":position==="middle"?"منتصف الملف":"قرب النهاية")+
+      ". الخادم يقرأ من S3 الخاص، لا من Xtream.");
+    hubSeekPlayer.src=route;
+    hubSeekPlayer.style.display="block";
+    hubSeekPlayer.load();
+    try{
+      await hubSeekPlayer.play();
+      setHubSeekStatus("✅ بدأ تشغيل العينة الخاصة في المتصفح. تأكد من رؤية الصورة وسماع الصوت بنفسك. هذه ليست مشاهدة الملف كاملًا.");
+    }catch{
+      setHubSeekStatus("لم يبدأ المشغل تلقائيًا. اضغط التشغيل داخل الفيديو؛ وإذا ظهر خطأ فقد تكون المعاينة غير متاحة أو تعذر التحويل.");
+    }finally{hubSeekBusy=false;this.disabled=false}
+  });
+  hubSeekPlayer.addEventListener("timeupdate",function(){
+    if(this.readyState>=2&&!this.paused&&this.videoWidth>0&&this.videoHeight>0){
+      hubSeekPlayedSeconds=Math.max(hubSeekPlayedSeconds,Number(this.currentTime)||0);
+      if(hubSeekPlayedSeconds>=2)setHubSeekStatus(
+        "✅ ظهرت بيانات فيديو وتقدّم تشغيل العينة "+
+        Math.floor(hubSeekPlayedSeconds)+" ثوانٍ. سماع الصوت يحتاج تأكيدك، ولا يُعتبر هذا تشغيلًا كاملًا.");
+    }
+  });
+  hubSeekPlayer.addEventListener("error",function(){
+    setHubSeekStatus("❌ فشل تحميل أو تشغيل عينة S3 من الموضع المختار. قد يكون FFmpeg أو فهرس MKV أو تحويل الصوت بحاجة لمعالجة؛ لم نعتمد الملف.");
+    hubSeekBusy=false;
+    $("hub-seek-preview-play").disabled=false;
+  });
+  // Website /operator owner-only trial: verified S3 MKV -> individual
+  // 30-second H264/AAC MP4 windows. Not a subscriber player nor HLS.
+  var siteTimeline={
+    meta:null,kind:null,runId:null,segment:-1,generation:0,playing:false,
+    currentUrl:null,loadController:null,prefetch:null,
+    lastFailedSegment:null,lastObservedTime:null
+  };
+  var siteTimelineEvidence=null;
+  var siteTimelineVideo=$("hub-timeline-player");
+  var siteTimelineSlider=$("hub-timeline-seek");
+  function siteClock(value){
+    var v=Math.max(0,Math.floor(Number(value)||0));
+    var h=Math.floor(v/3600),m=Math.floor(v%3600/60),s=v%60;
+    return (h?h+":":"")+
+      (h?String(m).padStart(2,"0"):String(m))+
+      ":"+String(s).padStart(2,"0");
+  }
+  function siteTimelineMsg(value){
+    $("hub-timeline-status").textContent=value;
+  }
+  function siteTimelineQoS(){
+    var e=siteTimelineEvidence;
+    $("hub-timeline-export").disabled=!e;
+    $("hub-timeline-retry").disabled=!siteTimeline.meta||
+      siteTimeline.lastFailedSegment===null;
+    $("hub-timeline-qos").textContent=!e?
+      "لم تبدأ جلسة مشاهدة. نتائج الجهاز تحتاج اختبارًا فعليًا.":
+      "نوافذ حُملت: "+e.windowsLoaded+"/"+e.windowsRequested+
+      " · انتقالات: "+e.transitionCount+
+      " · مهلة انتظار التحويل: "+e.busyResponses+
+      " · إعادات اتصال: "+e.retryCount+
+      " · توقف/انتظار: "+e.bufferWaitEvents+
+      " · ثوانٍ لوحظت متفرقة: "+e.seenSeconds.size+
+      " · زمن جلب النوافذ: "+Math.round(e.totalLoadMs/1000)+" ث.";
+  }
+  function siteTimelineUpdateControls(){
+    var active=!!siteTimeline.meta;
+    siteTimelineSlider.disabled=!active;
+    $("hub-timeline-stop").disabled=!active;
+    $("hub-timeline-previous").disabled=!active||siteTimeline.segment<=0;
+    $("hub-timeline-next").disabled=!active||
+      siteTimeline.segment>=siteTimeline.meta.segmentCount-1;
+    $("hub-timeline-media").disabled=active;
+    siteTimelineQoS();
+  }
+  function siteTimelineRefreshClock(){
+    var meta=siteTimeline.meta;
+    var duration=meta?.durationSeconds||0;
+    var local=Math.max(0,Number(siteTimelineVideo.currentTime)||0);
+    var seconds=meta?Math.min(duration,
+      Math.max(0,siteTimeline.segment)*meta.segmentSeconds+local):0;
+    $("hub-timeline-clock").textContent=
+      siteClock(seconds)+" / "+(meta?siteClock(duration):"--:--");
+    if(meta&&!siteTimelineSlider.matches(":active"))
+      siteTimelineSlider.value=String(Math.floor(seconds));
+  }
+  function siteTimelineDiscardPrefetch(){
+    var pre=siteTimeline.prefetch;
+    siteTimeline.prefetch=null;
+    if(pre){
+      pre.controller.abort();
+      pre.promise.then(function(url){
+        if(url)URL.revokeObjectURL(url);
+      }).catch(function(){});
+    }
+  }
+  function siteTimelineStop(){
+    if(siteTimelineEvidence&&!siteTimelineEvidence.stoppedAt)
+      siteTimelineEvidence.stoppedAt=new Date().toISOString();
+    siteTimeline.generation++;
+    siteTimeline.playing=false;
+    siteTimeline.loadController?.abort();
+    siteTimeline.loadController=null;
+    siteTimelineDiscardPrefetch();
+    siteTimelineVideo.pause();
+    siteTimelineVideo.removeAttribute("src");
+    siteTimelineVideo.load();
+    siteTimelineVideo.style.display="none";
+    if(siteTimeline.currentUrl)URL.revokeObjectURL(siteTimeline.currentUrl);
+    siteTimeline.currentUrl=null;
+    siteTimeline.meta=null;siteTimeline.kind=null;siteTimeline.runId=null;
+    siteTimeline.segment=-1;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
+    siteTimelineSlider.max="0";siteTimelineSlider.value="0";
+    siteTimelineUpdateControls();
+    siteTimelineRefreshClock();
+  }
+  function siteTimelinePath(index){
+    return "/operator/api/content-hub/timeline/"+
+      siteTimeline.kind+"/"+encodeURIComponent(siteTimeline.runId)+
+      "/clip/"+index+".mp4";
+  }
+  async function siteTimelineDelay(ms,signal){
+    if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+    return new Promise(function(resolve,reject){
+      var timer=null;
+      var onAbort=function(){
+        clearTimeout(timer);signal?.removeEventListener("abort",onAbort);
+        reject(Error("تم إلغاء الطلب."));
+      };
+      timer=setTimeout(function(){
+        signal?.removeEventListener("abort",onAbort);resolve();
+      },ms);
+      signal?.addEventListener("abort",onAbort,{once:true});
+    });
+  }
+  async function siteTimelineFetch(index,signal){
+    var meta=siteTimeline.meta;
+    if(!meta||!Number.isSafeInteger(index)||index<0||
+      index>=meta.segmentCount)throw Error("رقم مقطع غير صالح.");
+    var response=null;
+    for(var attempt=0;attempt<8;attempt++){
+      if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+      try{
+        response=await fetch(siteTimelinePath(index),{
+          method:"GET",credentials:"same-origin",cache:"no-store",signal});
+      }catch(error){
+        if(signal?.aborted)throw Error("تم إلغاء الطلب.");
+        if(attempt>=2)throw Error("تعذر الاتصال بالخادم. أعد محاولة النافذة.");
+        if(siteTimelineEvidence)siteTimelineEvidence.retryCount++;
+        await siteTimelineDelay(1000*(attempt+1),signal);
+        continue;
+      }
+      if(response.status===429&&attempt<7){
+        if(siteTimelineEvidence){
+          siteTimelineEvidence.busyResponses++;
+          siteTimelineEvidence.retryCount++;
+        }
+        await siteTimelineDelay(Math.min(7000,1100*(attempt+1)),signal);
+        continue;
+      }
+      if([502,503,504].includes(response.status)&&attempt<2){
+        if(siteTimelineEvidence)siteTimelineEvidence.retryCount++;
+        await siteTimelineDelay(1600*(attempt+1),signal);
+        continue;
+      }
+      break;
+    }
+    siteTimelineQoS();
+    if(!response?.ok){
+      if(response?.status===429)
+        throw Error("خادم التحويل مشغول بعد محاولات محدودة؛ أعد المحاولة يدويًا.");
+      if(response?.status===404)
+        throw Error("فحص التشغيل الخاص غير متاح الآن.");
+      throw Error("تعذر تحويل المقطع "+(index+1)+
+        " (HTTP "+(response?.status||"network")+").");
+    }
+    var size=Number(response.headers.get("content-length"));
+    if(response.headers.get("content-type")!=="video/mp4"||
+       response.headers.get("x-blofy-timeline-source")!=="verified-private-s3"||
+       Number(response.headers.get("x-blofy-timeline-index"))!==index||
+       Number(response.headers.get("x-blofy-timeline-offset"))!==
+          index*meta.segmentSeconds||
+       !Number.isSafeInteger(size)||size<2048||size>18*1024*1024)
+      throw Error("الاستجابة لا تثبت أنها مقطع صحيح من تخزين BLOFY.");
+    var bytes=await response.blob();
+    if(bytes.size!==size||
+       await bytes.slice(4,8).text()!=="ftyp")
+      throw Error("محتوى مقطع MP4 أو حجمه غير صحيح.");
+    return URL.createObjectURL(bytes);
+  }
+  function siteTimelineWarmNext(){
+    var idx=siteTimeline.segment+1,meta=siteTimeline.meta;
+    if(!meta||!siteTimeline.playing||idx>=meta.segmentCount||
+       siteTimeline.prefetch)return;
+    var ctl=new AbortController();
+    var request=siteTimelineFetch(idx,ctl.signal).catch(function(){return null});
+    siteTimeline.prefetch={index:idx,controller:ctl,promise:request};
+  }
+  async function siteTimelineLoad(index,offset){
+    var meta=siteTimeline.meta;
+    if(!meta||index<0||index>=meta.segmentCount)return;
+    var generation=++siteTimeline.generation;
+    var beganAt=Date.now();
+    if(siteTimelineEvidence)siteTimelineEvidence.windowsRequested++;
+    siteTimeline.playing=true;
+    siteTimeline.lastFailedSegment=null;
+    siteTimeline.lastObservedTime=null;
+    var ctl=new AbortController(),pre=siteTimeline.prefetch;
+    siteTimeline.loadController?.abort();
+    siteTimeline.loadController=ctl;
+    siteTimeline.prefetch=null;
+    if(pre&&pre.index!==index){
+      pre.controller.abort();
+      pre.promise.then(function(url){if(url)URL.revokeObjectURL(url)})
+        .catch(function(){});
+      pre=null;
+    }
+    siteTimelineVideo.pause();
+    siteTimelineVideo.removeAttribute("src");siteTimelineVideo.load();
+    if(siteTimeline.currentUrl)URL.revokeObjectURL(siteTimeline.currentUrl);
+    siteTimeline.currentUrl=null;
+    siteTimeline.segment=index;
+    siteTimelineUpdateControls();siteTimelineRefreshClock();
+    siteTimelineMsg("جار تجهيز النافذة "+(index+1)+" من "+
+      meta.segmentCount+" من التخزين الخاص... المقاطع تُحوّل عند الطلب.");
+    try{
+      var url=pre?await pre.promise:
+        await siteTimelineFetch(index,ctl.signal);
+      // A failed speculative prefetch must never permanently block the
+      // actual next window: retry it as an explicit, cancelable request.
+      if(!url&&pre)url=await siteTimelineFetch(index,ctl.signal);
+      if(!url)throw Error("لم تنجح معاينة النافذة التالية.");
+      if(siteTimeline.generation!==generation||!siteTimeline.meta){
+        URL.revokeObjectURL(url);return;
+      }
+      siteTimeline.currentUrl=url;
+      if(siteTimelineEvidence){
+        siteTimelineEvidence.windowsLoaded++;
+        siteTimelineEvidence.visitedWindows.add(index);
+        siteTimelineEvidence.totalLoadMs+=Date.now()-beganAt;
+        if(index>0)siteTimelineEvidence.transitionCount++;
+        siteTimelineQoS();
+      }
+      siteTimelineVideo.src=url;
+      siteTimelineVideo.style.display="block";
+      siteTimelineVideo.load();
+      siteTimelineVideo.addEventListener("loadedmetadata",function(){
+        if(siteTimeline.generation!==generation)return;
+        var seek=Math.max(0,Math.min(Number(offset)||0,
+          Math.max(0,(Number(siteTimelineVideo.duration)||meta.segmentSeconds)-0.15)));
+        if(seek>0)siteTimelineVideo.currentTime=seek;
+      },{once:true});
+      try{
+        await siteTimelineVideo.play();
+        if(siteTimeline.generation===generation)
+          siteTimelineMsg("✅ بدأت النافذة "+(index+1)+" من "+
+           meta.segmentCount+". الصوت والصورة يتطلبان تأكيدك؛ "+
+           "قد يحدث توقف بين النوافذ.");
+      }catch{
+        if(siteTimeline.generation===generation)
+          siteTimelineMsg("المقطع جاهز. اضغط تشغيل داخل الفيديو إذا منع المتصفح التشغيل التلقائي.");
+      }
+    }catch(error){
+      if(siteTimeline.generation===generation){
+        siteTimeline.playing=false;
+        siteTimeline.lastFailedSegment=index;
+        if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+        siteTimelineUpdateControls();
+        siteTimelineMsg("❌ "+String(error.message||"فشل تشغيل المقطع").slice(0,175)+
+          " جرّب زر إعادة محاولة النافذة. لم يتم اعتماد تشغيل الملف كاملًا.");
+      }
+    }
+  }
+  $("hub-timeline-start").addEventListener("click",async function(){
+    if(this.disabled)return;
+    var kind=$("hub-timeline-media").value;
+    var identity=hubQaIdentity(kind);
+    if(!identity){siteTimelineMsg(
+      "لا يوجد ملف وحيد مكتمل ومتحقق منه. حدّث المكتبة أولًا.");return}
+    siteTimelineStop();
+    siteTimelineMsg("جار التحقق من مدة الملف الأصلي على S3...");
+    this.disabled=true;
+    try{
+      var route="/operator/api/content-hub/timeline/"+
+        kind+"/"+encodeURIComponent(identity.runId)+"/meta";
+      var response=await fetch(route,{credentials:"same-origin",cache:"no-store"});
+      if(!response.ok)throw Error(response.status===404?
+        "تشغيل الملف الكامل التجريبي غير مفعل في Content Hub.":
+        "فشل فحص مدة الملف (HTTP "+response.status+").");
+      var meta=await response.json();
+      if(meta.ok!==true||meta.mediaKind!==kind||
+        meta.runId!==identity.runId||
+        meta.segmentSeconds!==30||
+        !Number.isInteger(meta.segmentCount)||
+        meta.segmentCount<1||meta.segmentCount>1200||
+        !Number.isFinite(meta.durationSeconds)||
+        Math.ceil(meta.durationSeconds/30)!==meta.segmentCount||
+        meta.customerCutover!==false||
+        meta.fullFilePlaybackVerified!==false)
+        throw Error("لم تتحقق هوية الملف أو مدته.");
+      siteTimeline.kind=kind;siteTimeline.runId=identity.runId;
+      siteTimeline.meta=meta;siteTimeline.playing=true;
+      siteTimelineEvidence={
+        schema:"blofy.stream.owner-timeline-qa.v1",
+        kind:kind,runId:identity.runId,
+        expectedBytes:identity.expectedBytes,
+        startedAt:new Date().toISOString(),stoppedAt:null,
+        durationSeconds:meta.durationSeconds,
+        segmentCount:meta.segmentCount,segmentSeconds:30,
+        windowsRequested:0,windowsLoaded:0,visitedWindows:new Set(),
+        seenSeconds:new Set(),totalLoadMs:0,transitionCount:0,
+        busyResponses:0,retryCount:0,failedWindows:0,
+        bufferWaitEvents:0,reachedLastWindow:false
+      };
+      $("hub-timeline-picture").checked=false;
+      $("hub-timeline-audio").checked=false;
+      siteTimelineSlider.max=String(Math.floor(meta.durationSeconds));
+      siteTimelineUpdateControls();
+      await siteTimelineLoad(0,0);
+    }catch(error){
+      siteTimelineStop();
+      siteTimelineMsg("❌ "+String(error.message||"تعذر بدء التشغيل").slice(0,180));
+    }finally{this.disabled=false}
+  });
+  $("hub-timeline-stop").addEventListener("click",function(){
+    siteTimelineStop();siteTimelineMsg("تم إيقاف التشغيل المتسلسل وحذف المقاطع المؤقتة من ذاكرة المتصفح.");
+  });
+  $("hub-timeline-next").addEventListener("click",function(){
+    if(siteTimeline.meta)void siteTimelineLoad(
+      Math.min(siteTimeline.meta.segmentCount-1,siteTimeline.segment+1),0);
+  });
+  $("hub-timeline-previous").addEventListener("click",function(){
+    if(siteTimeline.meta)void siteTimelineLoad(
+      Math.max(0,siteTimeline.segment-1),0);
+  });
+  siteTimelineSlider.addEventListener("input",function(){
+    $("hub-timeline-clock").textContent=
+      siteClock(Number(this.value))+" / "+siteClock(siteTimeline.meta?.durationSeconds||0);
+  });
+  siteTimelineSlider.addEventListener("change",function(){
+    var meta=siteTimeline.meta;
+    if(!meta)return;
+    var target=Math.max(0,Math.min(meta.durationSeconds-0.2,
+      Number(this.value)||0));
+    var index=Math.min(meta.segmentCount-1,
+      Math.floor(target/meta.segmentSeconds));
+    void siteTimelineLoad(index,target-index*meta.segmentSeconds);
+  });
+  siteTimelineVideo.addEventListener("timeupdate",function(){
+    siteTimelineRefreshClock();
+    var e=siteTimelineEvidence,local=Number(this.currentTime);
+    if(e&&siteTimeline.meta&&siteTimeline.currentUrl&&!this.paused&&
+       Number.isFinite(local)&&local>=0){
+      var last=siteTimeline.lastObservedTime;
+      if(last!==null&&local>last&&local-last<=1.8){
+        var upper=Math.min(Math.floor(local),
+          siteTimeline.meta.segmentSeconds-1);
+        for(var second=Math.floor(last);second<=upper;second++)
+          if(second>=0&&second<siteTimeline.meta.segmentSeconds)
+            e.seenSeconds.add(siteTimeline.segment*
+              siteTimeline.meta.segmentSeconds+second);
+      }
+      siteTimeline.lastObservedTime=local;
+      siteTimelineQoS();
+    }
+    if(siteTimeline.meta&&!this.paused&&this.currentTime>1)
+      siteTimelineWarmNext();
+  });
+  siteTimelineVideo.addEventListener("ended",function(){
+    if(!siteTimeline.playing||!siteTimeline.meta)return;
+    if(siteTimeline.segment+1<siteTimeline.meta.segmentCount)
+      void siteTimelineLoad(siteTimeline.segment+1,0);
+    else{
+      siteTimeline.playing=false;
+      if(siteTimelineEvidence)siteTimelineEvidence.reachedLastWindow=true;
+      siteTimelineQoS();
+      siteTimelineMsg("وصل المشغل إلى نهاية نوافذ الملف المخزّن. "+
+        "يحتاج هذا الاختبار إلى مشاهدة بشرية للتحقق من الصوت والصورة والجودة.");
+    }
+  });
+  siteTimelineVideo.addEventListener("error",function(){
+    if(siteTimelineEvidence)siteTimelineEvidence.failedWindows++;
+    if(siteTimeline.meta&&siteTimeline.playing){
+      siteTimeline.lastFailedSegment=siteTimeline.segment;
+      siteTimeline.playing=false;
+      siteTimelineUpdateControls();
+      siteTimelineMsg("❌ تعذر فك مقطع MP4 في المتصفح. "+
+        "اضغط إعادة المحاولة أو افحص توافق الصوت والصورة.");
+    }
+  });
+  ["waiting","stalled"].forEach(function(name){
+    siteTimelineVideo.addEventListener(name,function(){
+      if(siteTimelineEvidence&&siteTimeline.meta){
+        siteTimelineEvidence.bufferWaitEvents++;
+        siteTimelineQoS();
+      }
+    });
+  });
+  $("hub-timeline-retry").addEventListener("click",function(){
+    if(!siteTimeline.meta||siteTimeline.lastFailedSegment===null)return;
+    void siteTimelineLoad(siteTimeline.lastFailedSegment,0);
+  });
+  $("hub-timeline-export").addEventListener("click",function(){
+    var e=siteTimelineEvidence;
+    if(!e)return;
+    var data={
+      schema:e.schema,
+      mediaKind:e.kind,
+      storedManifest:{runId:e.runId,expectedBytes:e.expectedBytes},
+      checkedAt:new Date().toISOString(),
+      startedAt:e.startedAt,
+      stoppedAt:e.stoppedAt,
+      durationSeconds:e.durationSeconds,
+      segmentSeconds:e.segmentSeconds,
+      segmentCount:e.segmentCount,
+      visitedWindows:e.visitedWindows.size,
+      windowsRequested:e.windowsRequested,
+      windowsLoaded:e.windowsLoaded,
+      observedDistinctSeconds:e.seenSeconds.size,
+      totalLoadMilliseconds:e.totalLoadMs,
+      transitionCount:e.transitionCount,
+      busyResponses:e.busyResponses,
+      retryCount:e.retryCount,
+      failedWindows:e.failedWindows,
+      bufferWaitEvents:e.bufferWaitEvents,
+      reachedLastWindow:e.reachedLastWindow,
+      pictureConfirmedByHuman:$("hub-timeline-picture").checked===true,
+      audibleAudioConfirmedByHuman:$("hub-timeline-audio").checked===true,
+      observedProof:"browser_time_updates_only",
+      physicalDeviceAttested:false,
+      sourceRightsProvenByThisReport:false,
+      fullFilePlaybackVerified:false,
+      customerReleaseApproved:false
+    };
+    var blob=new Blob([JSON.stringify(data,null,2)],{
+      type:"application/json"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="blofy-stream-timeline-"+e.kind+"-"+
+      new Date().toISOString().replace(/[:.]/g,"-")+".json";
+    document.body.append(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    siteTimelineMsg("تم تنزيل تقرير محلي لا يحتوي بيانات الاتصال. "+
+      "ما زال اعتماد مشاهدة الملف كاملًا وفحص الصوت الحقيقي مطلوبَين.");
+  });
+  // Isolated QA unit harness uses minimal mock elements without media APIs.
+  if(typeof siteTimelineVideo.pause==='function')siteTimelineStop();
+  refreshHubBrowserQa();
   if(tabs[location.hash.slice(1)]&&location.hash!=="#home")tab(location.hash.slice(1));
   refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth();
   setInterval(function(){if(!document.hidden){refresh();loadLive();loadFailures();loadAutoHealth();loadSecurity();loadSharedReadiness();loadSmartOps();loadSourceCapacity();loadCrossService();loadPlaybackHealth()}},60000);

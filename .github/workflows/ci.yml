@@ -22,6 +22,21 @@ jobs:
       - run: bash -n infra/azure/configure-github-oidc.sh
       - run: npm test
 
+  synthetic-decoder-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: isolated-stream/decoder-lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test test/*.test.mjs
+      # Also executes the real FFmpeg + FFprobe synthetic decode during Docker build.
+      - run: docker build -t blofy-decoder-synthetic-ci .
+
   isolated-stream-test:
     runs-on: ubuntu-latest
     timeout-minutes: 8
