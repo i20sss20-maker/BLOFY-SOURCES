@@ -95,7 +95,7 @@ test('empty recorded errors are explicitly zero, but never equal full catalog ve
       mediaFailureItems:async()=>({status:200,body:{ok:true,items:[]}})
     },
     playback:()=>({dataFresh:true,assessment:{ok:true,incidents:[]}}),
-    ops:()=>({ok:true,channels:[]})
+    ops:()=>({ok:true,capacity:{activeFeeds:0},channels:[]})
   });
   const r=await scan.snapshot();
   assert.equal(r.counters.historical404Missing,0);
