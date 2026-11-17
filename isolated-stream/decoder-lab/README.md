@@ -9,7 +9,7 @@ The worker generates a 1.4-second MPEG-TS sample with **MPEG-2 video** and **MP2
 ## Deployment and resource safety
 - GitHub repository `i20sss20-maker/BLOFY-SOURCES`; Railway root directory: `/isolated-stream/decoder-lab`.
 - Dockerfile: `node:22-alpine` plus Alpine `ffmpeg` / `ffprobe`, runs unit tests and real decode smoke during container build, uses non-root `node` user.
-- Configure `BLOFY_DECODER_LAB_TOKEN` with a randomly generated **>=40-character** secret on the lab service **before deployment**. Never commit this secret or send it to the browser.
+- Configure two independently random **>=40-character** lab secrets before deployment: `BLOFY_DECODER_LAB_TOKEN` for explicit synthetic reruns **only on lab**, and `BLOFY_DECODER_LAB_VIEW_TOKEN` for read-only report access. The latter is also configured on the BLOFY STREAM API service for server-to-server reading; neither key is ever returned to browsers.
 - Set resource limits no higher than 0.5 vCPU / 0.5 GB RAM for the pilot, with just one replica, healthcheck `/health` and restart-on-failure.
 - No mounted volume is necessary: generated transport files are restricted to a fresh `/tmp/blofy-decoder-*/synthetic.ts` directory, have a 2 MB cap and are deleted after each probe.
 - Each FFmpeg/FFprobe invocation is given a 18 s timeout, max 32 KiB output and `-threads 1` (decoder).
@@ -17,8 +17,8 @@ The worker generates a 1.4-second MPEG-TS sample with **MPEG-2 video** and **MP2
 
 ## Endpoints
 - `GET /health` public, minimal, returns 200 only when the synthetic test passed and the lab secret is configured, otherwise 503. No sensitive information.
-- `GET /api/report` needs `Authorization: Bearer <BLOFY_DECODER_LAB_TOKEN>`; returns detailed synthetic-only result.
-- `POST /api/synthetic-run` needs the same header and an **empty body**. No URL, file, stream ID, codec or media selection is accepted. Returns 202 on start, 409 if already running, 429 on cooldown.
+- `GET /api/report` needs `Authorization: Bearer <BLOFY_DECODER_LAB_VIEW_TOKEN>`; returns a synthetic-only result. The run token cannot access this endpoint.
+- `POST /api/synthetic-run` needs the **different** `<BLOFY_DECODER_LAB_TOKEN>` Bearer header and an **empty body**. The view token cannot trigger work. No URL, file, stream ID, codec or media selection is accepted. Returns 202 on start, 409 if already running, 429 on cooldown.
 - All other routes return 404 or 401; no CORS, uploads, data writes, source discovery or public customer access.
 
 ## Checks
@@ -40,3 +40,9 @@ After deployment: inspect Railway health, status and logs; verify `/health` = 20
 
 ## Rollback
 Stop/delete only Railway lab service `blofy-decoder-lab`. No commits from this branch affect BLOFY STREAM production unless intentionally merged and separately deployed; the lab has no dependence on customer routes or session codes.
+
+## Same-domain read-only status in BLOFY
+
+The original BLOFY STREAM operator dashboard now provides `GET /operator/api/media-scan/decoder-lab`, behind its existing owner Basic authentication (or signed BLOFY website admin cookie through the proxy). It calls a **fixed** HTTPS lab report endpoint using a **view-only** token at the STREAM backend, caches for 45 seconds, strips unknown fields and source details, and displays synthetic codec/frame results at `https://blofyplayer.com/admin/control-center#diagnostics`.
+
+No browser sees either token. The operator page **cannot** start or repeat FFmpeg runs. A production channel remains unverified, even after a green synthetic result. A stale lab result or missing lab connection appears as unknown, not green.
