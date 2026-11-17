@@ -40,3 +40,13 @@ test('daily status is present only in Basic-authenticated operator route group',
  assert.ok(ix>src.indexOf("const readable={"));
  assert.equal(src.includes('app.get("/daily-catalog"'),false);
 });
+
+test('owner daily panel marks overdue queued/running receipts without suggesting automatic retries',()=>{
+ const html=renderOperatorDashboard('test_nonce');
+ assert.match(html,/queued_over_one_hour_review_required/);
+ assert.match(html,/running_over_six_hours_review_required/);
+ assert.match(html,/needsOperatorReview===true/);
+ assert.match(html,/لم يبدأ فحص السجل أي استيراد جديد/);
+ assert.match(html,/أكثر من 6 ساعات/);
+ assert.doesNotMatch(html,/fetch\("\/operator\/api\/ops\/daily-catalog",\{method:"POST"/);
+});
