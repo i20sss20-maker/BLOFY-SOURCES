@@ -321,6 +321,39 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
     }
     // Explicitly approved, max-two sequential HLS checks on existing active
     // operator paths only. No background catalog sweep or new Xtream paths.
+    if(req.method==='POST'&&path==='/operator/api/media-scan/passive-sample'){
+      if(req.headers['x-blofy-operator-action']!=='media-scan-passive-sample'){
+        json(res,403,{ok:false,code:'operator_action_header_required'});return true;
+      }
+      if(typeof liveSupervisor?.captureActiveTs!=='function'||
+        String(process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN||'').length<40){
+        json(res,503,{ok:false,code:'passive_capture_not_configured'});return true;
+      }
+      void readAdminJson(req).then(async body=>{
+        const sample=await liveSupervisor.captureActiveTs({
+          name:body.path,rightsConfirmed:body.rightsConfirmed===true
+        });
+        if(sample.status!==200||!Buffer.isBuffer(sample.bytes))
+          return {status:sample.status||503,body:{
+            ok:false,code:sample.code||'passive_capture_unavailable',
+            passiveCapture:true,providerConnectionsCreated:0,
+            customerRoutesChanged:false
+          }};
+        try{
+          const report=await ownerSampleBridge.submit(sample.bytes);
+          return {status:report.status,body:{
+            ...report.body,passiveCapture:true,
+            source:'existing_operator_publisher_input',
+            captureComplete:sample.code==='passive_sample_complete',
+            capturedBytes:sample.bytes.length,providerConnectionsCreated:0,
+            customerRoutesChanged:false
+          }};
+        }finally{sample.bytes.fill(0);}
+      }).then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'passive_sample_unavailable',
+          customerRoutesChanged:false}));
+      return true;
+    }
     if(req.method==='POST'&&path==='/operator/api/media-scan/owner-sample'){
       if(req.headers['x-blofy-operator-action']!=='media-scan-owner-sample'||
         req.headers['x-blofy-sample-rights']!=='confirmed'){
