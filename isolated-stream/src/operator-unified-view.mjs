@@ -5765,7 +5765,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       "audioDecoded","videoDecoded"];
     function csv(v){
       // Escape spreadsheet formula prefixes, delimiters and newlines.
-      var s=String(v??"").replace(/^[\s]*[=+\-@]/,"'  $("media-probe-queue-refresh").addEventListener("click",function(){void mediaProbeQueueLoad()});");
+      var s=String(v??"").replace(/^[\s]*[=+\-@]/,function(m){return "'"+m;});
       return '"'+s.replace(/"/g,'""').replace(/\r?\n/g," ")+'"';
     }
     var rows=[columns.map(csv).join(",")];
