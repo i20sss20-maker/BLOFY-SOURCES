@@ -27,3 +27,18 @@ Do not enable a recurring scan, bulk catalog sweep or automatic retries without 
 ## Rollback
 
 Repoint Railway **blofy-stream-api** service to the prior pinned commit. The BLOFY website itself, subscriber Xtream routes, codes, and the independent original Railway admin URL are unaffected.
+
+## Evidence-based diagnostics and exports (2026-11-17)
+
+The operator dashboard now explains sample-level audio/video anomalies without pretending that an FFmpeg decoder ran:
+
+- MPEG-TS PMT absent or incomplete => **unknown**, never a healthy result.
+- PMT declares no audio => **review source audio program** (not conclusive proof the full channel has no audio).
+- Sufficient TS packets sampled with audio/video payload missing => **review sampling and transport**.
+- TS continuity gaps => **review network/transport**; gaps alone do not prove playback failure.
+- E-AC3/AC3/DTS/TrueHD/AAC-LATM => **review Android 9 vs Windows decoder support**, not automatic transcoding.
+- Valid transport + observed audio/video packets => **observed sample only**; decoded sound and image remain unverified.
+
+Last five in-process scan jobs are summarized separately from total source channel count. The UI can download sanitized JSON and CSV with the operator path identifier, status and rationale; it excludes source URLs, subscriber credentials, playback tickets and original media. Spreadsheet formula-like cell contents are escaped on CSV export. The server does **not** store durable audit history yet; exporting copies onto the administrator's computer is the current operational safeguard.
+
+Next gate: a separate sandboxed decode worker (ffprobe/FFmpeg), explicit per-sample rights, CPU/memory/time limits, and synthetic-file performance tests before it is allowed to process even a licensed live sample. Never install an uncontrolled decoding process directly into the customer playback path.

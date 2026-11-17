@@ -1,3 +1,5 @@
+import {diagnoseOperatorHlsResult,summarizeOperatorHlsRuns} from './operator-hls-triage.mjs';
+
 // Explicitly approved, single-flight HLS verification of *already active*
 // operator-only restream paths. Never creates routes or picks Xtream URLs.
 // All state is in process memory; restart marks historical work unavailable.
@@ -65,7 +67,7 @@ export function createOperatorLiveProbeQueue({
       completedAt:current.completedAt,requested:current.requested,
       completed:current.results.filter(r=>r.state!=='queued'&&r.state!=='running').length,
       cancelRequested:current.cancelRequested===true,
-      results:current.results.map(row=>({...row}))
+      results:current.results.map(row=>({...row,diagnosis:diagnoseOperatorHlsResult(row)}))
     }:null;
     const wait=lastStartAt===-Infinity?0:Math.max(0,COOLDOWN_MS-(clock()-lastStartAt));
     return {
@@ -78,8 +80,9 @@ export function createOperatorLiveProbeQueue({
       job,previous:history.map(run=>({
         id:run.id,state:run.state,startedAt:run.startedAt,
         completedAt:run.completedAt,
-        results:run.results.map(row=>({...row}))
+        results:run.results.map(row=>({...row,diagnosis:diagnoseOperatorHlsResult(row)}))
       })),
+      historicalSummary:summarizeOperatorHlsRuns(history),
       newOperatorPathsCreated:0,upstreamSessionsCreated:null,
       customerRoutesModified:false,
       probeMayReuseOnDemandWorker:true,

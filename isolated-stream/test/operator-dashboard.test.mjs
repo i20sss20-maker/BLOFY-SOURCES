@@ -419,3 +419,19 @@ test('bounded media probe queue is protected and inert without explicit approval
     assert.equal((await noActive.json()).code,'operator_live_probe_path_not_active');
   });
 });
+
+
+test('media scan result UI describes diagnosed audio/video status and safe JSON/CSV exports',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const page=await response.text();
+    assert.match(page,/id="media-probe-queue-export-json"/);
+    assert.match(page,/id="media-probe-queue-export-csv"/);
+    assert.match(page,/id="media-probe-queue-history"/);
+    assert.match(page,/id="media-probe-queue-summary"/);
+    assert.match(page,/diagnosis\.nextStep/);
+    assert.match(page,/completeCatalogVerified|decodedVideo|videoDecoded/);
+    assert.doesNotMatch(page,/localStorage\.setItem\([^)]*media-probe-queue/);
+  });
+});

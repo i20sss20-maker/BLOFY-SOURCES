@@ -143,3 +143,22 @@ test('unknown PMT and no declared audio never claim audible silence or decoded a
   assert.equal(q.snapshot().job.results[0].tracks.audioTrackDeclared,null);
   assert.equal(q.snapshot().job.results[0].tracks.decodedAudioVerified,false);
 });
+
+
+test('queue snapshot exposes safe triage and bounded prior results for export',async()=>{
+  const s=supervisorStub([P1]);
+  s.rows[0].mediaTracks={...s.rows[0].mediaTracks,audioContinuityGaps:0};
+  const q=createOperatorLiveProbeQueue({
+    supervisor:s,delay:async()=>s.finish(),pollIntervalMs:10,maxPollIterations:2
+  });
+  assert.equal(q.start({paths:[P1],rightsConfirmed:true,capacityAcknowledged:true}).status,202);
+  await finishQueue(q);
+  const snapshot=q.snapshot();
+  assert.equal(snapshot.job.results[0].diagnosis.code,'transport_packets_observed');
+  assert.equal(snapshot.job.results[0].diagnosis.audioDecoded,false);
+  assert.equal(snapshot.previous[0].results[0].diagnosis.videoDecoded,false);
+  assert.equal(snapshot.historicalSummary.runs,1);
+  assert.equal(snapshot.historicalSummary.paths,1);
+  assert.equal(snapshot.historicalSummary.observed,1);
+  assert.doesNotMatch(JSON.stringify(snapshot),/provider\.invalid|password=secret/);
+});
