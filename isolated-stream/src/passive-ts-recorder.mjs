@@ -31,8 +31,7 @@ export function createPassiveTsRecorder({
       bytes=Buffer.concat(slot.parts,slot.size);
     slot.parts=[];slot.tail=Buffer.alloc(0);
     slot.size=0;slot.synced=false;
-    slot.resolve(result(bytes?200:status,bytes?code:'passive_capture_unavailable',
-      bytes?{bytes}:{}));
+    slot.resolve(result(bytes?200:status,code,bytes?{bytes}:{}));
   }
   function request(name,session){
     if(!ID.test(name)||!Number.isSafeInteger(session)||session<1)
