@@ -10,7 +10,7 @@ const track={
   secretSourceUrl:'https://provider.invalid/key'
 };
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function supervisorStub(initial=[P1],clock=()=>1000000){
+function supervisorStub(initial=[P1],clock=Date.now){
   const rows=initial.map(path=>({path,connections:1,
     probePending:false,lastProbe:null,mediaTracks:track,
     sourceUrl:'https://provider.invalid/stream?password=secret'}));
