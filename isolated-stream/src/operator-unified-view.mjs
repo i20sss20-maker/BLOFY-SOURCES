@@ -1128,6 +1128,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <tbody id="media-watchlist-signals"></tbody></table></div>
 <p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
 </div>
+<div class="panel" id="owner-radio-audio-qa-panel">
+ <div class="controls"><div><h3>🎧 فحص مصدر الصوت — للمالك فقط</h3>
+ <p class="muted">افحص محطتين فقط من القائمة المعتمدة. الفحص يدوي، يقرأ حدًا أقصى 4 كيلوبايت لكل محطة ولا ينقل الصوت للمشتركين. يفصل بين بيانات صوت حقيقية وHTML/HLS وخطأ المصدر؛ لا يثبت سماع الصوت على الجهاز.</p></div>
+ <button id="owner-audio-qa-refresh" type="button" class="btn secondary">↻ قراءة قائمة المحطات</button></div>
+ <div class="inline">
+ <label for="owner-audio-qa-track-1">المحطة الأولى</label><select id="owner-audio-qa-track-1" aria-label="المحطة الأولى"></select>
+ <label for="owner-audio-qa-track-2">الثانية (اختيارية)</label><select id="owner-audio-qa-track-2" aria-label="المحطة الثانية"></select>
+ <button id="owner-audio-qa-probe" type="button" class="btn" disabled>▶ فحص المحطتين الآن</button>
+ </div>
+ <p id="owner-audio-qa-status" class="diag-inline-note" role="status" aria-live="polite">لم يُجرَ فحص من هذه الصفحة بعد.</p>
+ <pre id="owner-audio-qa-output" class="log" aria-label="نتائج فحص الصوت">لا توجد نتائج حتى الآن.</pre>
+ <p class="muted">حماية: تسجيل دخول المسؤول، طلب مؤكد، محطتان كحد أقصى، وتبريد 120 ثانية بين المحاولات. لن تُعرض روابط المصدر أو مفاتيحه.</p>
+</div>
 <div class="panel" id="decoder-lab-panel">
 <div class="controls"><div><h3>🧪 مختبر FFmpeg — فك الترميز الحقيقي</h3>
 <p class="muted">هذا فحص لملف صناعي ينشئه المختبر المعزول. النتيجة لا تثبت تشغيل أي قناة Xtream أو وجود صوت مسموع على Android 9 أو Windows.</p></div>
@@ -1364,6 +1377,66 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function action(path,header,data){var r=await fetch("/operator/api/"+path,{method:"POST",credentials:"same-origin",
       headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
     var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
+
+  var ownerAudioBusy=false;
+  function ownerAudioStatus(message){$("owner-audio-qa-status").textContent=message}
+  function ownerAudioOptions(select,rows,optional){
+    var previous=select.value;
+    select.replaceChildren();
+    if(optional)select.append(new Option("بدون محطة ثانية",""));
+    (rows||[]).forEach(function(item){
+      if(/^anis-[a-z0-9-]{1,54}$/.test(String(item.id||"")))
+        select.append(new Option(String(item.label||item.id).slice(0,80),item.id));
+    });
+    if(Array.from(select.options).some(function(x){return x.value===previous}))
+      select.value=previous;
+  }
+  async function loadOwnerAudioReadiness(){
+    if(ownerAudioBusy)return;
+    var refresh=$("owner-audio-qa-refresh");
+    refresh.disabled=true;$("owner-audio-qa-probe").disabled=true;
+    try{
+      var d=await api("audio/readiness"),rows=Array.isArray(d.tracks)?d.tracks:[];
+      ownerAudioOptions($("owner-audio-qa-track-1"),rows,false);
+      ownerAudioOptions($("owner-audio-qa-track-2"),rows,true);
+      $("owner-audio-qa-probe").disabled=rows.length===0;
+      if(!rows.length)ownerAudioStatus("محطات الصوت غير مهيأة في الخادم.");
+      else ownerAudioStatus("المحطات المتاحة: "+rows.length+
+        ". اختر محطة أو محطتين واضغط فحص عند الحاجة.");
+      if(Array.isArray(d.latest)&&d.latest.length){
+        $("owner-audio-qa-output").textContent=d.latest.map(function(x){
+          return x.id+" — "+x.reason+" / "+x.payloadClass+
+            " / "+x.receivedBytes+" B";
+        }).join("\n");
+      }
+    }catch(e){ownerAudioStatus("تعذر قراءة المحطات: "+String(e.message||"غير معروف"))}
+    finally{refresh.disabled=false}
+  }
+  $("owner-audio-qa-refresh").addEventListener("click",loadOwnerAudioReadiness);
+  $("owner-audio-qa-probe").addEventListener("click",async function(){
+    if(ownerAudioBusy)return;
+    var ids=[$("owner-audio-qa-track-1").value,
+      $("owner-audio-qa-track-2").value].filter(Boolean);
+    if(!ids.length||new Set(ids).size!==ids.length){
+      ownerAudioStatus("اختر محطة واحدة أو محطتين مختلفتين.");return;
+    }
+    if(!confirm("فحص مباشر لبيانات أول محطتين من المصدر المعتمد فقط، بحد 4KB لكل محطة؟"))return;
+    ownerAudioBusy=true;this.disabled=true;
+    ownerAudioStatus("جار قراءة عينة صغيرة من المصدر دون التأثير على العملاء...");
+    try{
+      var d=await action("audio/probe","audio-probe",{ids:ids});
+      $("owner-audio-qa-output").textContent=(d.results||[]).map(function(x){
+        return x.id+" — "+x.reason+" — "+x.payloadClass+
+          " — "+x.receivedBytes+" B"+
+          (x.httpStatus?" — HTTP "+x.httpStatus:"")+
+          " — "+(x.progressiveAudioDetected?"حزم صوت/TS معرّفة":
+            "لم تُثبت حزم صوت متوافقة");
+      }).join("\n");
+      ownerAudioStatus("✅ تم فحص "+d.checked+" محطة. هذا لا يثبت وجود صوت مسموع على الجهاز.");
+    }catch(e){ownerAudioStatus("تعذر الفحص: "+String(e.message||"غير معروف"))}
+    finally{ownerAudioBusy=false;this.disabled=false}
+  });
+  void loadOwnerAudioReadiness();
   var hubState=null,hubLoading=false;
   var hubBytes=function(n){
     var val=Number(n||0);
