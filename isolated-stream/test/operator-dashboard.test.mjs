@@ -462,3 +462,16 @@ test('synthetic decoder lab status is owner-only and cannot trigger any decoder 
     assert.match(html,/productionStreamVerified===false/);
   });
 });
+
+
+test('decoder audio matrix is visible as explicit synthetic-only observations',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/id="decoder-lab-codec-rows"/);
+    assert.match(html,/showDecoderLabCodecs/);
+    assert.match(html,/MP2 · AAC · AC3 · E-AC3/);
+    assert.match(html,/توافق الترميز مع Android 9/);
+  });
+});
