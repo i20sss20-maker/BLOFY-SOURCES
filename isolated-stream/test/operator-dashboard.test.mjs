@@ -551,3 +551,19 @@ test('passive sample remains owner-only, opt-in, and does not start disconnected
     else process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN=previous;
   }
 });
+
+
+test('original STREAM admin remains navigable to entire BLOFY website from same-origin portal',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const response=await fetch(base+'/operator',{headers:{authorization:auth}});
+    assert.equal(response.status,200);
+    const html=await response.text();
+    assert.match(html,/class="blofy-top-website-link" href="https:\/\/blofyplayer\.com\/admin"/);
+    assert.match(html,/href="https:\/\/blofyplayer\.com\/admin\/control-center\/health"/);
+    assert.match(html,/href="https:\/\/updates\.blofyplayer\.com\/downloads"/);
+    for(const tab of ['sources','restream','library','accounts','codes','distributors','diagnostics']){
+      assert.match(html,new RegExp('data-tab="'+tab+'"'));
+    }
+    assert.doesNotMatch(html,/<iframe\s/i);
+  });
+});
