@@ -8,6 +8,7 @@ import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
+import {createPassiveTsRecorder} from './passive-ts-recorder.mjs';
 import {validateSalehOriginSource,salehOriginReadiness} from './saleh-origin-policy.mjs';
 
 const MTX='http://blofy-stream-media.railway.internal:9997';
@@ -92,6 +93,7 @@ export function createLiveRestreamSupervisor({
     throw new Error('restream_shared_readers_invalid');
   const auth=optsAuth(mediaPassword);
   const paths=new Map(),tokens=new Map();
+  const passiveRecorder=createPassiveTsRecorder({clock});
   let operation=false,cleanupAt=0;
   async function mediamtx(method,route,data){
     if(!auth)throw err('restream_control_unavailable');
@@ -208,7 +210,8 @@ export function createLiveRestreamSupervisor({
         title:String(upstream.body.name||'').slice(0,160),
         createdAt:clock(),lastUsedAt:null,connections:0,lastError:null,lastProbe:null,
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1,
-        audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null};
+        audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null,
+        feedGeneration:0};
       const config={source:'publisher',
         runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
@@ -228,6 +231,7 @@ export function createLiveRestreamSupervisor({
     if(!row)return safe({ok:false,code:'restream_path_not_found'},404);
     if(operation)return safe({ok:false,code:'restream_busy'},429);
     // Immediately invalidate feed token, even if MTX deletion errors.
+    passiveRecorder.abort(name,row.feedGeneration||0);
     tokens.delete(row.ticket);paths.delete(name);
     try{await mediamtx('DELETE','/v3/config/paths/delete/'+name)}
     catch(e){return safe({ok:false,code:classify(e),feedDisabled:true},503)}
@@ -259,6 +263,20 @@ export function createLiveRestreamSupervisor({
     return safe({ok:true,path:name,started:true,probePending:true,
       customerTrafficChanged:false},202);
   }
+  async function captureActiveTs({name,rightsConfirmed=false}={}){
+    if(rightsConfirmed!==true)
+      return {status:403,code:'passive_sample_rights_required'};
+    if(!safePath(name))
+      return {status:400,code:'passive_capture_invalid_selection'};
+    const row=paths.get(name);
+    if(!row)return {status:404,code:'passive_capture_path_not_found'};
+    if(row.connections!==1||!Number.isInteger(row.feedGeneration)||
+      row.feedGeneration<1||row.probePending===true)
+      return {status:409,code:'passive_capture_no_active_publisher'};
+    // ONLY observing the original streamFeed byte path, with no MediaMTX
+    // playlist reads and no new provider session. The recorder is single-flight.
+    return passiveRecorder.request(name,row.feedGeneration);
+  }
   function list(){
     return {ok:true,maxPaths,maxSharedReaders,
       salehOrigin:salehOriginReadiness({enabled:salehOnlyOrigin,
@@ -284,6 +302,8 @@ export function createLiveRestreamSupervisor({
     if(!row)return response(res,410,{ok:false,code:'restream_feed_expired'});
     if(row.connections>=1)return response(res,429,{ok:false,code:'restream_feed_busy'});
     row.connections++;row.lastUsedAt=clock();
+    row.feedGeneration=(row.feedGeneration||0)+1;
+    const thisFeedGeneration=row.feedGeneration;
     const controllers=new Set();
     let closedByReader=false,startedAt=clock();
     const onClose=()=>{
@@ -390,6 +410,7 @@ export function createLiveRestreamSupervisor({
         // are passed through unchanged, with no new connection to the source.
         let chunk=Buffer.from(active.first.value);
         observeTrackBytes(chunk);
+        passiveRecorder.offer(name,thisFeedGeneration,chunk);
         yield chunk;
         while(true){
           const next=await active.reader.read();
@@ -397,6 +418,7 @@ export function createLiveRestreamSupervisor({
           if(next.value?.byteLength){
             chunk=Buffer.from(next.value);
             observeTrackBytes(chunk);
+            passiveRecorder.offer(name,thisFeedGeneration,chunk);
             yield chunk;
           }
         }
@@ -433,6 +455,7 @@ export function createLiveRestreamSupervisor({
     }finally{
       for(const controller of controllers)controller.abort();
       res.off('close',onClose);
+      passiveRecorder.abort(name,thisFeedGeneration);
       row.connections=Math.max(0,row.connections-1);
       row.lastUsedAt=clock();
     }
@@ -499,5 +522,6 @@ export function createLiveRestreamSupervisor({
       return {ok:true,removed};
     }catch{return {ok:false,code:'restream_control_unavailable'}}
   }
-  return {start,stop,probe,list,streamFeed,proxyHls,recoverOldPaths};
+  return {start,stop,probe,list,streamFeed,proxyHls,recoverOldPaths,
+    captureActiveTs};
 }
