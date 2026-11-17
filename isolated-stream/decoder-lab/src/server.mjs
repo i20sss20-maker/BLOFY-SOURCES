@@ -2,6 +2,7 @@
 import {createServer} from 'node:http';
 import {labBearerAuthorized} from './access.mjs';
 import {runSyntheticDecoder} from './decoder.mjs';
+import {runSyntheticAudioMatrix} from './audio-codec-matrix.mjs';
 
 const PORT=Number(process.env.PORT||3000);
 const RUN_SECRET=process.env.BLOFY_DECODER_LAB_TOKEN||'';
@@ -29,11 +30,16 @@ function respond(res,status,body){
 async function executeSmoke(){
   busy=true;lastStarted=Date.now();
   try{
-    report=await runSyntheticDecoder();
+    const base=await runSyntheticDecoder();
+    const matrix=await runSyntheticAudioMatrix();
+    report={...base,ok:base.ok===true&&matrix.allVerified===true,
+      codecMatrix:matrix.tests,codecMatrixAllVerified:matrix.allVerified,
+      codecsDecoded:matrix.codecsDecoded};
     console.log(JSON.stringify({
       event:'decoder_synthetic_test',ok:report.ok,scope:report.scope,
       stage:report.stage,code:report.code||null,
-      audioFrames:report.audioFrames??null,videoFrames:report.videoFrames??null
+      audioFrames:report.audioFrames??null,videoFrames:report.videoFrames??null,
+      codecMatrix:report.codecMatrix?.map(x=>({codec:x.codec,ok:x.ok,frames:x.audioFrames}))
     }));
   }catch{
     report={ok:false,scope:'synthetic_local_only',stage:'worker',
