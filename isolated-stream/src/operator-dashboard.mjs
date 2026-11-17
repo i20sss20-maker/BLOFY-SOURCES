@@ -627,6 +627,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       // Operator Basic auth enforced above; portal Bearer key never returned
       // to the client. No player source details or credentials are serialized.
       '/operator/api/source-capacity':()=>portal.sourceCapacity(),
+      '/operator/api/audio/readiness':()=>portal.audioReadiness(),
       '/operator/api/content-hub/status':()=>portal.contentHubStatus(),
       '/operator/api/content-hub/seasons/series':()=>portal.contentHubSeasonSeries(),
       '/operator/api/content-hub/seasons/pilot':()=>portal.contentHubSeasonPilot(),
@@ -713,6 +714,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         path==='/operator/api/content-hub/batch/start'?'content-hub-copy-start':
         path==='/operator/api/content-hub/batch/pause'?'content-hub-copy-pause':
         path==='/operator/api/content-hub/batch/next'?'content-hub-batch-next':
+        path==='/operator/api/audio/probe'?'audio-probe':
         path==='/operator/api/ops/mirror-intake'?'ops-mirror-stage':
         path==='/operator/api/ops/mirror-intake/cancel'?'ops-mirror-cancel':
         path==='/operator/api/ops/schedule'?'ops-schedule':
@@ -733,6 +735,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       if(req.headers['x-blofy-operator-action']!==action)
         return json(res,403,{ok:false,code:'operator_action_header_required'}),true;
       void readAdminJson(req).then(data=>{
+        if(action==='audio-probe')return portal.audioProbe(data);
         if(action==='ops-mirror-stage')return portal.opsMirrorIntakeStage(data);
         if(action==='ops-mirror-cancel')return portal.opsMirrorIntakeCancel(data);
         if(action==='season-retry')return portal.contentHubSeasonRetry(data);
