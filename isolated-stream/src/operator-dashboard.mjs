@@ -641,6 +641,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       '/operator/api/codes':()=>portal.codes({offset:uri.searchParams.get('offset')||0}),
       '/operator/api/distributors':()=>portal.distributorAdmins(),
       '/operator/api/sales-summary':()=>portal.salesSummary(),
+      '/operator/api/media-quality':()=>portal.mediaQuality(),
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
       }),
