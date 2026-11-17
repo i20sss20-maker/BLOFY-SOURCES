@@ -1126,8 +1126,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="panel" id="media-probe-queue-panel">
 <div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
 <p class="muted">يفحص مقاطع HLS الحقيقية على مسارات المشرف الموجودة مسبقًا فقط. مسار واحد في كل مرة، وبحد مسارين لكل تشغيل؛ لا ينشئ قناة أو يغيّر بث العملاء.</p></div>
-<button type="button" class="btn secondary sm" id="media-probe-queue-refresh">↻ تحديث المسارات والنتائج</button></div>
+<div class="actions"><button type="button" class="btn secondary sm" id="media-probe-queue-refresh">↻ تحديث المسارات والنتائج</button>
+<button type="button" class="btn secondary sm" id="media-probe-queue-export-json" disabled>⬇ حفظ JSON</button>
+<button type="button" class="btn secondary sm" id="media-probe-queue-export-csv" disabled>⬇ حفظ CSV</button></div></div>
 <p class="diag-inline-note" id="media-probe-queue-status" role="status" aria-live="polite">لم تُقرأ المسارات المؤهلة بعد.</p>
+<p class="muted" id="media-probe-queue-summary">الأعداد تخص آخر خمس عمليات يدوية محفوظة في الذاكرة، وليس كل القنوات.</p>
 <div class="tablewrap"><table><thead><tr><th>اختيار</th><th>مسار المشرف</th><th>اتصال المصدر</th></tr></thead>
 <tbody id="media-probe-queue-candidates"></tbody></table></div>
 <p class="muted">الفحص متاح لمسارات المشرف النشطة التي لديها اتصال سحب قائم فقط؛ المسارات الخاملة مستبعدة. قد يُعاد فتح الاتصال إذا انقطع أثناء الاختبار. لا توجد عملية فحص لجميع قنوات Xtream.</p>
@@ -1140,8 +1143,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <button type="button" class="btn secondary" id="media-probe-queue-cancel" disabled>⏹ إيقاف جدولة الباقي</button>
 </div>
 <p class="muted" style="margin-top:12px">نجاح HLS يعني وصول بيانات TS، وليس ظهور صورة مفكوكة أو سماع صوت على Android 9 أو Windows. مؤشرات PMT والحزم تساعد في التشخيص ولا تعالج القناة تلقائيًا.</p>
-<div class="tablewrap"><table><thead><tr><th>المسار</th><th>حالة الفحص</th><th>الوصول إلى البيانات</th><th>مسار الصوت / الترميز</th><th>مسار الفيديو / الترميز</th></tr></thead>
+<div class="tablewrap"><table><thead><tr><th>المسار</th><th>حالة الفحص</th><th>الوصول إلى البيانات</th><th>مسار الصوت / الترميز</th><th>مسار الفيديو / الترميز</th><th>التشخيص حسب العينة</th><th>الإجراء المقترح</th></tr></thead>
 <tbody id="media-probe-queue-results"></tbody></table></div>
+<div class="controls" style="margin-top:16px"><h4>آخر خمس عمليات فحص يدوية</h4><span class="muted">سجل مؤقت داخل خدمة STREAM؛ احفظ نسخة JSON أو CSV قبل أي إعادة نشر.</span></div>
+<div class="tablewrap"><table><thead><tr><th>رقم المهمة</th><th>المسار</th><th>حالة العينة</th><th>السبب</th></tr></thead><tbody id="media-probe-queue-history"></tbody></table></div>
 </div>
 <div class="panel" id="deep-audit-panel">
 <div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
@@ -5620,7 +5625,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
   });
-  var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false;
+  var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false,mediaProbeQueueLatest=null;
   var mediaProbeQueueState={
     queued:"بانتظار الدور",running:"فحص HLS جار",
     transport_verified:"وصلت مقاطع HLS",transport_failed:"تعذر وصول مقطع HLS",
@@ -5634,6 +5639,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var isRunning=data.job?.state==="running";
     var selected=new Set(Array.from(candidates.querySelectorAll("input:checked"))
       .map(function(input){return input.value}));
+    mediaProbeQueueLatest=data;
     candidates.replaceChildren();results.replaceChildren();
     (Array.isArray(data.eligiblePaths)?data.eligiblePaths:[]).forEach(function(item){
       var row=node("tr"),td=node("td"),check=node("input");
@@ -5666,9 +5672,31 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       mediaProbeQueueCell(row,Array.isArray(tracks.videoCodecs)&&tracks.videoCodecs.length?
         tracks.videoCodecs.join(", ")+" • حزم الصورة "+(tracks.videoPayloadPackets??"غير معروف"):
         "غير مؤكد");
+      var diagnosis=item.diagnosis||{};
+      mediaProbeQueueCell(row,diagnosis.title||"لا توجد بيانات كافية");
+      mediaProbeQueueCell(row,diagnosis.nextStep||"لا يتم إصلاح القناة تلقائيًا.");
       results.appendChild(row);
     });
-    if(!results.children.length){var empty=node("tr"),td=cell(empty,"لم يبدأ أي فحص HLS من هذا الطابور بعد.");td.colSpan=5;results.appendChild(empty);}
+    if(!results.children.length){var empty=node("tr"),td=cell(empty,"لم يبدأ أي فحص HLS من هذا الطابور بعد.");td.colSpan=7;results.appendChild(empty);}
+    var history=$("media-probe-queue-history");history.replaceChildren();
+    (Array.isArray(data.previous)?data.previous:[]).slice(0,5).forEach(function(run){
+      (Array.isArray(run.results)?run.results:[]).slice(0,2).forEach(function(item){
+        var row=node("tr");mediaProbeQueueCell(row,run.id||"—");
+        mediaProbeQueueCell(row,item.path||"—");
+        mediaProbeQueueCell(row,mediaProbeQueueState[item.state]||"غير محدد");
+        mediaProbeQueueCell(row,item.diagnosis?.title||"غير معروف");
+        history.appendChild(row);
+      });
+    });
+    if(!history.children.length){var tr=node("tr"),td=cell(tr,"لم تُحفظ نتائج فحص مكتملة منذ تشغيل الخدمة.");td.colSpan=4;history.appendChild(tr);}
+    var past=data.historicalSummary||{};
+    value("media-probe-queue-summary","آخر "+(past.runs??0)+" عمليات يدويّة · "+
+      "العينات التي تحتاج مراجعة: "+(past.review??0)+" · "+
+      "نقل مع حزم صوت وصورة مرصودة: "+(past.observed??0)+" · "+
+      "غير مؤكدة: "+(past.unknown??0)+
+      ". هذا ليس فحصًا لجميع قنوات Xtream ولا يثبت فك الصوت أو الصورة.");
+    $("media-probe-queue-export-json").disabled=!(data.job||data.previous?.length);
+    $("media-probe-queue-export-csv").disabled=!(data.job||data.previous?.length);
     var cooldown=Number(data.cooldownRemainingMs)||0;
     status.textContent="المهمة: "+(data.job?.id||"لا توجد")+
       " · المنجز: "+(data.job?.completed??0)+"/"+(data.job?.requested??0)+
@@ -5684,10 +5712,69 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     if(mediaProbeQueueBusy)return;
     mediaProbeQueueBusy=true;
     try{var data=await api("media-scan/queue");mediaProbeQueueRender(data)}
-    catch(e){value("media-probe-queue-status","تعذر قراءة الطابور: "+e.message+
+    catch(e){mediaProbeQueueLatest=null;
+      $("media-probe-queue-export-json").disabled=true;
+      $("media-probe-queue-export-csv").disabled=true;
+      value("media-probe-queue-status","تعذر قراءة الطابور: "+e.message+
       " • الحالة غير معروفة، ولم يبدأ فحص جديد.")}
     finally{mediaProbeQueueBusy=false;}
   }
+  function mediaProbeQueueDownload(data,name,type){
+    var blob=new Blob([data],{type:type+";charset=utf-8"});
+    var url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download=name;document.body.appendChild(link);
+    link.click();link.remove();setTimeout(function(){URL.revokeObjectURL(url)},5000);
+  }
+  function mediaProbeQueueRows(){
+    var state=mediaProbeQueueLatest;
+    if(!state)return [];
+    var runs=(Array.isArray(state.previous)?state.previous:[]).slice(0,5);
+    // Include a running or latest task not yet entered into history; do not
+    // duplicate the newest completed run already represented in history.
+    if(state.job&&!runs.some(function(r){return r.id===state.job.id}))
+      runs.unshift(state.job);
+    var rows=[];
+    runs.slice(0,6).forEach(function(run){
+      (Array.isArray(run.results)?run.results:[]).slice(0,2).forEach(function(item){
+        rows.push({
+          taskId:String(run.id||""),path:String(item.path||""),
+          state:String(item.state||""),transportVerified:item.transportVerified===true,
+          issueCode:String(item.diagnosis?.code||"result_unavailable"),
+          issue:String(item.diagnosis?.title||"غير معروف"),
+          guidance:String(item.diagnosis?.nextStep||""),
+          audioDecoded:false,videoDecoded:false
+        });
+      });
+    });
+    return rows;
+  }
+  $("media-probe-queue-export-json").addEventListener("click",function(){
+    if(!mediaProbeQueueLatest)return;
+    var payload={
+      product:"BLOFY STREAM",scope:"owner_only_bounded_hls",
+      exportedAt:new Date().toISOString(),
+      data:mediaProbeQueueRows(),
+      note:"عينات HLS لمسارات مشرف نشطة فقط، بدون كلمات مرور أو إثبات فك الصوت أو الصورة."
+    };
+    mediaProbeQueueDownload(JSON.stringify(payload,null,2),
+      "blofy-hls-samples-"+Date.now()+".json","application/json");
+  });
+  $("media-probe-queue-export-csv").addEventListener("click",function(){
+    if(!mediaProbeQueueLatest)return;
+    var columns=["taskId","path","state","transportVerified","issueCode","issue","guidance",
+      "audioDecoded","videoDecoded"];
+    function csv(v){
+      // Escape spreadsheet formula prefixes, delimiters and newlines.
+      var s=String(v??"").replace(/^[\s]*[=+\-@]/,"'  $("media-probe-queue-refresh").addEventListener("click",function(){void mediaProbeQueueLoad()});");
+      return '"'+s.replace(/"/g,'""').replace(/\r?\n/g," ")+'"';
+    }
+    var rows=[columns.map(csv).join(",")];
+    mediaProbeQueueRows().forEach(function(item){
+      rows.push(columns.map(function(k){return csv(item[k])}).join(","));
+    });
+    mediaProbeQueueDownload("\ufeff"+rows.join("\r\n"),
+      "blofy-hls-samples-"+Date.now()+".csv","text/csv");
+  });
   $("media-probe-queue-refresh").addEventListener("click",function(){void mediaProbeQueueLoad()});
   $("media-probe-queue-start").addEventListener("click",async function(){
     var paths=Array.from(document.querySelectorAll(".media-probe-queue-option:checked"))
