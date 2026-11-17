@@ -52,7 +52,7 @@ async function readAdminJson(req){
     return body;
   }catch{throw Object.assign(new Error('invalid_json'),{status:400})}
 }
-export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fetch,
+export function createOperatorDashboard({adminToken='',operatorProxyToken='',engineOrigin,fetchImpl=fetch,
   getSmokeState=()=>({}),runSmoke=async()=>({status:503,body:{ok:false,code:'not_ready'}}),
   controlUsername='',controlPassword='',unifiedSecret='',edgeObservabilityKey='',
   playbackGroqApiKey='',getReplicaSynthetic=()=>null,
@@ -131,7 +131,9 @@ export function createOperatorDashboard({adminToken='',engineOrigin,fetchImpl=fe
     const path=uri.pathname;
     if(!(path==='/operator'||path==='/operator/'||path.startsWith('/operator/api/')))return false;
     if(!enabled){json(res,404,{ok:false,code:'operator_console_not_configured'});return true;}
-    if(!authorized(req,adminToken)){
+    // Same-origin BLOFY website forwards a dedicated backend-only credential.
+    // Keep the existing operator login unchanged; never return either token to browsers.
+    if(!authorized(req,adminToken) && !authorized(req,operatorProxyToken)){
       rejectInvalidOperator(req,res);return true;
     }
     if(req.method==='GET'&&(path==='/operator'||path==='/operator/')){
