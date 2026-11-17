@@ -355,3 +355,23 @@ test('authenticated security dashboard has anonymous per-channel stream diagnost
   assert.doesNotThrow(()=>new Function(script[1]));
  });
 });
+
+
+test('website proxy credential works independently and cannot replace the original operator secret',async()=>{
+  const proxyToken='dedicated-private-website-proxy-credential-1234567890';
+  const proxyAuth='Basic '+Buffer.from('operator:'+proxyToken).toString('base64');
+  await withServer({adminToken:secret,operatorProxyToken:proxyToken},async base=>{
+    assert.equal((await fetch(base+'/operator')).status,401);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:auth}})).status,200);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:proxyAuth}})).status,200);
+    assert.equal((await fetch(base+'/operator/api/state',{headers:{authorization:proxyAuth}})).status,200);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:'Basic '+Buffer.from('operator:invalid').toString('base64')}})).status,401);
+  });
+});
+test('short or missing proxy credential is never an operator credential',async()=>{
+  await withServer({adminToken:secret,operatorProxyToken:'short'},async base=>{
+    const denied=await fetch(base+'/operator',{headers:{authorization:'Basic '+Buffer.from('operator:short').toString('base64')}});
+    assert.equal(denied.status,401);
+    assert.equal((await fetch(base+'/operator',{headers:{authorization:auth}})).status,200);
+  });
+});
