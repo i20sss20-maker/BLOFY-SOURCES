@@ -14,6 +14,7 @@ import {createEdgeMetricsClient} from './edge-metrics-client.mjs';
 import {createSmartPlaybackMonitor} from './smart-playback-monitor.mjs';
 import {createOperatorMediaWatchlist} from './operator-media-watchlist.mjs';
 import {createDecoderLabReportClient} from './decoder-lab-report-client.mjs';
+import {createOwnerSampleBridge,readOperatorSample} from './owner-ts-sample-bridge.mjs';
 import {createOperatorLiveProbeQueue} from './operator-live-probe-queue.mjs';
 import {createSmartPlaybackAi} from './smart-playback-ai.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
@@ -76,6 +77,9 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   const mediaProbeQueue=liveSupervisor&&typeof liveSupervisor.list==='function'&&
     typeof liveSupervisor.probe==='function'?
     createOperatorLiveProbeQueue({supervisor:liveSupervisor}):null;
+  const ownerSampleBridge=createOwnerSampleBridge({
+    fetchImpl,uploadToken:process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN||''
+  });
   const decoderLabReport=createDecoderLabReportClient({
     fetchImpl,viewToken:process.env.BLOFY_DECODER_LAB_VIEW_TOKEN||''
   });
@@ -317,6 +321,20 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
     }
     // Explicitly approved, max-two sequential HLS checks on existing active
     // operator paths only. No background catalog sweep or new Xtream paths.
+    if(req.method==='POST'&&path==='/operator/api/media-scan/owner-sample'){
+      if(req.headers['x-blofy-operator-action']!=='media-scan-owner-sample'||
+        req.headers['x-blofy-sample-rights']!=='confirmed'){
+        json(res,403,{ok:false,code:'operator_sample_rights_required'});return true;
+      }
+      void readOperatorSample(req)
+        .then(async data=>data.ok?ownerSampleBridge.submit(data.bytes):
+          {status:data.status||400,body:{
+            ok:false,scope:'approved_short_ts_sample',code:data.code
+          }})
+        .then(({status,body})=>json(res,status,body))
+        .catch(()=>json(res,503,{ok:false,code:'sample_bridge_unavailable'}));
+      return true;
+    }
     if(req.method==='GET'&&path==='/operator/api/media-scan/decoder-lab'){
       void decoderLabReport.snapshot().then(data=>json(res,200,data))
         .catch(()=>json(res,503,{ok:false,readOnly:true,
