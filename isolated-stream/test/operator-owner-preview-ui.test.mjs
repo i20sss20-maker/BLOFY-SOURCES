@@ -24,3 +24,13 @@ test('owner preview inline script parses and securely handles 409/429/503 before
  assert.match(html,/\/operator\/api\/content-hub\/episodes\/preview/);
  assert.match(html,/\/operator\/api\/content-hub\/seasons\/episodes\//);
 });
+
+test('browser accepts bounded chunked preview only after verifying exact MP4 signature',()=>{
+ const html=renderOperatorDashboard('no-content-length');
+ assert.match(html,/var expected=header===null\?null:Number\(header\)/);
+ assert.match(html,/var reader=response\.body\.getReader\(\)/);
+ assert.match(html,/bytes>12\*1024\*1024/);
+ assert.match(html,/blob\.slice\(4,8\)\.text\(\)!=="ftyp"/);
+ assert.match(html,/expected!==null&&bytes!==expected/);
+ assert.doesNotMatch(html,/var blob=await response\.blob\(\)/);
+});

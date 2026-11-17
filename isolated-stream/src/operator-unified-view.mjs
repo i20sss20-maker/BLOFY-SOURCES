@@ -2324,11 +2324,34 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         return;
       }
       var mime=String(response.headers.get("content-type")||"");
-      var bytes=Number(response.headers.get("content-length"));
-      if(mime!=="video/mp4"||!Number.isSafeInteger(bytes)||
-         bytes<2048||bytes>12*1024*1024)throw Error("owner_preview_invalid_mp4");
-      var blob=await response.blob();
-      if(blob.size!==bytes||job.signal.aborted)return;
+      var header=response.headers.get("content-length");
+      var expected=header===null?null:Number(header);
+      if(mime!=="video/mp4"||(expected!==null&&
+        (!Number.isSafeInteger(expected)||expected<2048||
+        expected>12*1024*1024)))throw Error("owner_preview_invalid_mp4");
+      if(!response.body)throw Error("owner_preview_invalid_mp4");
+      // A proxy may strip Content-Length. Do not reject a valid chunked
+      // response, but never use unbounded Response.blob().
+      var reader=response.body.getReader(),chunks=[],bytes=0;
+      try{
+        for(;;){
+          var next=await reader.read();
+          if(next.done)break;
+          if(job.signal.aborted)return;
+          bytes+=next.value.byteLength;
+          if(bytes>12*1024*1024)throw Error("owner_preview_invalid_mp4");
+          chunks.push(next.value);
+        }
+      }finally{
+        try{await reader.cancel()}catch(e){}
+        try{reader.releaseLock()}catch(e){}
+      }
+      if(job.signal.aborted)return;
+      if(bytes<2048||(expected!==null&&bytes!==expected))
+        throw Error("owner_preview_invalid_mp4");
+      var blob=new Blob(chunks,{type:"video/mp4"});
+      if(await blob.slice(4,8).text()!=="ftyp")
+        throw Error("owner_preview_invalid_mp4");
       var objectUrl=URL.createObjectURL(blob);
       if(ownerPreviewJobs.get(playerId)!==job){
         URL.revokeObjectURL(objectUrl);return;
