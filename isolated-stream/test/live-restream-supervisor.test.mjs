@@ -247,3 +247,74 @@ test('standard operator mode remains a bitwise pass-through without AAC encoding
  assert.doesNotMatch(cmd,/-c:a aac|-ac 2/);
  assert.equal(service.list().items[0].audioMode,'copy');
 });
+
+
+test('manual passive TS capture reuses original publisher bytes with zero extra provider fetches',async()=>{
+  const records=[],configs=[];
+  let producer;
+  const live=new ReadableStream({start(controller){producer=controller}});
+  const portal={configured:true,liveChannel:async()=>({
+    status:200,body:{
+      ok:true,kind:'live',extension:'ts',sourceId:UUID,channelId:'88',
+      sourceUrl:'https://provider.example/owner-live/88.ts',name:'Test only'
+    }
+  })};
+  const service=createLiveRestreamSupervisor({
+    portal,mediaPassword:password,
+    lookup:async()=>[{address:'8.8.8.8',family:4}],
+    fetchImpl:async(url,options={})=>{
+      const target=String(url);records.push(target);
+      if(target.includes(':9997/')){
+        if(options.method==='POST')configs.push(JSON.parse(options.body));
+        return Response.json({});
+      }
+      if(target.startsWith('https://provider.example/'))
+        return new Response(live,{status:200,
+          headers:{'content-type':'video/mp2t'}});
+      throw Error('unexpected fetch');
+    }
+  });
+  const start=await service.start(row());
+  assert.equal(start.status,201);
+  const path=start.body.path;
+  assert.equal((await service.captureActiveTs({name:path,rightsConfirmed:false})).status,403);
+  assert.equal((await service.captureActiveTs({name:path,rightsConfirmed:true})).status,409);
+  assert.equal(records.filter(u=>u.startsWith('https://provider.example/')).length,0);
+  const token=configs[0].runOnDemand.match(/\/internal\/live-feed\/([a-f0-9]{48})/)[1];
+  const server=http.createServer((req,res)=>service.streamFeed(req,res,token));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  function transport(count){
+    const bytes=Buffer.alloc(188*count);
+    for(let i=0;i<count;i++){bytes[188*i]=0x47;bytes[188*i+3]=0x10;}
+    return bytes;
+  }
+  try{
+    const responsePromise=fetch('http://127.0.0.1:'+server.address().port+
+      '/internal/live-feed/'+token);
+    producer.enqueue(transport(5)); // publisher is now opening
+    const response=await responsePromise;
+    assert.equal(response.status,200);
+    const consuming=response.arrayBuffer();
+    const reading=service.list().items[0];
+    assert.equal(reading.connections,1);
+    const cap=service.captureActiveTs({name:path,rightsConfirmed:true});
+    producer.enqueue(transport(6100)); // no new upstream GET; same body stream
+    const result=await cap;
+    assert.equal(result.status,200);
+    assert.equal(result.code,'passive_sample_complete');
+    assert.equal(result.bytes.length,188*6000);
+    assert.equal(result.providerRequestsCreated,0);
+    assert.equal(result.customerRoutesChanged,false);
+    assert.equal(records.filter(u=>u.startsWith('https://provider.example/')).length,1);
+    assert.equal(records.filter(u=>u.includes(':8888')).length,0,
+      'passive capture does not fetch MediaMTX HLS or restart an on-demand worker');
+    result.bytes.fill(0);
+    producer.close();
+    assert.equal((await consuming).byteLength,188*(5+6100));
+  }finally{
+    try{producer.close()}catch{}
+    await new Promise(resolve=>server.close(resolve));
+  }
+  const final=await service.stop(path);
+  assert.equal(final.status,200);
+});
