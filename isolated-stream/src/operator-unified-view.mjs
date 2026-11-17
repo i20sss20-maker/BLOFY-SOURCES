@@ -2107,6 +2107,80 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     if(seasonQueueBusy||seasonPage>=seasonPages)return;
     seasonPage++;void refreshSeasonQueue();
   });
+  // The preview service can return JSON 409/429/503 instead of MP4. Fetch
+  // once and only hand a verified, size-bounded same-origin Blob to <video>.
+  // This avoids a second FFmpeg conversion and surfaces safe failure codes.
+  var ownerPreviewJobs=new Map();
+  var ownerPreviewBlobs=new Map();
+  function ownerPreviewMessage(code,status){
+    var messages={
+      owner_preview_busy:"المعاينة مشغولة الآن؛ حاول بعد قليل.",
+      owner_preview_cooldown:"المعاينة قيد التهدئة؛ حاول بعد قليل.",
+      owner_preview_disabled:"معاينة المالك غير مفعلة في التخزين.",
+      private_preview_episode_not_verified:"الحلقة غير مكتملة أو لم يتم التحقق من تخزينها.",
+      season_episode_not_verified:"الحلقة غير معتمدة للمعاينة بعد.",
+      private_preview_verified_prefix_unavailable:"تعذّر التحقق من سلامة أجزاء الملف المحفوظ في S3.",
+      private_preview_manifest_unavailable:"تعذّر قراءة سجل الملف المحفوظ.",
+      private_preview_encode_failed:"فشل تحويل الملف إلى عينة صوت وصورة متوافقة.",
+      private_preview_output_unavailable:"تعذّر تجهيز ملف المعاينة النهائي.",
+      owner_preview_not_ready:"المعاينة ليست جاهزة في Content Hub.",
+      owner_preview_private_media_unavailable:"لم يتمكن الموقع من الحصول على ملف المعاينة الداخلي.",
+      owner_preview_bridge_not_configured:"ربط المعاينة الخاص غير مهيأ.",
+      owner_preview_invalid_media_response:"استجابة المعاينة لا تحتوي ملف MP4 صالحًا."
+    };
+    if(status===401)return "جلسة المسؤول غير مخوّلة. أعد تسجيل الدخول."; 
+    return (messages[code]||"المعاينة غير متاحة في هذه اللحظة.")+
+      (code?" ["+code+"]":"");
+  }
+  async function loadOwnerPreview(playerId,url,showStatus){
+    var video=$(playerId);
+    var oldJob=ownerPreviewJobs.get(playerId);if(oldJob)oldJob.abort();
+    var oldBlob=ownerPreviewBlobs.get(playerId);
+    video.pause();video.removeAttribute("src");video.load();
+    if(oldBlob){URL.revokeObjectURL(oldBlob);ownerPreviewBlobs.delete(playerId)}
+    var job=new AbortController();ownerPreviewJobs.set(playerId,job);
+    showStatus("يجري تجهيز معاينة خاصة من التخزين المتحقق منه...");
+    try{
+      var response=await fetch(url,{credentials:"same-origin",cache:"no-store",
+        redirect:"error",signal:job.signal});
+      if(!response.ok){
+        var code="";
+        try{
+          var errorType=String(response.headers.get("content-type")||"");
+          if(errorType.includes("application/json")){
+            var result=await response.json();
+            code=String(result&&result.code||"").slice(0,80);
+          }
+        }catch(e){}
+        if(ownerPreviewJobs.get(playerId)===job)
+          showStatus("❌ "+ownerPreviewMessage(code,response.status));
+        return;
+      }
+      var mime=String(response.headers.get("content-type")||"");
+      var bytes=Number(response.headers.get("content-length"));
+      if(mime!=="video/mp4"||!Number.isSafeInteger(bytes)||
+         bytes<2048||bytes>12*1024*1024)throw Error("owner_preview_invalid_mp4");
+      var blob=await response.blob();
+      if(blob.size!==bytes||job.signal.aborted)return;
+      var objectUrl=URL.createObjectURL(blob);
+      if(ownerPreviewJobs.get(playerId)!==job){
+        URL.revokeObjectURL(objectUrl);return;
+      }
+      ownerPreviewBlobs.set(playerId,objectUrl);
+      video.src=objectUrl;video.load();
+      showStatus("✅ عينة MP4 جاهزة؛ شغّلها وتحقق من الصورة والصوت يدويًا.");
+    }catch(e){
+      if(!job.signal.aborted&&ownerPreviewJobs.get(playerId)===job)
+        showStatus("❌ تعذّر تحميل المعاينة؛ تحقق من الاتصال والخدمة.");
+    }finally{
+      if(ownerPreviewJobs.get(playerId)===job)ownerPreviewJobs.delete(playerId);
+    }
+  }
+  window.addEventListener("pagehide",function(){
+    ownerPreviewJobs.forEach(function(job){job.abort()});
+    ownerPreviewBlobs.forEach(function(url){URL.revokeObjectURL(url)});
+    ownerPreviewBlobs.clear();
+  });
   async function refreshSeasonQueue(){
     if(seasonQueueBusy)return;
     seasonQueueBusy=true;
@@ -2229,15 +2303,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
               view.type="button";view.style.marginTop="8px";
               view.dataset.seasonRunId=String(r.runId);
               view.addEventListener("click",function(){
-                var preview=$("season-episode-preview-player");
-                preview.pause();preview.removeAttribute("src");preview.load();
-                preview.src="/operator/api/content-hub/seasons/episodes/"+
-                  encodeURIComponent(String(r.runId))+"/preview";
-                preview.load();
                 $("season-episode-preview-wrap").style.display="block";
-                $("season-episode-preview-note").textContent=
-                  "معاينة الحلقة "+r.episodeNumber+
-                  " من التخزين الخاص. تأكد من الصورة والصوت؛ لا تؤثر على بث المشتركين.";
+                void loadOwnerPreview("season-episode-preview-player",
+                  "/operator/api/content-hub/seasons/episodes/"+
+                  encodeURIComponent(String(r.runId))+"/preview",
+                  function(message){
+                    $("season-episode-preview-note").textContent=
+                      "الحلقة "+r.episodeNumber+" — "+message;
+                  });
               });
               card.append(view);
             }
@@ -2458,10 +2531,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     seasonPreviewWatched=false;
     $("season-video-okay").checked=false;$("season-audio-okay").checked=false;
     seasonButtonAV();
-    var player=$("season-preview-video");
-    player.pause();player.removeAttribute("src");player.load();
-    player.src="/operator/api/content-hub/episodes/preview";
-    player.load();seasonMessage("شغّل العينة وتحقق من الصوت والصورة بنفسك.");
+    void loadOwnerPreview("season-preview-video",
+      "/operator/api/content-hub/episodes/preview",seasonMessage);
   });
   $("season-preview-video").addEventListener("timeupdate",function(){
     if(this.currentTime>=0.6)seasonPreviewWatched=true;
