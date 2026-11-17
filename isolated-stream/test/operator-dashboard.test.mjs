@@ -511,3 +511,43 @@ test('manual owner TS analyzer remains protected, inactive without confirmation,
     assert.match(html,/لا يفتح النظام اتصالًا جديدًا بالمصدر/);
   });
 });
+
+
+test('passive sample remains owner-only, opt-in, and does not start disconnected channels',async()=>{
+  const previous=process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN;
+  process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN='TEST_ONLY_PASSIVE_CAPTURE_TOKEN_NOT_PUBLIC_OR_REAL_1234567';
+  try{
+    await withServer({adminToken:secret},async base=>{
+      const url=base+'/operator/api/media-scan/passive-sample';
+      const body=JSON.stringify({path:'live-123456abcdef',rightsConfirmed:true});
+      const unauthorized=await fetch(url,{method:'POST',
+        headers:{'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},body});
+      assert.equal(unauthorized.status,401);
+      const noAction=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json'},body});
+      assert.equal(noAction.status,403);
+      const noConsent=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},
+        body:JSON.stringify({path:'live-123456abcdef',rightsConfirmed:false})});
+      assert.equal(noConsent.status,403);
+      assert.equal((await noConsent.json()).code,'passive_sample_rights_required');
+      const disconnected=await fetch(url,{method:'POST',
+        headers:{authorization:auth,'content-type':'application/json',
+          'x-blofy-operator-action':'media-scan-passive-sample'},body});
+      assert.equal(disconnected.status,404);
+      assert.equal((await disconnected.json()).code,'passive_capture_path_not_found');
+      const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+      assert.equal(page.status,200);
+      const html=await page.text();
+      for(const id of ['passive-ts-refresh','passive-ts-path','passive-ts-rights',
+        'passive-ts-run','passive-ts-status'])assert.ok(html.includes('id="'+id+'"'));
+      assert.match(html,/media-scan\/passive-sample/);
+      assert.match(html,/لا يفتح مسار Xtream أو HLS جديدًا/);
+    });
+  }finally{
+    if(previous===undefined)delete process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN;
+    else process.env.BLOFY_DECODER_LAB_SAMPLE_TOKEN=previous;
+  }
+});
