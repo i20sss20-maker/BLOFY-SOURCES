@@ -3955,6 +3955,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "✅ الجدولة مفعّلة للمصدر saleh فقط عند 4:00–4:59 صباحًا بتوقيت السعودية. "+
         "هذا فهرس بيانات، وليس نسخًا للأفلام إلى تخزين BLOFY.";
       var receipts=Array.isArray(d.receipts)?d.receipts.slice(0,7):[];
+      // PostgreSQL receipts are not a progress stream: a stale queued or
+      // running row is only evidence that manual review is needed.
+      if(receipts.some(function(row){return row.needsOperatorReview===true;}))
+        status.textContent="⚠ يوجد طلب مزامنة طال دون إثبات اكتماله. تحقق من سجلات الاستيراد والمصدر قبل إعادة المحاولة؛ لم يبدأ فحص السجل أي استيراد جديد.";
       if(!receipts.length){
         var none=document.createElement("p");
         none.textContent="لم تُسجّل مهمة يومية بعد. لا يُعد هذا دليلًا على اكتمال النسخ أو الفهرسة.";
@@ -3966,9 +3970,14 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       receipts.forEach(function(row){
         var item=document.createElement("p");
         var day=String(row.day||"غير محدد").slice(0,12);
+        var attention={
+          queued_over_one_hour_review_required:" ⚠ بانتظار أكثر من ساعة؛ راجع الخدمة",
+          running_over_six_hours_review_required:" ⚠ قيد التشغيل أكثر من 6 ساعات؛ راجع التقدم"
+        };
         item.textContent=day+" — "+(labels[row.state]||"حالة غير معروفة")+
           (row.finishedAt?" · انتهى: "+
-            new Date(row.finishedAt).toLocaleString("ar-SA"):"");
+            new Date(row.finishedAt).toLocaleString("ar-SA"):"")+
+          (attention[row.attentionCode]||"");
         holder.appendChild(item);
       });
     }catch(e){
