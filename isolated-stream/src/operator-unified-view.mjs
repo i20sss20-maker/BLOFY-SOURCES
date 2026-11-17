@@ -1123,6 +1123,26 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <tbody id="media-watchlist-signals"></tbody></table></div>
 <p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
 </div>
+<div class="panel" id="media-probe-queue-panel">
+<div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
+<p class="muted">يفحص مقاطع HLS الحقيقية على مسارات المشرف الموجودة مسبقًا فقط. مسار واحد في كل مرة، وبحد مسارين لكل تشغيل؛ لا ينشئ قناة أو يغيّر بث العملاء.</p></div>
+<button type="button" class="btn secondary sm" id="media-probe-queue-refresh">↻ تحديث المسارات والنتائج</button></div>
+<p class="diag-inline-note" id="media-probe-queue-status" role="status" aria-live="polite">لم تُقرأ المسارات المؤهلة بعد.</p>
+<div class="tablewrap"><table><thead><tr><th>اختيار</th><th>مسار المشرف</th><th>اتصال المصدر</th></tr></thead>
+<tbody id="media-probe-queue-candidates"></tbody></table></div>
+<p class="muted">الفحص متاح لمسارات المشرف النشطة التي لديها اتصال سحب قائم فقط؛ المسارات الخاملة مستبعدة. قد يُعاد فتح الاتصال إذا انقطع أثناء الاختبار. لا توجد عملية فحص لجميع قنوات Xtream.</p>
+<div class="inline" style="margin:12px 0">
+<label><input type="checkbox" id="media-probe-queue-rights"> أؤكد أن لدي حق فحص المسارات المحددة</label>
+<label><input type="checkbox" id="media-probe-queue-capacity"> أقر بأن الفحص قد يعيد فتح اتصال مصدر منقطع وأتحمل حدود اتصالات المزود</label>
+</div>
+<div class="actions">
+<button type="button" class="btn" id="media-probe-queue-start">▶ فحص المسارات المحددة</button>
+<button type="button" class="btn secondary" id="media-probe-queue-cancel" disabled>⏹ إيقاف جدولة الباقي</button>
+</div>
+<p class="muted" style="margin-top:12px">نجاح HLS يعني وصول بيانات TS، وليس ظهور صورة مفكوكة أو سماع صوت على Android 9 أو Windows. مؤشرات PMT والحزم تساعد في التشخيص ولا تعالج القناة تلقائيًا.</p>
+<div class="tablewrap"><table><thead><tr><th>المسار</th><th>حالة الفحص</th><th>الوصول إلى البيانات</th><th>مسار الصوت / الترميز</th><th>مسار الفيديو / الترميز</th></tr></thead>
+<tbody id="media-probe-queue-results"></tbody></table></div>
+</div>
 <div class="panel" id="deep-audit-panel">
 <div class="controls"><div><h3>فحص النظام بالكامل</h3><p class="muted">اختيار المصدر يُظهر حد اتصالاته بدل تعميم النتيجة على جميع المصادر.</p></div>
 <div class="diag-actions"><label class="diag-source-label" for="deep-audit-source">المصدر <select id="deep-audit-source" aria-label="المصدر المراد فحصه"><option value="">كل المصادر</option></select></label>
@@ -5599,6 +5619,98 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       await loadLive();
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
+  });
+  var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false;
+  var mediaProbeQueueState={
+    queued:"بانتظار الدور",running:"فحص HLS جار",
+    transport_verified:"وصلت مقاطع HLS",transport_failed:"تعذر وصول مقطع HLS",
+    failed:"فشل الفحص",skipped:"لم يعد المسار نشطًا",
+    unknown:"انتهت المهلة دون نتيجة",cancelled:"أُلغي قبل البدء"
+  };
+  function mediaProbeQueueCell(row,v){cell(row,String(v))}
+  function mediaProbeQueueRender(data){
+    var status=$("media-probe-queue-status");
+    var candidates=$("media-probe-queue-candidates"),results=$("media-probe-queue-results");
+    var isRunning=data.job?.state==="running";
+    var selected=new Set(Array.from(candidates.querySelectorAll("input:checked"))
+      .map(function(input){return input.value}));
+    candidates.replaceChildren();results.replaceChildren();
+    (Array.isArray(data.eligiblePaths)?data.eligiblePaths:[]).forEach(function(item){
+      var row=node("tr"),td=node("td"),check=node("input");
+      check.type="checkbox";check.value=String(item.path);
+      check.className="media-probe-queue-option";
+      check.checked=selected.has(check.value);check.disabled=isRunning;
+      check.setAttribute("aria-label","تحديد "+check.value);
+      td.appendChild(check);row.appendChild(td);
+      mediaProbeQueueCell(row,item.path);
+      mediaProbeQueueCell(row,item.currentFeedConnections===1?
+        "نشط • اتصال واحد":"غير مؤكد");
+      candidates.appendChild(row);
+    });
+    if(!candidates.children.length){
+      var empty=node("tr"),td=cell(empty,data.available===false?
+        "تعذر قراءة حالة المسارات.":"لا توجد مسارات مشرف نشطة مؤهلة. افتح قناة مرخصة من قسم إعادة البث أولًا.");
+      td.colSpan=3;candidates.appendChild(empty);
+    }
+    (Array.isArray(data.job?.results)?data.job.results:[]).forEach(function(item){
+      var row=node("tr");
+      mediaProbeQueueCell(row,item.path);
+      mediaProbeQueueCell(row,mediaProbeQueueState[item.state]||"غير محدد");
+      mediaProbeQueueCell(row,item.transportVerified?"تم التحقق من النقل":
+        item.state==="running"?"قيد الفحص":"غير مثبت");
+      var tracks=item.tracks||{};
+      mediaProbeQueueCell(row,tracks.audioTrackDeclared===true?
+        "PMT: موجود • "+(tracks.audioCodecs||[]).join(", ")+
+        " • حزم الصوت "+(tracks.audioPayloadPackets??"غير معروف"):
+        tracks.audioTrackDeclared===false?"PMT: لا يعلن صوتًا":"غير مؤكد");
+      mediaProbeQueueCell(row,Array.isArray(tracks.videoCodecs)&&tracks.videoCodecs.length?
+        tracks.videoCodecs.join(", ")+" • حزم الصورة "+(tracks.videoPayloadPackets??"غير معروف"):
+        "غير مؤكد");
+      results.appendChild(row);
+    });
+    if(!results.children.length){var empty=node("tr"),td=cell(empty,"لم يبدأ أي فحص HLS من هذا الطابور بعد.");td.colSpan=5;results.appendChild(empty);}
+    var cooldown=Number(data.cooldownRemainingMs)||0;
+    status.textContent="المهمة: "+(data.job?.id||"لا توجد")+
+      " · المنجز: "+(data.job?.completed??0)+"/"+(data.job?.requested??0)+
+      " · الفحوصات المتزامنة: 1"+(cooldown>0?
+        " · فترة الحماية المتبقية: "+Math.ceil(cooldown/1000)+" ثانية":"")+
+      " · نتائج الطابور مؤقتة وتُفقد عند إعادة تشغيل السيرفر.";
+    $("media-probe-queue-start").disabled=isRunning||data.available!==true;
+    $("media-probe-queue-cancel").disabled=!isRunning;
+    if(mediaProbeQueueTimer){clearTimeout(mediaProbeQueueTimer);mediaProbeQueueTimer=null;}
+    if(isRunning)mediaProbeQueueTimer=setTimeout(function(){void mediaProbeQueueLoad()},3500);
+  }
+  async function mediaProbeQueueLoad(){
+    if(mediaProbeQueueBusy)return;
+    mediaProbeQueueBusy=true;
+    try{var data=await api("media-scan/queue");mediaProbeQueueRender(data)}
+    catch(e){value("media-probe-queue-status","تعذر قراءة الطابور: "+e.message+
+      " • الحالة غير معروفة، ولم يبدأ فحص جديد.")}
+    finally{mediaProbeQueueBusy=false;}
+  }
+  $("media-probe-queue-refresh").addEventListener("click",function(){void mediaProbeQueueLoad()});
+  $("media-probe-queue-start").addEventListener("click",async function(){
+    var paths=Array.from(document.querySelectorAll(".media-probe-queue-option:checked"))
+      .map(function(input){return input.value});
+    if(!paths.length||paths.length>2){show("اختر مسارًا واحدًا أو مسارين نشطين فقط.",false);return;}
+    if(!$("media-probe-queue-rights").checked||
+       !$("media-probe-queue-capacity").checked){
+      show("يلزم تأكيد صلاحية الفحص وحدود اتصال المزود.",false);return;
+    }
+    if(!confirm("سيفحص النظام مسارات المشرف الموجودة واحدًا بعد الآخر، وقد يُعاد فتح الاتصال إذا انقطع أثناء الفحص. لا تُفحص قنوات أخرى. متابعة؟"))return;
+    this.disabled=true;
+    try{
+      var response=await action("media-scan/queue/start","media-scan-start",{
+        paths:paths,rightsConfirmed:true,capacityAcknowledged:true});
+      show(response.started?"بدأ فحص HLS. النتيجة ستظهر داخل الجدول.":"لم يبدأ الفحص.",response.started);
+    }catch(e){show("لم يبدأ الفحص: "+e.message,false)}
+    finally{await mediaProbeQueueLoad();}
+  });
+  $("media-probe-queue-cancel").addEventListener("click",async function(){
+    try{await action("media-scan/queue/cancel","media-scan-cancel",{});
+      show("توقفت جدولة المسارات التالية؛ الفحص الجاري قد يستمر حتى ينتهي.",true)}
+    catch(e){show("تعذر إيقاف الجدولة: "+e.message,false)}
+    finally{await mediaProbeQueueLoad()}
   });
   var mediaWatchlistLatest=null,mediaWatchlistBusy=false;
   var mediaWatchlistState={
