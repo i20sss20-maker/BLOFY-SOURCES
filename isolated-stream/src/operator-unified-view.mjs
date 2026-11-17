@@ -1156,6 +1156,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <div class="stat"><small>ترميز الصوت المرصود</small><strong id="owner-ts-sample-codec">—</strong></div>
 </div>
 <p id="owner-ts-sample-explanation" class="muted">تخص النتيجة الملف القصير وليس جميع القنوات. لا تثبت سماع الصوت أو ظهور الصورة على أجهزة Android وWindows.</p>
+<div class="controls" style="margin-top:18px"><h4>📡 أخذ عينة من الاتصال النشط مباشرة — دون تجهيز ملف</h4>
+<button type="button" class="btn secondary sm" id="passive-ts-refresh">↻ عرض اتصالات المشرف النشطة</button></div>
+<p class="muted">يستمع الفاحص مؤقتًا لبايتات TS المارة في اتصال المشرف الموجود أصلًا، ولا يفتح مسار Xtream أو HLS جديدًا. لا يعمل إذا كانت القناة متوقفة، ولا يختبر القنوات تلقائيًا.</p>
+<div class="inline" style="margin:12px 0">
+<label for="passive-ts-path">قناة المشرف النشطة
+<select id="passive-ts-path" aria-label="مسار المشرف النشط"><option value="">اضغط تحديث لعرض المسارات</option></select></label>
+<label><input type="checkbox" id="passive-ts-rights"> أؤكد أن لدي حق أخذ عينة قصيرة من هذا البث، وأوافق على تحليلها في المختبر المعزول</label>
+<button type="button" id="passive-ts-run" class="btn" disabled>🎧 فحص الصوت والصورة من الاتصال القائم</button></div>
+<p class="diag-inline-note" id="passive-ts-status" role="status" aria-live="polite">لم يبدأ أخذ عينة. يُسمح بعينة واحدة فقط، مع مهلة وحدود آمنة بين كل تشغيل.</p>
 </div>
 <div class="panel" id="media-probe-queue-panel">
 <div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
@@ -5754,6 +5763,102 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch{
       message.textContent="انتهى الوقت أو تعذر تحليل العينة بأمان. لم تُنفذ تغييرات على القنوات.";
     }finally{clearTimeout(timeout);ownerSampleBusy=false;this.disabled=false;}
+  });
+  var passiveSampleBusy=false,passiveSampleLoading=false;
+  async function refreshPassiveSamples(){
+    if(passiveSampleBusy||passiveSampleLoading)return;
+    passiveSampleLoading=true;
+    var select=$("passive-ts-path"),status=$("passive-ts-status"),
+      button=$("passive-ts-run");
+    button.disabled=true;
+    select.replaceChildren();
+    status.textContent="جار قراءة المسارات النشطة فقط؛ لا تُفتح قنوات جديدة.";
+    try{
+      var data=await api("live");
+      var eligible=(Array.isArray(data.items)?data.items:[])
+        .filter(function(item){return /^live-[a-f0-9]{12}$/.test(item.path||"")&&
+          item.connections===1&&item.probePending!==true;}).slice(0,3);
+      var empty=document.createElement("option");empty.value="";
+      empty.textContent=eligible.length?"اختر قناة المشرف":"لا يوجد اتصال مشرف نشط مؤهل";
+      select.appendChild(empty);
+      eligible.forEach(function(item){
+        var option=document.createElement("option");
+        option.value=item.path;
+        option.textContent=String(item.title||"قناة المشرف").slice(0,60)+" · "+item.path;
+        select.appendChild(option);
+      });
+      button.disabled=!eligible.length;
+      status.textContent=eligible.length?
+        "عدد مسارات المشرف النشطة: "+eligible.length+
+        ". اختر مسارًا ووافق على الفحص قبل بدء العينة.":
+        "لا يوجد مسار مشرف نشط. افتح قناة مصرحًا بها من قسم إعادة البث أولًا؛ لن يُنشئ الفاحص اتصالًا بدلًا عنك.";
+    }catch{
+      status.textContent="تعذر قراءة حالة اتصالات المشرف. لم يتم طلب أي بث.";
+      button.disabled=true;
+    }finally{passiveSampleLoading=false;}
+  }
+  $("passive-ts-refresh").addEventListener("click",function(){void refreshPassiveSamples()});
+  $("passive-ts-run").addEventListener("click",async function(){
+    if(passiveSampleBusy)return;
+    var selected=$("passive-ts-path").value,rights=$("passive-ts-rights").checked;
+    var status=$("passive-ts-status");
+    if(!/^live-[a-f0-9]{12}$/.test(selected)){
+      status.textContent="اختر مسار مشرف نشطًا أولًا.";return;
+    }
+    if(!rights){
+      status.textContent="يلزم تأكيد حق فحص العينة قبل البدء.";return;
+    }
+    if(!confirm("سيقرأ المختبر جزءًا قصيرًا من بيانات قناة المشرف الجارية أصلًا، دون طلب قناة جديدة، وسيحذف العينة بعد التحليل. متابعة؟"))return;
+    passiveSampleBusy=true;this.disabled=true;
+    status.textContent="جار انتظار بايتات عينة من الاتصال الموجود ثم تحليلها. قد يستغرق ذلك وقتًا محدودًا، دون تغيير بث المشتركين.";
+    var controller=new AbortController();
+    var timer=setTimeout(function(){controller.abort()},100000);
+    try{
+      var response=await fetch("/operator/api/media-scan/passive-sample",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"content-type":"application/json",
+          "x-blofy-operator-action":"media-scan-passive-sample"},
+        body:JSON.stringify({path:selected,rightsConfirmed:true}),
+        signal:controller.signal
+      });
+      var data=await response.json();
+      if(response.status===401){
+        status.textContent="انتهت جلسة المشرف. سجل الدخول مرة أخرى.";return;
+      }
+      if(response.status!==200||data.scope!=="approved_short_ts_sample"||
+        data.passiveCapture!==true){
+        var causes={
+          passive_capture_no_active_publisher:"المسار لم يعد نشطًا؛ لا يُفتح اتصال جديد تلقائيًا.",
+          passive_capture_busy:"يوجد فحص آخر جارٍ حاليًا.",
+          passive_capture_cooldown:"انتظر فترة الحماية قبل إعادة الفحص.",
+          passive_capture_timeout:"لم تصل بيانات كافية خلال مهلة الفحص.",
+          passive_feed_session_ended:"انتهى اتصال المشرف أثناء أخذ العينة.",
+          passive_ts_alignment_failed:"لم تُرصد حزم TS محاذية في العينة.",
+          passive_ts_sync_lost:"تغير ترتيب حزم TS أثناء العينة.",
+          sample_lab_cooldown:"المختبر في فترة حماية بين العمليات."
+        };
+        status.textContent=(causes[data.code]||
+          "تعذر فحص القناة ضمن الحدود الآمنة: "+String(data.code||"unknown").slice(0,70))+
+          " · لم تُنشأ جلسة جديدة للمصدر.";
+        return;
+      }
+      value("owner-ts-sample-audio-track",data.hasAudio?"مرصود في العينة":"غير مرصود في العينة");
+      value("owner-ts-sample-audio-decoded",data.decodedAudio===true?"نجح داخل FFmpeg":
+        data.decodedAudio===false?"فشل داخل FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-video-decoded",data.decodedVideo===true?"نجح داخل FFmpeg":
+        data.decodedVideo===false?"فشل داخل FFmpeg":"غير مؤكد");
+      value("owner-ts-sample-codec",data.audioCodec||"غير معروف");
+      value("owner-ts-sample-explanation",String(data.explanation||"")+
+        " النتائج تخص عينة من دخل المشرف، ولا تثبت سماع الصوت على جهاز العميل.");
+      status.textContent="عينة من اتصال المشرف القائم: "+String(data.code||"غير معروف")+
+        " · حجمها: "+(data.capturedBytes??"—")+
+        " بايت · لم يتم فتح اتصال جديد أو تعديل بث المشتركين.";
+    }catch{
+      status.textContent="فشل الاتصال بالفاحص أو انتهت مهلة الطلب، دون إنشاء اتصال جديد بالمصدر.";
+    }finally{
+      clearTimeout(timer);passiveSampleBusy=false;this.disabled=false;
+      void refreshPassiveSamples();
+    }
   });
   var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false,mediaProbeQueueLatest=null;
   var mediaProbeQueueState={
