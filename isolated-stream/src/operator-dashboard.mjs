@@ -642,6 +642,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       '/operator/api/distributors':()=>portal.distributorAdmins(),
       '/operator/api/sales-summary':()=>portal.salesSummary(),
       '/operator/api/media-quality':()=>portal.mediaQuality(),
+      '/operator/api/ops/admin-readiness':()=>portal.ownerAdminReadiness(),
       '/operator/api/media-failures':()=>portal.mediaFailures({
         sourceId:uri.searchParams.get('sourceId')||''
       }),

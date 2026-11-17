@@ -1143,6 +1143,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <tbody id="media-watchlist-signals"></tbody></table></div>
 <p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
 </div>
+<div class="panel" id="owner-code-distributor-qa-panel">
+ <div class="controls"><div><h3>🔎 فحص أكواد BLOFY ولوحات الموزعين — قراءة حقيقية آمنة</h3>
+ <p class="muted">يفحص وجود الجداول والأعمدة الأساسية وصلاحية قراءة PostgreSQL الفعلية فقط. لا يصدر أكوادًا، ولا يكشف بيانات العملاء والموزعين، ولا يغيّر الأرصدة أو ينفذ ترقية الجداول.</p></div>
+ <button type="button" class="btn secondary" id="owner-data-qa-refresh">↻ فحص قاعدة البيانات</button></div>
+ <p class="diag-inline-note" id="owner-data-qa-status" role="status" aria-live="polite">لم يُتحقق من قاعدة الأكواد والموزعين بعد.</p>
+ <div class="cards">
+ <div class="stat"><small>قاعدة أكواد الاشتراك</small><strong id="owner-data-qa-codes">—</strong></div>
+ <div class="stat"><small>قاعدة لوحات الموزعين</small><strong id="owner-data-qa-distributors">—</strong></div>
+ </div>
+ <p class="muted">نجاح قراءة الجداول لا يثبت إصدار كود أو استرداده أو تعديل رصيد موزع؛ تلك اختبارات معاملات مستقلة، ولا تنفذها هذه الصفحة.</p>
+</div>
 <div class="panel" id="owner-radio-audio-qa-panel">
  <div class="controls"><div><h3>🎧 فحص مصدر الصوت — للمالك فقط</h3>
  <p class="muted">افحص محطتين فقط من القائمة المعتمدة. الفحص يدوي، يقرأ حدًا أقصى 4 كيلوبايت لكل محطة ولا ينقل الصوت للمشتركين. يفصل بين بيانات صوت حقيقية وHTML/HLS وخطأ المصدر؛ لا يثبت سماع الصوت على الجهاز.</p></div>
@@ -1393,6 +1404,54 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       headers:{"content-type":"application/json","x-blofy-operator-action":header},body:JSON.stringify(data||{})});
     var d=await r.json();if(!r.ok||d.ok===false)throw Error(d.code||d.error||"HTTP "+r.status);return d}
 
+  var ownerAdminQaBusy=false;
+  function ownerAdminStoreLabel(row){
+    var names={
+      readable:"✅ القراءة متاحة",
+      table_missing:"⚠️ الجدول غير موجود",
+      columns_incomplete:"⚠️ أعمدة أساسية ناقصة",
+      database_unavailable:"❌ تعذر قراءة قاعدة البيانات",
+      unavailable:"❌ غير متاح"
+    };
+    return names[String(row?.state||"")]||"غير مؤكد";
+  }
+  async function loadOwnerAdminReadiness(){
+    if(ownerAdminQaBusy)return;
+    ownerAdminQaBusy=true;
+    var button=$("owner-data-qa-refresh"),status=$("owner-data-qa-status");
+    button.disabled=true;
+    status.textContent="جار التحقق من الجداول وصلاحية قراءة البيانات دون أي تعديل...";
+    try{
+      var response=await fetch("/operator/api/ops/admin-readiness",{
+        cache:"no-store",credentials:"same-origin",redirect:"error"
+      });
+      if(![200,503].includes(response.status))throw Error("HTTP "+response.status);
+      var report=await response.json();
+      if(report.scope!=="authoritative_owner_postgresql_read_only"||
+         report.schemaMutations!==0||report.customerWrites!==0||
+         report.tableRowsReturned!==false||report.providerMediaRequests!==0||
+         !Array.isArray(report.stores))
+        throw Error("نتيجة فحص البنية غير موثوقة.");
+      var byId=Object.fromEntries(report.stores.filter(function(x){
+        return x&&["codes","distributors"].includes(x.id)
+      }).map(function(x){return [x.id,x]}));
+      value("owner-data-qa-codes",ownerAdminStoreLabel(byId.codes));
+      value("owner-data-qa-distributors",ownerAdminStoreLabel(byId.distributors));
+      status.textContent=report.ok===true&&response.status===200?
+        "✅ تأكدت القراءة الحقيقية لجداول الأكواد والموزعين، دون تعديل بيانات أي مشترك.":
+        "⚠️ توجد مشكلة في بنية أو صلاحيات إحدى الجداول؛ لا تعتبر معاملات الأكواد مكتملة.";
+    }catch(e){
+      ["owner-data-qa-codes","owner-data-qa-distributors"].forEach(function(id){
+        value(id,"—");
+      });
+      status.textContent="تعذر فحص قاعدة الأكواد والموزعين: "+
+        String(e.message||"غير معروف").slice(0,110);
+    }finally{
+      ownerAdminQaBusy=false;button.disabled=false;
+    }
+  }
+  $("owner-data-qa-refresh").addEventListener("click",loadOwnerAdminReadiness);
+  void loadOwnerAdminReadiness();
   var ownerAudioBusy=false;
   function ownerAudioStatus(message){$("owner-audio-qa-status").textContent=message}
   function ownerAudioOptions(select,rows,optional){
