@@ -24,6 +24,7 @@ import {createXtreamCatalogRelay,createXtreamManifestRelay} from './xtream-catal
 import {createOfficialM3uDiagnostic} from './xtream-playlist-route-diagnostic.mjs';
 import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-profile-diagnostic.mjs';
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
+import {readOnlyOperatorSiteProof} from './operator-site-live-readiness.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
@@ -437,6 +438,16 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
           }));
         }).catch(()=>console.warn('BLOFY_STREAM_UNIFIED_BRIDGE_PROOF',
           JSON.stringify({ok:false,code:'bridge_probe_error'})));
+        // Authenticate through the SAME fixed Portal bridge and check six
+        // operator modules against real production read endpoints. The
+        // result contains only HTTP status classes and timing, never DB rows.
+        // Code and reseller GET are excluded since they may initialize
+        // database schema; no real writes are performed by this proof.
+        void readOnlyOperatorSiteProof({client:portal})
+          .then(report=>console.info('BLOFY_STREAM_SITE_READINESS',JSON.stringify(report)))
+          .catch(()=>console.warn('BLOFY_STREAM_SITE_READINESS',
+            JSON.stringify({ok:false,code:'site_readiness_error',
+              sourceMediaRequests:0,customerCutover:false})));
         // Metadata-only season bridge proof. Never reads upstream media or
         // reveals object keys, credentials, title names or subscriber data.
         void portal.contentHubSeasonQueue().then(({status,body})=>{
