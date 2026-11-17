@@ -102,3 +102,41 @@ test('oversized remote reports are rejected and never sent to browser',async()=>
   assert.equal(r.ok,false);
   assert.equal(r.state,'unavailable');
 });
+
+
+test('matrix is verified only for exactly one successful AAC, AC3 and E-AC3 decode each',async()=>{
+  const matrix=['aac','ac3','eac3'].map(codec=>({
+    codec,ok:true,stage:'complete',audioDecoded:true,audioFrames:8,
+    providerUrl:'https://private-provider.invalid/?password=hidden'
+  }));
+  const client=createDecoderLabReportClient({
+    viewToken:token,clock:()=>now,
+    fetchImpl:async()=>Response.json({...good,report:{
+      ...good.report,codecMatrix:matrix,codecMatrixAllVerified:true
+    }})
+  });
+  const result=await client.snapshot();
+  assert.equal(result.ok,true);
+  assert.equal(result.codecMatrixVerified,true);
+  assert.equal(result.allSyntheticCodecsVerified,true);
+  assert.deepEqual(result.audioCodecMatrix.map(x=>x.codec),['aac','ac3','eac3']);
+  assert.equal(result.audioCodecMatrix.every(x=>x.decoded),true);
+  assert.doesNotMatch(JSON.stringify(result),/private-provider|password|hidden/);
+});
+test('duplicate codec entries and misleading matrix flag are rejected',async()=>{
+  const client=createDecoderLabReportClient({
+    viewToken:token,clock:()=>now,
+    fetchImpl:async()=>Response.json({...good,report:{
+      ...good.report,codecMatrix:[
+        {codec:'aac',ok:true,stage:'complete',audioDecoded:true,audioFrames:8},
+        {codec:'aac',ok:true,stage:'complete',audioDecoded:true,audioFrames:8},
+        {codec:'eac3',ok:true,stage:'complete',audioDecoded:true,audioFrames:8}
+      ],codecMatrixAllVerified:true
+    }})
+  });
+  const result=await client.snapshot();
+  assert.equal(result.codecMatrixVerified,false);
+  assert.equal(result.allSyntheticCodecsVerified,false);
+  assert.equal(result.audioCodecMatrix[0].decoded,false);
+  assert.equal(result.audioCodecMatrix[1].decoded,false);
+});
