@@ -17,6 +17,31 @@ const integer=(value,max)=>Number.isSafeInteger(value)&&value>=0&&value<=max?val
 const samplePath=p=>typeof p==='string'&&
   /^\/tmp\/blofy-owner-sample-[A-Za-z0-9_-]+\/sample\.ts$/.test(p);
 
+export async function readOwnerSampleRequest(req){
+  const sizeRaw=req.headers?.['content-length'];
+  if(typeof sizeRaw!=='string'||!/^[0-9]{1,8}$/.test(sizeRaw)||
+    req.headers?.['transfer-encoding']!==undefined||
+    req.headers?.['content-type']!=='video/mp2t')
+    return {ok:false,code:'invalid_sample_request'};
+  const expected=Number(sizeRaw);
+  if(!Number.isSafeInteger(expected)||expected<MIN_PACKETS*TS_SIZE||
+    expected>MAX_SAMPLE_BYTES||expected%TS_SIZE!==0)
+    return {ok:false,code:'sample_size_rejected'};
+  const chunks=[];let received=0;
+  try{
+    for await(const part of req){
+      const chunk=Buffer.from(part);
+      received+=chunk.length;
+      if(received>expected||received>MAX_SAMPLE_BYTES)
+        return {ok:false,code:'sample_size_rejected'};
+      chunks.push(chunk);
+    }
+  }catch{return {ok:false,code:'sample_request_interrupted'};}
+  if(received!==expected)return {ok:false,code:'sample_length_mismatch'};
+  const bytes=Buffer.concat(chunks,received);
+  return isMpegTsSample(bytes)?{ok:true,bytes}:{ok:false,code:'invalid_mpegts_sample'};
+}
+
 export function isMpegTsSample(bytes){
   if(!Buffer.isBuffer(bytes)||bytes.length<MIN_PACKETS*TS_SIZE||
     bytes.length>MAX_SAMPLE_BYTES||bytes.length%TS_SIZE!==0)return false;
