@@ -24,7 +24,7 @@ async function check(target,client,clock){
    httpStatus===null?'unknown':
    httpStatus>=500?'unavailable':
    httpStatus<200||httpStatus>=300?'unavailable':
-   body?.ok===false?'degraded':'connected';
+   body?.ok===false?'degraded':body?.ok===true?'connected':'reachable';
   // Strict fields only. Do not print body (it can include subscribers,
   // source names, titles, storage keys or other sensitive metadata).
   return {id:target.id,state,httpStatus,
@@ -55,6 +55,7 @@ export async function readOnlyOperatorSiteProof({
   checks,
   checked:checks.length,
   connected:checks.filter(x=>x.state==='connected').length,
+  reachable:checks.filter(x=>x.state==='reachable').length,
   degraded:checks.filter(x=>x.state==='degraded').length,
   unavailable:checks.filter(x=>x.state==='unavailable'||x.state==='blocked').length,
   sourceMediaRequests:0,customerWrites:0,customerCutover:false,
