@@ -46,7 +46,7 @@ async function withLocalOperator(fn){
 }
 test('radio source QA UI is authenticated, compiles and never embeds source URL',()=>{
  const page=renderOperatorDashboard('audio-qa-test');
- for(const id of ['owner-audio-qa-panel','owner-audio-qa-refresh',
+ for(const id of ['owner-radio-audio-qa-panel','owner-audio-qa-refresh',
   'owner-audio-qa-track-1','owner-audio-qa-track-2',
   'owner-audio-qa-probe','owner-audio-qa-output'])
   assert.match(page,new RegExp('id="'+id+'"'));
