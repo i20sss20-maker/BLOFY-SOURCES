@@ -1123,6 +1123,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <tbody id="media-watchlist-signals"></tbody></table></div>
 <p class="muted">⚠️ عدد القنوات المفحوصة بفك ترميز الصوت والصورة في هذا التقرير: 0. فحص قناة أو حلقة واحدة من المصدر يتطلب إجراءً منفصلًا بإذن المشرف وحدود الاتصال المعتمدة.</p>
 </div>
+<div class="panel" id="decoder-lab-panel">
+<div class="controls"><div><h3>🧪 مختبر FFmpeg — فك الترميز الحقيقي</h3>
+<p class="muted">هذا فحص لملف صناعي ينشئه المختبر المعزول. النتيجة لا تثبت تشغيل أي قناة Xtream أو وجود صوت مسموع على Android 9 أو Windows.</p></div>
+<button type="button" id="decoder-lab-refresh" class="btn secondary">↻ قراءة نتيجة المختبر</button></div>
+<div class="cards">
+<div class="stat"><small>فك ترميز الصوت الصناعي</small><strong id="decoder-lab-audio">غير معروف</strong></div>
+<div class="stat"><small>فك ترميز الصورة الصناعية</small><strong id="decoder-lab-video">غير معروف</strong></div>
+<div class="stat"><small>إطارات الصوت</small><strong id="decoder-lab-audio-frames">—</strong></div>
+<div class="stat"><small>إطارات الصورة</small><strong id="decoder-lab-video-frames">—</strong></div>
+</div>
+<p class="diag-inline-note" id="decoder-lab-status" role="status" aria-live="polite">جار التحقق من حالة مختبر FFmpeg؛ لا نختبر محتوى العملاء.</p>
+<p class="muted">المختبر على خدمة اختبار مستقلة. واجهة BLOFY تقرأ النتيجة فقط؛ تشغيل اختبار جديد وإدارة المفاتيح ليسا متاحين من هنا. لا يُنفذ إصلاح أو تحويل صوت تلقائي.</p>
+</div>
 <div class="panel" id="media-probe-queue-panel">
 <div class="controls"><div><h3>🧪 طابور فحص HLS للمسارات النشطة</h3>
 <p class="muted">يفحص مقاطع HLS الحقيقية على مسارات المشرف الموجودة مسبقًا فقط. مسار واحد في كل مرة، وبحد مسارين لكل تشغيل؛ لا ينشئ قناة أو يغيّر بث العملاء.</p></div>
@@ -5625,6 +5638,35 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     }catch(e){$("live-result").textContent="تعذر تشغيل القناة: "+e.message;show(e.message,false)}
     finally{this.disabled=false}
   });
+  var decoderLabBusy=false;
+  async function loadDecoderLabStatus(){
+    if(decoderLabBusy)return;
+    decoderLabBusy=true;
+    var button=$("decoder-lab-refresh");
+    var status=$("decoder-lab-status");
+    button.disabled=true;
+    status.textContent="جار قراءة نتيجة الاختبار الصناعي فقط...";
+    try{
+      var info=await api("media-scan/decoder-lab");
+      var verified=info?.state==="synthetic_verified"&&info?.ok===true&&
+        info?.audioDecoded===true&&info?.videoDecoded===true&&
+        info?.productionStreamVerified===false;
+      value("decoder-lab-audio",verified?"فُكّ صناعيًا":"غير مثبت");
+      value("decoder-lab-video",verified?"فُكّ صناعيًا":"غير مثبت");
+      value("decoder-lab-audio-frames",verified&&Number.isInteger(info.audioFrames)?count(info.audioFrames):"—");
+      value("decoder-lab-video-frames",verified&&Number.isInteger(info.videoFrames)?count(info.videoFrames):"—");
+      status.textContent=(verified?
+        "✅ نجح فك الصوت والصورة لعينة صناعية معزولة. ":"⚠ لم يثبت اختبار فك الصوت والصورة. ")+
+        (info?.message||"نتيجة غير معروفة.")+
+        " · فحص قنوات المشتركين: لم يجرَ · لا تغيير لمسارات المشاهدة.";
+    }catch{
+      value("decoder-lab-audio","غير معروف");value("decoder-lab-video","غير معروف");
+      value("decoder-lab-audio-frames","—");value("decoder-lab-video-frames","—");
+      status.textContent="تعذر الاتصال بالمختبر. لا تعتبر القنوات سليمة أو معطلة بناءً على ذلك.";
+    }finally{button.disabled=false;decoderLabBusy=false;}
+  }
+  $("decoder-lab-refresh").addEventListener("click",function(){void loadDecoderLabStatus()});
+  setTimeout(function(){void loadDecoderLabStatus()},1800);
   var mediaProbeQueueTimer=null,mediaProbeQueueBusy=false,mediaProbeQueueLatest=null;
   var mediaProbeQueueState={
     queued:"بانتظار الدور",running:"فحص HLS جار",
