@@ -475,3 +475,39 @@ test('decoder audio matrix is visible as explicit synthetic-only observations',a
     assert.match(html,/توافق الترميز مع Android 9/);
   });
 });
+
+
+test('manual owner TS analyzer remains protected, inactive without confirmation, and never auto-fetches a channel',async()=>{
+  await withServer({adminToken:secret},async base=>{
+    const bytes=Buffer.alloc(188*12);
+    for(let i=0;i<12;i++){bytes[188*i]=0x47;bytes[188*i+3]=0x10;}
+    const unauth=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample',
+        'x-blofy-sample-rights':'confirmed'},body:bytes
+    });
+    assert.equal(unauth.status,401);
+    const noRights=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample'},body:bytes
+    });
+    assert.equal(noRights.status,403);
+    assert.equal((await noRights.json()).code,'operator_sample_rights_required');
+    const noLab=await fetch(base+'/operator/api/media-scan/owner-sample',{
+      method:'POST',headers:{authorization:auth,
+        'content-type':'video/mp2t',
+        'x-blofy-operator-action':'media-scan-owner-sample',
+        'x-blofy-sample-rights':'confirmed'},body:bytes
+    });
+    assert.equal(noLab.status,503);
+    assert.equal((await noLab.json()).code,'sample_lab_not_configured');
+    const page=await fetch(base+'/operator',{headers:{authorization:auth}});
+    const html=await page.text();
+    assert.match(html,/id="owner-ts-sample-panel"/);
+    assert.match(html,/id="owner-ts-sample-file"/);
+    assert.match(html,/id="owner-ts-sample-consent"/);
+    assert.match(html,/x-blofy-sample-rights/);
+    assert.match(html,/لا يفتح النظام اتصالًا جديدًا بالمصدر/);
+  });
+});
