@@ -59,7 +59,7 @@ export function createLiveFanout({
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,
     sourceHandoffs:0,sourceHandoffWaits:0,abandonedViewerRequests:0,
-    upstreamReconnects:0,
+    sourceReleaseStalls:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
@@ -203,16 +203,20 @@ export function createLiveFanout({
     return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
   }
   async function releaseUpstream(reader,response){
-    // Some sources never settle ReadableStream.cancel() after a stalled read.
-    // The fetch AbortController is already aborted by the caller; cleanup
-    // must not indefinitely block the next single-source retry.
+    // Abort is always issued before this call. A stuck provider may delay
+    // stream cancellation; timing out here MUST NOT falsely prove its
+    // upstream connection was released. Retain a pending cleanup promise so
+    // another live channel cannot consume a second one-slot source feed.
+    if(!reader&&!response?.body)return {confirmed:Promise.resolve(true),settled:true};
+    const confirmed=Promise.resolve().then(()=>reader?
+      reader.cancel():response.body.cancel()).then(()=>true,()=>false);
     let timer;
     try{
-      await Promise.race([
-        Promise.resolve().then(()=>reader?
-          reader.cancel():response?.body?.cancel()).catch(()=>{}),
-        new Promise(resolve=>{timer=setTimeout(resolve,250);})
+      const settled=await Promise.race([
+        confirmed.then(ok=>({done:true,ok})),
+        new Promise(resolve=>{timer=setTimeout(()=>resolve({done:false}),250);})
       ]);
+      return {confirmed,settled:settled.done&&settled.ok===true};
     }finally{
       if(timer)clearTimeout(timer);
       if(reader)try{reader.releaseLock()}catch{}
@@ -221,6 +225,7 @@ export function createLiveFanout({
   async function pump(row){
     let everDelivered=false,failedAttempts=0,initialFailures=0;
     let reopening=false;
+    const pendingReleases=[];
     try{
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,connectedAt=clock();
@@ -357,8 +362,16 @@ export function createLiveFanout({
         }finally{
           // Source reader is released BEFORE a replacement source GET.
           attemptController.abort();
-          await releaseUpstream(reader,response);
+          const cleanup=await releaseUpstream(reader,response);
           row.controller.signal.removeEventListener('abort',stopAttempt);
+          if(!cleanup.settled){
+            // Do not start a sequential reconnect until the previous
+            // upstream really closed. Keep an opaque pending confirmation;
+            // a rejected or never-settling cancellation fails closed.
+            pendingReleases.push(cleanup.confirmed);
+            counters.sourceReleaseStalls++;
+            retry=false;
+          }
         }
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
@@ -366,9 +379,28 @@ export function createLiveFanout({
         await new Promise(resolve=>setTimeout(resolve,delay));
       }
     }finally{
-      // Every sequential reconnect already awaited releaseUpstream before
-      // exiting this pump; this resolves an in-progress channel handoff.
-      row.signalUpstreamReleased?.();
+      if(pendingReleases.length){
+        // A resolved cancellation is the only condition that releases
+        // a quarantined source. Do not open fresh source GETs after a
+        // rejected/hanging cleanup; a service restart may be needed.
+        const confirmed=Promise.all(pendingReleases).then(results=>{
+          if(results.every(Boolean))return true;
+          return new Promise(()=>{});
+        });
+        void confirmed.then(()=>row.signalUpstreamReleased?.());
+        if(row.licensedSourceId){
+          const scope=row.licensedSourceId;
+          const prior=pendingSourceReleases.get(scope)||Promise.resolve();
+          const gate=Promise.all([prior,confirmed]).then(()=>{});
+          pendingSourceReleases.set(scope,gate);
+          void gate.finally(()=>{
+            if(pendingSourceReleases.get(scope)===gate)
+              pendingSourceReleases.delete(scope);
+          });
+        }
+      }else{
+        row.signalUpstreamReleased?.();
+      }
       closeFeed(row.key,'closed',row);
     }
   }
