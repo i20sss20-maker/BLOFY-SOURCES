@@ -37,6 +37,10 @@ export function createLiveFanout({
   }catch{}
   const feeds=new Map();
   const cooldowns=new Map();
+  // An idle feed is removed from admission immediately, but a provider
+  // connection can take a moment to close. Never open the replacement
+  // one-slot channel until the previous provider stream is released.
+  const pendingSourceReleases=new Map();
   // Short-lived, credential-free diagnostics for the authenticated operator:
   // an ordinal per source feed (not source URL, account, token or IP).
   let feedSequence=0;
@@ -53,7 +57,8 @@ export function createLiveFanout({
     try{onEvent({...item})}catch{}
   }
   const counters={providerFailures:0,slowViewerDisconnects:0,
-    capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,upstreamReconnects:0,
+    capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,
+    sourceHandoffs:0,sourceHandoffWaits:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
@@ -360,6 +365,9 @@ export function createLiveFanout({
         await new Promise(resolve=>setTimeout(resolve,delay));
       }
     }finally{
+      // Every sequential reconnect already awaited releaseUpstream before
+      // exiting this pump; this resolves an in-progress channel handoff.
+      row.signalUpstreamReleased?.();
       closeFeed(row.key,'closed',row);
     }
   }
@@ -402,6 +410,43 @@ export function createLiveFanout({
       }
     }
     if(!row&&sourceScope){
+      // Reclaim unused old channel immediately while preserving active
+      // viewers. Wait for its actual upstream reader to finish releasing
+      // before opening a different channel under a one-slot source.
+      for(const [oldKey,old] of [...feeds]){
+        if(oldKey===key||old.licensedSourceId!==sourceScope||
+           old.viewers.size!==0||!old.idleTimer)continue;
+        const release=old.pumpStarted?old.upstreamReleasedPromise:Promise.resolve();
+        closeFeed(oldKey,'idle',old);
+        const previous=pendingSourceReleases.get(sourceScope)||Promise.resolve();
+        const done=Promise.all([previous,release]).then(()=>{});
+        pendingSourceReleases.set(sourceScope,done);
+        void done.finally(()=>{
+          if(pendingSourceReleases.get(sourceScope)===done)
+            pendingSourceReleases.delete(sourceScope);
+        });
+        counters.sourceHandoffs++;
+      }
+      const pending=pendingSourceReleases.get(sourceScope);
+      if(pending){
+        counters.sourceHandoffWaits++;
+        let timer;
+        const completed=await Promise.race([
+          pending.then(()=>true),
+          new Promise(resolve=>{timer=setTimeout(()=>resolve(false),1500);})
+        ]);
+        if(timer)clearTimeout(timer);
+        if(!completed){
+          res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
+            'content-type':'application/json'});
+          res.end('{"ok":false,"code":"fanout_source_handoff_pending"}');
+          return;
+        }
+        // Other clients may have created this channel while we waited.
+        row=feeds.get(key);
+      }
+    }
+    if(!row&&sourceScope){
       // A single-upstream Xtream subscription can share the SAME channel
       // across licensed viewers, but cannot promise a different live channel
       // concurrently. Protect the already playing channel: never evict it or
@@ -437,7 +482,14 @@ export function createLiveFanout({
         counters.capacityRejections++;
         res.writeHead(503,{'retry-after':'3'});res.end('fanout_capacity_reached');return;
       }
+      // Signal only after the previous real provider connection has been
+      // released; this is not a timing guess or a fixed reconnect sleep.
+      let signalUpstreamReleased;
+      const upstreamReleasedPromise=new Promise(resolve=>{
+        signalUpstreamReleased=resolve;
+      });
       row={key,sourceUrl:url.href,viewers:new Set(),controller:new AbortController(),
+        upstreamReleasedPromise,signalUpstreamReleased,
         allowProviderCdn:allowProviderCdn===true,
         licensedSourceId:sourceScope,
         providerMaxConcurrentFeeds:sourceQuota,
@@ -496,7 +548,9 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,lateJoinReplayLimitBytes:lateJoinReplayBytes,
+    maxFeeds,maxViewersPerFeed,
+    pendingSourceHandoffs:pendingSourceReleases.size,
+    lateJoinReplayLimitBytes:lateJoinReplayBytes,
     bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}),
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
