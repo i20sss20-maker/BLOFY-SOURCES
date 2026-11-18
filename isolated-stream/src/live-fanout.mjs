@@ -402,6 +402,16 @@ export function createLiveFanout({
       }
     }
     if(!row&&sourceScope){
+      // A departed viewer may have left its previous channel in the short
+      // idle grace period. A one-slot provider must not block channel-zapping
+      // merely because that *unused* feed still occupies our local map.
+      // Reclaim only an explicitly idle, viewer-free feed from the SAME
+      // licensed source; never preempt an actively watched channel.
+      for(const [oldKey,old] of [...feeds]){
+        if(oldKey!==key&&old.licensedSourceId===sourceScope&&
+           old.viewers.size===0&&old.idleTimer)
+          closeFeed(oldKey,'idle',old);
+      }
       // A single-upstream Xtream subscription can share the SAME channel
       // across licensed viewers, but cannot promise a different live channel
       // concurrently. Protect the already playing channel: never evict it or
