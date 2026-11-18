@@ -58,7 +58,8 @@ export function createLiveFanout({
   }
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,
-    sourceHandoffs:0,sourceHandoffWaits:0,upstreamReconnects:0,
+    sourceHandoffs:0,sourceHandoffWaits:0,abandonedViewerRequests:0,
+    upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
@@ -382,6 +383,13 @@ export function createLiveFanout({
       res.writeHead(405,{allow:'GET, HEAD'});res.end();return;
     }
     const url=await assertPublicMediaUrl(sourceUrl,{lookup});
+    // DNS validation and provider handoff are asynchronous. During quick
+    // channel-zapping, the player may leave before admission completes.
+    // Never start a new source feed or occupy a viewer slot for a dead HTTP
+    // response. Node may mark a finished GET request stream as destroyed
+    // while its response remains healthy; check response state instead.
+    const viewerGone=()=>res.destroyed||res.writableEnded||req.aborted===true;
+    if(viewerGone()){counters.abandonedViewerRequests++;return;}
     // Different signed provider-redirect scopes must NOT merge into the
     // same feed, even when their upstream URL is identical. Two granted
     // viewers still share exactly one feed under the same licensed scope.
@@ -436,6 +444,7 @@ export function createLiveFanout({
           new Promise(resolve=>{timer=setTimeout(()=>resolve(false),1500);})
         ]);
         if(timer)clearTimeout(timer);
+        if(viewerGone()){counters.abandonedViewerRequests++;return;}
         if(!completed){
           res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
             'content-type':'application/json'});
@@ -467,6 +476,7 @@ export function createLiveFanout({
         return;
       }
     }
+    if(viewerGone()){counters.abandonedViewerRequests++;return;}
     if(!row){
       // During rapid channel zapping, old feeds remain alive for idleMs
       // after their last viewer leaves. Reclaim ONLY those idle feeds if
