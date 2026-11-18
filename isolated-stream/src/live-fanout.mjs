@@ -364,10 +364,11 @@ export function createLiveFanout({
           attemptController.abort();
           const cleanup=await releaseUpstream(reader,response);
           row.controller.signal.removeEventListener('abort',stopAttempt);
-          if(!cleanup.settled){
-            // Do not start a sequential reconnect until the previous
-            // upstream really closed. Keep an opaque pending confirmation;
-            // a rejected or never-settling cancellation fails closed.
+          if(!cleanup.settled&&row.licensedSourceId){
+            // Only the explicitly licensed, upstream-quota-scoped feeds
+            // must fail closed until actual provider release is confirmed.
+            // Independent unscoped streams keep their existing bounded
+            // retry behavior, without claiming a shared provider slot.
             pendingReleases.push(cleanup.confirmed);
             counters.sourceReleaseStalls++;
             retry=false;
