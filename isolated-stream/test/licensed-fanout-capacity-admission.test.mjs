@@ -1,0 +1,99 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {once} from 'node:events';
+import {createLiveFanout} from '../src/live-fanout.mjs';
+import {createRelayBroker} from '../src/relay-broker.mjs';
+
+const SALEH='d2bb0397-1c56-4751-adc9-1a17758022f6';
+const SOURCE_A='https://licensed.example/live/channel-a.ts';
+const SOURCE_B='https://licensed.example/live/channel-b.ts';
+const TS=Buffer.alloc(188*3,0x34);
+for(let i=0;i<TS.length;i+=188)TS[i]=0x47;
+async function waitFor(check){
+ const start=Date.now();
+ while(Date.now()-start<7500){
+  if(check())return;
+  await new Promise(r=>setTimeout(r,15));
+ }
+ throw Error('synthetic_license_capacity_timeout');
+}
+test('one licensed upstream carries 40 clients of SAME channel, unrelated channel is blocked', {timeout:22000},async()=>{
+ let upstreamGets=0,upstream;
+ const src=new ReadableStream({start(c){upstream=c}});
+ const fanout=createLiveFanout({
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{upstreamGets++;return new Response(src,{
+   status:200,headers:{'content-type':'video/mp2t'}});},
+  maxViewersPerFeed:128,maxFeeds:3,idleMs:40,
+  firstByteTimeoutMs:6000,readIdleTimeoutMs:6000
+ });
+ const server=http.createServer((req,res)=>void fanout.handle(req,res,
+  req.url==='/other'?SOURCE_B:SOURCE_A,{
+   licensedSourceId:SALEH,providerMaxConcurrentFeeds:1
+  }));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const incoming=Array.from({length:40},()=>fetch(base+'/same'));
+  await waitFor(()=>fanout.stats().viewers===40);
+  assert.equal(upstreamGets,1,'one provider HTTP request for all 40 viewers');
+  const rejected=await fetch(base+'/other');
+  assert.equal(rejected.status,503);
+  assert.match(await rejected.text(),/fanout_source_channel_limit/);
+  assert.equal(rejected.headers.get('retry-after'),'2');
+  assert.equal(fanout.stats().viewers,40,
+    'denying second channel must never disconnect first channel viewers');
+  assert.equal(upstreamGets,1,'second channel did not open upstream');
+  upstream.enqueue(new Uint8Array(TS));
+  const responses=await Promise.all(incoming);
+  assert.ok(responses.every(x=>x.status===200));
+  const readers=responses.map(x=>x.body.getReader());
+  const pieces=await Promise.all(readers.map(x=>x.read()));
+  assert.ok(pieces.every(x=>!x.done&&
+   Buffer.compare(Buffer.from(x.value),TS)===0));
+  const s=fanout.stats();
+  assert.equal(s.activeFeeds,1);
+  assert.equal(s.sourceLimitRejections,1);
+  assert.equal(s.upstreamSessionsOpened,1);
+  assert.equal(s.viewersAccepted,40);
+  assert.equal(s.quotaScope,'one_media_process');
+  assert.equal(s.crossReplicaQuotaGuaranteed,false);
+  await Promise.all(readers.map(x=>x.cancel().catch(()=>{})));
+  await waitFor(()=>fanout.stats().viewers===0);
+ }finally{
+  fanout.close();
+  server.closeAllConnections();
+  await new Promise(done=>server.close(done));
+ }
+});
+
+test('shared relay grant fails closed when upstream capacity or source ID is not verified',async()=>{
+ const KEY='safe-relay-test-key-abcdef0123456789abcdef0123456789';
+ const broker=createRelayBroker({sharedToken:KEY,sharedLiveEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}]});
+ const server=http.createServer((req,res)=>void broker.issue(req,res));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const origin='http://127.0.0.1:'+server.address().port;
+ const issue=body=>fetch(origin+'/internal/relay-grants',{method:'POST',
+  headers:{authorization:'Bearer '+KEY,'content-type':'application/json'},
+  body:JSON.stringify({kind:'live',sourceUrl:SOURCE_A,sharedLive:true,...body})});
+ try{
+  const noScope=await issue({});
+  assert.equal(noScope.status,409);
+  assert.equal((await noScope.json()).code,'relay_shared_source_quota_required');
+  const noQuota=await issue({licensedSourceId:SALEH});
+  assert.equal(noQuota.status,409);
+  const invalidQuota=await issue({licensedSourceId:SALEH,providerMaxConcurrentFeeds:0});
+  assert.equal(invalidQuota.status,409);
+  const valid=await issue({licensedSourceId:SALEH,providerMaxConcurrentFeeds:1});
+  assert.equal(valid.status,201);
+  const ticket=await valid.json();
+  assert.equal(ticket.sharedLiveGranted,true);
+  assert.match(ticket.path,/^\/relay\/[a-f0-9]{48}$/);
+ }finally{
+  broker.close?.();
+  server.closeAllConnections();
+  await new Promise(done=>server.close(done));
+ }
+});
