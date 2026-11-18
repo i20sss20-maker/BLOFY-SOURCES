@@ -161,6 +161,12 @@ export function createRelayBroker({
       Number.isSafeInteger(input.providerMaxConcurrentFeeds)&&
       input.providerMaxConcurrentFeeds>=1&&input.providerMaxConcurrentFeeds<=64&&
       UUID.test(String(input.licensedSourceId||''));
+    // A licensed shared grant without a source-wide upstream quota could
+    // otherwise open two different channels using a one-connection account.
+    // Reject instead of silently dropping the quota. This is an operator
+    // configuration error, never permission to bypass provider limits.
+    if(sharedLiveGranted&&!grouped)
+      return respond(res,409,{ok:false,code:'relay_shared_source_quota_required'});
     tickets.set(id,{sourceUrl:url.href,kind:input.kind,
       licensedSourceId:grouped?String(input.licensedSourceId).toLowerCase():null,
       providerMaxConcurrentFeeds:grouped?input.providerMaxConcurrentFeeds:null,
