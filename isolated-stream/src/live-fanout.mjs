@@ -477,6 +477,10 @@ export function createLiveFanout({
   }
   return {handle,stats:()=>({activeFeeds:feeds.size,
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
+    // This media instance enforces its licensed channel quota locally.
+    // Scaling replicas without a single shared origin / distributed lease
+    // must never be advertised as more upstream capacity.
+    quotaScope:'one_media_process',crossReplicaQuotaGuaranteed:false,
     cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
     ...counters,failureReasons:{...failureReasons},
     // Up to maxFeeds (64) active sources and only 32 recent incidents:
