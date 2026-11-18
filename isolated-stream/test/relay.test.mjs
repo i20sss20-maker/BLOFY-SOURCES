@@ -6,6 +6,7 @@ import {assertPublicMediaUrl} from '../src/relay-guard.mjs';
 import {createRelayBroker} from '../src/relay-broker.mjs';
 
 const shared='isolated-relay-test-secret-abcdefghijklmnopqrstuvwxyz123456789';
+const licensedSourceId='d2bb0397-1c56-4751-adc9-1a17758022f6';
 const ts=Buffer.alloc(188*3,0x11);
 for(let i=0;i<ts.length;i+=188)ts[i]=0x47;
 
@@ -341,7 +342,7 @@ test('ten independent authorized relay grants share a single TS source and toler
   try{
     await host(async origin=>{
       const grants=await Promise.all(Array.from({length:10},()=>issue(origin,{
-        kind:'live',sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true
+        kind:'live',sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true,licensedSourceId,providerMaxConcurrentFeeds:1
       })));
       assert.ok(grants.every(g=>g.status===201));
       const issued=await Promise.all(grants.map(g=>g.json()));
@@ -438,7 +439,7 @@ test('signed licensed shared ticket follows one validated public source-issued C
  await host(async origin=>{
   const response=await issue(origin,{kind:'live',
    sourceUrl:'https://allowed.example/live/u/p/3.ts',
-   sharedLive:true,licensedCdnRedirect:true});
+   sharedLive:true,licensedSourceId,providerMaxConcurrentFeeds:1,licensedCdnRedirect:true});
   assert.equal(response.status,201);
   const ticket=await response.json();
   assert.equal(ticket.sharedLiveGranted,true);
@@ -474,7 +475,7 @@ test('shared tickets without licensed CDN scope still deny external redirect',as
  let calls=0;
  await host(async origin=>{
   const response=await issue(origin,{kind:'live',
-   sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true});
+   sourceUrl:'https://allowed.example/live/u/p/3.ts',sharedLive:true,licensedSourceId,providerMaxConcurrentFeeds:1});
   const ticket=await response.json();
   assert.equal(ticket.sharedLiveGranted,true);
   const media=await fetch(origin+ticket.path);
