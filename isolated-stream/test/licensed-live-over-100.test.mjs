@@ -82,7 +82,8 @@ test('shared grant reports explicit true only when configured at the media plane
     const res=await fetch('http://127.0.0.1:'+server.address().port+'/grant',{
       method:'POST',headers:{authorization:'Bearer '+sharedToken,
         'content-type':'application/json'},
-      body:JSON.stringify({kind:'live',sharedLive:true,sourceUrl:SOURCE})
+      body:JSON.stringify({kind:'live',sharedLive:true,sourceUrl:SOURCE,
+        licensedSourceId:'d2bb0397-1c56-4751-adc9-1a17758022f6',providerMaxConcurrentFeeds:1})
     });
     assert.equal(res.status,201);
     const body=await res.json();
