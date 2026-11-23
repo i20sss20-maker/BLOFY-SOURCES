@@ -29,6 +29,7 @@ import {readOnlyOperatorSiteProof} from './operator-site-live-readiness.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
+const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
 const startedAt=new Date().toISOString();
 const safeResponse=(res,status,data)=>{
   const body=Buffer.from(JSON.stringify(data));
@@ -393,6 +394,27 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
     service.mediaRedundancy.start();
+    // Independently prove HLS transport on the standby with an internal
+    // synthetic 2-track source; this is NOT a real provider or customer test.
+    // No customer cutover, source credential, or recording is performed.
+    if(process.env.BLOFY_STREAM_STANDBY_SYNTHETIC_ON_BOOT==='1'){
+      const standbySmokeTimer=setTimeout(()=>{
+        void verifyRestreamSmoke(STANDBY_ENGINE,{
+          pathName:'smoke',timeoutMs:22000
+        }).then(report=>console.info('BLOFY_MEDIA_STANDBY_SYNTHETIC',
+          JSON.stringify({
+            ok:report.ok,code:report.code,stage:report.stage,
+            elapsedMs:report.elapsedMs,
+            bytesVerified:report.bytesVerified||0,
+            providerRequests:0,customerTrafficChanged:false,
+            audioVideoDecoded:false,realSourceVerified:false
+          })))
+        .catch(()=>console.warn('BLOFY_MEDIA_STANDBY_SYNTHETIC',
+          JSON.stringify({ok:false,code:'standby_synthetic_probe_failed',
+            providerRequests:0,customerTrafficChanged:false})));
+      },17000);
+      standbySmokeTimer.unref?.();
+    }
     // Read-only Smart Playback Health runs while admin UI is closed.
     // Samples only fixed internal monitoring APIs once per minute.
     service.operatorDashboard.start();
