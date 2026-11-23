@@ -64,6 +64,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
   mediaRedundancy=()=>({ok:false,code:'not_configured'}),
+  mediaHlsCanary=()=>({ok:false,code:'not_configured'}),
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
@@ -410,6 +411,11 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         ok:false,code:'operator_media_watchlist_unavailable',
         allChannelsScanned:false,noProviderRequestsTriggered:true
       }));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-hls-canary'){
+      try{json(res,200,mediaHlsCanary());}
+      catch{json(res,503,{ok:false,code:'synthetic_canary_unavailable'});}
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/media-redundancy'){

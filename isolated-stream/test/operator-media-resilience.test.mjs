@@ -78,3 +78,12 @@ test('operator redundancy API remains behind authentication, reports no client m
  assert.match(view,/id="media-standby-readiness"/);
  assert.doesNotMatch(dashboard.slice(0,dashboard.indexOf('const handle=(req,res)=>')),/providerCredentials/);
 });
+
+test('dual synthetic HLS transport proofs are operator-only and opt-out of real source playback',async()=>{
+ const s=await readFile(new URL('../src/server.mjs',import.meta.url),'utf8');
+ const d=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ const v=await readFile(new URL('../src/operator-unified-view.mjs',import.meta.url),'utf8');
+ assert.match(s,/service\.mediaHlsCanary\.start\(\{delayMs:40000\}\)/);
+ assert.match(d,/path==='\/operator\/api\/media-hls-canary'/);
+ assert.match(v,/id="media-standby-hls-proof"/);
+});

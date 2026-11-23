@@ -16,6 +16,7 @@ import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {createStreamOpsObservatory} from './stream-ops-observatory.mjs';
 import {createMediaEngineRedundancyWatch} from './media-engine-redundancy-watch.mjs';
+import {createMediaHlsCanaryWatch} from './media-hls-canary-watch.mjs';
 import {probeLicensedSharedLive} from './shared-live-canary.mjs';
 import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -153,6 +154,9 @@ export function createStreamServer({
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const streamOps=createStreamOpsObservatory({
     relayStats:()=>relayBroker.stats(),autoHealth:()=>autoHealth.snapshot()});
+  const mediaHlsCanary=createMediaHlsCanaryWatch({
+    fetchImpl,logger:event=>console.info('BLOFY_MEDIA_SYNTHETIC_HEALTH',JSON.stringify(event))
+  });
   const mediaRedundancy=createMediaEngineRedundancyWatch({
     fetchImpl,controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     logger:record=>console.info('BLOFY_MEDIA_REDUNDANCY_WATCH',JSON.stringify(record))
@@ -161,6 +165,7 @@ export function createStreamServer({
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,sharedReadiness,streamOps:()=>streamOps.snapshot(),
     mediaRedundancy:()=>mediaRedundancy.snapshot(),
+    mediaHlsCanary:()=>mediaHlsCanary.snapshot(),
     getReplicaSynthetic:()=>replicaBootProof,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
@@ -336,7 +341,7 @@ export function createStreamServer({
       elapsedMs:Number.isSafeInteger(proof?.elapsedMs)?proof.elapsedMs:null,
       checkedAt:new Date().toISOString(),realSalehVerified:false
     }},
-    liveSupervisor,autoHealth,streamOps,mediaRedundancy,operatorDashboard,sharedReadiness,
+    liveSupervisor,autoHealth,streamOps,mediaRedundancy,mediaHlsCanary,operatorDashboard,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
 
@@ -395,6 +400,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
     service.mediaRedundancy.start();
+    service.mediaHlsCanary.start({delayMs:40000});
     // Independently prove HLS transport on the standby with an internal
     // synthetic 2-track source; this is NOT a real provider or customer test.
     // No customer cutover, source credential, or recording is performed.

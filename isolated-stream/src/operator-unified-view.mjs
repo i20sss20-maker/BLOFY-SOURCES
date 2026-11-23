@@ -619,6 +619,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted" id="media-engine-readiness" role="status">اضغط فحص المحرك للتحقق من MediaMTX.</p>
   <p class="muted" id="media-hour-summary" role="status">تقرير الساعة جاهز للقراءة من المؤشرات التشغيلية، وليس تسجيل فيديو.</p>
   <p class="muted" id="media-standby-readiness" role="status">جارٍ تجهيز مراقبة المحرك الأساسي والاحتياطي كل دقيقة…</p>
+  <p class="muted" id="media-standby-hls-proof" role="status">جارٍ التحقق من خروج HLS الحقيقي لمصدر الاختبار الداخلي على المحركين…</p>
 </div>
 </section>
 <section class="view" id="page-library">
@@ -5851,7 +5852,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var oldText=button.textContent;
     button.textContent="جارٍ فحص MediaMTX…";
     try{
-      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy")]);
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary")]);
       if(reports[0].status==="fulfilled"){
         var a=reports[0].value;
         $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
@@ -5875,6 +5876,22 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       }else{
         $("media-standby-readiness").textContent=
          "⚠️ تقرير جاهزية المحركين غير متاح الآن؛ لا يعني ذلك توقف البث.";
+      }
+      if(reports[3].status==="fulfilled"){
+        var c=reports[3].value,cp=c.engines&&c.engines.primary||{},
+          cs=c.engines&&c.engines.standby||{};
+        var textState={"verified":"المقطع سليم","failed":"فشل اختبار المقطع",
+          "unknown":"لا توجد عينة"};
+        $("media-standby-hls-proof").textContent=
+          "🎞️ فحص HLS كل "+Number(c.intervalMinutes||5)+" دقائق · الأساسي: "+
+          (textState[cp.syntheticHlsState]||"غير معروف")+" ("+
+          Number(cp.successfulSamples||0)+"/"+Number(cp.samples||0)+") · الاحتياطي: "+
+          (textState[cs.syntheticHlsState]||"غير معروف")+" ("+
+          Number(cs.successfulSamples||0)+"/"+Number(cs.samples||0)+
+          ") · اختبار داخلي، لا يثبت تشغيل قنوات المزوّد.";
+      }else{
+        $("media-standby-hls-proof").textContent=
+         "⚠️ لم تتوفر عينات HLS الداخلية. لا يمكن إثبات جاهزية المقاطع حتى يُستكمل الفحص.";
       }
       if(reports[1].status==="fulfilled"){
         var b=reports[1].value;
