@@ -5896,7 +5896,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
            cp.syntheticHlsLatencyP95Ms+"ms":"—")+" / احتياطي "+
           (Number.isFinite(cs.syntheticHlsLatencyP95Ms)?
            cs.syntheticHlsLatencyP95Ms+"ms":"—")+
-          ") · اختبار داخلي، لا يثبت تشغيل قنوات المزوّد.";
+          " · اختبار داخلي، لا يثبت تشغيل قنوات المزوّد.";
       }else{
         $("media-standby-hls-proof").textContent=
          "⚠️ لم تتوفر عينات HLS الداخلية. لا يمكن إثبات جاهزية المقاطع حتى يُستكمل الفحص.";
