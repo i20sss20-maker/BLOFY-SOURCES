@@ -331,3 +331,74 @@ test('private MediaMTX health uses only one control-plane GET, no media',async()
  assert.equal(calls.at(-1).method,'GET');
  assert.ok(calls.at(-1).url.endsWith('/v3/config/paths/list'));
 });
+
+
+test('cold standby engine accepts new operator path when primary control 503s',async()=>{
+ const seen=[];
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Licensed preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async(url,options={})=>{
+   const target=String(url);seen.push({url:target,method:options.method||'GET'});
+   if(target.includes('media-standby.railway.internal:9997')){
+    return Response.json(target.endsWith('/paths/list')?{items:[]}:{});
+   }
+   if(target.includes('media.railway.internal:9997'))
+    return Response.json({error:'unavailable'},{status:503});
+   throw Error('unexpected outgoing fetch');
+  }
+ });
+ const result=await service.start(row());
+ assert.equal(result.status,201);
+ assert.equal(result.body.engine,'standby');
+ assert.equal(result.body.customerTrafficChanged,false);
+ assert.equal(service.list().items[0].engine,'standby');
+ assert.ok(seen.some(x=>x.url.includes('media-standby.railway.internal:9997/v3/config/paths/add/')));
+ assert.equal(seen.filter(x=>x.url.includes('provider.example')).length,0);
+ const stopped=await service.stop(result.body.path);
+ assert.equal(stopped.status,200);
+ assert.ok(seen.some(x=>x.method==='DELETE'&&x.url.includes('media-standby.railway.internal')));
+});
+test('MediaMTX authorization denial never triggers standby or extra origin connection',async()=>{
+ let backupRequests=0;
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Test preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   if(String(url).includes('standby')){
+    backupRequests++;
+    return Response.json({items:[]});
+   }
+   return Response.json({error:'unauthorized'},{status:401});
+  }
+ });
+ const result=await service.start(row());
+ assert.equal(result.status,503);
+ assert.equal(result.body.code,'restream_control_denied');
+ assert.equal(backupRequests,0);
+});
+test('standby engine is disabled unless the operator explicitly enables it',async()=>{
+ let second=0;
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Test preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:false,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   if(String(url).includes('standby'))second++;
+   return Response.json({error:'unavailable'},{status:503});
+  }
+ });
+ assert.equal((await service.start(row())).status,503);
+ assert.equal(second,0);
+});
