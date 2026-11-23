@@ -119,7 +119,7 @@ export function createLiveRestreamSupervisor({
     // so orphaned FFmpeg workers can always be recovered after deployment.
     const content=await readBoundedJson(reply,
       route==='/v3/config/paths/list'?128*1024:8192);
-    if(reply.status===404)return {status:404,body:content};
+    if(reply.status===404&&method==='DELETE')return {status:404,body:content};
     if(!reply.ok)throw err([400,401,403,404,409,422].includes(reply.status)
       ?'restream_control_denied':'restream_control_unavailable');
     return {status:reply.status,body:content};
