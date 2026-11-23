@@ -89,7 +89,7 @@ export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
   maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,
   httpEofReconnect=false,onUnexpectedError=()=>{},
-  standbyEnabled=false,
+  standbyEnabled=false,recordHourEnabled=false,
   salehOnlyOrigin=false,salehUpstreamChannelLimit=1
 }={}){
   if(!Number.isSafeInteger(salehUpstreamChannelLimit)||
@@ -135,13 +135,20 @@ export function createLiveRestreamSupervisor({
   const idleTimer=setInterval(()=>{void prune().catch(()=>{})},60_000);
   idleTimer.unref?.();
   async function start({sourceId,channelId,backupSourceId,backupChannelId,
-    rightsConfirmed,audioMode='copy',audioTranscodeConfirmed=false}={}){
+    rightsConfirmed,audioMode='copy',audioTranscodeConfirmed=false,
+    recordOneHour=false,recordingRightsConfirmed=false}={}){
     if(!auth||!portal?.configured)return safe({ok:false,code:'restream_not_configured'},503);
     if(rightsConfirmed!==true)return safe({ok:false,code:'stream_rights_confirmation_required'},403);
     if(!['copy','aac'].includes(audioMode))
       return safe({ok:false,code:'restream_audio_mode_invalid'},400);
     if(audioMode==='aac'&&audioTranscodeConfirmed!==true)
       return safe({ok:false,code:'restream_audio_transcode_confirmation_required'},403);
+    if(recordOneHour===true){
+      if(recordingRightsConfirmed!==true)
+        return safe({ok:false,code:'hour_recording_rights_confirmation_required'},403);
+      if(!recordHourEnabled||!standbyEnabled)
+        return safe({ok:false,code:'hour_recording_feature_disabled'},409);
+    }
     if(operation)return safe({ok:false,code:'restream_busy'},429);
     operation=true;
     try{
@@ -153,6 +160,7 @@ export function createLiveRestreamSupervisor({
         // Prevent a different audio profile or backup configuration from
         // silently using a *second* licensed upstream connection.
         if((existing.audioMode||'copy')!==audioMode||
+          Boolean(existing.recordOneHour)!==(recordOneHour===true)||
           (backupSourceId&&!existing.backupConfigured))
           return safe({ok:false,code:'restream_duplicate_source_options',
             customerTrafficChanged:false},409);
@@ -160,6 +168,7 @@ export function createLiveRestreamSupervisor({
           sourceId:existing.sourceId,channelId:existing.channelId,
           audioMode:existing.audioMode||'copy',
           onDemand:true,backupConfigured:existing.backupConfigured,engine:existing.engine,
+          recordOneHour:existing.recordOneHour===true,recordingVerified:false,
           playbackVerified:false,customerTrafficChanged:false,
           reused:true,playlist:'/operator/api/live/'+existing.name+'/index.m3u8'});
       }
@@ -184,6 +193,8 @@ export function createLiveRestreamSupervisor({
       if(audioMode==='aac'&&[...paths.values()].some(row=>row.audioMode==='aac'))
         return safe({ok:false,code:'restream_audio_transcode_capacity_reached'},429);
       if(paths.size>=maxPaths)return safe({ok:false,code:'restream_capacity_reached'},409);
+      if(recordOneHour===true&&[...paths.values()].some(x=>x.recordOneHour===true))
+        return safe({ok:false,code:'hour_recording_single_channel_limit'},409);
       const upstream=await portal.liveChannel({sourceId,channelId,rightsConfirmed:true});
       if(upstream.status!==200||upstream.body?.ok!==true)
         return safe({ok:false,code:upstream.body?.code||'restream_source_unavailable'},
@@ -221,18 +232,32 @@ export function createLiveRestreamSupervisor({
         audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         feedGeneration:0,shortPrimaryEndAt:null,shortPrimaryEndCount:0,
         mediaHealth:{cleanSourceEnds:0,readStalls:0,sourceErrors:0,backupSelections:0},
-        engine:'primary'};
+        engine:'primary',recordOneHour:recordOneHour===true};
       const config={source:'publisher',
         runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
-        runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
+        runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders,
+        ...(recordOneHour===true?{
+          // 1-hour retention is for an independently confirmed, licensed
+          // operator preview only. Always use the persistent standby volume.
+          record:true,recordPath:'/recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z',
+          recordFormat:'fmp4',recordPartDuration:'1s',
+          recordSegmentDuration:'15s',recordDeleteAfter:'1h'
+        }:{})};
       try{
-        await mediamtx('POST','/v3/config/paths/add/'+name,config);
+        if(recordOneHour===true){
+          // No fallback to unmounted primary media storage. Fail closed if
+          // the volume-backed standby cannot accept the path.
+          await mediamtx('GET','/v3/config/paths/list',undefined,'standby');
+          await mediamtx('POST','/v3/config/paths/add/'+name,config,'standby');
+          row.engine='standby';
+        }else await mediamtx('POST','/v3/config/paths/add/'+name,config);
       }catch(error){
         // Only a failed private control transport/5xx is eligible. A healthy
         // primary always retains ownership; subscriber routes never change.
         // No FFmpeg worker runs merely because a path is configured.
-        if(!standbyEnabled||error?.code!=='restream_control_unavailable')
+        if(recordOneHour===true||!standbyEnabled||
+           error?.code!=='restream_control_unavailable')
           throw error;
         await mediamtx('GET','/v3/config/paths/list',undefined,'standby');
         await mediamtx('POST','/v3/config/paths/add/'+name,config,'standby');
@@ -241,7 +266,8 @@ export function createLiveRestreamSupervisor({
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
         channelId:row.channelId,onDemand:true,backupConfigured:row.backupConfigured,
-        audioMode,engine:row.engine,playbackVerified:false,customerTrafficChanged:false,
+        audioMode,engine:row.engine,recordOneHour:row.recordOneHour,
+        recordingVerified:false,playbackVerified:false,customerTrafficChanged:false,
         playlist:'/operator/api/live/'+name+'/index.m3u8'},201);
     }catch(e){return safe({ok:false,code:classify(e)},503)}
     finally{operation=false}
@@ -308,6 +334,7 @@ export function createLiveRestreamSupervisor({
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,engine:row.engine,
+      recordOneHour:row.recordOneHour===true,recordingVerified:false,
       mediaHealth:{...row.mediaHealth},
       mediaTracks:row.trackInspector?.summary()||null,
       trackInspectedAt:row.trackInspectedAt||null,

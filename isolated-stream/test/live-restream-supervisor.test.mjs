@@ -402,3 +402,50 @@ test('standby engine is disabled unless the operator explicitly enables it',asyn
  assert.equal((await service.start(row())).status,503);
  assert.equal(second,0);
 });
+
+test('hour recording requires separate rights and opt-in; no provider requests when disabled',async()=>{
+ const {service,calls}=createFixture();
+ const denied=await service.start({...row(),recordOneHour:true});
+ assert.equal(denied.status,403);
+ assert.equal(denied.body.code,'hour_recording_rights_confirmation_required');
+ assert.equal(calls.length,0);
+ const unavailable=await service.start({...row(),recordOneHour:true,
+   recordingRightsConfirmed:true});
+ assert.equal(unavailable.status,409);
+ assert.equal(unavailable.body.code,'hour_recording_feature_disabled');
+ assert.equal(calls.length,0);
+});
+test('one-hour recording is isolated on standby, bounded and only configured on-demand',async()=>{
+ const calls=[];
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Licensed pilot',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({portal,mediaPassword:password,
+  standbyEnabled:true,recordHourEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async(url,options={})=>{
+   calls.push({url:String(url),method:options.method,body:options.body});
+   return Response.json(String(url).endsWith('/paths/list')?{items:[]}:{});
+  }
+ });
+ const result=await service.start({...row(),recordOneHour:true,
+  recordingRightsConfirmed:true});
+ assert.equal(result.status,201);
+ assert.equal(result.body.engine,'standby');
+ assert.equal(result.body.recordOneHour,true);
+ assert.equal(result.body.recordingVerified,false);
+ const post=calls.find(x=>x.method==='POST'&&x.url.includes('media-standby.'));
+ assert.ok(post);
+ const config=JSON.parse(post.body);
+ assert.equal(config.record,true);
+ assert.equal(config.recordDeleteAfter,'1h');
+ assert.equal(config.recordSegmentDuration,'15s');
+ assert.equal(config.recordPartDuration,'1s');
+ assert.equal(config.recordPath,'/recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z');
+ assert.ok(!post.body.includes('provider.example'));
+ assert.equal(calls.filter(x=>x.url.includes('media.railway.internal:9997')).length,0,
+  'licensed recording must never be configured on the unmounted primary');
+ const duplicate=await service.start({...row(),recordOneHour:false});
+ assert.equal(duplicate.status,409);
+});

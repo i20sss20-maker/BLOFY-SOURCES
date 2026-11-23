@@ -145,6 +145,7 @@ export function createStreamServer({
     httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
     standbyEnabled:process.env.BLOFY_STREAM_MEDIAMTX_STANDBY_PATH_FAILOVER==='1',
+    recordHourEnabled:process.env.BLOFY_STREAM_OPERATOR_HOUR_RECORDING_ENABLED==='1',
     // Requires explicit admin activation after a verified saleh source pilot.
     // Existing subscriber routing remains untouched by this operator control.
     salehOnlyOrigin:process.env.BLOFY_STREAM_SALEH_ORIGIN_ENABLED==='1',

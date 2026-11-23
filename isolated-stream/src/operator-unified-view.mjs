@@ -581,6 +581,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <label><input id="live-aac-audio" type="checkbox"> تجربة تحويل الصوت إلى AAC</label>
+<label><input id="live-hour-record" type="checkbox"> 💾 تجربة حفظ آخر ساعة لقناة أملك حق تسجيلها (على الاحتياطي فقط)</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 <button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
@@ -6070,6 +6071,9 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
       }
       var audioMode=$("live-aac-audio").checked?"aac":"copy";
+      var recordOneHour=$("live-hour-record").checked;
+      if(recordOneHour&&!confirm(
+        "أؤكد امتلاك حقوق تسجيل وتخزين هذه القناة، وأوافق على تشغيل حفظ اختباري لا يتجاوز ساعة في وحدة التخزين المستقلة. لم يُعتمد التسجيل الجماعي. متابعة؟"))return;
       if(audioMode==="aac"&&!confirm(
         "تجربة AAC تخص مسار المشرف فقط وتستهلك CPU. لن تتغير أكواد أو قنوات العملاء. متابعة؟"))
         return;
@@ -6077,6 +6081,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         sourceId:sourceId,channelId:channelId,
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
         audioMode:audioMode,audioTranscodeConfirmed:audioMode==="aac",
+        recordOneHour:recordOneHour,recordingRightsConfirmed:recordOneHour,
         rightsConfirmed:true
       });
       $("live-result").textContent=
@@ -6086,6 +6091,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
         "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
         "\nالصوت: "+(result.audioMode==="aac"?"تحويل AAC للمشرف فقط":"نسخ دون تحويل")+
+        "\nتسجيل تجريبي: "+(result.recordOneHour?"مهيأ عند بدء البث، لم يتم إثبات حفظ ملف بعد":"غير مفعّل")+
         "\nالمسار: "+String(result.path||"");
       show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);
       await loadLive();
