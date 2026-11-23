@@ -498,6 +498,7 @@ export function createLiveRestreamSupervisor({
     if(req.method!=='GET'||!safePath(name)||!paths.has(name)||!safeFile(file))
       return response(res,404,{ok:false,code:'restream_path_not_found'});
     // The caller must already have passed the operator Basic auth.
+    const row=paths.get(name);
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),60000);
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
