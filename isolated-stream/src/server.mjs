@@ -196,6 +196,34 @@ export function createStreamServer({
       return void officialM3uDiagnostic.handle(req,res);
     if(url.pathname==='/internal/xtream-media-client-profiles')
       return void clientProfiles.handle(req,res);
+    if(url.pathname==='/internal/media-engine-health'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      void liveSupervisor.mediaEngineHealth().then(report=>
+        safeResponse(res,report.ok?200:503,report)).catch(()=>
+        safeResponse(res,503,{ok:false,code:'restream_control_unavailable',
+          customerTrafficChanged:false,providerRequests:0}));
+      return;
+    }
+    // Last-hour operator transport report; read-only, no IPTV media reads.
+    if(url.pathname==='/internal/media-hour-report'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      const snap=streamOps.snapshot();
+      const trend=Array.isArray(snap.trend)?snap.trend.slice(-240):[];
+      const first=trend[0]?.at,last=trend[trend.length-1]?.at;
+      const observedWindowMinutes=Number.isFinite(first)&&Number.isFinite(last)
+        ?Math.max(0,Math.round((last-first)/60000)):0;
+      return safeResponse(res,200,{ok:true,readOnly:true,mediaCopied:false,
+        customerTrafficChanged:false,isAllSubscribersMeasured:false,
+        type:'rolling_media_observability_1h',samples:trend.length,
+        observedWindowMinutes,
+        totalProviderFailures:trend.reduce((n,x)=>n+(x.providerErrors||0),0),
+        totalReconnects:trend.reduce((n,x)=>n+(x.reconnects||0),0),
+        totalCapacityRejections:trend.reduce((n,x)=>n+(x.capacityRejections||0),0),
+        lastCriticalCount:snap.criticalCount??null,
+        checkedAt:new Date().toISOString()});
+    }
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});

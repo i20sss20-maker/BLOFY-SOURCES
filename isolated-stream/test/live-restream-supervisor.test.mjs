@@ -318,3 +318,16 @@ test('manual passive TS capture reuses original publisher bytes with zero extra 
   const final=await service.stop(path);
   assert.equal(final.status,200);
 });
+
+
+test('private MediaMTX health uses only one control-plane GET, no media',async()=>{
+ const {service,calls}=createFixture();
+ const n=calls.length;
+ const health=await service.mediaEngineHealth();
+ assert.equal(health.ok,true);
+ assert.equal(health.providerRequests,0);
+ assert.equal(health.customerTrafficChanged,false);
+ assert.equal(calls.length,n+1);
+ assert.equal(calls.at(-1).method,'GET');
+ assert.ok(calls.at(-1).url.endsWith('/v3/config/paths/list'));
+});
