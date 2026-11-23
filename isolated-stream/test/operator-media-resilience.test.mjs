@@ -43,3 +43,16 @@ test('private engine health and hour window never expose anonymous routes public
  assert.match(sup,/readWithMediaDeadline\(active.reader,active.controller/);
  assert.match(sup,/providerRequests:0/);
 });
+
+test('authenticated operator UI exposes MediaMTX control and one-hour resilience report',async()=>{
+ const [dashboard,view,supervisor]=await Promise.all([
+  readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8'),
+  readFile(new URL('../src/operator-unified-view.mjs',import.meta.url),'utf8'),
+  readFile(new URL('../src/live-restream-supervisor.mjs',import.meta.url),'utf8')
+ ]);
+ assert.match(dashboard,/path==='\/operator\/api\/media-engine-health'/);
+ assert.match(dashboard,/path==='\/operator\/api\/media-hour-report'/);
+ assert.match(view,/id="media-resilience-refresh"/);
+ assert.match(view,/function loadMediaResilience\(/);
+ assert.match(supervisor,/restream_source_eof/);
+});

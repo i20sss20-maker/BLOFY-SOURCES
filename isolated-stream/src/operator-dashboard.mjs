@@ -411,6 +411,33 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       }));
       return true;
     }
+    if(req.method==='GET'&&path==='/operator/api/media-engine-health'){
+      // Authenticated private MediaMTX control check, zero source video reads.
+      void liveSupervisor.mediaEngineHealth().then(report=>
+        json(res,report.ok?200:503,report)).catch(()=>
+        json(res,503,{ok:false,code:'restream_control_unavailable',
+          customerTrafficChanged:false,providerRequests:0}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-hour-report'){
+      try{
+        const snapshot=streamOps()||{};
+        const trend=Array.isArray(snapshot.trend)?snapshot.trend.slice(-240):[];
+        const first=trend[0]?.at,last=trend[trend.length-1]?.at;
+        const coverage=Number.isFinite(first)&&Number.isFinite(last)
+          ?Math.max(0,Math.round((last-first)/60000)):0;
+        return json(res,200,{ok:true,readOnly:true,
+          scope:'operator_fanout_and_hls_1h',customerTrafficChanged:false,
+          mediaCopied:false,isAllSubscribersMeasured:false,
+          checkedAt:new Date().toISOString(),samples:trend.length,
+          observedWindowMinutes:coverage,
+          providerFailures:trend.reduce((n,x)=>n+(x.providerErrors||0),0),
+          reconnects:trend.reduce((n,x)=>n+(x.reconnects||0),0),
+          capacityRejections:trend.reduce((n,x)=>n+(x.capacityRejections||0),0),
+          criticalAlerts:snapshot.criticalCount||0,
+          rollingWindowConfiguredMinutes:snapshot.historyWindowMinutes||60});
+      }catch{return json(res,503,{ok:false,code:'media_hour_report_unavailable'});}
+    }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
     }

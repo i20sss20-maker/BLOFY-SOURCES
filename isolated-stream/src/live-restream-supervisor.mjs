@@ -442,7 +442,8 @@ export function createLiveRestreamSupervisor({
             row.preferredIndex=next.preferredIndex;
             row.mediaHealth.backupSelections++;
             row.lastError='restream_short_primary_disconnect';
-          }else row.lastError=null;
+          }else row.lastError=sourceIndex===0&&clock()-startedAt<180000
+            ?'restream_source_eof':null;
         }
       }finally{
         try{await active.reader.cancel()}catch{}

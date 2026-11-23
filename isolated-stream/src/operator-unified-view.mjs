@@ -610,6 +610,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <video id="live-preview" controls playsinline preload="none" style="display:none;width:min(100%,850px);margin:16px 0;border-radius:10px;background:black" aria-label="معاينة القناة"></video>
 <pre id="live-result" class="log">اختر قناة من مكتبتك ثم ابدأ إعادة البث.</pre>
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
+<div class="panel" id="media-resilience-console">
+  <div class="controls">
+    <div><h3>🛡️ مركز ثبات MediaMTX والنسخة الاحتياطية</h3>
+    <p class="muted">تشخيص آمن لآخر ساعة واتصال المحرك الفعلي. لا يشغّل بثًا جديدًا ولا ينقل المشتركين ولا يخزّن ملفات الفيديو.</p></div>
+    <button class="btn secondary" id="media-resilience-refresh" type="button">↻ فحص المحرك وتقرير الساعة</button>
+  </div>
+  <p class="muted" id="media-engine-readiness" role="status">اضغط فحص المحرك للتحقق من MediaMTX.</p>
+  <p class="muted" id="media-hour-summary" role="status">تقرير الساعة جاهز للقراءة من المؤشرات التشغيلية، وليس تسجيل فيديو.</p>
+</div>
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
@@ -5834,6 +5843,38 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("security-refresh").addEventListener("click",loadSecurity);
   $("auto-health-refresh").addEventListener("click",loadAutoHealth);
+  async function loadMediaResilience(){
+    var button=$("media-resilience-refresh");
+    if(!button)return;
+    button.disabled=true;
+    var oldText=button.textContent;
+    button.textContent="جارٍ فحص MediaMTX…";
+    try{
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report")]);
+      if(reports[0].status==="fulfilled"){
+        var a=reports[0].value;
+        $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
+          Number(a.managedOperatorPaths||0)+" · ناشرون نشطون "+
+          Number(a.activeOperatorPublishers||0)+
+          " · بدون فتح أي اتصال بث من المصدر.";
+      }else{
+        $("media-engine-readiness").textContent="⚠️ تعذر الوصول لواجهة تحكم MediaMTX. لا يثبت ذلك توقف قنوات العملاء.";
+      }
+      if(reports[1].status==="fulfilled"){
+        var b=reports[1].value;
+        $("media-hour-summary").textContent="📊 آخر ساعة تشغيلية · تغطية "+
+          Number(b.observedWindowMinutes||0)+" دقيقة · أعطال المصدر "+
+          Number(b.providerFailures||0)+" · إعادات الاتصال "+
+          Number(b.reconnects||0)+" · رفض السعة "+
+          Number(b.capacityRejections||0)+" · إنذارات حرجة حاليًا "+
+          Number(b.criticalAlerts||0)+
+          " · هذه إحصاءات المحرك المنفصل فقط، وليست كافة عملاء BLOFY.";
+      }else{
+        $("media-hour-summary").textContent="تعذر استخراج تقرير الساعة. لا يعني ذلك اختفاء سجل الانقطاعات.";
+      }
+    }finally{button.disabled=false;button.textContent=oldText;}
+  }
+  $("media-resilience-refresh").addEventListener("click",loadMediaResilience);
   async function loadLive(){
     if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
     try{
