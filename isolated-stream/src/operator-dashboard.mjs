@@ -426,7 +426,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         const first=trend[0]?.at,last=trend[trend.length-1]?.at;
         const coverage=Number.isFinite(first)&&Number.isFinite(last)
           ?Math.max(0,Math.round((last-first)/60000)):0;
-        return json(res,200,{ok:true,readOnly:true,
+        json(res,200,{ok:true,readOnly:true,
           scope:'operator_fanout_and_hls_1h',customerTrafficChanged:false,
           mediaCopied:false,isAllSubscribersMeasured:false,
           checkedAt:new Date().toISOString(),samples:trend.length,
@@ -436,7 +436,8 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
           capacityRejections:trend.reduce((n,x)=>n+(x.capacityRejections||0),0),
           criticalAlerts:snapshot.criticalCount||0,
           rollingWindowConfiguredMinutes:snapshot.historyWindowMinutes||60});
-      }catch{return json(res,503,{ok:false,code:'media_hour_report_unavailable'});}
+      }catch{json(res,503,{ok:false,code:'media_hour_report_unavailable'});}
+      return true;
     }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
