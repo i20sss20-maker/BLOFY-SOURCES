@@ -95,3 +95,17 @@ test('unsupported supervisor reports unknown state instead of a healthy zero',as
   assert.equal(data.error,'auto_health_read_unavailable');
   assert.equal(monitor.snapshot().ok,false);
 });
+
+
+test('real source EOF overrides a stale successful transport probe',async()=>{
+ const f=createFixture();
+ f.item.lastProbe={at:999900,ok:true,code:'ok'};
+ f.item.lastError='restream_source_eof';
+ const monitor=createLiveAutoHealth({liveSupervisor:f.liveSupervisor,clock:f.clock});
+ const report=await monitor.scan();
+ assert.equal(report.totals.warning,1);
+ assert.equal(report.paths[0].reason,'restream_source_eof');
+ f.item.lastError=null;
+ const healed=await monitor.scan();
+ assert.equal(healed.totals.healthy,1);
+});

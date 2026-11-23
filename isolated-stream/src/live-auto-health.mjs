@@ -27,6 +27,10 @@ export function createLiveAutoHealth({
   }
   function statusOf(row){
     if(row.probePending===true)return 'checking';
+    // A real upstream stall or unexpected EOF overrides a previously green
+    // HLS sample. That sample cannot prove the source is still producing bytes.
+    if(['restream_source_eof','restream_provider_stalled'].includes(row.lastError))
+      return 'warning';
     const probe=row.lastProbe;
     if(probe&&Number.isFinite(probe.at)&&clock()-probe.at>staleAfterMs)
       return 'stale';
@@ -38,7 +42,8 @@ export function createLiveAutoHealth({
     return 'untested';
   }
   function safeCode(row){
-    const code=row.lastProbe?.code||row.lastError||'no_probe';
+    const code=['restream_source_eof','restream_provider_stalled'].includes(row.lastError)
+      ?row.lastError:row.lastProbe?.code||row.lastError||'no_probe';
     return /^restream_[a-z_]{3,65}$/.test(code)||code==='ok'
       ?code:'unknown';
   }

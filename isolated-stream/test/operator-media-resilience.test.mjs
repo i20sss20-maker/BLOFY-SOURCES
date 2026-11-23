@@ -56,3 +56,14 @@ test('authenticated operator UI exposes MediaMTX control and one-hour resilience
  assert.match(view,/function loadMediaResilience\(/);
  assert.match(supervisor,/restream_source_eof/);
 });
+
+
+test('hourly operator endpoint terminates route with true to avoid duplicate responses',async()=>{
+ const code=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ const begin=code.indexOf("path==='/operator/api/media-hour-report'");
+ const end=code.indexOf("path==='/operator/api/auto-health'",begin);
+ const handler=code.slice(begin,end);
+ assert.ok(begin>0&&end>begin);
+ assert.match(handler,/return true;/);
+ assert.doesNotMatch(handler,/return json\(res/);
+});
