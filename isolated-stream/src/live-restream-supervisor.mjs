@@ -14,6 +14,10 @@ import {readWithMediaDeadline,nextOperatorSourcePreference} from './operator-med
 
 const MTX='http://blofy-stream-media.railway.internal:9997';
 const HLS='http://blofy-stream-media.railway.internal:8888';
+const MTX_STANDBY='http://blofy-stream-media-standby.railway.internal:9997';
+const HLS_STANDBY='http://blofy-stream-media-standby.railway.internal:8888';
+const API_ORIGINS={primary:MTX,standby:MTX_STANDBY};
+const HLS_ORIGINS={primary:HLS,standby:HLS_STANDBY};
 const INTERNAL='http://blofy-stream-api.railway.internal:3000';
 const MAX_PATHS=3,MAX_IDLE_MS=20*60*1000;
 // Reader capacity is per shared MediaMTX path, not per upstream connection.
@@ -28,7 +32,7 @@ const classify=e=>[
   'restream_provider_not_found','restream_provider_denied','restream_provider_unavailable',
   'restream_invalid_upstream','restream_invalid_media','restream_first_byte_timeout',
   'restream_busy','restream_hls_unavailable','restream_provider_stalled','restream_provider_redirect_denied',
-  'restream_control_unavailable','restream_path_not_found'
+  'restream_control_unavailable','restream_control_denied','restream_path_not_found'
 ].includes(e?.code)?e.code:'restream_internal_error';
 const response=(res,status,payload)=>{
   const bytes=Buffer.from(JSON.stringify(payload));
@@ -85,6 +89,7 @@ export function createLiveRestreamSupervisor({
   portal,fetchImpl=fetch,lookup,mediaPassword='',clock=Date.now,
   maxPaths=MAX_PATHS,maxSharedReaders=MAX_SHARED_READERS,
   httpEofReconnect=false,onUnexpectedError=()=>{},
+  standbyEnabled=false,
   salehOnlyOrigin=false,salehUpstreamChannelLimit=1
 }={}){
   if(!Number.isSafeInteger(salehUpstreamChannelLimit)||
@@ -96,13 +101,14 @@ export function createLiveRestreamSupervisor({
   const paths=new Map(),tokens=new Map();
   const passiveRecorder=createPassiveTsRecorder({clock});
   let operation=false,cleanupAt=0;
-  async function mediamtx(method,route,data){
-    if(!auth)throw err('restream_control_unavailable');
+  async function mediamtx(method,route,data,engine='primary'){
+    if(!auth||!API_ORIGINS[engine]||(engine==='standby'&&!standbyEnabled))
+      throw err('restream_control_unavailable');
     if(!/^\/v3\/config\/paths\/(?:add|delete|list)(?:\/live-[a-f0-9]{12})?$/.test(route))
       throw err('restream_control_unavailable');
     let reply;
     try{
-      reply=await fetchImpl(MTX+route,{method,redirect:'manual',
+      reply=await fetchImpl(API_ORIGINS[engine]+route,{method,redirect:'manual',
         signal:AbortSignal.timeout(6500),
         headers:{authorization:auth,accept:'application/json',
           ...(data?{'content-type':'application/json'}:{})},
@@ -114,7 +120,8 @@ export function createLiveRestreamSupervisor({
     const content=await readBoundedJson(reply,
       route==='/v3/config/paths/list'?128*1024:8192);
     if(reply.status===404)return {status:404,body:content};
-    if(!reply.ok)throw err('restream_control_unavailable');
+    if(!reply.ok)throw err([400,401,403,404,409,422].includes(reply.status)
+      ?'restream_control_denied':'restream_control_unavailable');
     return {status:reply.status,body:content};
   }
   async function prune(){
@@ -152,7 +159,7 @@ export function createLiveRestreamSupervisor({
         return safe({ok:true,path:existing.name,title:existing.title,
           sourceId:existing.sourceId,channelId:existing.channelId,
           audioMode:existing.audioMode||'copy',
-          onDemand:true,backupConfigured:existing.backupConfigured,
+          onDemand:true,backupConfigured:existing.backupConfigured,engine:existing.engine,
           playbackVerified:false,customerTrafficChanged:false,
           reused:true,playlist:'/operator/api/live/'+existing.name+'/index.m3u8'});
       }
@@ -213,16 +220,28 @@ export function createLiveRestreamSupervisor({
         candidateUrls:candidates,preferredIndex:0,failovers:0,backupConfigured:candidates.length>1,
         audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         feedGeneration:0,shortPrimaryEndAt:null,shortPrimaryEndCount:0,
-        mediaHealth:{cleanSourceEnds:0,readStalls:0,sourceErrors:0,backupSelections:0}};
+        mediaHealth:{cleanSourceEnds:0,readStalls:0,sourceErrors:0,backupSelections:0},
+        engine:'primary'};
       const config={source:'publisher',
         runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders};
-      await mediamtx('POST','/v3/config/paths/add/'+name,config);
+      try{
+        await mediamtx('POST','/v3/config/paths/add/'+name,config);
+      }catch(error){
+        // Only a failed private control transport/5xx is eligible. A healthy
+        // primary always retains ownership; subscriber routes never change.
+        // No FFmpeg worker runs merely because a path is configured.
+        if(!standbyEnabled||error?.code!=='restream_control_unavailable')
+          throw error;
+        await mediamtx('GET','/v3/config/paths/list',undefined,'standby');
+        await mediamtx('POST','/v3/config/paths/add/'+name,config,'standby');
+        row.engine='standby';
+      }
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
         channelId:row.channelId,onDemand:true,backupConfigured:row.backupConfigured,
-        audioMode,playbackVerified:false,customerTrafficChanged:false,
+        audioMode,engine:row.engine,playbackVerified:false,customerTrafficChanged:false,
         playlist:'/operator/api/live/'+name+'/index.m3u8'},201);
     }catch(e){return safe({ok:false,code:classify(e)},503)}
     finally{operation=false}
@@ -235,7 +254,7 @@ export function createLiveRestreamSupervisor({
     // Immediately invalidate feed token, even if MTX deletion errors.
     passiveRecorder.abort(name,row.feedGeneration||0);
     tokens.delete(row.ticket);paths.delete(name);
-    try{await mediamtx('DELETE','/v3/config/paths/delete/'+name)}
+    try{await mediamtx('DELETE','/v3/config/paths/delete/'+name,undefined,row.engine)}
     catch(e){return safe({ok:false,code:classify(e),feedDisabled:true},503)}
     return safe({ok:true,stopped:true,path:name,customerTrafficChanged:false});
   }
@@ -249,7 +268,7 @@ export function createLiveRestreamSupervisor({
     // The on-demand FFmpeg worker may need more time than a Railway HTTP
     // proxy timeout. Return 202 immediately, then expose the final
     // transport result in the authenticated GET /operator/api/live listing.
-    void verifyRestreamSmoke(HLS,{fetchImpl,pathName:name,timeoutMs:48000})
+    void verifyRestreamSmoke(HLS_ORIGINS[row.engine],{fetchImpl,pathName:name,timeoutMs:48000})
       .then(report=>{
         const feedError=row.lastError&&/^restream_[a-z_]+$/.test(row.lastError)
           ?row.lastError:null;
@@ -288,7 +307,7 @@ export function createLiveRestreamSupervisor({
       path:row.name,sourceId:row.sourceId,channelId:row.channelId,
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
-      probePending:row.probePending===true,
+      probePending:row.probePending===true,engine:row.engine,
       mediaHealth:{...row.mediaHealth},
       mediaTracks:row.trackInspector?.summary()||null,
       trackInspectedAt:row.trackInspectedAt||null,
@@ -484,7 +503,7 @@ export function createLiveRestreamSupervisor({
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
     res.once('close',onClose);
     try{
-      const privateBase=HLS+'/'+name+'/';
+      const privateBase=HLS_ORIGINS[row.engine]+'/'+name+'/';
       const reply=await fetchImpl(privateBase+file,{redirect:'manual',
         cache:'no-store',signal:controller.signal,
         headers:{accept:'*/*',...(typeof req.headers.range==='string'&&
@@ -499,7 +518,7 @@ export function createLiveRestreamSupervisor({
         const rewritten=raw.replace(/^([^#\r\n][^\r\n]*)$/gm,(line)=>{
           let url;try{url=new URL(line,privateBase)}catch{bad=true;return ''};
           const suffix=url.pathname.slice(('/'+name+'/').length);
-          if(url.origin!==new URL(HLS).origin||
+          if(url.origin!==new URL(HLS_ORIGINS[row.engine]).origin||
              !url.pathname.startsWith('/'+name+'/')||!safeFile(suffix)){
             bad=true;return '';
           }
@@ -540,19 +559,26 @@ export function createLiveRestreamSupervisor({
   }
   async function recoverOldPaths(){
     if(!auth)return {ok:false,code:'restream_control_unavailable'};
-    // Only names in this service's reserved pattern; requires single replica.
-    let removed=0;
-    try{
-      const listing=await mediamtx('GET','/v3/config/paths/list');
-      for(const item of listing.body?.items||[]){
-        if(safePath(item?.name)&&!paths.has(item.name)){
-          await mediamtx('DELETE','/v3/config/paths/delete/'+item.name);
-          removed++;
+    // Remove only live-<12 hex> paths orphaned by our old process, on each
+    // reachable engine. Never delete 'smoke' or a path owned by this process.
+    let removed=0,enginesReached=0;
+    const engines=standbyEnabled?['primary','standby']:['primary'];
+    for(const engine of engines){
+      try{
+        const listing=await mediamtx('GET','/v3/config/paths/list',undefined,engine);
+        enginesReached++;
+        for(const item of listing.body?.items||[]){
+          const name=item?.name;
+          if(safePath(name)&&paths.get(name)?.engine!==engine){
+            await mediamtx('DELETE','/v3/config/paths/delete/'+name,undefined,engine);
+            removed++;
+          }
         }
-      }
-      cleanupAt=clock();
-      return {ok:true,removed};
-    }catch{return {ok:false,code:'restream_control_unavailable'}}
+      }catch{}
+    }
+    cleanupAt=clock();
+    return enginesReached===engines.length?{ok:true,removed,enginesReached}
+      :{ok:false,code:'restream_control_unavailable',removed,enginesReached};
   }
   return {start,stop,probe,list,streamFeed,proxyHls,recoverOldPaths,
     mediaEngineHealth,captureActiveTs};
