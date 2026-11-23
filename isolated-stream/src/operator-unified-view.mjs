@@ -620,6 +620,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted" id="media-hour-summary" role="status">تقرير الساعة جاهز للقراءة من المؤشرات التشغيلية، وليس تسجيل فيديو.</p>
   <p class="muted" id="media-standby-readiness" role="status">جارٍ تجهيز مراقبة المحرك الأساسي والاحتياطي كل دقيقة…</p>
   <p class="muted" id="media-standby-hls-proof" role="status">جارٍ التحقق من خروج HLS الحقيقي لمصدر الاختبار الداخلي على المحركين…</p>
+  <p class="muted" id="media-hour-buffer-state" role="status">💾 تخزين آخر ساعة: مساحة 8GB للاختبار الاصطناعي على الاحتياطي؛ لا يتم تسجيل قنوات العملاء.</p>
 </div>
 </section>
 <section class="view" id="page-library">
@@ -5852,7 +5853,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var oldText=button.textContent;
     button.textContent="جارٍ فحص MediaMTX…";
     try{
-      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary")]);
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary"),api("media-hour-buffer")]);
       if(reports[0].status==="fulfilled"){
         var a=reports[0].value;
         $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
@@ -5892,6 +5893,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       }else{
         $("media-standby-hls-proof").textContent=
          "⚠️ لم تتوفر عينات HLS الداخلية. لا يمكن إثبات جاهزية المقاطع حتى يُستكمل الفحص.";
+      }
+      if(reports[4].status==="fulfilled"){
+        var h=reports[4].value;
+        $("media-hour-buffer-state").textContent=
+          "💾 تخزين ساعة تجريبي على الاحتياطي: "+
+          (h.state==="synthetic_hour_buffer_has_segments"
+          ?"✅ تم إثبات وجود "+Number(h.syntheticSegmentsWithinHour||0)+
+            " مقطعًا اختباريًا محفوظًا خلال آخر ساعة"
+          :h.state==="synthetic_hour_buffer_not_yet_verified"
+          ?"الواجهة متصلة؛ لم يثبت حفظ مقاطع بعد"
+          :"الفحص لم يكتمل ("+String(h.state||"unknown")+")")+
+          " · لا يسجل بث العملاء ولا يفعّل إعادة مشاهدة القنوات.";
+      }else{
+        $("media-hour-buffer-state").textContent=
+         "💾 تخزين آخر ساعة: يتعذر فحص التسجيل الداخلي حاليًا.";
       }
       if(reports[1].status==="fulfilled"){
         var b=reports[1].value;
