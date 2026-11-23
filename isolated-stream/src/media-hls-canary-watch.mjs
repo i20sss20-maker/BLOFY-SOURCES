@@ -17,6 +17,11 @@ const known=new Set(['synthetic_hls_ts_verified','restream_smoke_invalid_path',
  'restream_smoke_redirect_invalid','restream_smoke_failed',
  'restream_smoke_empty_body','restream_smoke_response_too_large']);
 const safeCode=x=>known.has(x)?x:'synthetic_probe_failed';
+function percentile(values,p){
+ if(!values.length)return null;
+ const sorted=[...values].sort((a,b)=>a-b);
+ return sorted[Math.min(sorted.length-1,Math.max(0,Math.ceil(sorted.length*p)-1))];
+}
 export function createMediaHlsCanaryWatch({
  verify=verifyRestreamSmoke,fetchImpl=fetch,clock=Date.now,
  intervalMs=300000,logger=()=>{}
@@ -34,11 +39,15 @@ export function createMediaHlsCanaryWatch({
    const recent=records.get(role).filter(x=>x.at>=now-MAX_HISTORY_MS);
    const last=recent.at(-1)||null;
    const pass=recent.filter(x=>x.ok).length;
+   const measured=recent.filter(x=>x.ok&&Number.isSafeInteger(x.elapsedMs))
+     .map(x=>x.elapsedMs);
    engines[role]={
     syntheticHlsState:!last?'unknown':last.ok?'verified':'failed',
     samples:recent.length,successfulSamples:pass,
     failedSamples:recent.length-pass,
     successRatePct:recent.length?Math.round(10000*pass/recent.length)/100:null,
+    syntheticHlsLatencyP50Ms:percentile(measured,0.5),
+    syntheticHlsLatencyP95Ms:percentile(measured,0.95),
     lastCode:last?.code||null,
     lastCheckedAt:last?new Date(last.at).toISOString():null,
     lastElapsedMs:last?.elapsedMs??null,

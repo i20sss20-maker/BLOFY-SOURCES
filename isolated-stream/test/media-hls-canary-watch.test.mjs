@@ -60,3 +60,18 @@ test('expired samples are excluded from the last-hour window',async()=>{
  assert.equal(watch.snapshot().engines.primary.samples,0);
  assert.equal(watch.snapshot().engines.standby.syntheticHlsState,'unknown');
 });
+
+test('synthetic HLS P50/P95 show measured startup without falsely claiming real playback',async()=>{
+ let now=5000000,step=0;
+ const watch=createMediaHlsCanaryWatch({clock:()=>now,verify:async()=>{
+  const samples=[120,240,350,700,900];
+  return{ok:true,stage:'segment',code:'synthetic_hls_ts_verified',
+    elapsedMs:samples[Math.floor(step++/2)]};
+ }});
+ for(let i=0;i<5;i++){await watch.check();now+=60000;}
+ const snap=watch.snapshot();
+ assert.equal(snap.engines.primary.syntheticHlsLatencyP50Ms,350);
+ assert.equal(snap.engines.primary.syntheticHlsLatencyP95Ms,900);
+ assert.equal(snap.engines.standby.syntheticHlsLatencyP95Ms,900);
+ assert.equal(snap.realSourceVerified,false);
+});

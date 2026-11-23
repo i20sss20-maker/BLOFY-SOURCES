@@ -581,6 +581,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <label><input id="live-aac-audio" type="checkbox"> تجربة تحويل الصوت إلى AAC</label>
+<label><input id="live-fast-start" type="checkbox"> ⚡ بدء سريع تجريبي للمشرف (فحص أقل، قد لا يناسب بعض القنوات)</label>
 <label><input id="live-hour-record" type="checkbox" disabled> 💾 حفظ آخر ساعة لقناة أملك حق تسجيلها (على الاحتياطي، بعد اعتماد وضع التسجيل)</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 <button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
@@ -5890,6 +5891,11 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           Number(cp.successfulSamples||0)+"/"+Number(cp.samples||0)+") · الاحتياطي: "+
           (textState[cs.syntheticHlsState]||"غير معروف")+" ("+
           Number(cs.successfulSamples||0)+"/"+Number(cs.samples||0)+
+          ") · بدء HLS الاصطناعي P95 أساسي "+
+          (Number.isFinite(cp.syntheticHlsLatencyP95Ms)?
+           cp.syntheticHlsLatencyP95Ms+"ms":"—")+" / احتياطي "+
+          (Number.isFinite(cs.syntheticHlsLatencyP95Ms)?
+           cs.syntheticHlsLatencyP95Ms+"ms":"—")+
           ") · اختبار داخلي، لا يثبت تشغيل قنوات المزوّد.";
       }else{
         $("media-standby-hls-proof").textContent=
@@ -6077,6 +6083,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
       }
       var audioMode=$("live-aac-audio").checked?"aac":"copy";
+      var fastStart=$("live-fast-start").checked;
       var recordOneHour=$("live-hour-record").checked;
       if(recordOneHour&&!confirm(
         "أؤكد امتلاك حقوق تسجيل وتخزين هذه القناة، وأوافق على تشغيل حفظ اختباري لا يتجاوز ساعة في وحدة التخزين المستقلة. لم يُعتمد التسجيل الجماعي. متابعة؟"))return;
@@ -6087,6 +6094,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         sourceId:sourceId,channelId:channelId,
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
         audioMode:audioMode,audioTranscodeConfirmed:audioMode==="aac",
+        fastStart:fastStart,
         recordOneHour:recordOneHour,recordingRightsConfirmed:recordOneHour,
         rightsConfirmed:true
       });
@@ -6097,6 +6105,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
         "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
         "\nالصوت: "+(result.audioMode==="aac"?"تحويل AAC للمشرف فقط":"نسخ دون تحويل")+
+        "\nبدء التشغيل: "+(result.fastStart?"⚡ تجريبي سريع":"قياسي متوافق")+
         "\nتسجيل تجريبي: "+(result.recordOneHour?"مهيأ عند بدء البث، لم يتم إثبات حفظ ملف بعد":"غير مفعّل")+
         "\nالمسار: "+String(result.path||"");
       show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);

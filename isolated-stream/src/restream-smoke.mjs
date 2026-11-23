@@ -112,11 +112,11 @@ export async function verifyRestreamSmoke(originInput,{
     let segment=null;
     // MediaMTX can publish the first playlist before its first complete TS
     // segment. Only retry the private playlist, never the source provider.
-    for(let attempt=0;attempt<4;attempt++){
+    for(let attempt=0;attempt<9;attempt++){
       const match=/#EXTINF:[^\r\n]*\r?\n([^#\r\n]+)/.exec(playlist);
       if(match){segment=match[1].trim();break;}
-      if(attempt===3)break;
-      await wait(1200);
+      if(attempt===8)break;
+      await wait(450);
       const next=await load(playlistUrl.toString(),playlistUrl);
       playlist=(await readBounded(next.response)).toString('utf8');
     }

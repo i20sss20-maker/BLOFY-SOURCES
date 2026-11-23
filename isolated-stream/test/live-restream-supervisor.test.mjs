@@ -449,3 +449,31 @@ test('one-hour recording is isolated on standby, bounded and only configured on-
  const duplicate=await service.start({...row(),recordOneHour:false});
  assert.equal(duplicate.status,409);
 });
+
+test('operator opt-in quick start reduces FFmpeg input analysis without changing video/audio codecs',async()=>{
+ const {service,calls}=createFixture();
+ const start=await service.start({...row(),fastStart:true});
+ assert.equal(start.status,201);
+ assert.equal(start.body.fastStart,true);
+ const m=calls.find(x=>x.method==='POST'&&mediaName.test(x.url));
+ assert.ok(m);
+ const config=JSON.parse(m.body);
+ assert.match(config.runOnDemand,/-probesize 262144 -analyzeduration 2000000 /);
+ assert.match(config.runOnDemand,/-map 0:v:0\?/);
+ assert.match(config.runOnDemand,/-map 0:a:0\?/);
+ assert.match(config.runOnDemand,/-c copy/);
+ assert.doesNotMatch(config.runOnDemand,/provider\.example|secret-password/);
+ const incompatible=await service.start({...row(),fastStart:false});
+ assert.equal(incompatible.status,409,'cannot silently change an active profile');
+ assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
+});
+test('regular licensed operator path retains full FFmpeg input probing for compatibility',async()=>{
+ const {service,calls}=createFixture();
+ const first=await service.start(row());
+ assert.equal(first.body.fastStart,false);
+ const config=JSON.parse(calls.find(x=>x.method==='POST'&&mediaName.test(x.url)).body);
+ assert.doesNotMatch(config.runOnDemand,/-probesize 262144/);
+ assert.doesNotMatch(config.runOnDemand,/-analyzeduration 2000000/);
+ const invalid=await service.start({...row(),fastStart:'true'});
+ assert.equal(invalid.status,400);
+});

@@ -60,7 +60,7 @@ function safeFile(p){
   return typeof p==='string'&&p.length<=175&&/^[a-zA-Z0-9_.-]+$/.test(p)&&
     !p.includes('..')&&/\.(?:m3u8|ts|mp4|m4s|aac|vtt)$/.test(p);
 }
-function buildCommand(name,ticket,{httpEofReconnect=false,audioMode='copy'}={}){
+function buildCommand(name,ticket,{httpEofReconnect=false,audioMode='copy',fastStart=false}={}){
   if(!safePath(name)||!TICKET.test(ticket))throw err('restream_invalid_path');
   if(!['copy','aac'].includes(audioMode))throw err('restream_audio_mode_invalid');
   // ALL interpolated values are strictly hex. No provider URL is added to
@@ -76,6 +76,9 @@ function buildCommand(name,ticket,{httpEofReconnect=false,audioMode='copy'}={}){
   return 'ffmpeg -nostdin -hide_banner -loglevel error '+
     '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 3 '+
     localFeedReconnect+
+    // Moderate startup probe budget only on operator-selected NEW paths.
+    // Default full probing remains for unusual codecs and delayed PMT/audio.
+    (fastStart?'-probesize 262144 -analyzeduration 2000000 ':'')+
     '-rw_timeout 14000000 -i '+INTERNAL+'/internal/live-feed/'+ticket+
     ' -map 0:v:0? -map 0:a:0? '+
     // Video is always copied. Only a newly created, operator-approved path
@@ -136,9 +139,11 @@ export function createLiveRestreamSupervisor({
   idleTimer.unref?.();
   async function start({sourceId,channelId,backupSourceId,backupChannelId,
     rightsConfirmed,audioMode='copy',audioTranscodeConfirmed=false,
-    recordOneHour=false,recordingRightsConfirmed=false}={}){
+    recordOneHour=false,recordingRightsConfirmed=false,fastStart=false}={}){
     if(!auth||!portal?.configured)return safe({ok:false,code:'restream_not_configured'},503);
     if(rightsConfirmed!==true)return safe({ok:false,code:'stream_rights_confirmation_required'},403);
+    if(typeof fastStart!=='boolean')
+      return safe({ok:false,code:'restream_fast_start_invalid'},400);
     if(!['copy','aac'].includes(audioMode))
       return safe({ok:false,code:'restream_audio_mode_invalid'},400);
     if(audioMode==='aac'&&audioTranscodeConfirmed!==true)
@@ -161,12 +166,13 @@ export function createLiveRestreamSupervisor({
         // silently using a *second* licensed upstream connection.
         if((existing.audioMode||'copy')!==audioMode||
           Boolean(existing.recordOneHour)!==(recordOneHour===true)||
+          Boolean(existing.fastStart)!==fastStart||
           (backupSourceId&&!existing.backupConfigured))
           return safe({ok:false,code:'restream_duplicate_source_options',
             customerTrafficChanged:false},409);
         return safe({ok:true,path:existing.name,title:existing.title,
           sourceId:existing.sourceId,channelId:existing.channelId,
-          audioMode:existing.audioMode||'copy',
+          audioMode:existing.audioMode||'copy',fastStart:existing.fastStart===true,
           onDemand:true,backupConfigured:existing.backupConfigured,engine:existing.engine,
           recordOneHour:existing.recordOneHour===true,recordingVerified:false,
           playbackVerified:false,customerTrafficChanged:false,
@@ -232,9 +238,9 @@ export function createLiveRestreamSupervisor({
         audioMode,trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         feedGeneration:0,shortPrimaryEndAt:null,shortPrimaryEndCount:0,
         mediaHealth:{cleanSourceEnds:0,readStalls:0,sourceErrors:0,backupSelections:0},
-        engine:'primary',recordOneHour:recordOneHour===true};
+        engine:'primary',recordOneHour:recordOneHour===true,fastStart};
       const config={source:'publisher',
-        runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode}),
+        runOnDemand:buildCommand(name,ticket,{httpEofReconnect,audioMode,fastStart}),
         runOnDemandRestart:true,runOnDemandStartTimeout:'35s',
         runOnDemandCloseAfter:'15s',maxReaders:maxSharedReaders,
         ...(recordOneHour===true?{
@@ -266,7 +272,7 @@ export function createLiveRestreamSupervisor({
       paths.set(name,row);tokens.set(ticket,name);
       return safe({ok:true,path:name,title:row.title,sourceId:row.sourceId,
         channelId:row.channelId,onDemand:true,backupConfigured:row.backupConfigured,
-        audioMode,engine:row.engine,recordOneHour:row.recordOneHour,
+        audioMode,fastStart:row.fastStart,engine:row.engine,recordOneHour:row.recordOneHour,
         recordingVerified:false,playbackVerified:false,customerTrafficChanged:false,
         playlist:'/operator/api/live/'+name+'/index.m3u8'},201);
     }catch(e){return safe({ok:false,code:classify(e)},503)}
@@ -336,6 +342,7 @@ export function createLiveRestreamSupervisor({
       title:row.title,createdAt:row.createdAt,lastUsedAt:row.lastUsedAt,
       connections:row.connections,lastError:row.lastError,lastProbe:row.lastProbe,
       probePending:row.probePending===true,engine:row.engine,
+      fastStart:row.fastStart===true,
       recordOneHour:row.recordOneHour===true,recordingVerified:false,
       mediaHealth:{...row.mediaHealth},
       mediaTracks:row.trackInspector?.summary()||null,
