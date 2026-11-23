@@ -95,3 +95,11 @@ test('operator cannot select hour recording while production recording is disabl
  assert.match(view,/recordingToggle\.disabled=d\.hourRecordingEnabled!==true/);
  assert.match(view,/recordingToggle\.disabled\)recordingToggle\.checked=false/);
 });
+
+test('operator launch gate uses synthetic evidence but cannot route subscribers',async()=>{
+ const s=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ const v=await readFile(new URL('../src/operator-unified-view.mjs',import.meta.url),'utf8');
+ assert.match(s,/path==='\/operator\/api\/media-production-gate'/);
+ assert.match(v,/id="media-launch-gate"/);
+ assert.match(v,/api\("media-production-gate"\)/);
+});

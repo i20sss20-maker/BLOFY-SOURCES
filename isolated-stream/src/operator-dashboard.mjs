@@ -5,6 +5,7 @@ import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
 import {streamOperatorOriginalRange} from './operator-original-range.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
+import {assessMediaProductionGate} from './media-production-gate.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
@@ -412,6 +413,15 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         ok:false,code:'operator_media_watchlist_unavailable',
         allChannelsScanned:false,noProviderRequestsTriggered:true
       }));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-production-gate'){
+      // In-memory, signed-in operator visibility only. No actual customer
+      // source is contacted and the response can NEVER trigger a rollout.
+      try{json(res,200,assessMediaProductionGate({
+        redundancy:mediaRedundancy(),synthetic:mediaHlsCanary()
+      }));}
+      catch{json(res,503,{ok:false,code:'media_production_gate_unavailable'});}
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/media-hour-buffer'){

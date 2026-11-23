@@ -623,6 +623,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   <p class="muted" id="media-standby-readiness" role="status">جارٍ تجهيز مراقبة المحرك الأساسي والاحتياطي كل دقيقة…</p>
   <p class="muted" id="media-standby-hls-proof" role="status">جارٍ التحقق من خروج HLS الحقيقي لمصدر الاختبار الداخلي على المحركين…</p>
   <p class="muted" id="media-hour-buffer-state" role="status">💾 تخزين آخر ساعة: مساحة 8GB للاختبار الاصطناعي على الاحتياطي؛ لا يتم تسجيل قنوات العملاء.</p>
+  <p class="muted" id="media-launch-gate" role="status">🚦 إطلاق جميع العملاء: بانتظار نتائج بث حقيقي لمدة ساعة، صلاحيات المصدر، اختبار الأجهزة والضغط.</p>
 </div>
 </section>
 <section class="view" id="page-library">
@@ -5855,7 +5856,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var oldText=button.textContent;
     button.textContent="جارٍ فحص MediaMTX…";
     try{
-      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary"),api("media-hour-buffer")]);
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary"),api("media-hour-buffer"),api("media-production-gate")]);
       if(reports[0].status==="fulfilled"){
         var a=reports[0].value;
         $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
@@ -5915,6 +5916,33 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       }else{
         $("media-hour-buffer-state").textContent=
          "💾 تخزين آخر ساعة: يتعذر فحص التسجيل الداخلي حاليًا.";
+      }
+      if(reports[5].status==="fulfilled"){
+        var gate=reports[5].value;
+        var blockers=(gate.blockers||[]).map(function(code){
+          return ({
+            primary_engine_control_not_verified:"التحكم بالأساسي",
+            standby_engine_control_not_verified:"التحكم بالاحتياطي",
+            primary_synthetic_hls_not_verified:"HLS الأساسي",
+            standby_synthetic_hls_not_verified:"HLS الاحتياطي",
+            full_hour_engine_transport_not_observed:"ساعة مراقبة كاملة",
+            licensedOriginPermissionVerified_missing:"توثيق حق إعادة التوزيع",
+            realLive60MinutePlaybackVerified_missing:"ساعة بث حقيقي",
+            multiViewerCapacityVerified_missing:"اختبار المشاهدين وحد الاتصالات",
+            tvAndroid9CodecAudioVerified_missing:"اختبار صوت وصورة Android 9",
+            webAndVidaPlaybackVerified_missing:"اختبار الويب وVIDAA",
+            rollbackDrillVerified_missing:"اختبار العودة للنسخة السابقة"
+          })[code]||"فحص غير مكتمل";
+        });
+        $("media-launch-gate").textContent=
+          "🚦 إطلاق الجميع: غير معتمد حاليًا · "+
+          (gate.syntheticInfrastructureStatus==="two_engines_synthetic_media_verified"
+           ?"المحركان سليمان في الاختبار الداخلي"
+           :"فحص المحركين غير مكتمل")+
+          " · متبقٍ: "+(blockers.join("، ")||"مراجعة الاعتماد النهائي")+
+          " · لم يتم تغيير قنوات العملاء.";
+      }else{
+        $("media-launch-gate").textContent="⚠️ تعذر قراءة بوابة اعتماد الإنتاج؛ يُحظر التوسع التلقائي.";
       }
       if(reports[1].status==="fulfilled"){
         var b=reports[1].value;
