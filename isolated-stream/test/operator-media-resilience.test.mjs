@@ -67,3 +67,14 @@ test('hourly operator endpoint terminates route with true to avoid duplicate res
  assert.match(handler,/return true;/);
  assert.doesNotMatch(handler,/return json\(res/);
 });
+
+
+test('operator redundancy API remains behind authentication, reports no client migration',async()=>{
+ const dashboard=await readFile(new URL('../src/operator-dashboard.mjs',import.meta.url),'utf8');
+ const server=await readFile(new URL('../src/server.mjs',import.meta.url),'utf8');
+ const view=await readFile(new URL('../src/operator-unified-view.mjs',import.meta.url),'utf8');
+ assert.match(dashboard,/path==='\/operator\/api\/media-redundancy'/);
+ assert.match(server,/service\.mediaRedundancy\.start\(\)/);
+ assert.match(view,/id="media-standby-readiness"/);
+ assert.doesNotMatch(dashboard.slice(0,dashboard.indexOf('const handle=(req,res)=>')),/providerCredentials/);
+});

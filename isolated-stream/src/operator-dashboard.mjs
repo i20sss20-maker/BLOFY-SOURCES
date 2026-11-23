@@ -63,6 +63,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
+  mediaRedundancy=()=>({ok:false,code:'not_configured'}),
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
@@ -409,6 +410,13 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
         ok:false,code:'operator_media_watchlist_unavailable',
         allChannelsScanned:false,noProviderRequestsTriggered:true
       }));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-redundancy'){
+      // Existing operator Basic auth is checked before reaching this route.
+      // Passive last-hour control API samples never use subscriber credentials.
+      try{json(res,200,mediaRedundancy());}
+      catch{json(res,503,{ok:false,code:'media_redundancy_unavailable'});}
       return true;
     }
     if(req.method==='GET'&&path==='/operator/api/media-engine-health'){

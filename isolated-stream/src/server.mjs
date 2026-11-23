@@ -15,6 +15,7 @@ import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {createStreamOpsObservatory} from './stream-ops-observatory.mjs';
+import {createMediaEngineRedundancyWatch} from './media-engine-redundancy-watch.mjs';
 import {probeLicensedSharedLive} from './shared-live-canary.mjs';
 import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -150,9 +151,14 @@ export function createStreamServer({
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const streamOps=createStreamOpsObservatory({
     relayStats:()=>relayBroker.stats(),autoHealth:()=>autoHealth.snapshot()});
+  const mediaRedundancy=createMediaEngineRedundancyWatch({
+    fetchImpl,controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    logger:record=>console.info('BLOFY_MEDIA_REDUNDANCY_WATCH',JSON.stringify(record))
+  });
   let replicaBootProof=null;
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,sharedReadiness,streamOps:()=>streamOps.snapshot(),
+    mediaRedundancy:()=>mediaRedundancy.snapshot(),
     getReplicaSynthetic:()=>replicaBootProof,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
@@ -328,7 +334,7 @@ export function createStreamServer({
       elapsedMs:Number.isSafeInteger(proof?.elapsedMs)?proof.elapsedMs:null,
       checkedAt:new Date().toISOString(),realSalehVerified:false
     }},
-    liveSupervisor,autoHealth,streamOps,operatorDashboard,sharedReadiness,
+    liveSupervisor,autoHealth,streamOps,mediaRedundancy,operatorDashboard,sharedReadiness,
     relayStats:()=>relayBroker.stats()};
 }
 
@@ -386,6 +392,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // Passive in-memory snapshots continue while the admin page is closed.
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
+    service.mediaRedundancy.start();
     // Read-only Smart Playback Health runs while admin UI is closed.
     // Samples only fixed internal monitoring APIs once per minute.
     service.operatorDashboard.start();

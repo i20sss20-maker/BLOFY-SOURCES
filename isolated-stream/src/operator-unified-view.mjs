@@ -618,6 +618,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   </div>
   <p class="muted" id="media-engine-readiness" role="status">اضغط فحص المحرك للتحقق من MediaMTX.</p>
   <p class="muted" id="media-hour-summary" role="status">تقرير الساعة جاهز للقراءة من المؤشرات التشغيلية، وليس تسجيل فيديو.</p>
+  <p class="muted" id="media-standby-readiness" role="status">جارٍ تجهيز مراقبة المحرك الأساسي والاحتياطي كل دقيقة…</p>
 </div>
 </section>
 <section class="view" id="page-library">
@@ -5850,7 +5851,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
     var oldText=button.textContent;
     button.textContent="جارٍ فحص MediaMTX…";
     try{
-      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report")]);
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy")]);
       if(reports[0].status==="fulfilled"){
         var a=reports[0].value;
         $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
@@ -5859,6 +5860,21 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           " · بدون فتح أي اتصال بث من المصدر.";
       }else{
         $("media-engine-readiness").textContent="⚠️ تعذر الوصول لواجهة تحكم MediaMTX. لا يثبت ذلك توقف قنوات العملاء.";
+      }
+      if(reports[2].status==="fulfilled"){
+        var r=reports[2].value,p=r.engines&&r.engines.primary||{},
+          s=r.engines&&r.engines.standby||{};
+        var readable={"available":"يستجيب","degraded":"تنبيه مؤقت",
+          "unavailable":"غير متاح","unknown":"لم يُفحص بعد"};
+        $("media-standby-readiness").textContent=
+          "🛡️ محرك أساسي: "+(readable[p.state]||"غير معروف")+
+          " · احتياطي مستقل: "+(readable[s.state]||"غير معروف")+
+          " · تغطية أساسي "+Number(p.observationWindowMinutes||0)+"/60 دقيقة"+
+          " · احتياطي "+Number(s.observationWindowMinutes||0)+"/60 دقيقة"+
+          " · لا يوجد تحويل تلقائي للعملاء ولا تسجيل فيديو.";
+      }else{
+        $("media-standby-readiness").textContent=
+         "⚠️ تقرير جاهزية المحركين غير متاح الآن؛ لا يعني ذلك توقف البث.";
       }
       if(reports[1].status==="fulfilled"){
         var b=reports[1].value;
