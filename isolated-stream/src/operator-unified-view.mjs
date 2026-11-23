@@ -581,7 +581,7 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <label><input id="live-aac-audio" type="checkbox"> تجربة تحويل الصوت إلى AAC</label>
-<label><input id="live-hour-record" type="checkbox"> 💾 تجربة حفظ آخر ساعة لقناة أملك حق تسجيلها (على الاحتياطي فقط)</label>
+<label><input id="live-hour-record" type="checkbox" disabled> 💾 حفظ آخر ساعة لقناة أملك حق تسجيلها (على الاحتياطي، بعد اعتماد وضع التسجيل)</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 <button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
@@ -5931,6 +5931,12 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
       var results=await Promise.allSettled([api("live"),api("state")]);
       if(results[0].status!=="fulfilled")throw results[0].reason;
       var d=results[0].value;
+      var recordingToggle=$("live-hour-record");
+      recordingToggle.disabled=d.hourRecordingEnabled!==true;
+      if(recordingToggle.disabled)recordingToggle.checked=false;
+      recordingToggle.title=recordingToggle.disabled
+        ?"تم اختبار التخزين الاصطناعي، لكن تسجيل القنوات الحقيقية غير معتمد حتى الآن."
+        :"يسمح لمسار مشرف واحد فقط بعد تأكيد صلاحية تسجيل القناة.";
       var media=results[1].status==="fulfilled"?results[1].value.mediaControl:null;
       renderLive(d.items||[],media&&media.paths||[]);
       var pilot=d.salehOrigin;

@@ -87,3 +87,11 @@ test('dual synthetic HLS transport proofs are operator-only and opt-out of real 
  assert.match(d,/path==='\/operator\/api\/media-hls-canary'/);
  assert.match(v,/id="media-standby-hls-proof"/);
 });
+
+test('operator cannot select hour recording while production recording is disabled',async()=>{
+ const source=await readFile(new URL('../src/live-restream-supervisor.mjs',import.meta.url),'utf8');
+ const view=await readFile(new URL('../src/operator-unified-view.mjs',import.meta.url),'utf8');
+ assert.match(source,/hourRecordingEnabled:recordHourEnabled===true&&standbyEnabled===true/);
+ assert.match(view,/recordingToggle\.disabled=d\.hourRecordingEnabled!==true/);
+ assert.match(view,/recordingToggle\.disabled\)recordingToggle\.checked=false/);
+});

@@ -326,6 +326,8 @@ export function createLiveRestreamSupervisor({
   }
   function list(){
     return {ok:true,maxPaths,maxSharedReaders,
+      hourRecordingEnabled:recordHourEnabled===true&&standbyEnabled===true,
+      hourRecordingMode:'single_licensed_operator_path_only',
       salehOrigin:salehOriginReadiness({enabled:salehOnlyOrigin,
         paths:[...paths.values()],
         upstreamChannelLimit:salehUpstreamChannelLimit}),
