@@ -276,7 +276,11 @@ export function createStreamServer({
           slowViewerDisconnects:f.slowViewerDisconnects,
           sourceBytesReceived:f.sourceBytesReceived,
           viewerBytesQueued:f.viewerBytesQueued,
-          viewersAccepted:f.viewersAccepted}});
+          viewersAccepted:f.viewersAccepted,
+          // Authenticated aggregate timings only; null without observations.
+          mediaLatency:f.mediaLatency,
+          pendingSourceHandoffs:f.pendingSourceHandoffs,
+          bufferedBootstrapBytes:f.bufferedBootstrapBytes}});
     }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);
