@@ -463,24 +463,25 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // A crashed/aborted licensed source can leave its body.cancel() Promise
     // unresolved even after all viewers leave. Its one-slot admission must
     // never be bypassed by starting a second provider connection. If ONLY
-    // an orphaned release remains for >=60s, no active feeds and zero
-    // viewers, let Railway close our real sockets by restarting this
+    // an orphaned release remains for >=15s, no active feeds and zero
+    // shared OR direct viewers, let Railway close our real sockets by restarting this
     // isolated API. Healthy streams are NEVER interrupted by this guard.
     // Emergency rollback: BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED=1.
     const verifyStaleRelease=createIdleFanoutReleaseRecovery({
-      minStallMs:60000,minSamples:3
+      minStallMs:15000,minSamples:3
     });
     const releaseGuard=setInterval(()=>{
       const snapshot=service.relayStats();
       if(snapshot?.sharedLiveEnabled!==true||
          process.env.BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED==='1')return;
-      const decision=verifyStaleRelease(snapshot.fanout);
+      const decision=verifyStaleRelease(snapshot.fanout,
+        snapshot.activeDirectMediaClients);
       if(!decision.restart)return;
       console.error('BLOFY_STREAM_LICENSED_SOURCE_RELEASE_RECOVERY',JSON.stringify({
         code:'orphaned_provider_release_requires_process_socket_close',
         pendingSourceHandoffs:snapshot.fanout.pendingSourceHandoffs,
-        activeFeeds:0,viewers:0,
-        reason:'only_after_60s_with_zero_customers',
+        activeFeeds:0,viewers:0,activeDirectMediaClients:0,
+        reason:'only_after_15s_with_zero_customers',
         customerConnectionsInterrupted:false,
         providerQuotaBypassed:false
       }));
