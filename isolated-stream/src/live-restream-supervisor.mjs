@@ -363,7 +363,7 @@ export function createLiveRestreamSupervisor({
     row.feedGeneration=(row.feedGeneration||0)+1;
     const thisFeedGeneration=row.feedGeneration;
     const controllers=new Set();
-    let closedByReader=false,startedAt=clock();
+    let closedByReader=false,startedAt=clock(),providerReadError=null;
     const onClose=()=>{
       if(!res.writableEnded){
         closedByReader=true;
@@ -416,10 +416,10 @@ export function createLiveRestreamSupervisor({
           throw err('restream_invalid_media');
         return {controller,reader,first};
       }catch(e){
+        controller.abort();controllers.delete(controller);
         try{await reader?.cancel?.()}catch{}
         try{reader?.releaseLock?.()}catch{}
         if(upstream?.body&&!upstream.bodyUsed)await upstream.body.cancel().catch(()=>{});
-        controllers.delete(controller);controller.abort();
         throw e;
       }
     }
@@ -469,8 +469,16 @@ export function createLiveRestreamSupervisor({
         passiveRecorder.offer(name,thisFeedGeneration,chunk);
         yield chunk;
         while(true){
-          const next=await readWithMediaDeadline(active.reader,active.controller,
-            {timeoutMs:22000});
+          let next;
+          try{
+            next=await readWithMediaDeadline(active.reader,active.controller,
+              {timeoutMs:22000});
+          }catch(error){
+            // A provider failure can destroy the response via pipeline before
+            // the outer catch runs. Keep its cause, not a false client close.
+            if(!closedByReader)providerReadError=error;
+            throw error;
+          }
           if(next.done)return;
           if(next.value?.byteLength){
             chunk=Buffer.from(next.value);
@@ -505,8 +513,8 @@ export function createLiveRestreamSupervisor({
         try{active.reader.releaseLock()}catch{}
       }
     }catch(e){
-      if(!closedByReader){
-        row.lastError=classify(e);
+      if(!closedByReader||providerReadError){
+        row.lastError=classify(providerReadError||e);
         row.mediaHealth.sourceErrors++;
         if(row.lastError==='restream_provider_stalled')row.mediaHealth.readStalls++;
         if(row.backupConfigured)
