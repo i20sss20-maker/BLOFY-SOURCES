@@ -522,10 +522,16 @@ test('provider 503 remains transient/unavailable, not mislabeled as 509',async()
 
 
 test('active direct movie relay is tracked while response is open and released on client disconnect', {timeout:8500},async()=>{
- let sourceReaders=0;
+ let sourceReaders=0,timer=null;
  const fetchImpl=async()=>new Response(new ReadableStream({
-   start(c){sourceReaders++;c.enqueue(new Uint8Array(ts))},
-   cancel(){sourceReaders=Math.max(0,sourceReaders-1)}
+   start(c){
+     sourceReaders++;c.enqueue(new Uint8Array(ts));
+     // Model a LIVE direct movie download, not a finite/idle stub. This
+     // keeps the HTTP client open until it explicitly disconnects.
+     timer=setInterval(()=>c.enqueue(new Uint8Array(ts)),40);
+     timer.unref?.();
+   },
+   cancel(){if(timer)clearInterval(timer);timer=null;sourceReaders=Math.max(0,sourceReaders-1)}
  }),{status:200,headers:{'content-type':'video/mp2t'}});
  await host(async base=>{
    const grant=await issue(base,{kind:'movie',sourceUrl:'https://allowed.example/movie/a/b/1.mp4'});
