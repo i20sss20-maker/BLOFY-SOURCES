@@ -182,7 +182,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 </div><div class="row" style="margin-top:17px">
 
-<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
+<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn secondary mini" type="button" id="bulk-issue">استخراج دفعة مدفوعة</button><span id="bulk-status" role="status" class="muted"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
@@ -197,7 +197,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
 <div class="card" id="activity-card"><div class="row"><h2>حركة المحفظة</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
+<div class="searchbar"><input id="activity-search" type="search" placeholder="بحث في الحركات المحمّلة"><select id="activity-filter"><option value="all">كل الحركات</option><option value="bonus">البونص والاسترداد</option><option value="issue">الاستخراج</option><option value="renew">التجديد</option><option value="refund">الاسترجاع</option><option value="adjustment">الشحن والتعديلات</option></select></div><div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
 <tbody id="activity-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
 <button id="activity-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
@@ -236,7 +236,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
 <form id="customer-form"><div class="formgrid"><div class="field"><label for="edit-customer-name">الاسم</label>
 <input id="edit-customer-name" maxlength="80"></div><div class="field"><label for="edit-customer-phone">الجوال</label>
-<input id="edit-customer-phone" maxlength="19" type="tel"></div></div>
+<input id="edit-customer-phone" maxlength="19" type="tel"></div><div class="field full"><label for="edit-customer-note">ملاحظات خاصة بالموزع</label><textarea id="edit-customer-note" maxlength="500" rows="3"></textarea></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="customer-dialog" class="btn secondary">إلغاء</button>
 <button id="customer-confirm" class="btn" type="submit">حفظ</button></div></form></dialog>
 <div class="card" id="library-panel"><div class="row"><h2>المكتبة</h2></div>
@@ -283,7 +283,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
- let visibleSecretTimer=null;
+ let visibleSecretTimer=null,bulkJob=null,bulkBusy=false;
  let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
@@ -366,7 +366,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    d.credentials?.m3uUrl&&'M3U: '+d.credentials.m3uUrl].filter(Boolean).join('\n');
   if(all){const copyAll=document.createElement('button');copyAll.className='btn secondary mini';
     copyAll.type='button';copyAll.textContent='نسخ الكل';
-    copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll)}
+    copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll);
+    const share=document.createElement('button');share.type='button';share.className='btn secondary mini';share.textContent='نسخ رسالة واتساب';share.addEventListener('click',()=>copy('اشتراك BLOFY STREAM\n'+all+'\nاحتفظ ببيانات اشتراكك ولا تشاركها مع الآخرين.'));box.appendChild(share)}
   const hide=document.createElement('button');hide.type='button';
   hide.className='btn secondary mini';hide.textContent='إخفاء البيانات';
   hide.addEventListener('click',()=>{clearTimeout(visibleSecretTimer);
@@ -440,6 +441,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   if($('manage-dialog').open)$('manage-dialog').close();
   $('edit-customer-name').value=item.customerName||'';
   $('edit-customer-phone').value=item.customerPhone||'';
+  $('edit-customer-note').value=item.customerNote||'';
   $('customer-dialog').showModal();
  }
  async function reloginFor(item){
@@ -461,6 +463,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
        item.type==='xtream'?(item.accountUsername||'اعرض البيانات'):
          (item.codeHint||'اعرض الكود')],
     ['الجوال',item.customerPhone||'—'],
+    ['ملاحظات خاصة',item.customerNote||'—'],
     ['الحالة',outcomeStatus(item)],
     ['الصلاحية',dateOnly(item.expiresAt)],
     ['تاريخ الإصدار',dateOnly(item.createdAt)],
@@ -648,7 +651,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const btn=$('customer-confirm');btn.disabled=true;
   try{
    await request('customer',{issueId:activeIssue.id,
-    name:$('edit-customer-name').value,phone:$('edit-customer-phone').value});
+    name:$('edit-customer-name').value,phone:$('edit-customer-phone').value,note:$('edit-customer-note').value});
    $('customer-dialog').close();msg('تم حفظ بيانات العميل',true);
    await refreshViews();
   }catch(err){msg('تعذر الحفظ: '+err.message,false)}
@@ -696,19 +699,22 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const body=$('activity-rows');body.replaceChildren();
   const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
     refund:'استرجاع',renew:'تجديد',relogin:'إعادة دخول'};
-  for(const item of activityRows){
+  const filter=$('activity-filter').value,term=$('activity-search').value.trim().toLowerCase();
+  const label=item=>item.details?.reason==='admin_bonus'?'بونص إداري':item.details?.reason==='reward_redemption'?'استرداد بونص للمحفظة':(types[item.type]||item.type);
+  const visible=activityRows.filter(item=>(filter==='all'||(filter==='bonus'?['admin_bonus','reward_redemption'].includes(item.details?.reason):item.type===filter))&&(!term||[label(item),item.details?.description,item.delta,item.balanceAfter,dateOnly(item.date)].join(' ').toLowerCase().includes(term)));
+  for(const item of visible){
    const tr=document.createElement('tr');
-   tableCell(tr,item.details?.reason==='reward_redemption'?'استرداد بونص للمحفظة':(types[item.type]||item.type));
+   tableCell(tr,label(item)+(item.details?.reason==='admin_bonus'?' · +'+Number(item.details.bonusQuarters)/4+' نقطة · '+(item.details.description||''):''));
    tableCell(tr,(item.delta>0?'+':'')+item.delta);
    tableCell(tr,item.balanceAfter==null?'—':item.balanceAfter);
    tableCell(tr,dateOnly(item.date));
    body.appendChild(tr);
   }
-  if(!activityRows.length){
+  if(!visible.length){
    const tr=document.createElement('tr');
    const td=tableCell(tr,'لا توجد حركات حديثة');td.colSpan=4;body.appendChild(tr);
   }
-  text('activity-count','المعروض: '+activityRows.length);
+  text('activity-count','المعروض: '+visible.length+' / '+activityRows.length);
   $('activity-more').hidden=activityNext==null;
  }
  async function loadActivity(more=false){
@@ -718,6 +724,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   activityNext=d.nextOffset;
   renderActivity();
  }
+ $('activity-search').addEventListener('input',renderActivity);
+ $('activity-filter').addEventListener('change',renderActivity);
  $('activity-refresh').addEventListener('click',()=>loadActivity().catch(e=>msg('تعذر تحميل الحركة: '+e.message,false)));
  $('activity-more').addEventListener('click',()=>loadActivity(true).catch(e=>msg(e.message,false)));
  function csvField(raw){
@@ -817,6 +825,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  });
  $('issue-form').addEventListener('submit',async e=>{
   e.preventDefault();const btn=$('issue-button');const cost=currentCost();
+  if(bulkBusy||bulkJob)return msg('أكمل الدفعة المعلقة أولًا أو تحقق من الاشتراكات بعد إعادة تسجيل الدخول.',false);
 
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
@@ -833,6 +842,31 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }finally{btn.disabled=false}
  });
 
+ $('bulk-issue').addEventListener('click',async()=>{
+   if(bulkBusy||inflightRequest)return;
+   const btn=$('bulk-issue'),single=$('issue-button');
+   if(!bulkJob){
+     const days=Number($('days').value),cost=currentCost();
+     if(!cost)return msg('استخراج الدفعات متاح للباقات المدفوعة فقط.',false);
+     const raw=prompt('عدد الاشتراكات (2 إلى 10):','2');if(raw===null)return;
+     const count=Number(raw);
+     if(!Number.isInteger(count)||count<2||count>10)return msg('العدد يجب أن يكون من 2 إلى 10.',false);
+     if(Number($('credits').textContent)<count*cost)return msg('الرصيد لا يكفي لهذه الدفعة.',false);
+     if(!confirm('إصدار '+count+' اشتراكات وخصم '+count*cost+' شهرًا من المحفظة؟'))return;
+     bulkJob={payload:{kind:currentKind,durationDays:days,customerName:$('customer-name').value,customerPhone:$('customer-phone').value},ids:Array.from({length:count},()=>crypto.randomUUID()),done:0};
+   }else if(!confirm('استئناف الدفعة بنفس معرفات الطلبات دون إعادة إصدار ما تم؟'))return;
+   bulkBusy=true;btn.disabled=true;single.disabled=true;
+   try{
+     while(bulkJob.done<bulkJob.ids.length){
+       await request('issue',{...bulkJob.payload,requestId:bulkJob.ids[bulkJob.done]});
+       bulkJob.done++;
+       text('bulk-status','تم '+bulkJob.done+' من '+bulkJob.ids.length);
+     }
+     bulkJob=null;msg('تم إصدار الدفعة، افتح الاشتراكات لعرض بيانات كل كود.',true);
+     $('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';
+   }catch(e){text('bulk-status','توقفت الدفعة عند '+bulkJob.done+'؛ راجع القائمة ثم استأنف بنفس الطلب.');msg(e.message,false);}
+   finally{bulkBusy=false;btn.disabled=false;single.disabled=false;btn.textContent=bulkJob?'استئناف الدفعة':'استخراج دفعة مدفوعة';await refreshViews();}
+ });
  let libraryEpoch=0;
  const selectedLibrary=new Map(),loadedLibrary=new Map();
  function selectionState(){
@@ -1001,7 +1035,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
    try{await request('logout')}catch{}
-   inflightRequest=null;setLogged(false);
+   inflightRequest=null;bulkJob=null;bulkBusy=false;setLogged(false);
     clearTimeout(visibleSecretTimer);$('issued-result').replaceChildren();
     $('issued-result').hidden=true;
    msg('تم تسجيل الخروج',true);
@@ -1074,7 +1108,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
       action==='reveal'?{issueId:data.issueId,includeXtream:data.includeXtream===true}:
      action==='list'?{q:data.q,offset:data.offset,status:data.status}:
      action==='clients'?{q:data.q}:
-     action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
+     action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone,note:data.note}:
      action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
      action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
      action==='rotate-xtream'?{issueId:data.issueId,requestId:data.requestId,
