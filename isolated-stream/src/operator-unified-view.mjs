@@ -4754,6 +4754,16 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("تقرير الموزع",async function(){
+        try{
+          var r=await action("distributors/"+d.id+"/report","distributor-report",{}),stats=r.stats||{};
+          var dialog=document.createElement("dialog"),heading=node("h2","تقرير "+d.name),fields=node("div",undefined,"formgrid");
+          dialog.appendChild(heading);
+          var labels={walletCredits:"رصيد الأشهر",rewardPointsAvailable:"البونص المتاح",rewardPointsPending:"البونص المعلق",rewardPointsRedeemed:"البونص المسترد",paidTotal:"الاشتراكات المدفوعة",trialsTotal:"التجارب",convertedTrials:"التجارب المحولة",renewalsMonth:"تجديدات الشهر",spentMonth:"رصيد الاستخراج المصروف هذا الشهر",renewedCreditsMonth:"رصيد التجديد المصروف هذا الشهر",pendingReview:"طلبات تحتاج مراجعة"};
+          for(var key of Object.keys(labels)){var tile=node("div",undefined,"stat");tile.append(node("small",labels[key]),node("strong",String(stats[key]??0)));fields.appendChild(tile);}
+          dialog.appendChild(fields);var close=node("button","إغلاق","btn");close.type="button";close.addEventListener("click",function(){dialog.close()});dialog.appendChild(close);dialog.addEventListener("close",function(){dialog.remove()});document.body.appendChild(dialog);dialog.showModal();
+        }catch(e){show("تعذر تحميل التقرير: "+e.message,false);}
+      },"secondary"));
       actions.appendChild(button("الصلاحيات",async function(){
         var labels={paidIssue:"إصدار مدفوع",trialIssue:"إصدار تجريبي",renew:"التجديد",redeem:"استرداد البونص",export:"التصدير",customerEdit:"تعديل العملاء",relogin:"إعادة الدخول",rotate:"تغيير بيانات Xtream",libraryEdit:"تنظيم المكتبة",dualAccess:"عرض Xtream لنفس الكود"};
         var dialog=document.createElement("dialog"),form=document.createElement("form");form.method="dialog";
