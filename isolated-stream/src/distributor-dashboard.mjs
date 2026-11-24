@@ -117,7 +117,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  .btn{background:#315fa9;border-color:#5881bd}.quicknav a{border-radius:12px}
  .stat{background:var(--card);border-color:var(--stroke)}
  .reward-card{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-color:#a68c4f;background:var(--card)}
- .reward-value{font-size:34px;font-weight:800;color:#e6b951;font-variant-numeric:tabular-nums}
+ .bonus-preview{display:inline-block;padding:8px 12px;border:1px solid #a68c4f;border-radius:10px;color:#e6b951;font-weight:700}.reward-value{font-size:34px;font-weight:800;color:#e6b951;font-variant-numeric:tabular-nums}
  .dual-btn{border-color:#427e81!important;color:#c2fff0!important;background:#1b4a4e!important}
  body[data-theme="light"] .dual-btn{color:#155451!important;background:#e0f8f1!important}
  button:focus-visible,a:focus-visible{outline:2px solid #72bbff;outline-offset:3px}
@@ -141,7 +141,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  <a href="#issues-card">اشتراكاتي</a>
  <a href="#library-panel">المكتبة</a>
  <a href="#clients-card">العملاء</a>
- <a href="#activity-card">الرصيد</a><a href="#reward-card">المكافآت</a>
+ <a href="#reward-card">المحفظة</a><a href="#activity-card">حركة المحفظة</a>
 </nav>
 <div class="card" id="account-card">
  <div class="row"><div><h2>حساب التاجر</h2><p class="muted" style="margin:0">بيانات دخول لوحتك آمنة. كلمة مرور اللوحة القديمة لا يمكن عرضها، ويمكن تغييرها بعد التحقق منها.</p></div>
@@ -159,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
 </div></div>
-<section class="card reward-card" id="reward-card"><div><h2>مكافآت BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. تُحسب بعد التفعيل أو التجديد المدفوع، منفصلة عن رصيد الأشهر.</p></div><div><small>النقاط المكتسبة</small><div class="reward-value" id="reward-earned">—</div></div><div><small>المتاح للاستبدال</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استبدال النقاط</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
+<section class="card reward-card" id="reward-card"><div><h2>محفظة BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. يضاف البونص بعد التفعيل أو التجديد المدفوع. استرده إلى رصيد الاشتراكات من المحفظة.</p></div><div><small>رصيد الاشتراكات</small><div class="reward-value" id="wallet-credits">—</div><small>شهر</small></div><div><small>بونص قيد التفعيل</small><div class="reward-value" id="wallet-pending">—</div></div><div><small>إجمالي البونص المكتسب</small><div class="reward-value" id="reward-earned">—</div></div><div><small>بونص قابل للاسترداد</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استرداد للمحفظة</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
 <span>اليوم <strong id="stat-today">—</strong></span>
 <span>الشهر <strong id="stat-month">—</strong></span>
 <span>التجارب <strong id="stat-trials">—</strong></span>
@@ -182,7 +182,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 </div><div class="row" style="margin-top:17px">
 
-<button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
+<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
@@ -196,7 +196,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
-<div class="card" id="activity-card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
+<div class="card" id="activity-card"><div class="row"><h2>حركة المحفظة</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
 <div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
 <tbody id="activity-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
@@ -232,7 +232,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
 <option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option></select></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="renew-dialog" class="btn secondary">إلغاء</button>
-<button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
+<span id="renew-bonus" class="bonus-preview" aria-live="polite"></span><button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
 <dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
 <form id="customer-form"><div class="formgrid"><div class="field"><label for="edit-customer-name">الاسم</label>
 <input id="edit-customer-name" maxlength="80"></div><div class="field"><label for="edit-customer-phone">الجوال</label>
@@ -286,10 +286,14 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let visibleSecretTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
+ const BONUS={1:0,30:.25,90:.5,180:1,365:2};
+ function bonusPreview(days,renew=false){const n=BONUS[Number(days)]||0;return n?'+'+n+' بونص '+(renew?'بعد التجديد':'بعد التفعيل'):'تجربة مجانية · بدون بونص'}
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
+  text('issue-bonus',bonusPreview($('days').value));
  }
  $('days').addEventListener('change',updateCost);updateCost();
+ $('renew-days').addEventListener('change',()=>text('renew-bonus',bonusPreview($('renew-days').value,true)));
  function text(id,v){$(id).textContent=String(v??"—")}
  function msg(value,ok){let e=$("notice");e.hidden=false;e.textContent=value;e.className="notice "+(ok?"ok":"");}
  async function request(method,data){
@@ -326,7 +330,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
  async function profile(){
   const d=await request('me');
-  setLogged(true);text("credits",d.item.credits);text("used",d.item.used);
+  setLogged(true);text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
   text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
   const credits=Number(d.item.credits)||0;
@@ -408,7 +412,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    return msg('التجديد غير متاح لهذا الاشتراك',false);
   activeIssue=item;
   if($('manage-dialog').open)$('manage-dialog').close();
-  $('renew-days').value='30';
+  $('renew-days').value='30';text('renew-bonus',bonusPreview(30,true));
   text('renew-title',item.days===1&&!item.converted?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
   $('renew-dialog').showModal();
  }
@@ -623,8 +627,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
    const earned=Number(x.rewardPointsEarned||0),available=Number(x.rewardPointsAvailable||0),rate=Number(x.rewardPointsPerCredit||1);
    text('reward-earned',x.rewardPointsEarned==null?'—':fmt(earned));
+   text('wallet-pending',x.rewardPointsPending==null?'—':fmt(x.rewardPointsPending));
    text('reward-available',x.rewardPointsAvailable==null?'—':fmt(available));
-   text('reward-spent','مستبدلة: '+fmt(x.rewardPointsRedeemed||0));
+   text('reward-spent','مستردة للمحفظة: '+fmt(x.rewardPointsRedeemed||0));
    const tiers=[{name:'Bronze',at:0},{name:'Silver',at:40},{name:'Gold',at:100},{name:'Platinum',at:200},{name:'Diamond',at:500}];
    const i=tiers.reduce((n,t,j)=>earned>=t.at?j:n,0),tier=tiers[i],next=tiers[i+1];
    text('reward-level',tier.name);
@@ -646,7 +651,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('reward-redeem').addEventListener('click',async()=>{
    const btn=$('reward-redeem'),rate=Number(btn.dataset.rate);
    if(btn.disabled||!Number.isFinite(rate)||rate<1)return;
-   if(!confirm('استبدال '+rate+' نقطة مقابل شهر واحد من الرصيد؟'))return;
+   if(!confirm('استرداد '+rate+' بونص وإضافة شهر واحد إلى رصيد محفظتك؟'))return;
    const id=actionId('reward-redemption','one-credit');btn.disabled=true;
    try{
      const result=await request('redeem-rewards',{credits:1,requestId:id.id});
@@ -660,7 +665,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     refund:'استرجاع',renew:'تجديد',relogin:'إعادة دخول'};
   for(const item of activityRows){
    const tr=document.createElement('tr');
-   tableCell(tr,types[item.type]||item.type);
+   tableCell(tr,item.details?.reason==='reward_redemption'?'استرداد بونص للمحفظة':(types[item.type]||item.type));
    tableCell(tr,(item.delta>0?'+':'')+item.delta);
    tableCell(tr,item.balanceAfter==null?'—':item.balanceAfter);
    tableCell(tr,dateOnly(item.date));
@@ -786,7 +791,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
-   inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
+   inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" شهر · "+bonusPreview($('days').value),true);
    await refreshViews();
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
