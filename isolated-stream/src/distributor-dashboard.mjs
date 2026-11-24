@@ -182,7 +182,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 </div><div class="row" style="margin-top:17px">
 
-<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
+<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn secondary mini" type="button" id="bulk-issue">استخراج دفعة مدفوعة</button><span id="bulk-status" role="status" class="muted"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
@@ -283,7 +283,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
- let visibleSecretTimer=null;
+ let visibleSecretTimer=null,bulkJob=null,bulkBusy=false;
  let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
@@ -825,6 +825,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  });
  $('issue-form').addEventListener('submit',async e=>{
   e.preventDefault();const btn=$('issue-button');const cost=currentCost();
+  if(bulkBusy||bulkJob)return msg('أكمل الدفعة المعلقة أولًا أو تحقق من الاشتراكات بعد إعادة تسجيل الدخول.',false);
 
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
@@ -841,6 +842,31 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }finally{btn.disabled=false}
  });
 
+ $('bulk-issue').addEventListener('click',async()=>{
+   if(bulkBusy||inflightRequest)return;
+   const btn=$('bulk-issue'),single=$('issue-button');
+   if(!bulkJob){
+     const days=Number($('days').value),cost=currentCost();
+     if(!cost)return msg('استخراج الدفعات متاح للباقات المدفوعة فقط.',false);
+     const raw=prompt('عدد الاشتراكات (2 إلى 10):','2');if(raw===null)return;
+     const count=Number(raw);
+     if(!Number.isInteger(count)||count<2||count>10)return msg('العدد يجب أن يكون من 2 إلى 10.',false);
+     if(Number($('credits').textContent)<count*cost)return msg('الرصيد لا يكفي لهذه الدفعة.',false);
+     if(!confirm('إصدار '+count+' اشتراكات وخصم '+count*cost+' شهرًا من المحفظة؟'))return;
+     bulkJob={payload:{kind:currentKind,durationDays:days,customerName:$('customer-name').value,customerPhone:$('customer-phone').value},ids:Array.from({length:count},()=>crypto.randomUUID()),done:0};
+   }else if(!confirm('استئناف الدفعة بنفس معرفات الطلبات دون إعادة إصدار ما تم؟'))return;
+   bulkBusy=true;btn.disabled=true;single.disabled=true;
+   try{
+     while(bulkJob.done<bulkJob.ids.length){
+       await request('issue',{...bulkJob.payload,requestId:bulkJob.ids[bulkJob.done]});
+       bulkJob.done++;
+       text('bulk-status','تم '+bulkJob.done+' من '+bulkJob.ids.length);
+     }
+     bulkJob=null;msg('تم إصدار الدفعة، افتح الاشتراكات لعرض بيانات كل كود.',true);
+     $('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';
+   }catch(e){text('bulk-status','توقفت الدفعة عند '+bulkJob.done+'؛ راجع القائمة ثم استأنف بنفس الطلب.');msg(e.message,false);}
+   finally{bulkBusy=false;btn.disabled=false;single.disabled=false;btn.textContent=bulkJob?'استئناف الدفعة':'استخراج دفعة مدفوعة';await refreshViews();}
+ });
  let libraryEpoch=0;
  const selectedLibrary=new Map(),loadedLibrary=new Map();
  function selectionState(){
@@ -1009,7 +1035,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
    try{await request('logout')}catch{}
-   inflightRequest=null;setLogged(false);
+   inflightRequest=null;bulkJob=null;bulkBusy=false;setLogged(false);
     clearTimeout(visibleSecretTimer);$('issued-result').replaceChildren();
     $('issued-result').hidden=true;
    msg('تم تسجيل الخروج',true);
