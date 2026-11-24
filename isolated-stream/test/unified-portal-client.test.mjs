@@ -207,3 +207,16 @@ test('paged season queue never permits unbounded query or malformed page',async(
  assert.equal(invalid.status,400);
  assert.equal(calls.length,2);
 });
+
+test('all existing distributor dashboard commands reach the fixed authenticated bridge',async()=>{
+ const calls=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+  calls.push({path:new URL(input).pathname,method:init.method,body:JSON.parse(init.body)});
+  return new Response(JSON.stringify({ok:true}),{status:200});
+ }});
+ for(const command of ['change-password','rotate-xtream','library-categories','organize-bulk','library-preview']){
+  assert.equal((await client.distributorRequest(command,{sessionToken:'scoped-test'})).status,200);
+  assert.deepEqual(calls.at(-1),{path:'/internal/blofy-stream/distributor/'+command,method:'POST',body:{sessionToken:'scoped-test'}});
+ }
+ const before=calls.length;for(const command of ['sources','../distributors','delete-source'])assert.equal((await client.distributorRequest(command,{})).status,400);
+ assert.equal(calls.length,before);
+});
