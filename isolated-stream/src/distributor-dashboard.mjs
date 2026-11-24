@@ -159,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
 </div></div>
-<section class="card reward-card" id="reward-card"><div><h2>محفظة BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. يضاف البونص بعد التفعيل أو التجديد المدفوع. استرده إلى رصيد الاشتراكات من المحفظة.</p></div><div><small>رصيد الاشتراكات</small><div class="reward-value" id="wallet-credits">—</div><small>شهر</small></div><div><small>بونص قيد التفعيل</small><div class="reward-value" id="wallet-pending">—</div></div><div><small>إجمالي البونص المكتسب</small><div class="reward-value" id="reward-earned">—</div></div><div><small>بونص قابل للاسترداد</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استرداد للمحفظة</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
+<section class="card reward-card" id="reward-card"><div><h2>محفظة BLOFY</h2><p class="muted"><span id="wallet-bonus-rates">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة.</span> يضاف البونص بعد التفعيل أو التجديد المدفوع. استرده إلى رصيد الاشتراكات من المحفظة.</p></div><div><small>رصيد الاشتراكات</small><div class="reward-value" id="wallet-credits">—</div><small>شهر</small></div><div><small>بونص قيد التفعيل</small><div class="reward-value" id="wallet-pending">—</div></div><div><small>إجمالي البونص المكتسب</small><div class="reward-value" id="reward-earned">—</div></div><div><small>بونص قابل للاسترداد</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استرداد للمحفظة</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
 <span>اليوم <strong id="stat-today">—</strong></span>
 <span>الشهر <strong id="stat-month">—</strong></span>
 <span>التجارب <strong id="stat-trials">—</strong></span>
@@ -168,7 +168,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <span>الأكثر <strong id="stat-top-plan">—</strong></span>
 <span>الحد اليومي <strong id="stat-quota">—</strong></span></div>
 <div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
-<div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
+<section class="card" id="notification-card"><div class="row"><h2>الإشعارات وحالة الاتصال</h2><button class="btn secondary mini" id="connection-check" type="button">فحص الاتصال</button></div><p id="connection-status" role="status" class="muted">لم يُفحص الاتصال بعد</p><p id="notification-summary" aria-live="polite" class="muted">—</p><button class="btn secondary mini" type="button" id="notification-expiry">عرض الاشتراكات القريبة من الانتهاء</button></section><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card" id="issue-card"><h2>استخراج اشتراك</h2>
 
@@ -213,7 +213,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <button class="btn danger mini" id="manage-rotate" type="button" hidden>تغيير اسم المستخدم وكلمة مرور Xtream</button>
 <button class="btn secondary mini" id="manage-renew" type="button">تجديد</button>
 <button class="btn secondary mini" id="manage-relogin" type="button">إعادة دخول</button>
-<button class="btn secondary mini" id="manage-customer" type="button">العميل</button>
+<button class="btn secondary mini" id="manage-customer" type="button">العميل</button><button class="btn secondary mini" id="manage-history" type="button">سجل الاشتراك</button><div id="manage-history-result" role="status" class="muted"></div>
 <button class="btn secondary mini" data-close-dialog="manage-dialog" type="button">إغلاق</button></div></dialog>
 <dialog id="merchant-password-dialog" aria-labelledby="merchant-password-title">
 <h2 id="merchant-password-title">تغيير كلمة مرور التاجر</h2>
@@ -288,7 +288,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
  const BONUS={1:0,30:.25,90:.5,180:1,365:2};
- function bonusPreview(days,renew=false){const n=BONUS[Number(days)]||0;return n?'+'+n+' بونص '+(renew?'بعد التجديد':'بعد التفعيل'):'تجربة مجانية · بدون بونص'}
+ function bonusPreview(days,renew=false){const n=BONUS[Number(days)]||0;return n?'+'+n+' بونص '+(renew?'بعد التجديد':'بعد التفعيل'):Number(days)===1?'تجربة مجانية · بدون بونص':'هذه الباقة بدون بونص'}
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
   text('issue-bonus',bonusPreview($('days').value));
@@ -331,7 +331,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
  async function profile(){
   const d=await request('me');
-  setLogged(true);text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
+  setLogged(true);for(const day of [30,90,180,365])if(Number.isInteger(d.item.bonusPolicy?.[day]))BONUS[day]=d.item.bonusPolicy[day]/4;
+   text("wallet-bonus-rates","شهر: "+BONUS[30]+" · 3 أشهر: "+BONUS[90]+" · 6 أشهر: "+BONUS[180]+" · سنة: "+BONUS[365]+" نقطة.");updateCost();text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
   text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
   const credits=Number(d.item.credits)||0;
@@ -455,7 +456,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   await refreshViews();
  }
  function showManage(item){
-  activeIssue=item;const box=$('manage-info');box.replaceChildren();
+  activeIssue=item;const box=$('manage-info');box.replaceChildren();$('manage-history-result').replaceChildren();
   const fields=[
     ['النوع',item.type==='app'?'كود':'Xtream'],
     ['العميل',item.customerName||'—'],
@@ -533,6 +534,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   finally{btn.disabled=false}
  });
  $('manage-customer').addEventListener('click',()=>activeIssue&&openCustomer(activeIssue));
+ $('manage-history').addEventListener('click',async()=>{if(!activeIssue)return;const id=activeIssue.id,box=$('manage-history-result'),btn=$('manage-history');btn.disabled=true;box.textContent='جار التحميل...';try{const r=await request('activity',{issueId:id,offset:0});if(activeIssue?.id!==id)return;box.replaceChildren();const labels={issue:'استخراج',renew:'تجديد',refund:'استرجاع',relogin:'إعادة دخول'};for(const item of r.items||[]){const p=document.createElement('p');p.textContent=(labels[item.type]||item.type)+' · '+timeLabel(item.date)+' · '+item.delta+' شهر';box.appendChild(p)}if(!r.items?.length)box.textContent='لا توجد حركات رصيد مسجلة؛ تاريخ الإصدار والحالة موضحان أعلاه.';if(r.nextOffset!=null){const p=document.createElement('p');p.textContent='عرض آخر 100 حركة.';box.appendChild(p)}}catch(e){box.textContent='تعذر تحميل السجل: '+e.message}finally{btn.disabled=false}});
  function renderIssueRows(){
   const target=$('items');target.replaceChildren();
   if(!issueRows.length){const tr=document.createElement('tr');
@@ -580,6 +582,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    const count=Number(d.stats.expiring||0);
    $('expiry-alert').hidden=count===0;
    text('expiry-alert-text',count+' اشتراك ينتهي خلال 7 أيام');
+    text('notification-summary',count+' اشتراك ينتهي خلال 7 أيام · '+Number(d.stats.expired||0)+' اشتراك منتهي');
   }
  }
  async function loadClients(more=false){
@@ -619,6 +622,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   searchTimer=setTimeout(()=>loadItems(false).catch(e=>msg(e.message,false)),260);
  });
  $('issue-status').addEventListener('change',()=>loadItems(false).catch(e=>msg(e.message,false)));
+ $('notification-expiry').addEventListener('click',()=>$('expiry-alert-open').click());
+ $('connection-check').addEventListener('click',async()=>{const btn=$('connection-check'),start=performance.now();btn.disabled=true;text('connection-status','جار فحص اتصال لوحة التوزيع...');try{await request('me');text('connection-status','اتصال اللوحة بالخادم ناجح · '+Math.round(performance.now()-start)+' ms (لا يقيس جودة البث)')}catch(e){text('connection-status','تعذر الاتصال باللوحة: '+e.message)}finally{btn.disabled=false}});
  $('expiry-alert-open').addEventListener('click',()=>{
   $('issue-search').value='';$('issue-status').value='expiring';
   loadItems(false).catch(e=>msg(e.message,false));
@@ -1115,7 +1120,7 @@ export function createDistributorDashboard({bridge,log=console}={}){
        acknowledgeDisconnect:data.acknowledgeDisconnect===true}:
      action==='change-password'?{currentPassword:data.currentPassword,
        newPassword:data.newPassword}:
-     action==='activity'?{offset:data.offset}:
+     action==='activity'?{offset:data.offset,issueId:data.issueId??null}:
      action==='export'?{offset:data.offset}:
      action==='library'?{type:data.type,q:data.q,offset:data.offset,
        categoryId:data.categoryId}:
