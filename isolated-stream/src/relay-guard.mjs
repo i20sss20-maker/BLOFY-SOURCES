@@ -20,7 +20,11 @@ function blockedIP(address){
   const m=/::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v);
   return m?blockedIP(m[1]):false;
 }
-export async function assertPublicMediaUrl(input,{lookup=dns.lookup}={}){
+// Bound admission even when the OS resolver stalls. The underlying DNS call
+// cannot necessarily be canceled, but a late result never authorizes a fetch.
+export async function assertPublicMediaUrl(input,{lookup=dns.lookup,dnsTimeoutMs=4000}={}){
+  if(!Number.isInteger(dnsTimeoutMs)||dnsTimeoutMs<20||dnsTimeoutMs>10000)
+    throw new Error('relay_dns_timeout_invalid');
   const raw=String(input||'');
   if(!raw||raw.length>2400||/[\r\n\\]/.test(raw))
     throw new Error('relay_bad_origin');
@@ -39,10 +43,16 @@ export async function assertPublicMediaUrl(input,{lookup=dns.lookup}={}){
   }else{
     if(!/^[a-z0-9.-]+$/.test(hostname))throw new Error('relay_bad_origin');
     let records;
-    try{records=await lookup(hostname,{all:true,verbatim:true})}
-    catch{throw new Error('relay_origin_unresolved')}
+    let timer;
+    try{
+      records=await Promise.race([
+        Promise.resolve().then(()=>lookup(hostname,{all:true,verbatim:true})),
+        new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('relay_origin_unresolved')),dnsTimeoutMs)})
+      ]);
+    }catch{throw new Error('relay_origin_unresolved')}
+    finally{clearTimeout(timer)}
     if(!Array.isArray(records)||!records.length)throw new Error('relay_origin_unresolved');
-    if(records.some(r=>blockedIP(r.address)))throw new Error('relay_private_origin');
+    if(records.some(r=>blockedIP(r?.address)))throw new Error('relay_private_origin');
   }
   return url;
 }
