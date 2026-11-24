@@ -1564,3 +1564,28 @@ body.zid-store .v5-lightbox-close{
  body.zid-store .v5-product-main-image img,
  body.zid-store .v5-related-card{transition:none!important}
 }
+
+
+/* V5.1: explain offline/stale product details without hiding prices or stock */
+body.zid-store .v5-cache-note{
+  display:flex;gap:10px;align-items:flex-start;
+  margin:20px 0;padding:14px 18px;
+  font-size:13px;line-height:1.85;font-weight:700;
+  border-radius:13px;border:1px solid #ebd5a8;
+  background:#fff9eb;color:#745722;
+}
+body.zid-store .v5-cache-note::before{
+  content:"!";display:grid;place-items:center;flex:0 0 21px;
+  width:21px;height:21px;border-radius:50%;
+  background:#ead39e;color:#654510;font-weight:900;
+}
+body.zid-store .v5-product-page-shell>.v5-product-back{
+  display:inline-flex;align-items:center;justify-content:center;
+  margin:16px 10px 16px 0!important;
+}
+body.zid-store .v5-product-page-shell>.v5-button-primary{
+  width:auto!important;display:inline-flex!important;
+}
+@media(max-width:750px){
+ body.zid-store .v5-cache-note{font-size:12px;padding:12px}
+}
