@@ -11,6 +11,14 @@ const FEED_STATES=new Set(['starting','ready','reconnecting','failed','idle']);
 const HLS_PATH=/^live-[a-f0-9]{12}$/;
 const positive=value=>Number.isSafeInteger(value)&&value>=0?value:0;
 const bounded=(value,max)=>Math.min(max,positive(value));
+function safeLatency(input){
+  const empty={samples:0,p50Ms:null,p95Ms:null,maxMs:null};
+  if(!input||!Number.isInteger(input.samples)||input.samples<1||input.samples>64)return empty;
+  const {samples,p50Ms,p95Ms,maxMs}=input;
+  if(![p50Ms,p95Ms,maxMs].every(v=>Number.isFinite(v)&&v>=0)||
+     p50Ms>p95Ms||p95Ms>maxMs)return empty;
+  return {samples,p50Ms,p95Ms,maxMs};
+}
 function countedDiff(current,old){
   // Counters are process-lifetime. Restart/reset must never appear as a spike.
   return old===null||current<old?0:current-old;
@@ -141,6 +149,10 @@ export function createStreamOpsObservatory({
         activeViewers:bounded(f.viewers,32768),maxFeeds,
         maxViewersPerFeed:maxViewers,
         capacityNote:'Internal shared-relay limits; not licensed provider capacity'},
+      mediaLatency:{scope:'shared_ts_transport_only',decodedVideoVerified:false,
+        windowMs:3600000,
+        admissionToFirstBytes:safeLatency(f.mediaLatency?.admissionToFirstBytes),
+        lastBytesToRecoveredBytes:safeLatency(f.mediaLatency?.lastBytesToRecoveredBytes)},
       channels,alertCount:alerts.length,criticalCount:
         alerts.filter(a=>a.level==='critical').length,
       alerts:alerts.slice(0,96),recentChanges:history.slice(0,historyLimit),

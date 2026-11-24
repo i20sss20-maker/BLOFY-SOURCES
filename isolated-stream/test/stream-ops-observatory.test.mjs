@@ -144,11 +144,30 @@ test('single nonce-protected operator UI contains Smart Ops safety scope and val
   for(const id of ['smart-ops-panel','smart-ops-refresh','smart-ops-status',
     'smart-ops-viewers','smart-ops-feeds','smart-ops-alerts',
     'smart-ops-critical','smart-ops-capacity-delta',
-    'smart-ops-channels','smart-ops-issues'])
+    'smart-ops-channels','smart-ops-issues','smart-ops-startup-latency','smart-ops-recovery-latency'])
     assert.ok(html.includes('id="'+id+'"'),id+' missing');
   assert.match(html,/لا تشمل جميع المشتركين/);
   assert.match(html,/api\("smart-ops"\)/);
   const script=html.match(/<script nonce="qa-safe-nonce">([\s\S]*?)<\/script>/);
   assert.ok(script,'nonce script missing');
   assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+
+test('Smart Ops publishes only sanitized transport timing and does not invent empty samples',()=>{
+ const fanout=makeFanout();
+ const obs=createStreamOpsObservatory({relayStats:()=>({fanout})});
+ const empty={samples:0,p50Ms:null,p95Ms:null,maxMs:null};
+ assert.deepEqual(obs.snapshot().mediaLatency.admissionToFirstBytes,empty);
+ fanout.mediaLatency={
+  admissionToFirstBytes:{samples:5,p50Ms:240,p95Ms:530,maxMs:600,sourceUrl:'https://secret.example/private'},
+  lastBytesToRecoveredBytes:{samples:2,p50Ms:900,p95Ms:800,maxMs:1000}
+ };
+ const report=obs.snapshot();
+ assert.equal(report.mediaLatency.scope,'shared_ts_transport_only');
+ assert.equal(report.mediaLatency.decodedVideoVerified,false);
+ assert.deepEqual(report.mediaLatency.admissionToFirstBytes,{samples:5,p50Ms:240,p95Ms:530,maxMs:600});
+ assert.deepEqual(report.mediaLatency.lastBytesToRecoveredBytes,empty);
+ assert.equal(JSON.stringify(report).includes('secret.example'),false);
+ fanout.mediaLatency.admissionToFirstBytes.samples=65;
+ assert.deepEqual(obs.snapshot().mediaLatency.admissionToFirstBytes,empty);
 });
