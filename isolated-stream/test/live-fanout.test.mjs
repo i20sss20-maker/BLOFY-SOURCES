@@ -818,3 +818,56 @@ test('bootstrap freshness settings are bounded',()=>{
  assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:0}),/fanout_capacity_invalid/);
  assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:16000}),/fanout_capacity_invalid/);
 });
+
+for(const retirement of ['idle expiry','global eviction']){
+ test('licensed quota remains reserved after '+retirement+' until actual release',async()=>{
+  const scope='550e8400-e29b-41d4-a716-446655440000';
+  let release,oldCancelStarted=false;
+  const gate=new Promise(resolve=>release=resolve);
+  const calls=[];
+  const broker=createLiveFanout({maxFeeds:1,idleMs:retirement==='idle expiry'?40:5000,
+   readIdleTimeoutMs:400,lookup:async()=>[{address:'8.8.8.8',family:4}],
+   fetchImpl:async url=>{
+    const name=url.pathname.split('/').pop();calls.push(name);
+    return new Response(new ReadableStream({
+     start(c){c.enqueue(new Uint8Array(packet))},
+     cancel(){if(name==='old.ts'){oldCancelStarted=true;return gate}}
+    }),{headers:{'content-type':'video/mp2t'}});
+   }});
+  const server=http.createServer((req,res)=>void broker.handle(req,res,
+   'https://licensed.example/live/a/b'+req.url,
+   req.url==='/other.ts'?{}:{licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base='http://127.0.0.1:'+server.address().port;
+  async function until(predicate){
+   for(let i=0;i<150&&!predicate();i++)await new Promise(r=>setTimeout(r,10));
+   assert.ok(predicate(),'expected state transition');
+  }
+  try{
+   const old=await fetch(base+'/old.ts',{signal:AbortSignal.timeout(5000)});
+   const reader=old.body.getReader();await reader.read();await reader.cancel();
+   await until(()=>broker.stats().viewers===0);
+   if(retirement==='global eviction'){
+    const other=await fetch(base+'/other.ts',{signal:AbortSignal.timeout(5000)});
+    assert.equal(other.status,200);
+    const b=other.body.getReader();await b.read();await b.cancel();
+    await until(()=>broker.stats().viewers===0);
+   }
+   await until(()=>oldCancelStarted);
+   assert.equal(broker.stats().pendingSourceHandoffs,1);
+   const blocked=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(5000)});
+   assert.equal(blocked.status,503);
+   assert.equal((await blocked.json()).code,'fanout_source_handoff_pending');
+   assert.equal(calls.filter(n=>n==='next.ts').length,0);
+   release();
+   await until(()=>broker.stats().pendingSourceHandoffs===0);
+   const next=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(5000)});
+   assert.equal(next.status,200);
+   const b=next.body.getReader();await b.read();await b.cancel();
+   assert.equal(calls.filter(n=>n==='next.ts').length,1);
+  }finally{
+   release();broker.close();server.closeAllConnections();
+   await new Promise(resolve=>server.close(resolve));
+  }
+ });
+}
