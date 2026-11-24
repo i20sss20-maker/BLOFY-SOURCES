@@ -2128,7 +2128,7 @@
    const n=chosen.get(id)||0;
    if(n>=10)return;
    chosen.set(id,n+1);save();updateCount();renderBasket();
-   if(dialog&&!dialog.open)open();
+   if(!dialog||!dialog.open)open();
  }
  function image(p){
    const el=make("span","v11-order-photo");
@@ -2399,6 +2399,7 @@
    const existing=get("checkout");
    if(existing){
      existing.textContent="إرسال الطلب للمتجر عبر واتساب ←";
+     existing.disabled=false;existing.removeAttribute("disabled");
      existing.addEventListener("click",event=>{
        event.preventDefault();event.stopImmediatePropagation();
        chooseExistingCart();open();
