@@ -756,7 +756,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
-      const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits|bonus|bonus-policy|permissions)$/i);
+      const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits|bonus|bonus-policy|permissions|report)$/i);
       const action=path==='/operator/api/content-hub/seasons/retry'?'season-retry':
         path==='/operator/api/content-hub/seasons/concurrent-read'?'season-concurrent-read':
         path==='/operator/api/content-hub/seasons/audit'?'season-audit':
