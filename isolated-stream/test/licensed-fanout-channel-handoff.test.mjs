@@ -67,19 +67,21 @@ test('channel zap releases the old idle source before the next channel starts', 
  },{fetchImpl});
 });
 test('incomplete upstream teardown blocks second source GET rather than exceeding quota', {timeout:12000},async()=>{
- let requests=0;let firstController;
+ let requests=0,releaseFirst,cancelStarted=false;
+ const releaseGate=new Promise(resolve=>releaseFirst=resolve);
  const fetchImpl=async()=>{
   requests++;
   if(requests===1)return new Response(new ReadableStream({
-   start(c){firstController=c;c.enqueue(new Uint8Array(TS))}
-   // A slow provider may ignore AbortSignal until it finishes its pending
-   // read; source slot must not be reused before this reader is released.
+   start(c){c.enqueue(new Uint8Array(TS))},
+   // Explicitly delay cancellation confirmation. A blocked read alone
+   // is now promptly cancelled and is not evidence of incomplete teardown.
+   cancel(){cancelStarted=true;return releaseGate}
   }),{status:200,headers:{'content-type':'video/mp2t'}});
   return new Response(new ReadableStream({
    start(c){c.enqueue(new Uint8Array(TS))}
   }),{status:200,headers:{'content-type':'video/mp2t'}});
  };
- await withRelay(async(base,fanout)=>{
+ try{await withRelay(async(base,fanout)=>{
   const old=await fetch(base+'/first'),reader=old.body.getReader();
   await reader.read();await reader.cancel();
   await waitUntil(()=>fanout.stats().viewers===0);
@@ -89,7 +91,8 @@ test('incomplete upstream teardown blocks second source GET rather than exceedin
   assert.equal(response.headers.get('retry-after'),'1');
   assert.equal(requests,1,'must not open second upstream while old is stuck');
   assert.equal(fanout.stats().pendingSourceHandoffs,1);
-  firstController.close();
+  assert.equal(cancelStarted,true);
+  releaseFirst();
   await waitUntil(()=>fanout.stats().pendingSourceHandoffs===0);
   const opened=await fetch(base+'/second');
   assert.equal(opened.status,200);
@@ -97,5 +100,5 @@ test('incomplete upstream teardown blocks second source GET rather than exceedin
   await newReader.read();
   assert.equal(requests,2);
   await newReader.cancel();
- },{fetchImpl,readIdleTimeoutMs:4000});
+ },{fetchImpl,readIdleTimeoutMs:4000});}finally{releaseFirst()}
 });
