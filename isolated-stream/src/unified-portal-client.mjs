@@ -242,6 +242,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/library-title',{method:'POST',
       body:{sourceId,type,itemId,currentName,proposedName}});
   }
+  // Coalesce only concurrent, identical owner-catalog reads for this client.
+  // No persistent cache, no stale results, no distributor/account requests.
+  const catalogInFlight=new Map();
   function catalog({type,serverId='',q='',offset=0}={}){
     if(!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_media_type'}});
@@ -250,7 +253,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const query=new URLSearchParams({type,offset:String(Math.max(0,Math.min(1000000,Number(offset)||0)))});
     if(serverId)query.set('serverId',serverId);
     if(q)query.set('q',String(q).slice(0,85));
-    return call(ROOT+'/catalog?'+query);
+    const path=ROOT+'/catalog?'+query;
+    const pending=catalogInFlight.get(path);
+    if(pending)return pending.then(result=>structuredClone(result));
+    if(catalogInFlight.size>=32)return call(path);
+    const task=call(path).finally(()=>catalogInFlight.delete(path));
+    catalogInFlight.set(path,task);
+    return task.then(result=>structuredClone(result));
   }
   function addSource(data){
     return call(ROOT+'/sources',{method:'POST',body:{
