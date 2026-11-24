@@ -1,0 +1,30 @@
+name: LIVE source-release guard
+on:
+  push:
+    branches:
+      - fix/live-stuck-release-no-crash-loop-20261125
+    paths:
+      - 'isolated-stream/src/server.mjs'
+      - 'isolated-stream/src/idle-fanout-release-recovery.mjs'
+      - 'isolated-stream/test/idle-fanout-release-recovery.test.mjs'
+      - '.github/workflows/live-source-release-guard.yml'
+  pull_request:
+    paths:
+      - 'isolated-stream/src/server.mjs'
+      - 'isolated-stream/src/idle-fanout-release-recovery.mjs'
+      - 'isolated-stream/test/idle-fanout-release-recovery.test.mjs'
+      - '.github/workflows/live-source-release-guard.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check isolated-stream/src/server.mjs
+      - run: node --test isolated-stream/test/idle-fanout-release-recovery.test.mjs
