@@ -3,8 +3,8 @@ import crypto from 'node:crypto';
 // Public landing page only. Do not collect real provider credentials until a
 // separately tested encrypted pairing service and compatible app are ready.
 const escapeHtml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export function renderStreamConnect(nonce){
- return String.raw`<!doctype html>
+export function renderStreamConnect(nonce,{enabled=false}={}){
+ const page=String.raw`<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1220"><meta name="description" content="BLOFY STREAM CONNECT — ربط اشتراك Xtream بتطبيق BLOFY STREAM."><title>BLOFY STREAM CONNECT</title>
 <style nonce="__NONCE__">
 :root{color-scheme:dark;--bg:#0b1220;--surface:#131e30;--panel:#17253a;--line:#2c415d;--text:#f5f8ff;--muted:#a7b8d1;--blue:#459aff;--mint:#70e4cf;--radius:23px}
@@ -15,15 +15,33 @@ export function renderStreamConnect(nonce){
 <div class="card"><h2>ربط اشتراك Xtream</h2><p class="muted">واجهة الربط الجديدة — الخطوة الأولى نحو كودك الخاص.</p><div class="status" role="status"><strong>الخدمة قيد التجهيز</strong><br>إصدار الأكواد معطّل إلى حين اكتمال الربط الآمن مع التطبيق. لا تدخل بيانات اشتراكك الحقيقية الآن.</div><div class="field"><label for="host">الهوست / Server URL</label><input id="host" type="url" placeholder="https://example.com:8080" disabled autocomplete="off"></div><div class="field"><label for="username">اسم المستخدم</label><input id="username" placeholder="Username" disabled autocomplete="off"></div><div class="field"><label for="password">كلمة المرور</label><input id="password" type="password" placeholder="••••••••" disabled autocomplete="off"></div><button class="cta" type="button" disabled>تحويل إلى كود STREAM</button><div class="secure">لا يتم إرسال أو حفظ أي بيانات من هذه الصفحة حاليًا.</div></div></section>
 <h2 class="section-title">كيف ستعمل الخدمة؟</h2><div class="steps"><article class="step"><span class="num">01</span><h3>أدخل اشتراكك</h3><p>الهوست واسم المستخدم وكلمة المرور الخاصة بمزودك.</p></article><article class="step"><span class="num">02</span><h3>احصل على كود</h3><p>بعد التحقق الآمن، يصدر النظام كود ربط خاصًا باشتراكك.</p></article><article class="step"><span class="num">03</span><h3>افتح BLOFY STREAM</h3><p>أدخل الكود في الإصدار المتوافق ليتم ربط التطبيق بمصدر اشتراكك.</p></article></div><div class="features"><div class="feature"><span class="tick">✓</span> تصميم متوافق مع الجوال والكمبيوتر</div><div class="feature"><span class="tick">✓</span> اشتراكك يبقى لدى مزودك</div><div class="feature"><span class="tick">✓</span> مسار مستقل عن اشتراكات BLOFY</div></div>
 <section class="faq"><h2 class="section-title">الأسئلة الشائعة</h2><details><summary>هل أستطيع استخدام أي مزود Xtream؟</summary><p>الهدف دعم المزودين المتوافقين والمصرّح لك باستخدامهم. يعتمد التشغيل على توافق المزود والتطبيق وتوفر الاتصال.</p></details><details><summary>هل يتغير تاريخ انتهاء اشتراكي؟</summary><p>لا يهدف الربط إلى تمديد اشتراكك أو تغيير حد الاتصالات الذي حدده مزود الخدمة.</p></details><details><summary>هل أستطيع استخراج كود الآن؟</summary><p>ليس بعد؛ إصدار الأكواد معطّل حتى اكتمال الاختبارات والربط مع التطبيق. لا تحفظ الصفحة أي بيانات دخول.</p></details></section>
-</main><footer><span dir="ltr">© BLOFY STREAM · CONNECT</span><span>استخدم فقط الاشتراكات والمحتوى المصرح لك به.</span></footer></body></html>`.replaceAll('__NONCE__',escapeHtml(nonce));
+</main><footer><span dir="ltr">© BLOFY STREAM · CONNECT</span><span>استخدم فقط الاشتراكات والمحتوى المصرح لك به.</span></footer></body></html>`;
+ if(!enabled)return page.replaceAll('__NONCE__',escapeHtml(nonce));
+ return enablePairingPage(page).replaceAll('__NONCE__',escapeHtml(nonce));
 }
-export function handleStreamConnect(req,res){
+export function handleStreamConnect(req,res,{enabled=false}={}){
  const path=(req.url||'/').split('?')[0];
  if(path!=='/connect'&&path!=='/connect/')return false;
  if(req.method!=='GET'&&req.method!=='HEAD'){
   res.writeHead(405,{'allow':'GET, HEAD','cache-control':'no-store'});res.end();return true;
  }
  const nonce=crypto.randomBytes(18).toString('base64');
- res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; style-src 'nonce-"+nonce+"'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});
- res.end(req.method==='HEAD'?'':renderStreamConnect(nonce));return true;
+ res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; style-src 'nonce-"+nonce+"'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"+(enabled?"; script-src 'nonce-"+nonce+"'; connect-src 'self'":"")});
+ res.end(req.method==='HEAD'?'':renderStreamConnect(nonce,{enabled}));return true;
+}
+
+function enablePairingPage(page){
+ return page
+ .replace('قيد التجهيز</span></header>','الربط التجريبي</span></header>')
+ .replace('<strong>الخدمة قيد التجهيز</strong><br>إصدار الأكواد معطّل إلى حين اكتمال الربط الآمن مع التطبيق. لا تدخل بيانات اشتراكك الحقيقية الآن.','<strong>استخدم إصدار التطبيق المتوافق مع CONNECT فقط.</strong><br>كود الربط يُستخدم مرة واحدة خلال 15 دقيقة. التحقق من صلاحية الاشتراك يتم داخل التطبيق.')
+ .replace('<div class="field"><label for="host">','<form id="connect-form" autocomplete="off"><div class="field"><label for="host">')
+ .replace('placeholder="https://example.com:8080" disabled autocomplete="off"','placeholder="https://example.com:8080" required maxlength="512" autocomplete="off"')
+ .replace('placeholder="Username" disabled autocomplete="off"','placeholder="Username" required maxlength="256" autocomplete="off"')
+ .replace('placeholder="••••••••" disabled autocomplete="off"','placeholder="••••••••" required maxlength="256" autocomplete="off"')
+ .replace('<button class="cta" type="button" disabled>تحويل إلى كود STREAM</button><div class="secure">لا يتم إرسال أو حفظ أي بيانات من هذه الصفحة حاليًا.</div>', '<label class="note"><input id="authorized" type="checkbox" required style="width:auto"> أؤكد أنني مخوّل باستخدام هذا الاشتراك والمحتوى.</label><button id="connect-submit" class="cta" type="submit">إنشاء كود الربط</button></form><div id="connect-result" role="status" aria-live="polite" class="status" hidden><p id="connect-message"></p><p id="connect-code" dir="ltr"></p><button type="button" id="connect-copy" hidden>نسخ الكود</button></div><div class="secure">تُشفّر البيانات مؤقتًا حتى استلامها من التطبيق. لا تشارك كود الربط مع أي شخص.</div>')
+ .replace('بعد التحقق الآمن، يصدر النظام كود ربط خاصًا باشتراكك.','يصدر النظام كودًا مؤقتًا، ويتحقق التطبيق من الاشتراك عند استلامه.')
+ .replace('ليس بعد؛ إصدار الأكواد معطّل حتى اكتمال الاختبارات والربط مع التطبيق. لا تحفظ الصفحة أي بيانات دخول.','نعم في النسخة التجريبية المتوافقة. الكود ليس إثباتًا لصلاحية الاشتراك؛ يتحقق التطبيق من المزود مباشرة.')
+ .replace('</body>', '<script nonce="__NONCE__">'+
+ "const form=document.getElementById('connect-form'),submit=document.getElementById('connect-submit'),result=document.getElementById('connect-result'),message=document.getElementById('connect-message'),code=document.getElementById('connect-code'),copy=document.getElementById('connect-copy');let timer;function clearResult(){clearTimeout(timer);code.textContent='';copy.hidden=true;}copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(code.textContent);message.textContent='تم النسخ. استخدم الكود في إصدار CONNECT المتوافق.';}catch{message.textContent='حدد الكود وانسخه يدويًا.';}});form.addEventListener('submit',async e=>{e.preventDefault();if(submit.disabled)return;clearResult();result.hidden=false;submit.disabled=true;message.textContent='جار إنشاء كود الربط...';const host=document.getElementById('host'),user=document.getElementById('username'),password=document.getElementById('password');let payload={host:host.value.trim(),username:user.value,password:password.value,authorized:document.getElementById('authorized').checked};password.value='';try{const r=await fetch('/connect/api/issue',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','x-blofy-connect-action':'issue'},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok||!data.ok){const messages={connect_host_invalid:'أدخل عنوان HTTPS صحيحًا دون مسار أو بيانات داخل الرابط.',connect_rate_limited:'محاولات كثيرة. حاول لاحقًا.',connect_disabled:'الخدمة غير مفعلة حاليًا.'};message.textContent=messages[data.code]||'تعذر إصدار الكود. حاول لاحقًا.';return;}if(!/^BC-[A-Za-z0-9_-]{24}$/.test(data.code)||data.oneTime!==true||data.providerVerified!==false){message.textContent='استجابة غير صالحة.';return;}form.reset();code.textContent=data.code;copy.hidden=false;message.textContent='كود ربط مؤقت للاستخدام مرة واحدة خلال 15 دقيقة. صلاحية الاشتراك لم تُتحقق بعد.';timer=setTimeout(()=>{clearResult();message.textContent='انتهت مدة عرض الكود. أنشئ كودًا جديدًا.';},15*60000);}catch{message.textContent='تعذر الاتصال بالخدمة.';}finally{payload=null;submit.disabled=false;}});"+
+ '</script></body>');
 }

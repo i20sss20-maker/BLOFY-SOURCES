@@ -48,6 +48,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     finally{clearTimeout(timer);}
   }
 
+  const connectIssue=({host,username,password}={})=>call(ROOT+'/connect/issue',{method:'POST',body:{host,username,password}});
   const distributorAdmins=()=>call(ROOT+'/distributors');
   function createDistributor(data){
     return call(ROOT+'/distributors',{method:'POST',body:{
@@ -562,7 +563,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,ownerAdminReadiness,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
+  return {configured,connectIssue,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,ownerAdminReadiness,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,
