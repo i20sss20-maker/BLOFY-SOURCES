@@ -3,17 +3,30 @@ export async function readWithMediaDeadline(reader,controller,{timeoutMs=22000}=
  if(typeof reader?.read!=='function'||typeof controller?.abort!=='function'||
   !Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)
   throw new Error('restream_read_deadline_invalid');
- let timer;
+ const signal=controller.signal;
+ const failure=code=>Object.assign(new Error(code),{code});
+ if(signal?.aborted)throw signal.reason||failure('restream_cancelled');
+ let timer,onAbort;
  try{
-  return await Promise.race([reader.read(),new Promise((_,reject)=>{
+  const interrupted=new Promise((_,reject)=>{
+   onAbort=()=>reject(signal?.reason||failure('restream_cancelled'));
+   signal?.addEventListener('abort',onAbort,{once:true});
    timer=setTimeout(()=>{
-    controller.abort();
-    const error=new Error('restream_provider_stalled');
-    error.code='restream_provider_stalled';
+    // Settle the deadline first: fetch readers can reject synchronously
+    // on abort, masking the actual stall as an undifferentiated AbortError.
+    const error=failure('restream_provider_stalled');
     reject(error);
+    controller.abort(error);
    },timeoutMs);
+  });
+  return await Promise.race([interrupted,Promise.resolve().then(()=>{
+   if(signal?.aborted)throw signal.reason||failure('restream_cancelled');
+   return reader.read();
   })]);
- }finally{clearTimeout(timer)}
+ }finally{
+  clearTimeout(timer);
+  signal?.removeEventListener('abort',onAbort);
+ }
 }
 // Select a separately authorized backup only on a very short EOF or two
 // short primary EOFs within five minutes. Selection applies on NEXT restart.

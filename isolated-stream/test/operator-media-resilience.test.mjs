@@ -103,3 +103,32 @@ test('operator launch gate uses synthetic evidence but cannot route subscribers'
  assert.match(v,/id="media-launch-gate"/);
  assert.match(v,/api\("media-production-gate"\)/);
 });
+
+test('deadline preserves stall code when reader rejects synchronously on abort',async()=>{
+ const controller=new AbortController();
+ const read=()=>new Promise((_,reject)=>controller.signal.addEventListener('abort',
+  ()=>reject(new DOMException('aborted','AbortError')),{once:true}));
+ await assert.rejects(readWithMediaDeadline({read},controller,{timeoutMs:10}),
+  {code:'restream_provider_stalled'});
+ assert.equal(controller.signal.reason.code,'restream_provider_stalled');
+});
+test('already cancelled read never starts a source read',async()=>{
+ const controller=new AbortController();controller.abort();
+ let calls=0;
+ await assert.rejects(readWithMediaDeadline({read:()=>{calls++;}},controller),
+  {name:'AbortError'});
+ assert.equal(calls,0);
+});
+test('client cancellation releases pending read without waiting for provider stall deadline',async()=>{
+ const controller=new AbortController();
+ const pending=readWithMediaDeadline({read:()=>new Promise(()=>{})},controller,
+  {timeoutMs:1000});
+ controller.abort();
+ await assert.rejects(pending,{name:'AbortError'});
+});
+test('supervisor preserves read failure evidence before pipeline closes the response',async()=>{
+ const s=await readFile(new URL('../src/live-restream-supervisor.mjs',import.meta.url),'utf8');
+ assert.match(s,/if\(!closedByReader\|\|error\?\.code==='restream_provider_stalled'\)providerReadError=error/);
+ assert.match(s,/if\(!closedByReader\|\|providerReadError\)/);
+ assert.match(s,/classify\(providerReadError\|\|e\)/);
+});
