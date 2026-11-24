@@ -220,3 +220,10 @@ test('all existing distributor dashboard commands reach the fixed authenticated 
  const before=calls.length;for(const command of ['sources','../distributors','delete-source'])assert.equal((await client.distributorRequest(command,{})).status,400);
  assert.equal(calls.length,before);
 });
+
+test('owner permission and report routes are fixed and never exposed through distributor bridge',async()=>{
+ const seen=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{seen.push(new URL(input).pathname);return new Response(JSON.stringify({ok:true}),{status:200})}});
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ for(const kind of ['permissions','report']){assert.equal((await client.distributorAdminAction(id,kind,{})).status,200);assert.equal(seen.at(-1),'/internal/blofy-stream/distributors/'+id+'/'+kind);assert.equal((await client.distributorRequest(kind,{})).status,400)}
+ assert.equal(seen.length,2);
+});
