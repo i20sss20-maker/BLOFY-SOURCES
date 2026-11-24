@@ -294,8 +294,19 @@ export function createLiveFanout({
                 throw Error('provider_redirect_denied');
               crossOriginHops++;
             }
-            await response.body?.cancel().catch(()=>{});
-            response=null;target=next;redirectCount++;
+            // Do not let a stalled redirect response hold all viewers
+            // indefinitely or open a second licensed upstream connection.
+            const redirectedRelease=await releaseUpstream(null,response);
+            response=null;
+            if(!redirectedRelease.settled){
+              if(row.licensedSourceId){
+                pendingReleases.push(redirectedRelease.confirmed);
+                counters.sourceReleaseStalls++;
+              }
+              throw Error('provider_redirect_denied');
+            }
+            attemptController.signal.throwIfAborted();
+            target=next;redirectCount++;
           }
           if(!response.ok||!response.body){
             if([401,403,404,429,456].includes(response.status)){
