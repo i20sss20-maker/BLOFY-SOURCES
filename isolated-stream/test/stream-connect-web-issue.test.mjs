@@ -73,7 +73,7 @@ test('public beta only permits unauthenticated issuance with explicit compatible
  assert.equal((await run(on,{...input,compatibleApp:true},{headers})).status,201);
  assert.equal(calls,1);
  const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
- assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/طريقة الربط والتوافق/);assert.match(html,/56\.0\.5/);assert.match(html,/التنزيل العام للنسخة المتوافقة غير متاح حاليًا/);assert.doesNotMatch(html,/github\.com|14942640054/);
+ assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/طريقة الربط والتوافق/);assert.match(html,/الأكواد الرقمية/);assert.match(html,/HTTP غير المشفر/);assert.doesNotMatch(html,/github\.com|14942640054/);
  assert.doesNotMatch(html,/الخدمة قيد التجهيز/);
  assert.match(renderStreamConnect('nonce'),/الخدمة قيد التجهيز/);
 });
@@ -104,3 +104,5 @@ test('copy falls back to selectable code when clipboard is missing or rejects',a
   else{assert.equal(copied,validCode);assert.match(elements.get('connect-message').textContent,/تم النسخ/);}
  }
 });
+
+test('numeric code and HTTP consent are forwarded only explicitly',async()=>{let seen;const bridge={configured:true,connectIssue:async data=>{seen=data;return {status:201,body:{ok:true,code:'012345678901',oneTime:true,providerVerified:false,expiresAt:now+900000}}}};const on=createConnectIssuer({bridge,enabled:true,pilotToken,clock:()=>now});const http={...input,host:'http://provider.example.com:8080',numericCode:true};assert.equal((await run(on,http)).status,400);assert.equal(seen,undefined);const r=await run(on,{...http,allowHttp:true});assert.equal(r.status,201);assert.equal(r.body.code,'012345678901');assert.deepEqual(seen,{host:http.host,username:http.username,password:http.password,allowHttp:true,numericCode:true});});
