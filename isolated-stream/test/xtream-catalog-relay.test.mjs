@@ -176,10 +176,11 @@ test('get_vod_info is authorized for one safe ID and does not expose raw secrets
 });
 
 test('disconnect during source validation opens no upstream and frees the catalog slot',async()=>{
- let calls=0,validations=0,release,entered,done;
+ let calls=0,validations=0,release,entered,done,serverClosed;
  const paused=new Promise(resolve=>release=resolve);
  const validationEntered=new Promise(resolve=>entered=resolve);
  const firstDone=new Promise(resolve=>done=resolve);
+ const downstreamClosed=new Promise(resolve=>serverClosed=resolve);
  await fixture((_req,res)=>{calls++;res.end('[]');},async origin=>{
   const relay=createXtreamCatalogRelay({sharedToken:secret,allowedOrigin:origin,maxConcurrent:1,
    validate:async u=>{if(++validations===1){entered();await paused;}return new URL(u);}});
@@ -187,7 +188,7 @@ test('disconnect during source validation opens no upstream and frees the catalo
   await fixture((req,res)=>{
    const n=++requests;
    const handled=relay.handle(req,res);
-   if(n===1)void handled.then(done);
+   if(n===1){res.once('close',serverClosed);void handled.then(done);}
   },async gateway=>{
    const body=JSON.stringify({sourceUrl:origin+'/player_api.php?username=u&password=p'});
    const headers={authorization:'Bearer '+secret,'content-type':'application/json'};
@@ -195,11 +196,11 @@ test('disconnect during source validation opens no upstream and frees the catalo
    client.on('error',()=>{});
    client.end(body);
    await validationEntered;
-   const closed=once(client,'close');
+   // ECONNRESET is expected when we deliberately destroy the client.
+   // Await the server's close event, not events.once(client,'close'),
+   // which rejects on that expected error.
    client.destroy();
-   await closed;
-   // Let the server observe the disconnected socket before DNS finishes.
-   await new Promise(resolve=>setTimeout(resolve,30));
+   await downstreamClosed;
    release();
    await Promise.race([firstDone,new Promise((_,reject)=>{
     const timer=setTimeout(()=>reject(new Error('catalog slot leaked')),1500);
