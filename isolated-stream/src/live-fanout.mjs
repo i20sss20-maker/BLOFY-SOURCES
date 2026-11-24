@@ -404,7 +404,10 @@ export function createLiveFanout({
           const message=String(error?.message||'');
           const reason=allowedReasons.has(message)?message:'other_transport';
           failureReasons[reason]=(failureReasons[reason]||0)+1;
-          const transient=['provider_unavailable','other_transport','fanout_read_idle_timeout'];
+          // A failed DNS resolution can be temporary, unlike an explicitly
+          // private address or invalid redirect. Retry only within the
+          // existing sequential budget; validate again before any GET.
+          const transient=['provider_unavailable','other_transport','fanout_read_idle_timeout','relay_origin_unresolved'];
           // A transient initial upstream 5xx or transport reset may succeed
           // on ONE bounded sequential retry. Never retry source access denial,
           // malformed media, private addresses or redirect violations.
