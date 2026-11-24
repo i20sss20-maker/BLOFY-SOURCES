@@ -21,7 +21,8 @@ export function renderStreamConnect(nonce,{enabled=false,publicBeta=false}={}){
 }
 export function handleStreamConnect(req,res,{enabled=false,pilot=false,publicBeta=false}={}){
  const path=(req.url||'/').split('?')[0];
- if(path!=='/connect'&&path!=='/connect/'&&!(pilot&&path==='/connect/pilot'))return false;
+ const officialRoot=path==='/'&&req.headers?.host==='connect.blofysat.com';
+ if(!officialRoot&&path!=='/connect'&&path!=='/connect/'&&!(pilot&&path==='/connect/pilot'))return false;
  if(req.method!=='GET'&&req.method!=='HEAD'){
   res.writeHead(405,{'allow':'GET, HEAD','cache-control':'no-store'});res.end();return true;
  }
@@ -33,7 +34,7 @@ export function handleStreamConnect(req,res,{enabled=false,pilot=false,publicBet
 function enablePairingPage(page,publicBeta=false){
  return page
  .replace('قيد التجهيز</span></header>',(publicBeta?'الربط متاح • Beta':'اختبار المالك الخاص')+'</span></header>')
- .replace('<strong>الخدمة قيد التجهيز</strong><br>إصدار الأكواد معطّل إلى حين اكتمال الربط الآمن مع التطبيق. لا تدخل بيانات اشتراكك الحقيقية الآن.','<strong>استخدم إصدار التطبيق المتوافق مع CONNECT فقط.</strong><br>كود الربط يُستخدم مرة واحدة خلال 15 دقيقة. التحقق من صلاحية الاشتراك يتم داخل التطبيق.'+(publicBeta?'<br><a href="https://github.com/i20sss20-maker/BLOFY-PLAYER-2.0/actions/runs/45372641228/artifacts/14910930584">بناء Android التجريبي (يتطلب صلاحية GitHub)</a><br>النسخة التجارية الحالية لا تدعم الكود بعد. يدعم الاختبار مصادر HTTPS والتشغيل المباشر المتوافق فقط.':''))
+ .replace('<strong>الخدمة قيد التجهيز</strong><br>إصدار الأكواد معطّل إلى حين اكتمال الربط الآمن مع التطبيق. لا تدخل بيانات اشتراكك الحقيقية الآن.','<strong>استخدم إصدار التطبيق المتوافق مع CONNECT فقط.</strong><br>كود الربط يُستخدم مرة واحدة خلال 15 دقيقة. التحقق من صلاحية الاشتراك يتم داخل التطبيق.'+(publicBeta?'<br><a href="https://github.com/i20sss20-maker/BLOFY-PLAYER-2.0/actions/runs/45434763965/artifacts/14942640054">نسخة Android 56.0.5 التجريبية الموقعة (تتطلب صلاحية GitHub)</a><br>النسخة التجارية الحالية لا تدعم الكود بعد. يدعم الاختبار مصادر HTTPS والتشغيل المباشر المتوافق فقط.':''))
  .replace('<div class="field"><label for="host">','<form id="connect-form" autocomplete="off"><div class="field"><label for="host">')
  .replace('placeholder="https://example.com:8080" disabled autocomplete="off"','placeholder="https://example.com:8080" required maxlength="512" autocomplete="off"')
  .replace('placeholder="Username" disabled autocomplete="off"','placeholder="Username" required maxlength="256" autocomplete="off"')

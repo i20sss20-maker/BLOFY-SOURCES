@@ -73,7 +73,18 @@ test('public beta only permits unauthenticated issuance with explicit compatible
  assert.equal((await run(on,{...input,compatibleApp:true},{headers})).status,201);
  assert.equal(calls,1);
  const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
- assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/14910930584/);
+ assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/14942640054/);
  assert.doesNotMatch(html,/الخدمة قيد التجهيز/);
  assert.match(renderStreamConnect('nonce'),/الخدمة قيد التجهيز/);
+});
+
+test('official blofysat hostname issues only with matching trusted origin',async()=>{
+ const host='connect.blofysat.com';let calls=0;
+ const issuer=createConnectIssuer({enabled:true,publicEnabled:true,bridge:{configured:true,connectIssue:async()=>{calls++;return {status:201,body:{ok:true,code:validCode,oneTime:true,providerVerified:false,expiresAt:now+900000}}}},clock:()=>now});
+ const headers={host,origin:'https://'+host,'content-type':'application/json','x-blofy-connect-action':'issue','sec-fetch-site':'same-origin'};
+ const data={...input,compatibleApp:true};
+ assert.equal((await run(issuer,data,{headers})).status,201);
+ assert.equal((await run(issuer,data,{headers:{...headers,origin:'https://connect.blofyplayer.com'}})).status,403);
+ assert.equal((await run(issuer,data,{headers:{...headers,host:'untrusted.example.com'}})).status,403);
+ assert.equal(calls,1);
 });

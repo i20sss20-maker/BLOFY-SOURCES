@@ -8,7 +8,7 @@ export function connectPilotAuthorized(req,token){
  try{const value=Buffer.from(header.slice(6),'base64').toString('utf8'),prefix='operator:';if(!value.startsWith(prefix))return false;const a=Buffer.from(value.slice(prefix.length)),b=Buffer.from(token);return a.length===b.length&&timingSafeEqual(a,b);}catch{return false;}
 }
 export function connectPilotChallenge(res){res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY CONNECT Pilot", charset="UTF-8"','cache-control':'no-store, private','x-content-type-options':'nosniff'});res.end();}
-const ORIGINS=new Set(['https://blofy-stream-api-production.up.railway.app','https://connect.blofyplayer.com']);
+const ORIGINS=new Set(['https://blofy-stream-api-production.up.railway.app','https://connect.blofysat.com']);
 const ERRORS=new Set(['connect_host_invalid','connect_input_invalid','connect_capacity','connect_rate_limited','connect_disabled']);
 function json(res,status,data){
  res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store, private','x-content-type-options':'nosniff','referrer-policy':'no-referrer'});res.end(JSON.stringify(data));
