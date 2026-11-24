@@ -8,7 +8,7 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createDistributorDashboard} from './distributor-dashboard.mjs';
 import {handleStreamConnect} from './stream-connect-page.mjs';
-import {createConnectIssuer} from './stream-connect-issuer.mjs';
+import {createConnectIssuer,connectPilotAuthorized,connectPilotChallenge} from './stream-connect-issuer.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
@@ -202,15 +202,21 @@ export function createStreamServer({
     }
   });
   const distributorDashboard=createDistributorDashboard({bridge:unifiedPortal,log});
-  const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured;
-  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled});
+  const connectPilotToken=process.env.BLOFY_CONNECT_PILOT_TOKEN||'';
+  const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured&&connectPilotToken.length>=32;
+  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,pilotToken:connectPilotToken});
   const app=http.createServer((req,res)=>{
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
     if(distributorDashboard.handle(req,res))return;
     if(connectIssuer.handle(req,res))return;
-    if(handleStreamConnect(req,res,{enabled:connectEnabled}))return;
+    if((req.url||'').split('?')[0]==='/connect/pilot'){
+      if(!connectEnabled){res.writeHead(503,{'cache-control':'no-store'});res.end('CONNECT pilot is disabled');return;}
+      if(!connectPilotAuthorized(req,connectPilotToken)){connectPilotChallenge(res);return;}
+      return handleStreamConnect(req,res,{enabled:true,pilot:true});
+    }
+    if(handleStreamConnect(req,res,{enabled:false}))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);

@@ -1,11 +1,19 @@
 // Browser pairing endpoint. No raw provider fetch, no query credentials,
 // no logs, no redirects. Off until a compatible app release is available.
+import {timingSafeEqual} from 'node:crypto';
+export function connectPilotAuthorized(req,token){
+ if(typeof token!=='string'||token.length<32)return false;
+ const header=req.headers?.authorization;
+ if(typeof header!=='string'||!header.startsWith('Basic ')||header.length>2048)return false;
+ try{const value=Buffer.from(header.slice(6),'base64').toString('utf8'),prefix='operator:';if(!value.startsWith(prefix))return false;const a=Buffer.from(value.slice(prefix.length)),b=Buffer.from(token);return a.length===b.length&&timingSafeEqual(a,b);}catch{return false;}
+}
+export function connectPilotChallenge(res){res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY CONNECT Pilot", charset="UTF-8"','cache-control':'no-store, private','x-content-type-options':'nosniff'});res.end();}
 const ORIGINS=new Set(['https://blofy-stream-api-production.up.railway.app','https://connect.blofyplayer.com']);
 const ERRORS=new Set(['connect_host_invalid','connect_input_invalid','connect_capacity','connect_rate_limited','connect_disabled']);
 function json(res,status,data){
  res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store, private','x-content-type-options':'nosniff','referrer-policy':'no-referrer'});res.end(JSON.stringify(data));
 }
-export function createConnectIssuer({bridge,enabled=false,clock=Date.now}={}){
+export function createConnectIssuer({bridge,enabled=false,pilotToken='',clock=Date.now}={}){
  let global={until:0,count:0};const clients=new Map();
  function permit(req){
   const now=clock(),key=String(req.socket?.remoteAddress||'unknown').slice(0,128)+'|'+String(req.headers?.['x-forwarded-for']||'').split(',')[0].trim().slice(0,128);
@@ -19,6 +27,7 @@ export function createConnectIssuer({bridge,enabled=false,clock=Date.now}={}){
  async function issue(req,res){
   if(req.method!=='POST'||req.url!=='/connect/api/issue'){json(res,405,{ok:false,code:'connect_method_denied'});return}
   if(enabled!==true||!bridge?.configured){json(res,503,{ok:false,code:'connect_disabled'});return}
+  if(!connectPilotAuthorized(req,pilotToken)){json(res,401,{ok:false,code:'connect_pilot_unauthorized'});return}
   const origin=String(req.headers?.origin||'');
   if(!ORIGINS.has(origin)||origin!=='https://'+String(req.headers?.host||'')||
      req.headers?.['x-blofy-connect-action']!=='issue'||
