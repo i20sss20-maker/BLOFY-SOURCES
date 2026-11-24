@@ -15,6 +15,7 @@ import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
 import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {createStreamOpsObservatory,summarizeMediaHour} from './stream-ops-observatory.mjs';
 import {createMediaEngineRedundancyWatch} from './media-engine-redundancy-watch.mjs';
@@ -459,6 +460,35 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       }
     },60000);
     mediaAudit.unref?.();
+    // A crashed/aborted licensed source can leave its body.cancel() Promise
+    // unresolved even after all viewers leave. Its one-slot admission must
+    // never be bypassed by starting a second provider connection. If ONLY
+    // an orphaned release remains for >=60s, no active feeds and zero
+    // viewers, let Railway close our real sockets by restarting this
+    // isolated API. Healthy streams are NEVER interrupted by this guard.
+    // Emergency rollback: BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED=1.
+    const verifyStaleRelease=createIdleFanoutReleaseRecovery({
+      minStallMs:60000,minSamples:3
+    });
+    const releaseGuard=setInterval(()=>{
+      const snapshot=service.relayStats();
+      if(snapshot?.sharedLiveEnabled!==true||
+         process.env.BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED==='1')return;
+      const decision=verifyStaleRelease(snapshot.fanout);
+      if(!decision.restart)return;
+      console.error('BLOFY_STREAM_LICENSED_SOURCE_RELEASE_RECOVERY',JSON.stringify({
+        code:'orphaned_provider_release_requires_process_socket_close',
+        pendingSourceHandoffs:snapshot.fanout.pendingSourceHandoffs,
+        activeFeeds:0,viewers:0,
+        reason:'only_after_60s_with_zero_customers',
+        customerConnectionsInterrupted:false,
+        providerQuotaBypassed:false
+      }));
+      // No privileged force-free: termination actually closes the process
+      // sockets. Railway restarts the stateless control service normally.
+      process.exit(76)
+    },5000);
+    releaseGuard.unref?.();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
     let recoveryAttempts=0;
