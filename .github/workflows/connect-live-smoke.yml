@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   synthetic-pairing:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/connect-live-smoke-20261124'
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'qa/connect-eight-digit-live-smoke-20261124'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
