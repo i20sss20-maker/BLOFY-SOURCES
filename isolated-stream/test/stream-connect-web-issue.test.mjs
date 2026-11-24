@@ -88,3 +88,19 @@ test('official blofysat hostname issues only with matching trusted origin',async
  assert.equal((await run(issuer,data,{headers:{...headers,host:'untrusted.example.com'}})).status,403);
  assert.equal(calls,1);
 });
+
+test('copy falls back to selectable code when clipboard is missing or rejects',async()=>{
+ const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
+ const script=html.match(/<script nonce="nonce">([\s\S]+)<\/script>/)[1];
+ for(const mode of ['clipboard','reject','missing','denied']){
+  const elements=new Map();let copied='',selected=false;
+  const selection={removeAllRanges(){selected=false},addRange(){selected=true}};
+  const document={getElementById(id){if(!elements.has(id))elements.set(id,{textContent:'',addEventListener(event,fn){this[event]=fn}});return elements.get(id)},createRange(){return {selectNodeContents(){}}},execCommand(action){assert.equal(action,'copy');assert.equal(selected,true);if(mode==='denied')return false;copied=validCode;return true}};
+  const navigator=mode==='missing'||mode==='denied'?{}:{clipboard:{async writeText(value){if(mode==='reject')throw Error('denied');copied=value}}};
+  new Function('document','navigator','window',script)(document,navigator,{getSelection:()=>selection});
+  elements.get('connect-code').textContent=validCode;
+  await elements.get('connect-copy').click();
+  if(mode==='denied'){assert.equal(copied,'');assert.equal(selected,true);assert.match(elements.get('connect-message').textContent,/يدويًا/);}
+  else{assert.equal(copied,validCode);assert.match(elements.get('connect-message').textContent,/تم النسخ/);}
+ }
+});
