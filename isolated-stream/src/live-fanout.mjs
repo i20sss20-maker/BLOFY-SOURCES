@@ -108,9 +108,24 @@ export function createLiveFanout({
     while(cooldowns.size>64)cooldowns.delete(cooldowns.keys().next().value);
     counters.providerFailures++;
   }
+  function guardSourceRelease(row){
+    if(!row.licensedSourceId||!row.pumpStarted||row.releaseGuarded)return;
+    row.releaseGuarded=true;
+    const scope=row.licensedSourceId;
+    const prior=pendingSourceReleases.get(scope)||Promise.resolve();
+    const gate=Promise.all([prior,row.upstreamReleasedPromise]).then(()=>{});
+    pendingSourceReleases.set(scope,gate);
+    void gate.finally(()=>{
+      if(pendingSourceReleases.get(scope)===gate)
+        pendingSourceReleases.delete(scope);
+    });
+  }
   function closeFeed(key,reason='closed',expectedRow=null){
     const row=feeds.get(key);
     if(!row||(expectedRow&&row!==expectedRow))return;
+    // Register release BEFORE removing admission: applies to timer expiry,
+    // global pool eviction, same-source handoff and terminal failure alike.
+    guardSourceRelease(row);
     feeds.delete(key);clearTimeout(row.idleTimer);
     row.controller.abort();
     if(reason==='idle')event(row,'idle');
@@ -397,16 +412,7 @@ export function createLiveFanout({
           return new Promise(()=>{});
         });
         void confirmed.then(()=>row.signalUpstreamReleased?.());
-        if(row.licensedSourceId){
-          const scope=row.licensedSourceId;
-          const prior=pendingSourceReleases.get(scope)||Promise.resolve();
-          const gate=Promise.all([prior,confirmed]).then(()=>{});
-          pendingSourceReleases.set(scope,gate);
-          void gate.finally(()=>{
-            if(pendingSourceReleases.get(scope)===gate)
-              pendingSourceReleases.delete(scope);
-          });
-        }
+        guardSourceRelease(row);
       }else{
         row.signalUpstreamReleased?.();
       }
@@ -465,15 +471,7 @@ export function createLiveFanout({
       for(const [oldKey,old] of [...feeds]){
         if(oldKey===key||old.licensedSourceId!==sourceScope||
            old.viewers.size!==0||!old.idleTimer)continue;
-        const release=old.pumpStarted?old.upstreamReleasedPromise:Promise.resolve();
         closeFeed(oldKey,'idle',old);
-        const previous=pendingSourceReleases.get(sourceScope)||Promise.resolve();
-        const done=Promise.all([previous,release]).then(()=>{});
-        pendingSourceReleases.set(sourceScope,done);
-        void done.finally(()=>{
-          if(pendingSourceReleases.get(sourceScope)===done)
-            pendingSourceReleases.delete(sourceScope);
-        });
         counters.sourceHandoffs++;
       }
       const pending=pendingSourceReleases.get(sourceScope);
@@ -486,7 +484,8 @@ export function createLiveFanout({
         ]);
         if(timer)clearTimeout(timer);
         if(viewerGone()){counters.abandonedViewerRequests++;return;}
-        if(!completed){
+        // A concurrent eviction can add another release while we wait.
+        if(!completed||(pendingSourceReleases.has(sourceScope)&&pendingSourceReleases.get(sourceScope)!==pending)){
           res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
             'content-type':'application/json'});
           res.end('{"ok":false,"code":"fanout_source_handoff_pending"}');
