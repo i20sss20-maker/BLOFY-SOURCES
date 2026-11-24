@@ -1917,7 +1917,7 @@
  function findItem(id,arr){
    return arr.find(p=>p&&Number(p.id)===id&&p.active!==false);
  }
- const state={id:0,lastId:0};
+ const state={lastHost:null};
  async function fetchItem(id){
    const old=findItem(id,saved());
    if(old)return old;
@@ -2065,9 +2065,10 @@
    if(!shell)return;
    sticky(shell);
    const id=Number(new URLSearchParams(location.search).get("item"));
-   if(!Number.isSafeInteger(id)||id<=0||state.lastId===id)return;
-   if(!shell.querySelector(".v5-product-layout"))return;
-   state.lastId=id;
+   if(!Number.isSafeInteger(id)||id<=0)return;
+   const host=shell.querySelector(".v5-product-main-image");
+   if(!host||host===state.lastHost)return;
+   state.lastHost=host;
    fetchItem(id).then(p=>{
      if(!p)return;
      if(!shell.isConnected)return;
