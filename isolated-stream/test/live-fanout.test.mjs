@@ -751,3 +751,38 @@ test('Retry-After is bounded and source denial never triggers a second initial u
   }
 });
 
+
+test('slow failed reconnect handshakes do not reset the playback recovery budget',async()=>{
+ let calls=0,now=100000;
+ await service(async(base,fanout)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  const bytes=await response.arrayBuffer();
+  assert.deepEqual(Buffer.from(bytes),packet);
+  assert.equal(calls,3,'initial stream plus exactly two reconnect attempts');
+  assert.equal(fanout.stats().upstreamReconnects,2);
+  assert.equal(fanout.stats().reconnectExhaustions,1);
+ },{clock:()=>now,reconnectOnUpstreamEnd:true,maxReconnectAttempts:2,
+  fetchImpl:async()=>{
+   calls++;
+   if(calls===1)return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+   now+=9000;
+   return new Response(null,{status:503});
+  }});
+});
+test('a source that resolves to a private address after EOF is never retried',async()=>{
+ let calls=0,lookups=0;
+ await service(async(base,fanout)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(calls,1);
+  assert.equal(lookups,3,'admission, initial source validation and one rejected reconnect');
+  assert.equal(fanout.stats().upstreamReconnects,1);
+ },{lookup:async()=>[{address:++lookups<=2?'8.8.8.8':'127.0.0.1',family:4}],
+  reconnectOnUpstreamEnd:true,maxReconnectAttempts:3,
+  fetchImpl:async()=>{
+   calls++;
+   return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+  }});
+});
