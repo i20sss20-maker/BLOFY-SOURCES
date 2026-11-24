@@ -61,13 +61,15 @@ test('release confirmation or invalid metrics reset the pending watch and protec
   assert.equal(guardWithDefaultNoDirect({clock:()=>1000,minStallMs:1000,minSamples:2})(bad).restart,false)
  }
 });
-test('service watchdog is idle-only, has kill switch, and never releases licensed quota in memory',()=>{
+test('service watchdog is idle-only, has kill switch, and quarantines a stuck source without exiting process',()=>{
  assert.match(server,/createIdleFanoutReleaseRecovery/);
  assert.match(server,/snapshot\?\.sharedLiveEnabled!==true/);
  assert.match(server,/BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED/);
  assert.match(server,/minStallMs:15000,minSamples:3/);
  assert.match(server,/if\(!decision\.restart\)return/);
- assert.match(server,/process\.exit\(76\)/);
+ assert.doesNotMatch(server,/process\.exit\(76\)/);
+ assert.match(server,/clearInterval\(releaseGuard\)/);
+ assert.match(server,/orphaned_provider_release_quarantined/);
  assert.doesNotMatch(server,/pendingSourceReleases\.clear\(|forceReleaseProvider|sourceQuota\s*=/);
 });
 
