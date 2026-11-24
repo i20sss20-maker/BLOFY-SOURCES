@@ -2,22 +2,24 @@
 // never confirms completion. NEVER pretend that the provider freed a slot;
 // only a process restart tears down the real operating-system sockets.
 // The operator restart guard can fire only after every customer viewer and
-// active fanout channel has drained for a sustained period.
+// active fanout channel AND all direct media relays have drained for a sustained period.
 export function createIdleFanoutReleaseRecovery({
- clock=Date.now,minStallMs=60000,minSamples=3
+ clock=Date.now,minStallMs=15000,minSamples=3
 }={}){
  if(typeof clock!=='function'||!Number.isSafeInteger(minStallMs)||
     minStallMs<1000||minStallMs>3600000||
     !Number.isSafeInteger(minSamples)||minSamples<2||minSamples>100)
   throw Error('idle_fanout_recovery_invalid');
  let pendingSince=null,quietSamples=0,fired=false;
- return function evaluate(stats){
+ return function evaluate(stats,activeDirectMediaClients){
   const pending=stats?.pendingSourceHandoffs;
   const viewers=stats?.viewers;
   const feeds=stats?.activeFeeds;
+  const direct=activeDirectMediaClients;
   if(!Number.isSafeInteger(pending)||!Number.isSafeInteger(viewers)||
-     !Number.isSafeInteger(feeds)||pending<0||viewers<0||feeds<0||
-     pending===0||viewers>0||feeds>0){
+     !Number.isSafeInteger(feeds)||!Number.isSafeInteger(direct)||
+     pending<0||viewers<0||feeds<0||direct<0||
+     pending===0||viewers>0||feeds>0||direct>0){
     pendingSince=null;quietSamples=0;
     return {restart:false,reason:'not_quiescent'};
   }
