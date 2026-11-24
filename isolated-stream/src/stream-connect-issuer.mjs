@@ -42,13 +42,15 @@ export function createConnectIssuer({bridge,enabled=false,publicEnabled=false,pi
    let data;try{data=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{json(res,400,{ok:false,code:'connect_input_invalid'});return}
    if(!data||typeof data.host!=='string'||data.host.length>512||typeof data.username!=='string'||data.username.length<1||data.username.length>256||
       typeof data.password!=='string'||data.password.length<1||data.password.length>256||data.authorized!==true||(publicEnabled&&data.compatibleApp!==true)){json(res,400,{ok:false,code:'connect_input_invalid'});return}
-   const result=await bridge.connectIssue({host:data.host,username:data.username,password:data.password}),body=result.body||{};
+   let provider;try{provider=new URL(data.host.trim())}catch{json(res,400,{ok:false,code:'connect_host_invalid'});return}
+   if(provider.protocol==='http:'&&data.allowHttp!==true){json(res,400,{ok:false,code:'connect_host_invalid'});return}
+   const result=await bridge.connectIssue({host:data.host,username:data.username,password:data.password,...(data.allowHttp===true?{allowHttp:true}:{}),...(data.numericCode===true?{numericCode:true}:{})}),body=result.body||{};
    if(result.status!==201||body.ok!==true){
     const code=ERRORS.has(body.code)?body.code:'connect_pairing_unavailable';
     json(res,[400,429,503].includes(result.status)?result.status:503,{ok:false,code});return
    }
    const remaining=Number(body.expiresAt)-clock();
-   if(!/^BC-[A-Za-z0-9_-]{24}$/.test(String(body.code||''))||body.oneTime!==true||body.providerVerified!==false||!Number.isFinite(remaining)||remaining<=0||remaining>16*60000){
+   if(!(/^(?:BC-[A-Za-z0-9_-]{24}|[0-9]{12})$/).test(String(body.code||''))||body.oneTime!==true||body.providerVerified!==false||!Number.isFinite(remaining)||remaining<=0||remaining>16*60000){
     json(res,503,{ok:false,code:'connect_pairing_unavailable'});return
    }
    json(res,201,{ok:true,code:body.code,expiresAt:body.expiresAt,oneTime:true,providerVerified:false});
