@@ -1144,3 +1144,49 @@ test('250 synthetic viewers keep healthy source running during isolated licensed
   await new Promise(resolve=>server.close(resolve));
  }
 });
+
+
+test('a transient DNS failure during live reconnect preserves the viewer response',async()=>{
+ let calls=0,lookups=0;
+ const restored=Buffer.from(packet);restored[10]=0x55;
+ let resumed;
+ await service(async(base,fanout)=>{
+   const response=await fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   assert.equal(response.status,200);
+   const reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.deepEqual(Buffer.from((await reader.read()).value),restored);
+   assert.equal(calls,2,'failed DNS must not open any upstream GET');
+   assert.equal(lookups,4);
+   assert.equal(fanout.stats().upstreamReconnects,2);
+   assert.equal(fanout.stats().reconnectRecovered,1);
+   await reader.cancel();
+ },{lookup:async()=>{
+    lookups++;
+    if(lookups===3)throw Object.assign(Error('temporary resolver issue'),{code:'EAI_AGAIN'});
+    return [{address:'8.8.8.8',family:4}];
+   },reconnectOnUpstreamEnd:true,maxReconnectAttempts:3,
+   fetchImpl:async()=>{
+     calls++;
+     if(calls===1)return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+     return new Response(new ReadableStream({start(c){resumed=c;c.enqueue(restored)}}),
+        {headers:{'content-type':'video/mp2t'}});
+   }});
+});
+
+test('unresolved DNS on every recovery attempt ends the feed within the existing budget',async()=>{
+ let calls=0,lookups=0;
+ await service(async(base,fanout)=>{
+   const response=await fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   assert.equal(response.status,200);
+   assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+   assert.equal(calls,1);
+   assert.equal(lookups,4);
+   assert.equal(fanout.stats().upstreamReconnects,2);
+   assert.equal(fanout.stats().reconnectExhaustions,1);
+ },{lookup:async()=>{
+     if(++lookups>2)return [];
+     return [{address:'8.8.8.8',family:4}];
+   },reconnectOnUpstreamEnd:true,maxReconnectAttempts:2,
+   fetchImpl:async()=>{calls++;return new Response(packet,{headers:{'content-type':'video/mp2t'}})}});
+});
