@@ -521,45 +521,42 @@ test('provider 503 remains transient/unavailable, not mislabeled as 509',async()
 });
 
 
-test('active direct movie relay is tracked while response is open and released on client disconnect', {timeout:8500},async()=>{
- let sourceReaders=0,timer=null;
- const fetchImpl=async()=>new Response(new ReadableStream({
-   start(c){
-     sourceReaders++;c.enqueue(new Uint8Array(ts));
-     // Model a LIVE direct movie download, not a finite/idle stub. This
-     // keeps the HTTP client open until it explicitly disconnects.
-     timer=setInterval(()=>c.enqueue(new Uint8Array(ts)),40);
-     timer.unref?.();
-   },
-   cancel(){if(timer)clearInterval(timer);timer=null;sourceReaders=Math.max(0,sourceReaders-1)}
- }),{status:200,headers:{'content-type':'video/mp2t'}});
- await host(async (base,service)=>{
+test('direct movie relay in-flight is counted and released when its HTTP request completes',{timeout:8500},async()=>{
+ let notifySourceStarted,releaseProvider;
+ const started=new Promise(resolve=>notifySourceStarted=resolve);
+ const gate=new Promise(resolve=>releaseProvider=resolve);
+ let requests=0;
+ const fetchImpl=async()=>{
+  requests++;
+  notifySourceStarted();
+  await gate;
+  return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}})
+ };
+ try{
+  await host(async(base,service)=>{
    const grant=await issue(base,{kind:'movie',sourceUrl:'https://allowed.example/movie/a/b/1.mp4'});
    assert.equal(grant.status,201);
    const {path}=await grant.json();
-   const viewer=await fetch(base+path);
+   const viewerPromise=fetch(base+path);
+   await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('source_did_not_start')),2500))]);
+   assert.equal(service.relayStats().activeDirectMediaClients,1,
+    'an in-flight direct media request must block isolated source watchdog');
+   const before=await fetch(base+'/internal/relay-health',{
+    headers:{authorization:'Bearer '+shared}});
+   assert.equal(before.status,200);
+   assert.equal((await before.json()).activeDirectMediaClients,1);
+   releaseProvider();
+   const viewer=await viewerPromise;
    assert.equal(viewer.status,200);
-   const reader=viewer.body.getReader();
-   const first=await reader.read();
-   assert.equal(first.done,false);
-   assert.equal(Buffer.from(first.value)[0],0x47);
-   const readHealth=async()=>{
-     const result=await fetch(base+'/internal/relay-health',{headers:{authorization:'Bearer '+shared}});
-     assert.equal(result.status,200);
-     return result.json()
-   };
-   const during=await readHealth();
-   const local=service.relayStats();
-   console.error('DIRECT_RELAY_COUNTER_TEST',JSON.stringify({server:local.activeDirectMediaClients,health:during.activeDirectMediaClients,sourceReaders,bodyUsed:viewer.bodyUsed,contentLength:viewer.headers.get('content-length'),transferEncoding:viewer.headers.get('transfer-encoding'),failureCounts:local.relayFailureCounts}));
-   assert.equal(during.activeDirectMediaClients,1);
-   assert.equal(during.fanout.viewers,0);
-   await reader.cancel();
-   let drained=false;
-   for(let i=0;i<60;i++){
-     const health=await readHealth();
-     if(health.activeDirectMediaClients===0){drained=true;break}
-     await new Promise(r=>setTimeout(r,25));
+   const result=Buffer.from(await viewer.arrayBuffer());
+   assert.deepEqual(result,ts);
+   let cleared=false;
+   for(let i=0;i<40;i++){
+    if(service.relayStats().activeDirectMediaClients===0){cleared=true;break}
+    await new Promise(resolve=>setTimeout(resolve,25))
    }
-   assert.equal(drained,true,'a client close removes the direct relay viewer without waiting for provider cleanup');
- });
+   assert.equal(cleared,true,'a completed media response releases the direct reader count');
+   assert.equal(requests,1);
+  },{fetchImpl});
+ }finally{releaseProvider?.()}
 });
