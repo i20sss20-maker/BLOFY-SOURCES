@@ -1931,3 +1931,45 @@ body.zid-store .v6-modal-foot small{font-size:12px}
  body.zid-store .v6-compare-toggle,
  body.zid-store .v6-compare-announcement{transition:none!important}
 }
+
+
+/* Product discovery help for comparing devices */
+body.zid-store .v6-compare-intro{
+  display:flex;align-items:center;gap:17px;
+  margin:16px 0 26px!important;
+  padding:20px 24px!important;
+  background:linear-gradient(110deg,#f3f0ff,#fff 75%)!important;
+  border:1px solid #e4def4!important;border-radius:18px!important;
+}
+body.zid-store .v6-intro-icon{
+  display:grid;place-items:center;
+  flex:0 0 54px;width:54px;height:54px;
+  border:1px solid #ded5f8;border-radius:16px;
+  background:#e8e1fc;color:#6651b9;
+  font-size:29px;font-weight:900;
+}
+body.zid-store .v6-intro-copy{min-width:0;flex:1}
+body.zid-store .v6-intro-copy strong{
+  display:block;color:#3b325e;font-size:16px;
+  font-weight:900;line-height:1.5;
+}
+body.zid-store .v6-intro-copy small{
+  display:block;margin-top:3px;
+  color:#6f7188;font-size:12px;line-height:1.8;
+}
+body.zid-store .v6-intro-action{
+  min-height:41px;padding:9px 17px;border-radius:11px;
+  background:#fff!important;color:#5d49ad!important;
+  border:1px solid #d8cdef!important;
+  font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap;
+}
+body.zid-store .v6-intro-action:hover{background:#eeeafa!important}
+@media(max-width:750px){
+ body.zid-store .v6-compare-intro{
+   padding:14px!important;gap:11px;flex-wrap:wrap;margin:11px 0 21px!important;
+ }
+ body.zid-store .v6-intro-icon{flex-basis:42px;width:42px;height:42px;font-size:24px}
+ body.zid-store .v6-intro-copy strong{font-size:13px}
+ body.zid-store .v6-intro-copy small{font-size:11px}
+ body.zid-store .v6-intro-action{width:100%;margin-top:4px}
+}
