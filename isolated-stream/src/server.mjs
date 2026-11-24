@@ -204,7 +204,8 @@ export function createStreamServer({
   const distributorDashboard=createDistributorDashboard({bridge:unifiedPortal,log});
   const connectPilotToken=process.env.BLOFY_CONNECT_PILOT_TOKEN||'';
   const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured&&connectPilotToken.length>=32;
-  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,pilotToken:connectPilotToken});
+  const connectPublicEnabled=connectEnabled&&process.env.BLOFY_CONNECT_PUBLIC_BETA==='1';
+  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,publicEnabled:connectPublicEnabled,pilotToken:connectPilotToken});
   const app=http.createServer((req,res)=>{
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
@@ -216,7 +217,7 @@ export function createStreamServer({
       if(!connectPilotAuthorized(req,connectPilotToken)){connectPilotChallenge(res);return;}
       return handleStreamConnect(req,res,{enabled:true,pilot:true});
     }
-    if(handleStreamConnect(req,res,{enabled:false}))return;
+    if(handleStreamConnect(req,res,{enabled:connectPublicEnabled,publicBeta:connectPublicEnabled}))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);

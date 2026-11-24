@@ -13,7 +13,7 @@ const ERRORS=new Set(['connect_host_invalid','connect_input_invalid','connect_ca
 function json(res,status,data){
  res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store, private','x-content-type-options':'nosniff','referrer-policy':'no-referrer'});res.end(JSON.stringify(data));
 }
-export function createConnectIssuer({bridge,enabled=false,pilotToken='',clock=Date.now}={}){
+export function createConnectIssuer({bridge,enabled=false,publicEnabled=false,pilotToken='',clock=Date.now}={}){
  let global={until:0,count:0};const clients=new Map();
  function permit(req){
   const now=clock(),key=String(req.socket?.remoteAddress||'unknown').slice(0,128)+'|'+String(req.headers?.['x-forwarded-for']||'').split(',')[0].trim().slice(0,128);
@@ -27,7 +27,7 @@ export function createConnectIssuer({bridge,enabled=false,pilotToken='',clock=Da
  async function issue(req,res){
   if(req.method!=='POST'||req.url!=='/connect/api/issue'){json(res,405,{ok:false,code:'connect_method_denied'});return}
   if(enabled!==true||!bridge?.configured){json(res,503,{ok:false,code:'connect_disabled'});return}
-  if(!connectPilotAuthorized(req,pilotToken)){json(res,401,{ok:false,code:'connect_pilot_unauthorized'});return}
+  if(!publicEnabled&&!connectPilotAuthorized(req,pilotToken)){json(res,401,{ok:false,code:'connect_pilot_unauthorized'});return}
   const origin=String(req.headers?.origin||'');
   if(!ORIGINS.has(origin)||origin!=='https://'+String(req.headers?.host||'')||
      req.headers?.['x-blofy-connect-action']!=='issue'||
@@ -41,7 +41,7 @@ export function createConnectIssuer({bridge,enabled=false,pilotToken='',clock=Da
    for await(const raw of req){const buf=Buffer.from(raw);size+=buf.length;if(size>4096){json(res,413,{ok:false,code:'connect_payload_too_large'});return}chunks.push(buf)}
    let data;try{data=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{json(res,400,{ok:false,code:'connect_input_invalid'});return}
    if(!data||typeof data.host!=='string'||data.host.length>512||typeof data.username!=='string'||data.username.length<1||data.username.length>256||
-      typeof data.password!=='string'||data.password.length<1||data.password.length>256||data.authorized!==true){json(res,400,{ok:false,code:'connect_input_invalid'});return}
+      typeof data.password!=='string'||data.password.length<1||data.password.length>256||data.authorized!==true||(publicEnabled&&data.compatibleApp!==true)){json(res,400,{ok:false,code:'connect_input_invalid'});return}
    const result=await bridge.connectIssue({host:data.host,username:data.username,password:data.password}),body=result.body||{};
    if(result.status!==201||body.ok!==true){
     const code=ERRORS.has(body.code)?body.code:'connect_pairing_unavailable';
