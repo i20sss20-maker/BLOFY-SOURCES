@@ -2211,8 +2211,9 @@
      l.append(inp);return l
    }
    const grid=make("div","v11-order-fields");
+   const homeAddress=field("الحي أو العنوان (اختياري لاستلام ريدبوكس)","address","text",false);
    grid.append(field("الاسم الكامل","customer_name","text"),field("رقم الجوال","phone","tel"),
-     field("المدينة","city","text"),field("العنوان بالتفصيل","address","text"));
+     field("المدينة","city","text"),homeAddress);
    form.append(grid);
 
    const shipping=make("fieldset","v12-shipping-method");
@@ -2251,6 +2252,10 @@
      const selected=redboxMethod.checked;
      pointPanel.hidden=!selected;
      nameInput.required=selected;
+     const addressInput=homeAddress.querySelector("input");
+     addressInput.required=!selected;
+     homeAddress.querySelector("span").textContent=selected?"الحي أو العنوان (اختياري لاستلام ريدبوكس)":"عنوان التوصيل بالتفصيل";
+     addressInput.placeholder=selected?"اسم الحي أو أقرب معلم إن رغبت":"الحي والشارع ورقم المبنى";
      if(!selected){nameInput.value="";pointLink.value=""}
    };
    redboxMethod.addEventListener("change",syncMethod);
@@ -2442,6 +2447,7 @@
      get("v11-items").hidden=false;
      const form=get("v11-order-form");form.hidden=false;
      form.reset();delete form.dataset.lat;delete form.dataset.lng;
+     form.querySelector('input[name="delivery_method"][value="redbox_pickup"]')?.dispatchEvent(new Event("change"));
    }
    renderBasket();
    if(typeof dialog.showModal==="function"){if(!dialog.open)dialog.showModal()}
