@@ -78,7 +78,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     finally{clearTimeout(timer);}
   }
 
-  const connectIssue=({host,username,password}={})=>call(ROOT+'/connect/issue',{method:'POST',body:{host,username,password}});
+  const connectIssue=({host,username,password,allowHttp,numericCode,shortCode}={})=>call(ROOT+'/connect/issue',{method:'POST',body:{host,username,password,...(allowHttp===true?{allowHttp:true}:{}),...(numericCode===true?{numericCode:true}:{}),...(shortCode===true?{shortCode:true}:{})}});
   const distributorAdmins=()=>call(ROOT+'/distributors');
   function createDistributor(data){
     return call(ROOT+'/distributors',{method:'POST',body:{
