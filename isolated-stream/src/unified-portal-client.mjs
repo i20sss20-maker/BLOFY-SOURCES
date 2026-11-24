@@ -57,7 +57,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     }});
   }
   function distributorAdminAction(id,kind,data={}){
-    if(!UUID.test(id)||!['credits','status','reset','limits','bonus','bonus-policy'].includes(kind))
+    if(!UUID.test(id)||!['credits','status','reset','limits','bonus','bonus-policy','permissions'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_action_denied'}});
     return call(ROOT+'/distributors/'+id+'/'+kind,{method:'POST',body:data});
   }
