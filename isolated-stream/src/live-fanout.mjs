@@ -163,11 +163,14 @@ export function createLiveFanout({
       row.recentBytes-=row.recentChunks.shift().bytes.length;
     }
   }
+  function discardRecent(row){
+    row.recentChunks=[];row.recentBytes=0;
+  }
   function rememberRecent(row,chunk){
     if(lateJoinReplayBytes===0||!chunk.length)return;
     const value=chunk.length>lateJoinReplayBytes
       ?Buffer.from(chunk.subarray(chunk.length-lateJoinReplayBytes))
-      :Buffer.from(chunk);
+      :chunk; // deliver owns this immutable Buffer; do not duplicate every packet.
     const now=clock();
     row.recentChunks.push({at:now,bytes:value});
     row.recentBytes+=value.length;
@@ -424,6 +427,9 @@ export function createLiveFanout({
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
             failedAttempts++;retry=true;reopening=true;
             row.state='reconnecting';
+            // No viewer may replay the retired publisher's cached media.
+            // Release that memory immediately, including during DNS or backoff.
+            discardRecent(row);
             row.reconnects++;
             event(row,'reconnecting',reason);
             counters.upstreamReconnects++;
@@ -620,7 +626,7 @@ export function createLiveFanout({
     counters.viewersAccepted++;
     const onClose=()=>{
       row.viewers.delete(res);
-      if(!row.viewers.size&&!row.idleTimer){
+      if(feeds.get(row.key)===row&&!row.viewers.size&&!row.idleTimer){
         row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
         row.idleTimer.unref?.();
       }
@@ -637,7 +643,12 @@ export function createLiveFanout({
       row.pumpStarted=true;void pump(row);
     }
   }
-  return {handle,stats:()=>({activeFeeds:feeds.size,
+  return {handle,stats:()=>{
+    // Background operator sampling also expires old tails when no new bytes
+    // arrive. This keeps reported cache occupancy honest during stalls.
+    const now=clock();
+    for(const row of feeds.values())pruneRecent(row,now);
+    return {activeFeeds:feeds.size,
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
     // This media instance enforces its licensed channel quota locally.
     // Scaling replicas without a single shared origin / distributed lease
@@ -665,6 +676,6 @@ export function createLiveFanout({
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
-    bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}),
+    bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}},
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
