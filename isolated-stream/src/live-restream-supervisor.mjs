@@ -476,7 +476,7 @@ export function createLiveRestreamSupervisor({
           }catch(error){
             // A provider failure can destroy the response via pipeline before
             // the outer catch runs. Keep its cause, not a false client close.
-            if(!closedByReader)providerReadError=error;
+            if(!closedByReader||error?.code==='restream_provider_stalled')providerReadError=error;
             throw error;
           }
           if(next.done)return;
