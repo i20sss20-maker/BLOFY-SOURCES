@@ -12,7 +12,7 @@ export function createLiveFanout({
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
-  lateJoinReplayBytes=256*1024
+  lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -26,7 +26,8 @@ export function createLiveFanout({
      !Number.isInteger(initialTransientRetries)||initialTransientRetries<0||
        initialTransientRetries>2||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
-       lateJoinReplayBytes>1024*1024)
+       lateJoinReplayBytes>1024*1024||
+     !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
     throw new Error('fanout_capacity_invalid');
   let approvedRedirectOrigin='';
   try{
@@ -122,24 +123,27 @@ export function createLiveFanout({
   // A viewer joining an already running TS feed needs recent transport
   // packets (often PAT/PMT and a nearby keyframe). Keep only a small in-memory
   // tail of the CURRENT upstream session, never disk or a separate source GET.
+  function pruneRecent(row,now){
+    while(row.recentChunks.length&&(row.recentChunks[0].at>now||
+      now-row.recentChunks[0].at>lateJoinReplayAgeMs||
+      row.recentBytes>lateJoinReplayBytes||row.recentChunks.length>256)){
+      row.recentBytes-=row.recentChunks.shift().bytes.length;
+    }
+  }
   function rememberRecent(row,chunk){
-    if(lateJoinReplayBytes===0)return;
+    if(lateJoinReplayBytes===0||!chunk.length)return;
     const value=chunk.length>lateJoinReplayBytes
       ?Buffer.from(chunk.subarray(chunk.length-lateJoinReplayBytes))
       :Buffer.from(chunk);
-    row.recentChunks.push(value);
+    const now=clock();
+    row.recentChunks.push({at:now,bytes:value});
     row.recentBytes+=value.length;
-    while(row.recentBytes>lateJoinReplayBytes&&row.recentChunks.length>1){
-      row.recentBytes-=row.recentChunks.shift().length;
-    }
-    if(row.recentBytes>lateJoinReplayBytes){
-      row.recentChunks=[Buffer.from(value.subarray(value.length-lateJoinReplayBytes))];
-      row.recentBytes=row.recentChunks[0].length;
-    }
+    pruneRecent(row,now);
   }
   function replayRecent(row,viewer){
     if(row.state!=='ready'||viewer.destroyed||viewer.writableEnded)return;
-    for(const chunk of row.recentChunks){
+    pruneRecent(row,clock());
+    for(const {bytes:chunk} of row.recentChunks){
       if(viewer.writableLength+chunk.length>512*1024){
         counters.slowViewerDisconnects++;
         if(!viewer.destroyed)viewer.destroy();
@@ -598,6 +602,7 @@ export function createLiveFanout({
     maxFeeds,maxViewersPerFeed,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
+    lateJoinReplayAgeMs,
     bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}),
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
