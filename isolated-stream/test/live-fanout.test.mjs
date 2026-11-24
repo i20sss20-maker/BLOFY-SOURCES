@@ -916,3 +916,61 @@ test('an idle closed feed cannot open upstream after pending DNS completes',asyn
   return [{address:'8.8.8.8',family:4}];
  },fetchImpl:async()=>{calls++;return new Response(packet)}});
 });
+
+test('a stalled redirect body cannot hang viewers or open a second upstream request',async()=>{
+ let calls=0,release;
+ const gate=new Promise(resolve=>release=resolve);
+ try{
+  await service(async(base,broker)=>{
+   const res=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+   assert.equal(res.status,502);
+   assert.equal((await res.json()).code,'fanout_source_unavailable');
+   assert.equal(calls,1);
+   assert.equal(broker.stats().failureReasons.provider_redirect_denied,1);
+  },{initialTransientRetries:2,fetchImpl:async()=>{
+   calls++;
+   return new Response(new ReadableStream({cancel(){return gate}}),{
+    status:302,headers:{location:'/live/a/b/index.ts'}});
+  }});
+ }finally{release()}
+});
+test('licensed stalled redirect retains source quota until cancellation completes',async()=>{
+ const scope='550e8400-e29b-41d4-a716-446655440000';
+ let release,calls=[];
+ const gate=new Promise(resolve=>release=resolve);
+ const broker=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   calls.push(url.pathname);
+   if(url.pathname.endsWith('/redirect.ts'))return new Response(new ReadableStream({
+    cancel(){return gate}
+   }),{status:302,headers:{location:'/live/a/b/target.ts'}});
+   return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>void broker.handle(req,res,
+  'https://licensed.example/live/a/b'+req.url,{
+   licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const first=await fetch(base+'/redirect.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(first.status,502);await first.text();
+  for(let i=0;i<100&&!broker.stats().pendingSourceHandoffs;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().pendingSourceHandoffs,1);
+  const blocked=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(blocked.status,503);
+  assert.equal((await blocked.json()).code,'fanout_source_handoff_pending');
+  assert.deepEqual(calls,['/live/a/b/redirect.ts']);
+  release();
+  for(let i=0;i<100&&broker.stats().pendingSourceHandoffs;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().pendingSourceHandoffs,0);
+  const next=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(next.status,200);
+  assert.deepEqual(Buffer.from(await next.arrayBuffer()),packet);
+  assert.deepEqual(calls,['/live/a/b/redirect.ts','/live/a/b/next.ts']);
+ }finally{
+  release();broker.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
