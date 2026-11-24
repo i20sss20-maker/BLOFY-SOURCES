@@ -786,3 +786,35 @@ test('a source that resolves to a private address after EOF is never retried',as
    return new Response(packet,{headers:{'content-type':'video/mp2t'}});
   }});
 });
+
+test('late viewers never receive expired bootstrap packets while existing viewers remain connected',async()=>{
+ let now=100000,writer,calls=0;
+ const source=new ReadableStream({start(c){writer=c}});
+ await service(async(base,fanout)=>{
+  const pending=fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  for(let i=0;i<100&&calls===0;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(calls,1);
+  writer.enqueue(new Uint8Array(packet));
+  const first=await pending;
+  const a=first.body.getReader();
+  assert.deepEqual(Buffer.from((await a.read()).value),packet);
+  now+=3001;
+  const joining=fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  for(let i=0;i<100&&fanout.stats().viewers<2;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(fanout.stats().viewers,2);
+  assert.equal(fanout.stats().lateJoinReplays,0);
+  const fresh=Buffer.from(packet);fresh[10]=0x22;
+  writer.enqueue(new Uint8Array(fresh));
+  const second=await joining,b=second.body.getReader();
+  assert.deepEqual(Buffer.from((await b.read()).value),fresh);
+  assert.deepEqual(Buffer.from((await a.read()).value),fresh);
+  assert.equal(calls,1);
+  await Promise.all([a.cancel(),b.cancel()]);
+ },{clock:()=>now,lateJoinReplayAgeMs:3000,fetchImpl:async()=>{
+  calls++;return new Response(source,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('bootstrap freshness settings are bounded',()=>{
+ assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:0}),/fanout_capacity_invalid/);
+ assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:16000}),/fanout_capacity_invalid/);
+});
