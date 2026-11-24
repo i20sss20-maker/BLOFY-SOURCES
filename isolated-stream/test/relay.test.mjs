@@ -21,7 +21,7 @@ async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers
     port:3000,runBootCanary:false});
   server.app.listen(0,'127.0.0.1');await once(server.app,'listening');
   const origin='http://127.0.0.1:'+server.app.address().port;
-  try{await fn(origin)}finally{
+  try{await fn(origin,server)}finally{
     server.app.closeAllConnections();
     await new Promise(resolve=>server.app.close(resolve));
   }
@@ -533,7 +533,7 @@ test('active direct movie relay is tracked while response is open and released o
    },
    cancel(){if(timer)clearInterval(timer);timer=null;sourceReaders=Math.max(0,sourceReaders-1)}
  }),{status:200,headers:{'content-type':'video/mp2t'}});
- await host(async base=>{
+ await host(async (base,service)=>{
    const grant=await issue(base,{kind:'movie',sourceUrl:'https://allowed.example/movie/a/b/1.mp4'});
    assert.equal(grant.status,201);
    const {path}=await grant.json();
@@ -549,6 +549,8 @@ test('active direct movie relay is tracked while response is open and released o
      return result.json()
    };
    const during=await readHealth();
+   const local=service.relayStats();
+   console.error('DIRECT_RELAY_COUNTER_TEST',JSON.stringify({server:local.activeDirectMediaClients,health:during.activeDirectMediaClients,sourceReaders,bodyUsed:viewer.bodyUsed}));
    assert.equal(during.activeDirectMediaClients,1);
    assert.equal(during.fanout.viewers,0);
    await reader.cancel();
