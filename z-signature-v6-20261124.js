@@ -1078,11 +1078,32 @@
     }
     add();
   }
+  function discoveryNote(){
+    if(catalog.length<2 || d.querySelector(".v6-compare-intro"))return;
+    const grid=byId("productlist");
+    if(!grid)return;
+    const box=el("div","v6-compare-intro");
+    const icon=el("span","v6-intro-icon","⇄");
+    icon.setAttribute("aria-hidden","true");
+    const copy=el("div","v6-intro-copy");
+    copy.append(el("strong","","اختيارك صار أسهل مع المقارنة"));
+    copy.append(el("small","","اضغط «قارن» في بطاقات المنتجات، واختر جهازين أو ثلاثة لمقارنة الأسعار والمواصفات والتوفر."));
+    const action=el("button","v6-intro-action","كيف أقارن؟");
+    action.type="button";
+    action.addEventListener("click",()=>{
+      const first=grid.querySelector(".v6-compare-toggle");
+      if(first)first.focus({preventScroll:true});
+      grid.scrollIntoView({behavior:"smooth",block:"center"});
+      announce("اختر المنتجات بزر «قارن»، ثم اضغط «عرض المقارنة».");
+    });
+    box.append(icon,copy,action);
+    grid.insertAdjacentElement("beforebegin",box);
+  }
   function refreshCatalog(list){
     if(!Array.isArray(list))return;
     catalog=list.filter(isGood);
     chosen=chosen.filter(id=>Boolean(getProduct(id)));
-    save();renderTray();bindGrid();bindDetails();
+    save();renderTray();bindGrid();bindDetails();discoveryNote();
   }
   function initialize(){
     if(!d.body.classList.contains("zid-store"))return;
