@@ -34,15 +34,18 @@ export function createMediaHlsCanaryWatch({
  let running=false,timer=null,nextAt=null,lastState=null;
  function snapshot(){
   const now=clock();
+  const freshnessMs=Math.min(MAX_HISTORY_MS,2*intervalMs+40000);
   const engines={};
   for(const role of ROLES){
    const recent=records.get(role).filter(x=>x.at>=now-MAX_HISTORY_MS);
    const last=recent.at(-1)||null;
+   const fresh=!!last&&last.at<=now&&now-last.at<=freshnessMs;
    const pass=recent.filter(x=>x.ok).length;
    const measured=recent.filter(x=>x.ok&&Number.isSafeInteger(x.elapsedMs))
      .map(x=>x.elapsedMs);
    engines[role]={
-    syntheticHlsState:!last?'unknown':last.ok?'verified':'failed',
+    syntheticHlsState:!fresh?'unknown':last.ok?'verified':'failed',
+    fresh,
     samples:recent.length,successfulSamples:pass,
     failedSamples:recent.length-pass,
     successRatePct:recent.length?Math.round(10000*pass/recent.length)/100:null,
@@ -59,6 +62,7 @@ export function createMediaHlsCanaryWatch({
   }
   return {ok:true,enabled:timer!==null,readOnly:true,
    scope:'fixed_private_synthetic_hls_only',intervalMinutes:intervalMs/60000,
+   freshnessLimitMs:freshnessMs,
    providerRequests:0,customerTrafficChanged:false,realSourceVerified:false,
    playbackCodecsDecoded:false,recordingsCreated:false,
    running,checkedAt:Math.max(...ROLES.map(role=>
@@ -72,6 +76,7 @@ export function createMediaHlsCanaryWatch({
   if(running)return snapshot();
   running=true;
   try{
+   const batch=[];
    for(const role of ROLES){
     let result;
     try{
@@ -87,9 +92,15 @@ export function createMediaHlsCanaryWatch({
      elapsedMs:Number.isSafeInteger(result?.elapsedMs)
       ?Math.min(60000,Math.max(0,result.elapsedMs)):null
     };
+    batch.push([role,item]);
+   }
+   // Publish both observations together; never combine a new success with
+   // a previous engine result while the other engine is still being checked.
+   for(const [role,item] of batch){
     const h=records.get(role);h.push(item);
     while(h.length>MAX_SAMPLES||h[0]?.at<clock()-MAX_HISTORY_MS)h.shift();
    }
+   running=false;
    const state=snapshot();
    if(state.readiness!==lastState){
     lastState=state.readiness;
