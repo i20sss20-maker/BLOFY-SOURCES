@@ -1190,3 +1190,56 @@ test('unresolved DNS on every recovery attempt ends the feed within the existing
    },reconnectOnUpstreamEnd:true,maxReconnectAttempts:2,
    fetchImpl:async()=>{calls++;return new Response(packet,{headers:{'content-type':'video/mp2t'}})}});
 });
+
+
+test('background sampling expires bootstrap bytes during a stall without disconnecting viewers',async()=>{
+ let now=100000,writer;
+ const upstream=new ReadableStream({start(c){writer=c}});
+ await service(async(base,fanout)=>{
+   const pending=fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   writer.enqueue(packet);
+   const response=await pending,reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,packet.length);
+   now+=3001;
+   assert.equal(fanout.stats().bufferedBootstrapBytes,0);
+   assert.equal(fanout.stats().viewers,1);
+   const fresh=Buffer.from(packet);fresh[10]=0x65;
+   writer.enqueue(fresh);
+   assert.deepEqual(Buffer.from((await reader.read()).value),fresh);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,fresh.length);
+   await reader.cancel();
+ },{clock:()=>now,lateJoinReplayAgeMs:3000,fetchImpl:async()=>new Response(upstream)});
+});
+
+test('retired bootstrap bytes are released as soon as a reconnect begins',async()=>{
+ let calls=0,writer,continueLookup;
+ const gate=new Promise(resolve=>continueLookup=resolve);
+ let lookups=0;
+ const initial=new ReadableStream({start(c){writer=c}});
+ const fresh=Buffer.from(packet);fresh[10]=0x66;
+ await service(async(base,fanout)=>{
+   const pending=fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   writer.enqueue(packet);
+   const response=await pending,reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,packet.length);
+   writer.close();
+   for(let i=0;i<100&&fanout.stats().upstreamReconnects===0;i++)
+     await new Promise(resolve=>setTimeout(resolve,10));
+   assert.equal(fanout.stats().channels[0].state,'reconnecting');
+   assert.equal(fanout.stats().bufferedBootstrapBytes,0);
+   assert.equal(fanout.stats().viewers,1);
+   continueLookup();
+   assert.deepEqual(Buffer.from((await reader.read()).value),fresh);
+   assert.equal(calls,2);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,fresh.length);
+   await reader.cancel();
+ },{reconnectOnUpstreamEnd:true,lookup:async()=>{
+   if(++lookups===3)await gate;
+   return [{address:'8.8.8.8',family:4}];
+ },fetchImpl:async()=>{
+   if(++calls===1)return new Response(initial);
+   return new Response(new ReadableStream({start(c){c.enqueue(fresh)}}));
+ }});
+});
