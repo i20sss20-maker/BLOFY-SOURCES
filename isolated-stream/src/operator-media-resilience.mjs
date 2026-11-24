@@ -19,7 +19,10 @@ export async function readWithMediaDeadline(reader,controller,{timeoutMs=22000}=
     controller.abort(error);
    },timeoutMs);
   });
-  return await Promise.race([interrupted,Promise.resolve().then(()=>reader.read())]);
+  return await Promise.race([interrupted,Promise.resolve().then(()=>{
+   if(signal?.aborted)throw signal.reason||failure('restream_cancelled');
+   return reader.read();
+  })]);
  }finally{
   clearTimeout(timer);
   signal?.removeEventListener('abort',onAbort);
