@@ -871,3 +871,48 @@ for(const retirement of ['idle expiry','global eviction']){
   }
  });
 }
+
+test('empty first transport chunks are skipped without rejecting later valid TS',async()=>{
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(broker.stats().sourceBytesReceived,packet.length);
+ },{fetchImpl:async()=>new Response(new ReadableStream({
+  start(c){c.enqueue(new Uint8Array(0));c.enqueue(new Uint8Array(packet));c.close()}
+ }),{headers:{'content-type':'video/mp2t'}})});
+});
+test('continuous empty chunks cannot keep an otherwise stalled live source alive',async()=>{
+ let sent=false;
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(broker.stats().failureReasons.fanout_read_idle_timeout,1);
+  assert.equal(broker.stats().sourceBytesReceived,packet.length);
+ },{readIdleTimeoutMs:75,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(c){if(!sent){sent=true;c.enqueue(new Uint8Array(packet));}
+   else c.enqueue(new Uint8Array(0))}
+ }),{headers:{'content-type':'video/mp2t'}})});
+});
+test('an idle closed feed cannot open upstream after pending DNS completes',async()=>{
+ let release,lookups=0,calls=0;
+ const gate=new Promise(resolve=>release=resolve);
+ await service(async(base,broker)=>{
+  const abort=new AbortController();
+  const request=fetch(base+'/live',{signal:abort.signal}).catch(()=>null);
+  try{
+   for(let i=0;i<100&&lookups<2;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(lookups,2);
+   abort.abort();await request;
+   for(let i=0;i<100&&broker.stats().activeFeeds;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(broker.stats().activeFeeds,0);
+   release();
+   await new Promise(r=>setTimeout(r,30));
+   assert.equal(calls,0);
+  }finally{abort.abort();release()}
+ },{idleMs:20,lookup:async()=>{
+  if(++lookups===2)await gate;
+  return [{address:'8.8.8.8',family:4}];
+ },fetchImpl:async()=>{calls++;return new Response(packet)}});
+});
