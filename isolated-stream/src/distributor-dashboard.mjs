@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards','quality']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -168,7 +168,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <span>الأكثر <strong id="stat-top-plan">—</strong></span>
 <span>الحد اليومي <strong id="stat-quota">—</strong></span></div>
 <div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
-<section class="card" id="notification-card"><div class="row"><h2>الإشعارات وحالة الاتصال</h2><button class="btn secondary mini" id="connection-check" type="button">فحص الاتصال</button></div><p id="connection-status" role="status" class="muted">لم يُفحص الاتصال بعد</p><p id="notification-summary" aria-live="polite" class="muted">—</p><button class="btn secondary mini" type="button" id="notification-expiry">عرض الاشتراكات القريبة من الانتهاء</button></section><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
+<section class="card" id="notification-card"><div class="row"><h2>الإشعارات وحالة الاتصال</h2><button class="btn secondary mini" id="connection-check" type="button">فحص الاتصال</button></div><p id="connection-status" role="status" class="muted">لم يُفحص الاتصال بعد</p><p id="notification-summary" aria-live="polite" class="muted">—</p><button class="btn secondary mini" type="button" id="notification-expiry">عرض الاشتراكات القريبة من الانتهاء</button></section><section class="card" id="relay-quality-card"><div class="row"><h2>جودة نقل البث</h2><button class="btn secondary mini" id="relay-quality-refresh" type="button">تحديث القياس</button></div><p class="muted">عينة حقيقية من بوابة نقل المصدر المشترك خلال آخر 60 دقيقة، على نسخة خادم واحدة. لا تمثل جميع الأجهزة أو جودة فك الفيديو على جهاز العميل.</p><div id="relay-quality-result" aria-live="polite" class="details-grid"></div><p id="relay-quality-status" role="status" class="muted">اضغط تحديث القياس لعرض العينة.</p></section><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card" id="issue-card"><h2>استخراج اشتراك</h2>
 
@@ -626,6 +626,18 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   searchTimer=setTimeout(()=>loadItems(false).catch(e=>msg(e.message,false)),260);
  });
  $('issue-status').addEventListener('change',()=>loadItems(false).catch(e=>msg(e.message,false)));
+ $('relay-quality-refresh').addEventListener('click',async()=>{
+  const btn=$('relay-quality-refresh'),box=$('relay-quality-result');btn.disabled=true;
+  text('relay-quality-status','جار قراءة قياسات البث...');
+  try{
+    const r=await request('quality');box.replaceChildren();
+    const ms=v=>v==null?'غير متاح':v+' ms';
+    const fields=[['بدء النقل',r.started],['فشل البدء',r.failed],['انقطاعات النقل',r.interrupted],['استعادة النقل',r.recovered],['انقطاعات المصدر المباشر',r.sourceDrops],['زمن بدء النقل P95',ms(r.p95StartMs)],['زمن الاستعادة P95',ms(r.p95RecoveryGapMs)]];
+    for(const [label,value] of fields){const tile=document.createElement('div'),name=document.createElement('small'),n=document.createElement('strong');name.textContent=label;n.textContent=String(value??'—');tile.append(name,n);box.appendChild(tile);}
+    for(const [key,label] of [['live','البث المباشر'],['movie','الأفلام'],['series','المسلسلات']]){const v=r.byKind?.[key]||{},p=document.createElement('p');p.textContent=label+': بدء '+Number(v.started||0)+' · فشل '+Number(v.failed||0)+' · انقطاع '+Number(v.interrupted||0);box.appendChild(p);}
+    text('relay-quality-status',r.started+r.failed+r.interrupted+r.recovered+r.sourceDrops===0?'لا توجد عينة بث كافية في هذه النسخة؛ لا يمكن تأكيد الجودة.':'عينة آخر ساعة · '+timeLabel(r.checkedAt)+' · ليست اختبار تشغيل على جهاز العميل');
+  }catch(e){box.replaceChildren();text('relay-quality-status','تعذر قراءة القياسات: '+e.message)}finally{btn.disabled=false;}
+ });
  $('notification-expiry').addEventListener('click',()=>$('expiry-alert-open').click());
  $('connection-check').addEventListener('click',async()=>{const btn=$('connection-check'),start=performance.now();btn.disabled=true;text('connection-status','جار فحص اتصال لوحة التوزيع...');try{await request('me');text('connection-status','اتصال اللوحة بالخادم ناجح · '+Math.round(performance.now()-start)+' ms (لا يقيس جودة البث)')}catch(e){text('connection-status','تعذر الاتصال باللوحة: '+e.message)}finally{btn.disabled=false}});
  $('expiry-alert-open').addEventListener('click',()=>{
