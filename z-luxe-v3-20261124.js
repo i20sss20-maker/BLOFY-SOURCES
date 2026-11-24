@@ -53,6 +53,41 @@
       }
       showroom.insertAdjacentElement("afterend",perks);
     }
+
+    /* Mobile quick dock delegates all actions to the existing store controls. */
+    if(!doc.querySelector(".luxe-mobile-dock")) {
+      const dock=node("nav","luxe-mobile-dock");
+      dock.setAttribute("aria-label","الوصول السريع");
+      const products=setLink(dock,"","#products");
+      products.className="luxe-dock-item";
+      products.append(node("span","luxe-dock-symbol","▦"),node("span","","المنتجات"));
+      const actions=[
+        ["favopen","♡","المفضلة","favcount"],
+        ["cartopen","♧","السلة","cartcount"],
+        ["trackopen","☷","طلباتي",null]
+      ];
+      for(const [id,icon,label,countID] of actions) {
+        const target=doc.getElementById(id);
+        if(!target)continue;
+        const b=node("button","luxe-dock-item");
+        b.type="button";
+        b.setAttribute("aria-label","فتح "+label);
+        b.append(node("span","luxe-dock-symbol",icon),node("span","",label));
+        if(countID) {
+          const count=node("span","luxe-dock-count");
+          const existing=doc.getElementById(countID);
+          if(existing) {
+            const refresh=()=>{const val=Number(existing.textContent.replace(/[^0-9]/g,""))||0;count.textContent=val>99?"99+":String(val);count.hidden=val===0;};
+            refresh();
+            new MutationObserver(refresh).observe(existing,{characterData:true,childList:true,subtree:true});
+          } else count.hidden=true;
+          b.append(count);
+        }
+        b.addEventListener("click",()=>target.click());
+        dock.append(b);
+      }
+      doc.body.appendChild(dock);
+    }
     const modal=doc.getElementById("productmodal");
     const details=doc.getElementById("detailbody");
     if(!modal || !details) return;
