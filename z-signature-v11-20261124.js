@@ -2095,6 +2095,7 @@
 (() => {
  "use strict";
  const d=document, KEY="blofysat_manual_basket_v11";
+ let googleMapLoad=null,googleMapInstance=null,googleMarker=null;
  const get=id=>d.getElementById(id);
  const make=(tag,cls,text)=>{const e=d.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=String(text);return e};
  let catalog=[],chosen=new Map(),dialog=null,observer=null,pending=false,merchantPhone="",created=null;
@@ -2216,6 +2217,7 @@
    const place=make("div","v11-map-section");
    place.append(make("h3","","موقع التوصيل على خرائط Google"),
      make("p","","انسخ رابط موقعك من خرائط Google والصقه هنا، أو استخدم تحديد موقعي. لا تحتاج مفتاح Google Maps لهذه الطريقة."));
+   const liveMap=make("div","v11-live-google-map");liveMap.id="v11-live-google-map";liveMap.hidden=true;place.append(liveMap);
    const address=field("رابط الموقع (اختياري)","maps_url","url",false);
    const mapInput=address.querySelector("input");mapInput.placeholder="https://maps.app.goo.gl/...";
    mapInput.maxLength=350;
@@ -2394,6 +2396,48 @@
    renderBasket();
    if(typeof dialog.showModal==="function"){if(!dialog.open)dialog.showModal()}
    else dialog.setAttribute("open","");
+   initGoogleMap().catch(()=>{});
+ }
+
+ async function initGoogleMap(){
+   const host=get("v11-live-google-map"),form=get("v11-order-form");
+   if(!host||!form||googleMapInstance)return;
+   let conf;try{const r=await fetch("/api/config",{credentials:"same-origin"});conf=r.ok?await r.json():{}}catch{return}
+   const key=String(conf.google_maps_browser_key||"");
+   if(!/^AIza[A-Za-z0-9_-]{30,45}$/.test(key))return;
+   try{
+     if(!googleMapLoad){
+       googleMapLoad=new Promise((resolve,reject)=>{
+         if(window.google?.maps?.Map)return resolve();
+         const script=d.createElement("script");
+         script.src="https://maps.googleapis.com/maps/api/js?key="+encodeURIComponent(key)+"&v=weekly";
+         script.async=true;script.defer=true;
+         script.onload=()=>window.google?.maps?.Map?resolve():reject(Error("GoogleMapsNotAvailable"));
+         script.onerror=()=>reject(Error("GoogleMapsBlocked"));
+         d.head.append(script);
+       });
+     }
+     await googleMapLoad;
+     if(!host.isConnected)return;
+     host.hidden=false;
+     const google=window.google;
+     const center={lat:24.7,lng:46.7};
+     googleMapInstance=new google.maps.Map(host,{center,zoom:5,mapTypeControl:false,streetViewControl:false,fullscreenControl:true});
+     const status=form.querySelector(".v11-map-status");
+     const field=form.querySelector('[name="maps_url"]');
+     googleMapInstance.addListener("click",event=>{
+       if(!event.latLng)return;
+       const lat=event.latLng.lat().toFixed(6),lng=event.latLng.lng().toFixed(6);
+       form.dataset.lat=lat;form.dataset.lng=lng;
+       if(field)field.value="https://www.google.com/maps/search/?api=1&query="+lat+"%2C"+lng;
+       const pos={lat:Number(lat),lng:Number(lng)};
+       if(!googleMarker)googleMarker=new google.maps.Marker({map:googleMapInstance,position:pos});
+       else googleMarker.setPosition(pos);
+       if(status)status.textContent="تم اختيار الموقع من الخريطة ✓";
+     });
+   }catch{
+     host.hidden=true;
+   }
  }
  function initCart(){
    const existing=get("checkout");
