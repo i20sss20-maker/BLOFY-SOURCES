@@ -128,7 +128,7 @@ test('client cancellation releases pending read without waiting for provider sta
 });
 test('supervisor preserves read failure evidence before pipeline closes the response',async()=>{
  const s=await readFile(new URL('../src/live-restream-supervisor.mjs',import.meta.url),'utf8');
- assert.match(s,/if\(!closedByReader\)providerReadError=error/);
+ assert.match(s,/if\(!closedByReader\|\|error\?\.code==='restream_provider_stalled'\)providerReadError=error/);
  assert.match(s,/if\(!closedByReader\|\|providerReadError\)/);
  assert.match(s,/classify\(providerReadError\|\|e\)/);
 });
