@@ -465,9 +465,9 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // unresolved even after all viewers leave. Its one-slot admission must
     // never be bypassed by starting a second provider connection. If ONLY
     // an orphaned release remains for >=15s, no active feeds and zero
-    // shared OR direct viewers, let Railway close our real sockets by restarting this
-    // isolated API. Healthy streams are NEVER interrupted by this guard.
-    // Emergency rollback: BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED=1.
+    // shared OR direct viewers, emit a one-time operator alert while keeping
+    // unrelated streams online. Never auto-exit in a restart loop.
+    // Emergency disable: BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED=1.
     const verifyStaleRelease=createIdleFanoutReleaseRecovery({
       minStallMs:15000,minSamples:3
     });
@@ -479,16 +479,23 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
         snapshot.activeDirectMediaClients);
       if(!decision.restart)return;
       console.error('BLOFY_STREAM_LICENSED_SOURCE_RELEASE_RECOVERY',JSON.stringify({
-        code:'orphaned_provider_release_requires_process_socket_close',
+        code:'orphaned_provider_release_quarantined',
         pendingSourceHandoffs:snapshot.fanout.pendingSourceHandoffs,
         activeFeeds:0,viewers:0,activeDirectMediaClients:0,
-        reason:'only_after_15s_with_zero_customers',
+        reason:'source_release_pending_manual_recovery',
         customerConnectionsInterrupted:false,
         providerQuotaBypassed:false
       }));
-      // No privileged force-free: termination actually closes the process
-      // sockets. Railway restarts the stateless control service normally.
-      process.exit(76)
+      // Do NOT repeatedly terminate the entire API on a stuck provider
+      // cancellation. Railway can exhaust the process restart allowance and
+      // leave unrelated LIVE channels and the authenticated control API down.
+      // Keep this licensed source quarantined: pendingSourceReleases continues
+      // to reject overlapping source GETs, so provider capacity is NOT bypassed.
+      // This is an operator-visible incident; source cleanup/restart requires
+      // a separately verified, safely controlled recovery procedure.
+      // A single warning is already emitted above; cease this watchdog once
+      // it has identified the stuck release in this process.
+      clearInterval(releaseGuard);
     },5000);
     releaseGuard.unref?.();
     // Restore safety after app restarts: the prior process held short-lived
