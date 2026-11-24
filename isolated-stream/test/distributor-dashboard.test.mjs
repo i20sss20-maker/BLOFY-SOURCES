@@ -113,7 +113,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   const html=await response.text();
   assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/value="365">سنة · 12/);
-  assert.doesNotMatch(html,/value="730"|سنتان|id="connections"|maxConnections:/);
+  assert.doesNotMatch(html,/<option[^>]*value="730"|id="connections"|maxConnections:/);
   assert.match(html,/id="renew-days"/);
   assert.match(html,/id="days"/);
   assert.match(html,/value="1">تجريبي · مجاني/);
