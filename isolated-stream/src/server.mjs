@@ -8,6 +8,7 @@ import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createDistributorDashboard} from './distributor-dashboard.mjs';
 import {handleStreamConnect} from './stream-connect-page.mjs';
+import {createConnectIssuer} from './stream-connect-issuer.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
@@ -201,12 +202,15 @@ export function createStreamServer({
     }
   });
   const distributorDashboard=createDistributorDashboard({bridge:unifiedPortal,log});
+  const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured;
+  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled});
   const app=http.createServer((req,res)=>{
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
     if(distributorDashboard.handle(req,res))return;
-    if(handleStreamConnect(req,res))return;
+    if(connectIssuer.handle(req,res))return;
+    if(handleStreamConnect(req,res,{enabled:connectEnabled}))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);
