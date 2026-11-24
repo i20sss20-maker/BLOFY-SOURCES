@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -37,7 +37,7 @@ function renderPage(nonce){
  const template=String.raw`<!doctype html><html lang="ar" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0f1420">
-<title>لوحة توزيع</title>
+<title>BLOFY DISTRIBUTION 2.0</title>
 <style>
 :root{--bg:#0f1420;--card:#171e2c;--stroke:#343e51;--white:#f2f5fb;--muted:#a8b4c6;--purple:#c2cbdc;--mint:#68dab0;--red:#ff9aa6}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:radial-gradient(ellipse 1100px 500px at 75% -170px,#14374b 0%,transparent 65%),var(--bg)}
@@ -111,7 +111,18 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 .btn.danger{background:#753448;border-color:#b9697c}
 @media(prefers-reduced-motion:no-preference){.card,.btn{transition:transform .16s ease,filter .16s ease,border-color .16s ease}.card:hover{border-color:#50617d}.btn:active{transform:scale(.985)}}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
-</style></head><body><main>
+/* Distribution 2.0: keep the existing layout, improve hierarchy and focus. */
+ :root{--bg:#0b1020;--card:#141e32;--stroke:#2a3953;--mint:#61e6bf}
+ main{max-width:1280px}.card{border-radius:20px;box-shadow:0 12px 32px #02061728}
+ .btn{background:#315fa9;border-color:#5881bd}.quicknav a{border-radius:12px}
+ .stat{background:var(--card);border-color:var(--stroke)}
+ .reward-card{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-color:#a68c4f;background:var(--card)}
+ .bonus-preview{display:inline-block;padding:8px 12px;border:1px solid #a68c4f;border-radius:10px;color:#e6b951;font-weight:700}.reward-value{font-size:34px;font-weight:800;color:#e6b951;font-variant-numeric:tabular-nums}
+ .dual-btn{border-color:#427e81!important;color:#c2fff0!important;background:#1b4a4e!important}
+ body[data-theme="light"] .dual-btn{color:#155451!important;background:#e0f8f1!important}
+ button:focus-visible,a:focus-visible{outline:2px solid #72bbff;outline-offset:3px}
+ @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+ </style></head><body><main>
 <header><h1 class="page-title">لوحة توزيع</h1>
 <div class="issue-actions"><button class="btn secondary mini" id="theme-toggle" type="button" aria-label="تغيير المظهر">المظهر</button>
 <button class="btn secondary mini" id="logout" type="button" hidden>خروج</button></div></header>
@@ -130,7 +141,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  <a href="#issues-card">اشتراكاتي</a>
  <a href="#library-panel">المكتبة</a>
  <a href="#clients-card">العملاء</a>
- <a href="#activity-card">الرصيد</a>
+ <a href="#reward-card">المحفظة</a><a href="#activity-card">حركة المحفظة</a>
 </nav>
 <div class="card" id="account-card">
  <div class="row"><div><h2>حساب التاجر</h2><p class="muted" style="margin:0">بيانات دخول لوحتك آمنة. كلمة مرور اللوحة القديمة لا يمكن عرضها، ويمكن تغييرها بعد التحقق منها.</p></div>
@@ -148,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
 </div></div>
-<div class="compact-kpis" aria-label="ملخص التوزيع">
+<section class="card reward-card" id="reward-card"><div><h2>محفظة BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. يضاف البونص بعد التفعيل أو التجديد المدفوع. استرده إلى رصيد الاشتراكات من المحفظة.</p></div><div><small>رصيد الاشتراكات</small><div class="reward-value" id="wallet-credits">—</div><small>شهر</small></div><div><small>بونص قيد التفعيل</small><div class="reward-value" id="wallet-pending">—</div></div><div><small>إجمالي البونص المكتسب</small><div class="reward-value" id="reward-earned">—</div></div><div><small>بونص قابل للاسترداد</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استرداد للمحفظة</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
 <span>اليوم <strong id="stat-today">—</strong></span>
 <span>الشهر <strong id="stat-month">—</strong></span>
 <span>التجارب <strong id="stat-trials">—</strong></span>
@@ -163,7 +174,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 <div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
-<form id="issue-form"><div class="formgrid">
+<p class="muted">كود STREAM واحد؛ يمكنك عرض بيانات Xtream لنفس الاشتراك بعد تفعيله.</p><form id="issue-form"><div class="formgrid">
 <div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
 <div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
@@ -171,7 +182,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 </div><div class="row" style="margin-top:17px">
 
-<button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
+<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
@@ -185,7 +196,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
-<div class="card" id="activity-card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
+<div class="card" id="activity-card"><div class="row"><h2>حركة المحفظة</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
 <div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
 <tbody id="activity-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
@@ -198,6 +209,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div id="manage-info" class="details-grid"></div>
 <div class="dialog-buttons" style="justify-content:flex-start;flex-wrap:wrap">
 <button class="btn secondary mini" id="manage-copy" type="button">عرض ونسخ الكود أو بيانات Xtream</button>
+<button class="btn dual-btn mini" id="manage-dual" type="button" hidden>عرض Xtream لنفس الاشتراك</button>
 <button class="btn danger mini" id="manage-rotate" type="button" hidden>تغيير اسم المستخدم وكلمة مرور Xtream</button>
 <button class="btn secondary mini" id="manage-renew" type="button">تجديد</button>
 <button class="btn secondary mini" id="manage-relogin" type="button">إعادة دخول</button>
@@ -220,7 +232,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
 <option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option></select></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="renew-dialog" class="btn secondary">إلغاء</button>
-<button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
+<span id="renew-bonus" class="bonus-preview" aria-live="polite"></span><button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
 <dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
 <form id="customer-form"><div class="formgrid"><div class="field"><label for="edit-customer-name">الاسم</label>
 <input id="edit-customer-name" maxlength="80"></div><div class="field"><label for="edit-customer-phone">الجوال</label>
@@ -275,10 +287,14 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
+ const BONUS={1:0,30:.25,90:.5,180:1,365:2};
+ function bonusPreview(days,renew=false){const n=BONUS[Number(days)]||0;return n?'+'+n+' بونص '+(renew?'بعد التجديد':'بعد التفعيل'):'تجربة مجانية · بدون بونص'}
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
+  text('issue-bonus',bonusPreview($('days').value));
  }
  $('days').addEventListener('change',updateCost);updateCost();
+ $('renew-days').addEventListener('change',()=>text('renew-bonus',bonusPreview($('renew-days').value,true)));
  function text(id,v){$(id).textContent=String(v??"—")}
  function msg(value,ok){let e=$("notice");e.hidden=false;e.textContent=value;e.className="notice "+(ok?"ok":"");}
  async function request(method,data){
@@ -315,7 +331,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
  async function profile(){
   const d=await request('me');
-  setLogged(true);text("credits",d.item.credits);text("used",d.item.used);
+  setLogged(true);text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
   text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
   const credits=Number(d.item.credits)||0;
@@ -415,7 +431,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    return msg('التجديد غير متاح لهذا الاشتراك',false);
   activeIssue=item;
   if($('manage-dialog').open)$('manage-dialog').close();
-  $('renew-days').value='30';
+  $('renew-days').value='30';text('renew-bonus',bonusPreview(30,true));
   text('renew-title',item.days===1&&!item.converted?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
   $('renew-dialog').showModal();
  }
@@ -463,6 +479,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }
   const canEdit=item.status==='done';
   $('manage-copy').hidden=!canEdit;
+   $('manage-dual').hidden=!canEdit||item.type!=='app'||!['active','expiring'].includes(item.subscriptionStatus);
   $('manage-rotate').hidden=!canEdit||item.type!=='xtream';
   $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
   $('manage-relogin').hidden=!item.canRelogin;
@@ -479,7 +496,16 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }catch(e){msg('تعذر نسخ الاشتراك: '+e.message,false)}
   finally{btn.disabled=false}
  });
- $('manage-rotate').addEventListener('click',async()=>{
+ $('manage-dual').addEventListener('click',async()=>{
+    if(!activeIssue||activeIssue.type!=='app')return;
+    const btn=$('manage-dual');btn.disabled=true;
+    try{const result=await request('reveal',{issueId:activeIssue.id,includeXtream:true});
+     if($('manage-dialog').open)$('manage-dialog').close();
+     showIssue(result);msg('نفس الاشتراك والكود، دون خصم جديد أو تغيير الصلاحية.',true);
+    }catch(e){msg('تعذر عرض Xtream. تأكد من تفعيل الكود وصلاحيته.',false)}
+    finally{btn.disabled=false}
+  });
+  $('manage-rotate').addEventListener('click',async()=>{
     if(!activeIssue||activeIssue.type!=='xtream'||activeIssue.status!=='done')return;
     if(!confirm('سيتم إنشاء اسم مستخدم وكلمة مرور Xtream جديدين؛ ستتوقف بيانات الدخول القديمة فورًا. هل توافق على إيقاف الجلسات القديمة وإرسال الجديدة إلى العميل؟'))return;
     const issue=activeIssue,btn=$('manage-rotate');btn.disabled=true;
@@ -522,7 +548,12 @@ body[data-theme="light"] .secret{background:#e1f7eb}
       const result=await request('reveal',{issueId:item.id});
       showIssue(result);
     });
-   if(item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
+   if(item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))
+      rowButton(actions,'عرض Xtream',async()=>{
+       const result=await request('reveal',{issueId:item.id,includeXtream:true});
+       showIssue(result);msg('نفس الاشتراك دون خصم إضافي.',true);
+      });
+    if(item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
    rowButton(actions,'إدارة',()=>showManage(item));
    target.appendChild(row);
   }
@@ -572,6 +603,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    if(item.status==='done')rowButton(td,'عرض/نسخ',async()=>{
     showIssue(await request('reveal',{issueId:item.id}));
    });
+   if(item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))rowButton(td,'عرض Xtream',async()=>{showIssue(await request('reveal',{issueId:item.id,includeXtream:true}));msg('نفس الاشتراك دون خصم إضافي.',true);});
    rowButton(td,'إدارة',()=>showManage(item));
    target.appendChild(tr);
   }
@@ -625,6 +657,20 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
  async function loadAnalytics(){
   const data=await request('analytics');const x=data.stats||{};
+   const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+   const earned=Number(x.rewardPointsEarned||0),available=Number(x.rewardPointsAvailable||0),rate=Number(x.rewardPointsPerCredit||1);
+   text('reward-earned',x.rewardPointsEarned==null?'—':fmt(earned));
+   text('wallet-pending',x.rewardPointsPending==null?'—':fmt(x.rewardPointsPending));
+   text('reward-available',x.rewardPointsAvailable==null?'—':fmt(available));
+   text('reward-spent','مستردة للمحفظة: '+fmt(x.rewardPointsRedeemed||0));
+   const tiers=[{name:'Bronze',at:0},{name:'Silver',at:40},{name:'Gold',at:100},{name:'Platinum',at:200},{name:'Diamond',at:500}];
+   const i=tiers.reduce((n,t,j)=>earned>=t.at?j:n,0),tier=tiers[i],next=tiers[i+1];
+   text('reward-level',tier.name);
+   text('reward-progress',next?'باقي '+fmt(next.at-earned)+' نقطة إلى '+next.name:'أعلى مستوى');
+   $('reward-level-progress').value=next?Math.max(0,Math.min(100,100*(earned-tier.at)/(next.at-tier.at))):100;
+   $('reward-redeem').disabled=x.rewardRedemptionEnabled!==true||available<rate;
+   $('reward-redeem').dataset.rate=String(rate);
+   text('reward-rate',x.rewardRedemptionEnabled===true?fmt(rate)+' نقطة = شهر واحد من الرصيد':'الاستبدال غير مفعّل حاليًا');
   text('stat-today',x.today||0);text('stat-month',x.month||0);
   text('stat-trials',x.trialsTotal||0);text('stat-renewals',x.renewalsMonth||0);
   text('stat-converted',x.convertedTrials||0);
@@ -635,13 +681,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('balance-alert').hidden=credits>3;
   $('balance-alert').textContent=credits===0?'الرصيد انتهى':'الرصيد منخفض: '+credits;
  }
+ $('reward-redeem').addEventListener('click',async()=>{
+   const btn=$('reward-redeem'),rate=Number(btn.dataset.rate);
+   if(btn.disabled||!Number.isFinite(rate)||rate<1)return;
+   if(!confirm('استرداد '+rate+' بونص وإضافة شهر واحد إلى رصيد محفظتك؟'))return;
+   const id=actionId('reward-redemption','one-credit');btn.disabled=true;
+   try{
+     const result=await request('redeem-rewards',{credits:1,requestId:id.id});
+     retryActions.delete(id.key);msg(result.repeated?'تم استرجاع عملية الاستبدال السابقة':'تم استبدال النقاط وإضافة شهر إلى رصيدك.',true);
+     await refreshViews();
+   }catch(e){msg('تعذر الاستبدال: '+e.message,false);await loadAnalytics().catch(()=>{});}
+ });
  function renderActivity(){
   const body=$('activity-rows');body.replaceChildren();
   const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
     refund:'استرجاع',renew:'تجديد',relogin:'إعادة دخول'};
   for(const item of activityRows){
    const tr=document.createElement('tr');
-   tableCell(tr,types[item.type]||item.type);
+   tableCell(tr,item.details?.reason==='reward_redemption'?'استرداد بونص للمحفظة':(types[item.type]||item.type));
    tableCell(tr,(item.delta>0?'+':'')+item.delta);
    tableCell(tr,item.balanceAfter==null?'—':item.balanceAfter);
    tableCell(tr,dateOnly(item.date));
@@ -767,7 +824,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
-   inflightRequest=null;$('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
+   inflightRequest=null;$('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" شهر · "+bonusPreview($('days').value),true);
    await refreshViews();
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
@@ -1013,7 +1070,8 @@ export function createDistributorDashboard({bridge,log=console}={}){
       kind:data.kind,label:'BLOFY STREAM',durationDays:data.durationDays,
       trialPhone:data.trialPhone,
       customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
-     action==='reveal'?{issueId:data.issueId}:
+     action==='redeem-rewards'?{credits:data.credits,requestId:data.requestId}:
+      action==='reveal'?{issueId:data.issueId,includeXtream:data.includeXtream===true}:
      action==='list'?{q:data.q,offset:data.offset,status:data.status}:
      action==='clients'?{q:data.q}:
      action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
