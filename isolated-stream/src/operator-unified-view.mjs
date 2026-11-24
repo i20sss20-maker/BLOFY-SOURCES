@@ -431,7 +431,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <span class="pill">ذروة المشاهدين خلال المراقبة: <strong id="smart-ops-peak-viewers">—</strong></span>
 <span class="pill">اتجاه المصدر (KiB/s): <strong id="smart-ops-ingress">—</strong></span>
 <span class="pill">تنبيهات سجلت أثناء إغلاق اللوحة: <strong id="smart-ops-incidents">—</strong></span>
+<span class="pill">وصول أول بيانات البث P95: <strong id="smart-ops-startup-latency">—</strong></span>
+<span class="pill">استعادة بيانات البث P95: <strong id="smart-ops-recovery-latency">—</strong></span>
 </div>
+<p class="muted">مؤشرات زمن النقل خلال آخر ساعة لمسارات المشاركة فقط؛ لا تقيس زمن ظهور الصورة أو جودة المشاهدة. P95 يعني أن 95٪ من العينات المرصودة تقع عند هذه المدة أو أقل.</p>
 <p id="smart-ops-scope" class="muted">لن نستنتج عدد عملاء التطبيق من بيانات مشاركة البث؛ ولا نغير حدود الاشتراك الأصلية.</p>
 <div class="grid">
 <div><h3>حالة مسارات المشاركة</h3>
@@ -5716,6 +5719,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function loadSmartOps(){
     try{
       var d=await api("smart-ops");
+      if(!d||d.ok!==true)throw new Error("مؤشرات القياس غير متاحة");
+      function latencyText(row){
+        return row&&row.samples>0&&Number.isFinite(row.p95Ms)?
+          count(Math.round(row.p95Ms))+" مللي ثانية ("+count(row.samples)+" عينة)":"لا توجد عينات";
+      }
+      value("smart-ops-startup-latency",latencyText(d.mediaLatency?.admissionToFirstBytes));
+      value("smart-ops-recovery-latency",latencyText(d.mediaLatency?.lastBytesToRecoveredBytes));
       value("smart-ops-status",d.alertCount===0?"لا توجد تنبيهات تشغيل نشطة":"يوجد "+count(d.alertCount)+" تنبيه");
       value("smart-ops-viewers",count(d.capacity?.activeViewers));
       value("smart-ops-feeds",count(d.capacity?.activeFeeds));
@@ -5780,6 +5790,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         ". لا يتم إنشاء طلبات بث إضافية لهذا الفحص.");
     }catch(e){
       value("smart-ops-status","تعذر قراءة مؤشرات الاتصال");
+      value("smart-ops-startup-latency","غير متاح");
+      value("smart-ops-recovery-latency","غير متاح");
       value("smart-ops-last-check","البيانات غير متاحة، ولا يجوز اعتبار جميع القنوات سليمة. "+e.message);
     }
   }
