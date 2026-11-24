@@ -661,6 +661,16 @@
   container.append(footer);
   d.title=item.name+" | BLOFYSAT";
  }
+ const catalogKey="blofysat_products_cache_v5";
+ const cachedProducts=()=>{
+   try{
+     const d=JSON.parse(sessionStorage.getItem(catalogKey)||"{}");
+     return d&&Date.now()-d.at<900000&&Array.isArray(d.list)?d.list:[];
+   }catch{return []}
+ };
+ const cacheProducts=list=>{
+   try{sessionStorage.setItem(catalogKey,JSON.stringify({at:Date.now(),list:list.slice(0,200)}))}catch{}
+ };
  async function page(){
    d.body.classList.add("v5-product-page");
    const root=d.querySelector("body.zid-store .wrap");
@@ -678,11 +688,29 @@
    }
    const dock=d.querySelector(".luxe-mobile-dock");
    if(dock){dock.querySelectorAll('a[href^="#"]').forEach(a=>a.href="/"+a.getAttribute("href"))}
+   const cached=cachedProducts();
+   let usedCache=false;
    try{
-     const response=await fetch("/api/products",{credentials:"same-origin"});
-     if(!response.ok)throw Error("catalog_unavailable");
-     const list=await response.json();
-     if(!Array.isArray(list))throw Error("invalid_catalog");
+     const early=cached.find(p=>Number(p.id)===productId&&p.active!==false);
+     if(early){detailsProduct(early,cached,section);usedCache=true}
+     let list;
+     try{
+       const controller=typeof AbortController!=="undefined"?new AbortController():null;
+       const timeout=controller?setTimeout(()=>controller.abort(),10000):null;
+       let response;
+       try{response=await fetch("/api/products",{credentials:"same-origin",cache:"no-store",...(controller?{signal:controller.signal}:{})})}
+       finally{if(timeout)clearTimeout(timeout)}
+       if(!response.ok)throw Error("catalog_http_"+response.status);
+       list=await response.json();
+       if(!Array.isArray(list))throw Error("invalid_catalog");
+       cacheProducts(list);
+     }catch(networkError){
+       if(!usedCache)throw networkError;
+       const note=make("p","v5-cache-note","تفاصيل المنتج المعروضة محفوظة من زيارتك الأخيرة، وقد تتغير الأسعار والمخزون. التحقق النهائي يتم من المتجر.");
+       section.append(note);
+       console.warn("BLOFYSAT V5 stale cache shown",String(networkError&&networkError.message||networkError));
+       return;
+     }
      const item=list.find(p=>Number(p.id)===productId&&p.active!==false);
      if(!item){
        section.replaceChildren();
@@ -699,9 +727,10 @@
      section.append(make("h1","v5-product-name","تعذر عرض تفاصيل المنتج"));
      section.append(make("p","v5-desc-muted","تحقق من اتصالك ثم حدّث الصفحة، أو ارجع لقائمة المنتجات."));
      const retry=make("button","v5-button-primary","إعادة المحاولة");retry.type="button";
-     retry.addEventListener("click",()=>{retry.remove();page()},{once:true});
+     retry.addEventListener("click",()=>{section.remove();page()},{once:true});
+     const native=make("a","v5-product-back","فتح المنتج من قائمة المتجر");native.href="/?product="+productId+"&from=details";
      const back=make("a","v5-product-back","العودة للمتجر");back.href="/#products";
-     section.append(retry,back);
+     section.append(retry,native,back);
      console.warn("BLOFYSAT V5 detail page error",String(e&&e.message||e));
    }
  }
@@ -732,6 +761,7 @@
      .then(arr=>{
        if(!Array.isArray(arr))return;
        products=arr.filter(x=>x&&x.active!==false&&typeof x.name==="string");
+       cacheProducts(products);
        enhance();
      }).catch(()=>{});
    }catch{}
