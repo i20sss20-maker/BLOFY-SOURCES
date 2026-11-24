@@ -100,6 +100,10 @@ export function createRelayBroker({
     failureCounts[code]=(failureCounts[code]||0)+1;
     return respond(res,502,{ok:false,code,...extra});
   };
+  // Non-shared VOD/TS relay clients are not counted by shared fanout.
+  // Track their response lifecycle so an idle shared-source recovery can
+  // NEVER restart this process during an unrelated customer download.
+  let activeDirectMediaClients=0;
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
@@ -205,6 +209,16 @@ export function createRelayBroker({
         if(res.headersSent||res.destroyed)return;
         return failRelay(res,'relay_provider_unavailable');
       }
+    }
+    let directTracked=req.method==='GET';
+    const releaseDirectViewer=()=>{
+      if(!directTracked)return;
+      directTracked=false;
+      activeDirectMediaClients=Math.max(0,activeDirectMediaClients-1)
+    };
+    if(directTracked){
+      activeDirectMediaClients++;
+      res.once('close',releaseDirectViewer)
     }
     const controller=new AbortController();
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
@@ -317,12 +331,14 @@ export function createRelayBroker({
       if(!res.destroyed)res.destroy();
     }finally{
       req.off('aborted',onAborted);res.off('close',onClose);
+      res.off('close',releaseDirectViewer);
+      releaseDirectViewer();
       controller.abort();
       if(upstream?.body&&!upstream.bodyUsed){try{await upstream.body.cancel()}catch{}}
     }
   }
   return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size,
-    sharedLiveEnabled,fanout:fanout.stats(),
+    sharedLiveEnabled,activeDirectMediaClients,fanout:fanout.stats(),
     security:{grantsIssued:quota.grantsIssued,
       issuerAuthDenied:quota.issuerAuthDenied,
       issuanceThrottled:quota.issuanceThrottled,
