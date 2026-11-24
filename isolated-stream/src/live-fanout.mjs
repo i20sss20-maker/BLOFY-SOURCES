@@ -46,6 +46,23 @@ export function createLiveFanout({
   // an ordinal per source feed (not source URL, account, token or IP).
   let feedSequence=0;
   const recentEvents=[];
+  // Bounded, process-local measurements of transport bytes, NOT decoded video.
+  const mediaLatency={startup:[],recovery:[]};
+  function recordLatency(kind,since){
+    const now=clock(),elapsed=now-since;
+    if(!Number.isFinite(elapsed)||elapsed<0)return;
+    const samples=mediaLatency[kind];
+    samples.push({at:now,ms:elapsed});
+    if(samples.length>64)samples.shift();
+  }
+  function latencySummary(kind){
+    const now=clock();
+    const values=mediaLatency[kind].filter(s=>s.at<=now&&now-s.at<=3600000)
+      .map(s=>s.ms).sort((a,b)=>a-b);
+    const percentile=p=>values.length?values[Math.ceil(values.length*p)-1]:null;
+    return {samples:values.length,p50Ms:percentile(0.5),p95Ms:percentile(0.95),
+      maxMs:values.length?values[values.length-1]:null};
+  }
   function event(row,kind,reason=''){
     const knownKinds=new Set(['connected','reconnecting','recovered','failed','idle']);
     if(!knownKinds.has(kind))return;
@@ -352,6 +369,8 @@ export function createLiveFanout({
               'x-content-type-options':'nosniff'});
           }
           firstMediaAt=lastMediaAt=clock();
+          if(!everDelivered)recordLatency('startup',row.admittedAt);
+          else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
           deliver(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
@@ -570,7 +589,7 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
-        state:'starting',idleTimer:null,startedAt:null,providerRetryAfterMs:0,
+        state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
       feeds.set(key,row);
@@ -609,6 +628,9 @@ export function createLiveFanout({
     quotaScope:'one_media_process',crossReplicaQuotaGuaranteed:false,
     cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
     ...counters,failureReasons:{...failureReasons},
+    mediaLatency:{scope:'shared_ts_transport_only',decodedVideoVerified:false,
+      windowMs:3600000,maxSamplesPerKind:64,
+      admissionToFirstBytes:latencySummary('startup'),lastBytesToRecoveredBytes:latencySummary('recovery')},
     // Up to maxFeeds (64) active sources and only 32 recent incidents:
     // no URLs, credentials, subscriber identifiers or IP addresses.
     channels:[...feeds.values()].map(row=>({
