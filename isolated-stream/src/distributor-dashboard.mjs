@@ -283,7 +283,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
- let visibleSecretTimer=null,bulkJob=null,bulkBusy=false;
+ let visibleSecretTimer=null,bulkJob=null,bulkBusy=false,access={};
+ const allowed=key=>access[key]!==false;
  let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
@@ -292,6 +293,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
   text('issue-bonus',bonusPreview($('days').value));
+  $('issue-button').disabled=bulkBusy||!!bulkJob||!allowed(currentCost()===0?'trialIssue':'paidIssue');
+  $('bulk-issue').hidden=!allowed('paidIssue');
  }
  $('days').addEventListener('change',updateCost);updateCost();
  $('renew-days').addEventListener('change',()=>text('renew-bonus',bonusPreview($('renew-days').value,true)));
@@ -304,6 +307,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   let result;try{result=await response.json()}catch{throw Error('استجابة الخادم غير صالحة')}
   if(!response.ok||result.ok===false){
    const codes={
+    distributor_permission_denied:'هذه العملية غير متاحة حسب صلاحيات الموزع',
     distributor_no_credits:'الرصيد غير كافٍ',
     distributor_issue_daily_limit:'بلغت حد الاستخراج اليومي',
     distributor_trial_daily_limit:'بلغت حد التجارب اليومية',
@@ -331,7 +335,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
  async function profile(){
   const d=await request('me');
-  setLogged(true);for(const day of [30,90,180,365])if(Number.isInteger(d.item.bonusPolicy?.[day]))BONUS[day]=d.item.bonusPolicy[day]/4;
+  setLogged(true);access=d.item.permissions||{};$('export-csv').hidden=!allowed('export');for(const day of [30,90,180,365])if(Number.isInteger(d.item.bonusPolicy?.[day]))BONUS[day]=d.item.bonusPolicy[day]/4;
    text("wallet-bonus-rates","شهر: "+BONUS[30]+" · 3 أشهر: "+BONUS[90]+" · 6 أشهر: "+BONUS[180]+" · سنة: "+BONUS[365]+" نقطة.");updateCost();text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
   text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
@@ -483,11 +487,11 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }
   const canEdit=item.status==='done';
   $('manage-copy').hidden=!canEdit;
-   $('manage-dual').hidden=!canEdit||item.type!=='app'||!['active','expiring'].includes(item.subscriptionStatus);
-  $('manage-rotate').hidden=!canEdit||item.type!=='xtream';
-  $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
-  $('manage-relogin').hidden=!item.canRelogin;
-  $('manage-customer').hidden=false;
+   $('manage-dual').hidden=!allowed('dualAccess')||!canEdit||item.type!=='app'||!['active','expiring'].includes(item.subscriptionStatus);
+  $('manage-rotate').hidden=!allowed('rotate')||!canEdit||item.type!=='xtream';
+  $('manage-renew').hidden=!allowed('renew')||!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
+  $('manage-relogin').hidden=!allowed('relogin')||!item.canRelogin;
+  $('manage-customer').hidden=!allowed('customerEdit');
   text('manage-renew',item.days===1&&!item.converted?'تحويل إلى مدفوع':'تجديد');
   $('manage-dialog').showModal();
  }
@@ -553,12 +557,12 @@ body[data-theme="light"] .secret{background:#e1f7eb}
       const result=await request('reveal',{issueId:item.id});
       showIssue(result);
     });
-   if(item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))
+   if(allowed('dualAccess')&&item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))
       rowButton(actions,'عرض Xtream',async()=>{
        const result=await request('reveal',{issueId:item.id,includeXtream:true});
        showIssue(result);msg('نفس الاشتراك دون خصم إضافي.',true);
       });
-    if(item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
+    if(allowed('relogin')&&item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
    rowButton(actions,'إدارة',()=>showManage(item));
    target.appendChild(row);
   }
@@ -609,7 +613,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    if(item.status==='done')rowButton(td,'عرض/نسخ',async()=>{
     showIssue(await request('reveal',{issueId:item.id}));
    });
-   if(item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))rowButton(td,'عرض Xtream',async()=>{showIssue(await request('reveal',{issueId:item.id,includeXtream:true}));msg('نفس الاشتراك دون خصم إضافي.',true);});
+   if(allowed('dualAccess')&&item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))rowButton(td,'عرض Xtream',async()=>{showIssue(await request('reveal',{issueId:item.id,includeXtream:true}));msg('نفس الاشتراك دون خصم إضافي.',true);});
    rowButton(td,'إدارة',()=>showManage(item));
    target.appendChild(tr);
   }
@@ -676,7 +680,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    text('reward-level',tier.name);
    text('reward-progress',next?'باقي '+fmt(next.at-earned)+' نقطة إلى '+next.name:'أعلى مستوى');
    $('reward-level-progress').value=next?Math.max(0,Math.min(100,100*(earned-tier.at)/(next.at-tier.at))):100;
-   $('reward-redeem').disabled=x.rewardRedemptionEnabled!==true||available<rate;
+   $('reward-redeem').disabled=!allowed('redeem')||x.rewardRedemptionEnabled!==true||available<rate;
    $('reward-redeem').dataset.rate=String(rate);
    text('reward-rate',x.rewardRedemptionEnabled===true?fmt(rate)+' نقطة = شهر واحد من الرصيد':'الاستبدال غير مفعّل حاليًا');
   text('stat-today',x.today||0);text('stat-month',x.month||0);
@@ -848,7 +852,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  });
 
  $('bulk-issue').addEventListener('click',async()=>{
-   if(bulkBusy||inflightRequest)return;
+   if(!allowed('paidIssue')||bulkBusy||inflightRequest)return;
    const btn=$('bulk-issue'),single=$('issue-button');
    if(!bulkJob){
      const days=Number($('days').value),cost=currentCost();
@@ -1040,7 +1044,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
    try{await request('logout')}catch{}
-   inflightRequest=null;bulkJob=null;bulkBusy=false;setLogged(false);
+   inflightRequest=null;bulkJob=null;bulkBusy=false;access={};setLogged(false);
     clearTimeout(visibleSecretTimer);$('issued-result').replaceChildren();
     $('issued-result').hidden=true;
    msg('تم تسجيل الخروج',true);
