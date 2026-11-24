@@ -60,3 +60,20 @@ test('pilot rejects absent or incorrect operator credentials and leaves public p
  assert.equal(handleStreamConnect({url:'/connect/pilot',method:'GET'},res,{enabled:true,pilot:true}),true);
  assert.match(res.body,/اختبار المالك الخاص/);
 });
+
+test('public beta only permits unauthenticated issuance with explicit compatible app consent',async()=>{
+ let calls=0;
+ const bridge={configured:true,connectIssue:async()=>{calls++;return {status:201,body:{ok:true,code:validCode,oneTime:true,providerVerified:false,expiresAt:now+900000}}}};
+ const headers={host,origin:'https://'+host,'content-type':'application/json','x-blofy-connect-action':'issue','sec-fetch-site':'same-origin'};
+ const off=createConnectIssuer({bridge,enabled:true,pilotToken,clock:()=>now});
+ assert.equal((await run(off,{...input,compatibleApp:true},{headers})).status,401);
+ const on=createConnectIssuer({bridge,enabled:true,publicEnabled:true,pilotToken,clock:()=>now});
+ assert.equal((await run(on,input,{headers})).status,400);
+ assert.equal((await run(on,{...input,compatibleApp:true},{headers:{...headers,origin:'https://invalid.example.com'}})).status,403);
+ assert.equal((await run(on,{...input,compatibleApp:true},{headers})).status,201);
+ assert.equal(calls,1);
+ const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
+ assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/14910930584/);
+ assert.doesNotMatch(html,/الخدمة قيد التجهيز/);
+ assert.match(renderStreamConnect('nonce'),/الخدمة قيد التجهيز/);
+});
