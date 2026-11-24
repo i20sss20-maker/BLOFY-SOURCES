@@ -4754,6 +4754,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("إهداء بونص",async function(){
+        var input=prompt("عدد نقاط البونص (0.25 إلى 1000):","2");if(input===null)return;
+        var quarters=Number(input)*4;if(!Number.isSafeInteger(quarters)||quarters<1||quarters>4000){show("أدخل عدد نقاط صحيحًا بمضاعفات ربع نقطة.",false);return;}
+        var reason=prompt("سبب المكافأة:","مكافأة خاصة");if(!reason||!reason.trim())return;
+        if(!confirm("إضافة "+quarters/4+" نقطة بونص إلى "+d.name+"؟"))return;
+        var requestId=crypto.randomUUID();
+        try{await action("distributors/"+d.id+"/bonus","distributor-bonus",{bonusQuarters:quarters,reason,requestId});show("تمت إضافة البونص.",true);await loadDistributors();}
+        catch(e){show("تعذر تأكيد إضافة البونص: "+e.message+"؛ راجع سجل المحفظة قبل التكرار.",false);}
+      },"secondary"));
       actions.appendChild(button("حد الإصدار",async function(){
         var input=prompt("الحد الأقصى لإصدارات الموزّع خلال 24 ساعة (1–10000):",
           String(d.dailyLimit||100));
