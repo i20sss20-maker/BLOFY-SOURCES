@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -159,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
 </div></div>
-<section class="card reward-card" id="reward-card"><div><h2>مكافآت BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. تُحسب بعد التفعيل أو التجديد المدفوع، منفصلة عن رصيد الأشهر.</p></div><div><small>النقاط المكتسبة</small><div class="reward-value" id="reward-earned">—</div></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
+<section class="card reward-card" id="reward-card"><div><h2>مكافآت BLOFY</h2><p class="muted">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة. تُحسب بعد التفعيل أو التجديد المدفوع، منفصلة عن رصيد الأشهر.</p></div><div><small>النقاط المكتسبة</small><div class="reward-value" id="reward-earned">—</div></div><div><small>المتاح للاستبدال</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استبدال النقاط</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
 <span>اليوم <strong id="stat-today">—</strong></span>
 <span>الشهر <strong id="stat-month">—</strong></span>
 <span>التجارب <strong id="stat-trials">—</strong></span>
@@ -172,9 +172,9 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card" id="issue-card"><h2>استخراج اشتراك</h2>
 
-<div class="chips"><button class="chip active" data-kind="app" type="button">كود STREAM + Xtream بعد التفعيل</button>
+<div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
-<form id="issue-form"><div class="formgrid">
+<p class="muted">كود STREAM واحد؛ يمكنك عرض بيانات Xtream لنفس الاشتراك بعد تفعيله.</p><form id="issue-form"><div class="formgrid">
 <div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
 <div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
@@ -620,7 +620,19 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
  async function loadAnalytics(){
   const data=await request('analytics');const x=data.stats||{};
-   text('reward-earned',x.rewardPointsEarned==null?'—':Number(x.rewardPointsEarned).toLocaleString('en-US',{maximumFractionDigits:2}));
+   const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+   const earned=Number(x.rewardPointsEarned||0),available=Number(x.rewardPointsAvailable||0),rate=Number(x.rewardPointsPerCredit||1);
+   text('reward-earned',x.rewardPointsEarned==null?'—':fmt(earned));
+   text('reward-available',x.rewardPointsAvailable==null?'—':fmt(available));
+   text('reward-spent','مستبدلة: '+fmt(x.rewardPointsRedeemed||0));
+   const tiers=[{name:'Bronze',at:0},{name:'Silver',at:40},{name:'Gold',at:100},{name:'Platinum',at:200},{name:'Diamond',at:500}];
+   const i=tiers.reduce((n,t,j)=>earned>=t.at?j:n,0),tier=tiers[i],next=tiers[i+1];
+   text('reward-level',tier.name);
+   text('reward-progress',next?'باقي '+fmt(next.at-earned)+' نقطة إلى '+next.name:'أعلى مستوى');
+   $('reward-level-progress').value=next?Math.max(0,Math.min(100,100*(earned-tier.at)/(next.at-tier.at))):100;
+   $('reward-redeem').disabled=x.rewardRedemptionEnabled!==true||available<rate;
+   $('reward-redeem').dataset.rate=String(rate);
+   text('reward-rate',x.rewardRedemptionEnabled===true?fmt(rate)+' نقطة = شهر واحد من الرصيد':'الاستبدال غير مفعّل حاليًا');
   text('stat-today',x.today||0);text('stat-month',x.month||0);
   text('stat-trials',x.trialsTotal||0);text('stat-renewals',x.renewalsMonth||0);
   text('stat-converted',x.convertedTrials||0);
@@ -631,6 +643,17 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('balance-alert').hidden=credits>3;
   $('balance-alert').textContent=credits===0?'الرصيد انتهى':'الرصيد منخفض: '+credits;
  }
+ $('reward-redeem').addEventListener('click',async()=>{
+   const btn=$('reward-redeem'),rate=Number(btn.dataset.rate);
+   if(btn.disabled||!Number.isFinite(rate)||rate<1)return;
+   if(!confirm('استبدال '+rate+' نقطة مقابل شهر واحد من الرصيد؟'))return;
+   const id=actionId('reward-redemption','one-credit');btn.disabled=true;
+   try{
+     const result=await request('redeem-rewards',{credits:1,requestId:id.id});
+     retryActions.delete(id.key);msg(result.repeated?'تم استرجاع عملية الاستبدال السابقة':'تم استبدال النقاط وإضافة شهر إلى رصيدك.',true);
+     await refreshViews();
+   }catch(e){msg('تعذر الاستبدال: '+e.message,false);await loadAnalytics().catch(()=>{});}
+ });
  function renderActivity(){
   const body=$('activity-rows');body.replaceChildren();
   const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
@@ -1009,7 +1032,8 @@ export function createDistributorDashboard({bridge,log=console}={}){
       kind:data.kind,label:'BLOFY STREAM',durationDays:data.durationDays,
       trialPhone:data.trialPhone,
       customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
-     action==='reveal'?{issueId:data.issueId,includeXtream:data.includeXtream===true}:
+     action==='redeem-rewards'?{credits:data.credits,requestId:data.requestId}:
+      action==='reveal'?{issueId:data.issueId,includeXtream:data.includeXtream===true}:
      action==='list'?{q:data.q,offset:data.offset,status:data.status}:
      action==='clients'?{q:data.q}:
      action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
