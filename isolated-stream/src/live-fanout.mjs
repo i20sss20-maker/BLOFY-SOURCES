@@ -220,7 +220,17 @@ export function createLiveFanout({
       },limitMs);
       timer.unref?.();
     });
-    return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
+    // Zero-byte chunks are not media progress and must not extend the idle
+    // budget. Yield on empty chunks so a broken upstream cannot starve timers.
+    async function readMedia(){
+      for(;;){
+        attemptController.signal.throwIfAborted();
+        const part=await reader.read();
+        if(part.done||part.value?.length)return part;
+        await new Promise(resolve=>setImmediate(resolve));
+      }
+    }
+    return Promise.race([readMedia(),timeout]).finally(()=>clearTimeout(timer));
   }
   async function releaseUpstream(reader,response){
     // Abort is always issued before this call. A stuck provider may delay
@@ -256,9 +266,11 @@ export function createLiveFanout({
           // Provider-issued TS redirects are validated at every hop; no
           // arbitrary origin hops and no source credential headers.
           let target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
+          attemptController.signal.throwIfAborted();
           const originalOrigin=target.origin;
           let crossOriginHops=0,redirectCount=0;
           while(true){
+            attemptController.signal.throwIfAborted();
             const headerTimer=setTimeout(()=>attemptController.abort(),firstByteTimeoutMs);
             headerTimer.unref?.();
             try{
@@ -266,6 +278,7 @@ export function createLiveFanout({
                 headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
                   'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
             }finally{clearTimeout(headerTimer)}
+            attemptController.signal.throwIfAborted();
             if(![301,302,303,307,308].includes(response.status))break;
             const location=response.headers.get('location');
             if(!location||redirectCount>=3)throw Error('provider_redirect_denied');
