@@ -4754,6 +4754,17 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("نسب البونص",async function(){
+        var labels={30:"شهر",90:"3 أشهر",180:"6 أشهر",365:"سنة"},defaults={30:1,90:2,180:4,365:8},rates={};
+        for(var day of [30,90,180,365]){
+          var input=prompt("بونص "+labels[day]+" بالنقاط (0 إلى 10، بمضاعفات 0.25):",String((d.bonusPolicy?.[day]??defaults[day])/4));
+          if(input===null)return;if(!input.trim()){show("أدخل قيمة البونص.",false);return;}
+          var n=Number(input)*4;if(!Number.isSafeInteger(n)||n<0||n>40){show("قيمة البونص غير صالحة.",false);return;}rates[day]=n;
+        }
+        if(!confirm("اعتماد النسب الجديدة للموزع "+d.name+" للعمليات المستقبلية فقط؟ لن تتغير المكافآت السابقة."))return;
+        try{await action("distributors/"+d.id+"/bonus-policy","distributor-bonus-policy",{bonusRates:rates});show("تم تحديث نسب البونص.",true);await loadDistributors();}
+        catch(e){show("تعذر تحديث النسب: "+e.message,false);}
+      },"secondary"));
       actions.appendChild(button("إهداء بونص",async function(){
         var input=prompt("عدد نقاط البونص (0.25 إلى 1000):","2");if(input===null)return;
         var quarters=Number(input)*4;if(!Number.isSafeInteger(quarters)||quarters<1||quarters>4000){show("أدخل عدد نقاط صحيحًا بمضاعفات ربع نقطة.",false);return;}
