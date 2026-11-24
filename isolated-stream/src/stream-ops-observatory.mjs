@@ -196,3 +196,42 @@ export function createStreamOpsObservatory({
   }
   return {snapshot,start,stop,sample};
 }
+
+
+// Process-local counters only. Do not treat stale or failed telemetry as
+// evidence of zero incidents. A delta crossing the rolling boundary or a
+// sampling gap is not attributable to the measured window.
+export function summarizeMediaHour(snap,now=Date.now()){
+  const windowStart=now-3600000,maxGap=45000;
+  const trend=(Array.isArray(snap?.trend)?snap.trend:[]).slice(-480)
+    .filter(p=>Number.isSafeInteger(p?.at)&&p.at>=windowStart&&p.at<=now);
+  const latest=trend[trend.length-1];
+  const fresh=snap?.ok===true&&Number.isSafeInteger(snap.checkedAt)&&
+    snap.checkedAt<=now&&now-snap.checkedAt<=maxGap&&
+    latest?.at===snap.checkedAt;
+  let coveredMs=0,measuredIntervals=0,lastEnd=windowStart;
+  const totals={totalProviderFailures:0,totalReconnects:0,totalCapacityRejections:0};
+  for(const p of trend){
+    const interval=p.intervalMs;
+    if(!Number.isSafeInteger(interval)||interval<=0||interval>maxGap||
+       p.at-interval<lastEnd||
+       ![p.providerErrors,p.reconnects,p.capacityRejections].every(n=>Number.isSafeInteger(n)&&n>=0))
+      continue;
+    lastEnd=p.at;coveredMs+=interval;measuredIntervals++;
+    totals.totalProviderFailures+=p.providerErrors;
+    totals.totalReconnects+=p.reconnects;
+    totals.totalCapacityRejections+=p.capacityRejections;
+  }
+  const measured=fresh&&measuredIntervals>0&&Object.values(totals).every(Number.isSafeInteger);
+  return {ok:fresh,readOnly:true,mediaCopied:false,customerTrafficChanged:false,
+    isAllSubscribersMeasured:false,type:'rolling_media_observability_1h',
+    evidenceState:!fresh?'unavailable':measured?'measured_intervals_only':'baseline_only',
+    ...(!fresh?{code:'media_hour_metrics_unavailable'}:{}),
+    samples:trend.length,measuredIntervals:fresh?measuredIntervals:0,
+    observedWindowMinutes:measured?Math.round(coveredMs/60000*100)/100:0,
+    totalProviderFailures:measured?totals.totalProviderFailures:null,
+    totalReconnects:measured?totals.totalReconnects:null,
+    totalCapacityRejections:measured?totals.totalCapacityRejections:null,
+    lastCriticalCount:fresh&&Number.isSafeInteger(snap.criticalCount)&&snap.criticalCount>=0?snap.criticalCount:null,
+    checkedAt:new Date(now).toISOString()};
+}

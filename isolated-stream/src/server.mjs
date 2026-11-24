@@ -16,7 +16,7 @@ import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
-import {createStreamOpsObservatory} from './stream-ops-observatory.mjs';
+import {createStreamOpsObservatory,summarizeMediaHour} from './stream-ops-observatory.mjs';
 import {createMediaEngineRedundancyWatch} from './media-engine-redundancy-watch.mjs';
 import {createMediaHlsCanaryWatch} from './media-hls-canary-watch.mjs';
 import {createMediaHourBufferInspector} from './media-hour-buffer-inspector.mjs';
@@ -242,20 +242,8 @@ export function createStreamServer({
     if(url.pathname==='/internal/media-hour-report'&&req.method==='GET'){
       if(!authorized(req.headers.authorization,adminToken))
         return safeResponse(res,401,{ok:false,code:'not_authorized'});
-      const snap=streamOps.snapshot();
-      const trend=Array.isArray(snap.trend)?snap.trend.slice(-240):[];
-      const first=trend[0]?.at,last=trend[trend.length-1]?.at;
-      const observedWindowMinutes=Number.isFinite(first)&&Number.isFinite(last)
-        ?Math.max(0,Math.round((last-first)/60000)):0;
-      return safeResponse(res,200,{ok:true,readOnly:true,mediaCopied:false,
-        customerTrafficChanged:false,isAllSubscribersMeasured:false,
-        type:'rolling_media_observability_1h',samples:trend.length,
-        observedWindowMinutes,
-        totalProviderFailures:trend.reduce((n,x)=>n+(x.providerErrors||0),0),
-        totalReconnects:trend.reduce((n,x)=>n+(x.reconnects||0),0),
-        totalCapacityRejections:trend.reduce((n,x)=>n+(x.capacityRejections||0),0),
-        lastCriticalCount:snap.criticalCount??null,
-        checkedAt:new Date().toISOString()});
+      const report=summarizeMediaHour(streamOps.snapshot());
+      return safeResponse(res,report.ok?200:503,report);
     }
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
