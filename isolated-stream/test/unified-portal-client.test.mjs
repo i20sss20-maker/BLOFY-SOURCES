@@ -227,3 +227,39 @@ test('owner permission and report routes are fixed and never exposed through dis
  for(const kind of ['permissions','report']){assert.equal((await client.distributorAdminAction(id,kind,{})).status,200);assert.equal(seen.at(-1),'/internal/blofy-stream/distributors/'+id+'/'+kind);assert.equal((await client.distributorRequest(kind,{})).status,400)}
  assert.equal(seen.length,2);
 });
+
+test('identical concurrent owner catalog reads share one upstream call, without stale cache',async()=>{
+ let calls=0,release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>{
+  calls++;await gate;
+  return new Response(JSON.stringify({ok:true,items:[{id:1}]}),{status:200});
+ }});
+ const a=client.catalog({type:'movie',q:'same'});
+ const b=client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,1);
+ release();
+ const [x,y]=await Promise.all([a,b]);
+ assert.deepEqual(x,y);
+ x.body.items[0].id=99;
+ assert.equal(y.body.items[0].id,1);
+ await client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,2,'completed results must not be cached');
+});
+test('catalog coalescing separates query scope and retries after failures',async()=>{
+ const calls=[];
+ let release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url)=>{
+  calls.push(String(url));await gate;
+  return new Response(JSON.stringify({ok:false}),{status:503});
+ }});
+ const requests=[client.catalog({type:'live',offset:0}),client.catalog({type:'live',offset:20}),
+  client.catalog({type:'movie',offset:0}),client.catalog({type:'live',offset:0})];
+ assert.equal(calls.length,3);
+ release();
+ const results=await Promise.all(requests);
+ assert.ok(results.every(r=>r.status===503));
+ await client.catalog({type:'live',offset:0});
+ assert.equal(calls.length,4);
+});
