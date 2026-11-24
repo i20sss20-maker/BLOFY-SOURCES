@@ -70,7 +70,7 @@ export function createLiveFanout({
   const allowedReasons=new Set(['provider_denied','provider_not_media',
     'provider_not_ts','provider_unavailable','fanout_upstream_ended',
     'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
-    'provider_redirect_denied']);
+    'provider_redirect_denied','relay_bad_origin']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   function admittedRetryAfterMs(header){
     // RFC 9110 Retry-After is delta seconds or an HTTP-date. Provider
@@ -195,8 +195,9 @@ export function createLiveFanout({
     let timer;
     const timeout=new Promise((_,reject)=>{
       timer=setTimeout(()=>{
-        attemptController.abort();
-        reject(new Error('fanout_read_idle_timeout'));
+        const error=new Error('fanout_read_idle_timeout');
+        reject(error);
+        attemptController.abort(error);
       },limitMs);
       timer.unref?.();
     });
@@ -228,7 +229,7 @@ export function createLiveFanout({
     const pendingReleases=[];
     try{
       while(!row.controller.signal.aborted&&row.viewers.size){
-        let reader=null,response=null,retry=false,connectedAt=clock();
+        let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
         const attemptController=new AbortController();
         const stopAttempt=()=>attemptController.abort();
         row.controller.signal.addEventListener('abort',stopAttempt,{once:true});
@@ -307,6 +308,7 @@ export function createLiveFanout({
               'referrer-policy':'no-referrer','x-frame-options':'DENY',
               'x-content-type-options':'nosniff'});
           }
+          firstMediaAt=lastMediaAt=clock();
           deliver(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
@@ -315,8 +317,11 @@ export function createLiveFanout({
               if(row.viewers.size)throw Error('fanout_upstream_ended');
               break;
             }
-            if(part.value?.length)deliver(row,Buffer.from(part.value));
-            if(clock()-connectedAt>=8000)cooldowns.delete(row.key);
+            if(part.value?.length){
+              lastMediaAt=clock();
+              deliver(row,Buffer.from(part.value));
+              if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+            }
           }
           if(!row.viewers.size||row.controller.signal.aborted)break;
         }catch(error){
@@ -324,19 +329,18 @@ export function createLiveFanout({
           const message=String(error?.message||'');
           const reason=allowedReasons.has(message)?message:'other_transport';
           failureReasons[reason]=(failureReasons[reason]||0)+1;
-          const forbidden=['provider_denied','provider_not_media','provider_not_ts',
-            'provider_redirect_denied'];
+          const transient=['provider_unavailable','other_transport','fanout_read_idle_timeout'];
           // A transient initial upstream 5xx or transport reset may succeed
           // on ONE bounded sequential retry. Never retry source access denial,
           // malformed media, private addresses or redirect violations.
           const transientInitial=!everDelivered&&
-            ['provider_unavailable','other_transport','fanout_read_idle_timeout']
-              .includes(reason)&&initialFailures<initialTransientRetries;
+            transient.includes(reason)&&initialFailures<initialTransientRetries;
           const canReconnect=reconnectOnUpstreamEnd===true&&
-            everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
-          // A healthy 8s+ upstream session resets short-failure budget;
-          // a series of fast failures stops after three attempts.
-          if(clock()-connectedAt>=8000)failedAttempts=0;
+            everDelivered&&maxReconnectAttempts>0&&
+            (transient.includes(reason)||reason==='fanout_upstream_ended');
+          // Only a sustained interval of delivered media resets the retry budget.
+          // Connection setup time and idle stalls are not healthy playback.
+          if(firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000)failedAttempts=0;
           if(transientInitial){
             initialFailures++;retry=true;counters.initialRetries++;
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
