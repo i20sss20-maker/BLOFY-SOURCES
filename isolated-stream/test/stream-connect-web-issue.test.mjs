@@ -73,7 +73,7 @@ test('public beta only permits unauthenticated issuance with explicit compatible
  assert.equal((await run(on,{...input,compatibleApp:true},{headers})).status,201);
  assert.equal(calls,1);
  const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
- assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/14942640054/);
+ assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/طريقة الربط والتوافق/);assert.match(html,/56\.0\.5/);assert.match(html,/التنزيل العام للنسخة المتوافقة غير متاح حاليًا/);assert.doesNotMatch(html,/github\.com|14942640054/);
  assert.doesNotMatch(html,/الخدمة قيد التجهيز/);
  assert.match(renderStreamConnect('nonce'),/الخدمة قيد التجهيز/);
 });
