@@ -5,11 +5,16 @@ on:
       - 'isolated-stream/scripts/connect-live-smoke.mjs'
       - '.github/workflows/connect-live-smoke.yml'
   workflow_dispatch:
+    inputs:
+      numeric:
+        description: 'Check public numeric HTTP and HTTPS issuance after rollout'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   synthetic-pairing:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/connect-live-smoke-20261124'
+    if: github.event_name == 'workflow_dispatch' || (github.head_ref == 'feature/connect-live-smoke-20261124' || github.head_ref == 'qa/connect-rollout-smoke-20261124')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -18,3 +23,5 @@ jobs:
         with:
           node-version: '22'
       - run: node isolated-stream/scripts/connect-live-smoke.mjs
+        env:
+          CONNECT_SMOKE_V2: ${{ github.event_name == 'workflow_dispatch' && inputs.numeric && 'true' || 'false' }}
