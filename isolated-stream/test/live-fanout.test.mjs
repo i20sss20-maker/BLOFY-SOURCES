@@ -1068,3 +1068,79 @@ test('retired feed waiting for first bytes releases source without waiting for f
    {headers:{'content-type':'video/mp2t'}});
  }});
 });
+
+test('250 synthetic viewers keep healthy source running during isolated licensed source recovery',{timeout:20000},async()=>{
+ const scopes={a:'550e8400-e29b-41d4-a716-446655440000',b:'550e8400-e29b-41d4-a716-446655440001'};
+ const calls={a:0,b:0},writers={};
+ const media=mark=>{const bytes=Buffer.alloc(188*3,mark);for(let i=0;i<bytes.length;i+=188)bytes[i]=0x47;return bytes};
+ const aFirst=media(0x21),aRecovered=media(0x42),bFirst=media(0x31),bDuring=media(0x32),bAfter=media(0x33);
+ let releaseRecovery;
+ const recoveryGate=new Promise(resolve=>releaseRecovery=resolve);
+ const fanout=createLiveFanout({maxFeeds:4,maxViewersPerFeed:128,
+  reconnectOnUpstreamEnd:true,lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   const key=url.pathname.endsWith('/b.ts')?'b':'a';
+   calls[key]++;
+   if(key==='a'&&calls.a===2)await recoveryGate;
+   return new Response(new ReadableStream({start(c){writers[key]=c}}),
+    {headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>{
+  const key=req.url==='/b'?'b':'a';
+  void fanout.handle(req,res,'https://licensed.example/live/account/'+(req.url==='/other-a'?'other-a':key)+'.ts',
+   {licensedSourceId:scopes[key],providerMaxConcurrentFeeds:1});
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ const abort=new AbortController();
+ const deadline=setTimeout(()=>abort.abort(),15000);
+ const request=path=>fetch(base+path,{signal:abort.signal});
+ async function until(fn){
+  for(let i=0;i<450&&!fn();i++)await new Promise(r=>setTimeout(r,10));
+  assert.ok(fn(),'expected bounded load-test state');
+ }
+ async function receive(readers,expected){
+  const chunks=await Promise.all(readers.map(reader=>reader.read()));
+  for(const x of chunks){assert.equal(x.done,false);assert.deepEqual(Buffer.from(x.value),expected)}
+ }
+ try{
+  const pendingA=Array.from({length:125},()=>request('/a'));
+  const pendingB=Array.from({length:125},()=>request('/b'));
+  // Handle rejections even if a state assertion fails before awaiting responses.
+  const joined=Promise.all([...pendingA,...pendingB]);void joined.catch(()=>{});
+  await until(()=>fanout.stats().viewers===250&&writers.a&&writers.b);
+  writers.a.enqueue(new Uint8Array(aFirst));writers.b.enqueue(new Uint8Array(bFirst));
+  const responses=await joined;assert.ok(responses.every(r=>r.status===200));
+  const readers=responses.map(r=>r.body.getReader()),a=readers.slice(0,125),b=readers.slice(125);
+  await Promise.all([receive(a,aFirst),receive(b,bFirst)]);
+  assert.deepEqual(calls,{a:1,b:1});
+  const retired=writers.a;retired.close();
+  await until(()=>calls.a===2);
+  // Keep A blocked while proving B's original viewers receive fresh bytes.
+  writers.b.enqueue(new Uint8Array(bDuring));await receive(b,bDuring);
+  const refused=await request('/other-a');
+  assert.equal(refused.status,503);
+  assert.equal((await refused.json()).code,'fanout_source_channel_limit');
+  assert.deepEqual(calls,{a:2,b:1});
+  const newA=Promise.all(Array.from({length:3},()=>request('/a')));void newA.catch(()=>{});
+  await until(()=>fanout.stats().viewers===253);
+  const full=await request('/a');
+  assert.equal(full.status,503);assert.equal(await full.text(),'fanout_viewer_limit');
+  releaseRecovery();await until(()=>writers.a!==retired);
+  writers.a.enqueue(new Uint8Array(aRecovered));
+  writers.b.enqueue(new Uint8Array(bAfter));
+  const late=await newA;assert.ok(late.every(r=>r.status===200));
+  const lateReaders=late.map(r=>r.body.getReader());
+  await Promise.all([receive([...a,...lateReaders],aRecovered),receive(b,bAfter)]);
+  const stats=fanout.stats();
+  assert.equal(stats.viewers,253);assert.equal(stats.activeFeeds,2);
+  assert.equal(stats.reconnectRecovered,1);assert.equal(stats.upstreamSessionsOpened,3);
+  assert.equal(stats.sourceLimitRejections,1);assert.equal(stats.capacityRejections,1);
+  assert.equal(stats.slowViewerDisconnects,0);
+  assert.deepEqual(calls,{a:2,b:1});
+  await Promise.all([...readers,...lateReaders].map(r=>r.cancel().catch(()=>{})));
+ }finally{
+  clearTimeout(deadline);abort.abort();releaseRecovery();fanout.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
