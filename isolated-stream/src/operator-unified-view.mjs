@@ -4754,6 +4754,15 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("الصلاحيات",async function(){
+        var labels={paidIssue:"إصدار مدفوع",trialIssue:"إصدار تجريبي",renew:"التجديد",redeem:"استرداد البونص",export:"التصدير",customerEdit:"تعديل العملاء",relogin:"إعادة الدخول",rotate:"تغيير بيانات Xtream",libraryEdit:"تنظيم المكتبة",dualAccess:"عرض Xtream لنفس الكود"};
+        var dialog=document.createElement("dialog"),form=document.createElement("form");form.method="dialog";
+        var heading=node("h2","صلاحيات "+d.name);form.appendChild(heading);
+        var fields={};for(var key of Object.keys(labels)){var label=document.createElement("label"),input=document.createElement("input");input.type="checkbox";input.checked=d.permissions?.[key]!==false;fields[key]=input;label.append(input,document.createTextNode(" "+labels[key]));var row=document.createElement("p");row.appendChild(label);form.appendChild(row);}
+        var save=node("button","حفظ الصلاحيات"),cancel=node("button","إلغاء");save.type="submit";save.value="save";cancel.type="submit";cancel.value="cancel";form.append(save,cancel);dialog.appendChild(form);document.body.appendChild(dialog);
+        dialog.addEventListener("close",async function(){var result=dialog.returnValue;dialog.remove();if(result!=="save")return;var settings=Object.fromEntries(Object.entries(fields).map(function(pair){return [pair[0],pair[1].checked]}));try{await action("distributors/"+d.id+"/permissions","distributor-permissions",{permissionSettings:settings});show("تم تحديث الصلاحيات دون تغيير الرصيد.",true);await loadDistributors();}catch(e){show("تعذر تحديث الصلاحيات: "+e.message,false);}});
+        dialog.showModal();
+      },"secondary"));
       actions.appendChild(button("نسب البونص",async function(){
         var labels={30:"شهر",90:"3 أشهر",180:"6 أشهر",365:"سنة"},defaults={30:1,90:2,180:4,365:8},rates={};
         for(var day of [30,90,180,365]){
