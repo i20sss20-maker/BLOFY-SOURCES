@@ -19,9 +19,9 @@ export function renderStreamConnect(nonce,{enabled=false}={}){
  if(!enabled)return page.replaceAll('__NONCE__',escapeHtml(nonce));
  return enablePairingPage(page).replaceAll('__NONCE__',escapeHtml(nonce));
 }
-export function handleStreamConnect(req,res,{enabled=false}={}){
+export function handleStreamConnect(req,res,{enabled=false,pilot=false}={}){
  const path=(req.url||'/').split('?')[0];
- if(path!=='/connect'&&path!=='/connect/')return false;
+ if(path!=='/connect'&&path!=='/connect/'&&!(pilot&&path==='/connect/pilot'))return false;
  if(req.method!=='GET'&&req.method!=='HEAD'){
   res.writeHead(405,{'allow':'GET, HEAD','cache-control':'no-store'});res.end();return true;
  }
@@ -32,7 +32,7 @@ export function handleStreamConnect(req,res,{enabled=false}={}){
 
 function enablePairingPage(page){
  return page
- .replace('قيد التجهيز</span></header>','الربط التجريبي</span></header>')
+ .replace('قيد التجهيز</span></header>','اختبار المالك الخاص</span></header>')
  .replace('<strong>الخدمة قيد التجهيز</strong><br>إصدار الأكواد معطّل إلى حين اكتمال الربط الآمن مع التطبيق. لا تدخل بيانات اشتراكك الحقيقية الآن.','<strong>استخدم إصدار التطبيق المتوافق مع CONNECT فقط.</strong><br>كود الربط يُستخدم مرة واحدة خلال 15 دقيقة. التحقق من صلاحية الاشتراك يتم داخل التطبيق.')
  .replace('<div class="field"><label for="host">','<form id="connect-form" autocomplete="off"><div class="field"><label for="host">')
  .replace('placeholder="https://example.com:8080" disabled autocomplete="off"','placeholder="https://example.com:8080" required maxlength="512" autocomplete="off"')
