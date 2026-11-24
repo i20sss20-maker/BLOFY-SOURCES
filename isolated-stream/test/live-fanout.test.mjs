@@ -1013,3 +1013,58 @@ test('failed source attempts do not generate misleading successful live latency'
   assert.equal(evidence.lastBytesToRecoveredBytes.samples,0);
  },{fetchImpl:async()=>new Response(null,{status:503})});
 });
+
+test('licensed channel handoff cancels blocked reader promptly instead of waiting for idle timeout',async()=>{
+ const scope='550e8400-e29b-41d4-a716-446655440000';
+ const calls=[];let cancelled=false;
+ const broker=createLiveFanout({idleMs:5000,readIdleTimeoutMs:15000,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   calls.push(url.pathname);
+   return new Response(new ReadableStream({
+    start(c){c.enqueue(new Uint8Array(packet))},
+    cancel(){if(url.pathname.endsWith('/old.ts'))cancelled=true}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>void broker.handle(req,res,
+  'https://licensed.example/live/a/b'+req.url,{
+   licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const a=await fetch(base+'/old.ts',{signal:AbortSignal.timeout(4000)});
+  const reader=a.body.getReader();await reader.read();await reader.cancel();
+  for(let i=0;i<100&&broker.stats().viewers;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().viewers,0);
+  const b=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(b.status,200);
+  assert.equal(cancelled,true);
+  assert.deepEqual(calls,['/live/a/b/old.ts','/live/a/b/next.ts']);
+  const next=b.body.getReader();
+  assert.deepEqual(Buffer.from((await next.read()).value),packet);
+  await next.cancel();
+ }finally{
+  broker.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
+test('retired feed waiting for first bytes releases source without waiting for first-byte timeout',async()=>{
+ let opened=false,cancelled=false;
+ await service(async(base,broker)=>{
+  const abort=new AbortController();
+  const pending=fetch(base+'/live',{signal:abort.signal}).catch(()=>null);
+  try{
+   for(let i=0;i<100&&!opened;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(opened,true);
+   abort.abort();await pending;
+   for(let i=0;i<100&&!cancelled;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(cancelled,true);
+   assert.equal(broker.stats().activeFeeds,0);
+   assert.equal(broker.stats().providerFailures,0);
+  }finally{abort.abort()}
+ },{idleMs:20,firstByteTimeoutMs:12000,fetchImpl:async()=>{
+  opened=true;
+  return new Response(new ReadableStream({cancel(){cancelled=true}}),
+   {headers:{'content-type':'video/mp2t'}});
+ }});
+});

@@ -2,6 +2,7 @@
 // A single validated provider HTTP response can be fanned out to multiple
 // viewers. Never store source URLs or credentials in logs or public responses.
 import {createHash} from 'node:crypto';
+import {setTimeout as sleep} from 'node:timers/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 
@@ -247,7 +248,19 @@ export function createLiveFanout({
         await new Promise(resolve=>setImmediate(resolve));
       }
     }
-    return Promise.race([readMedia(),timeout]).finally(()=>clearTimeout(timer));
+    // A provider body need not respond to fetch's abort signal. Wake the
+    // pump immediately on viewer retirement, then confirm reader release
+    // via the existing licensed-source guard before allowing replacement.
+    const signal=attemptController.signal;
+    let onAbort;
+    const aborted=new Promise((_,reject)=>{
+      onAbort=()=>reject(signal.reason||new Error('fanout_aborted'));
+      if(signal.aborted)onAbort();
+      else signal.addEventListener('abort',onAbort,{once:true});
+    });
+    return Promise.race([readMedia(),timeout,aborted]).finally(()=>{
+      clearTimeout(timer);signal.removeEventListener('abort',onAbort);
+    });
   }
   async function releaseUpstream(reader,response){
     // Abort is always issued before this call. A stuck provider may delay
@@ -443,7 +456,8 @@ export function createLiveFanout({
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
         const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
-        await new Promise(resolve=>setTimeout(resolve,delay));
+        try{await sleep(delay,undefined,{signal:row.controller.signal});}
+        catch(error){if(!row.controller.signal.aborted)throw error;break;}
       }
     }finally{
       if(pendingReleases.length){
