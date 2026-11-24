@@ -550,7 +550,7 @@ test('active direct movie relay is tracked while response is open and released o
    };
    const during=await readHealth();
    const local=service.relayStats();
-   console.error('DIRECT_RELAY_COUNTER_TEST',JSON.stringify({server:local.activeDirectMediaClients,health:during.activeDirectMediaClients,sourceReaders,bodyUsed:viewer.bodyUsed}));
+   console.error('DIRECT_RELAY_COUNTER_TEST',JSON.stringify({server:local.activeDirectMediaClients,health:during.activeDirectMediaClients,sourceReaders,bodyUsed:viewer.bodyUsed,contentLength:viewer.headers.get('content-length'),transferEncoding:viewer.headers.get('transfer-encoding'),failureCounts:local.relayFailureCounts}));
    assert.equal(during.activeDirectMediaClients,1);
    assert.equal(during.fanout.viewers,0);
    await reader.cancel();
