@@ -1,8 +1,8 @@
-// Last-resort recovery for a terminated provider stream whose reader.cancel()
-// never confirms completion. NEVER pretend that the provider freed a slot;
-// only a process restart tears down the real operating-system sockets.
-// The operator restart guard can fire only after every customer viewer and
-// active fanout channel AND all direct media relays have drained for a sustained period.
+// Fail-closed detection of an orphaned licensed source release. This module
+// only emits an incident decision: it never kills the process or releases
+// a provider slot. The caller must quarantine the source and alert the operator.
+// An incident can be emitted only after all customer viewers, active feeds,
+// and direct media relays have drained for a sustained period.
 export function createIdleFanoutReleaseRecovery({
  clock=Date.now,minStallMs=15000,minSamples=3
 }={}){
@@ -35,7 +35,7 @@ export function createIdleFanoutReleaseRecovery({
   const idleMs=now-pendingSince;
   if(!fired&&idleMs>=minStallMs&&quietSamples>=minSamples){
    fired=true;
-   return {restart:true,reason:'stuck_provider_reader_requires_socket_close',
+   return {restart:true,reason:'stuck_provider_release_quarantined',
     idleMs,quiescent:true}
   }
   return {restart:false,reason:fired?'already_triggered':'release_pending',
