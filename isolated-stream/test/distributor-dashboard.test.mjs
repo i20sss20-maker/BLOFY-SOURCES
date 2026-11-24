@@ -200,3 +200,23 @@ test('customer directory lists each subscription, including trials sharing a pho
   assert.doesNotThrow(()=>new vm.Script(html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1]));
  });
 });
+
+test('rewards and dual access UI use only authenticated, explicit, scoped actions',async()=>{
+ const calls=[],sessionToken='R'.repeat(43);
+ const dashboard=createDistributorDashboard({bridge:{async distributorRequest(action,data){
+  calls.push({action,data});return {status:200,body:{ok:true}};
+ }}});
+ const server=createServer((req,res)=>{if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port,origin='https://'+new URL(base).host;
+ try{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const id of ['reward-earned','reward-available','reward-redeem','reward-level','manage-dual','wallet-credits','wallet-pending','issue-bonus','renew-bonus'])assert.ok(html.includes('id="'+id+'"'));
+  const post=(action,body,withCookie=true)=>fetch(base+'/distributor/api/'+action,{method:'POST',headers:{origin,'content-type':'application/json','x-blofy-distributor-action':action,...(withCookie?{cookie:'blofy_dist='+sessionToken}:{})},body:JSON.stringify(body)});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req'},false)).status,401);
+  assert.equal((await post('reveal',{issueId:'owned',includeXtream:true,code:'foreign',accountId:'foreign'})).status,200);
+  assert.deepEqual(calls[0],{action:'reveal',data:{sessionToken,issueId:'owned',includeXtream:true}});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req',points:99999,distributorId:'foreign'})).status,200);
+  assert.deepEqual(calls[1],{action:'redeem-rewards',data:{sessionToken,credits:1,requestId:'req'}});
+ }finally{await new Promise(resolve=>server.close(resolve))}
+});
