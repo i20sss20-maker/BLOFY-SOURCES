@@ -974,3 +974,42 @@ test('licensed stalled redirect retains source quota until cancellation complete
   await new Promise(resolve=>server.close(resolve));
  }
 });
+
+test('shared live latency distinguishes first bytes from recovered bytes and expires old evidence',async()=>{
+ let now=100000,calls=0,secondWriter;
+ await service(async(base,broker)=>{
+  assert.equal(broker.stats().mediaLatency.admissionToFirstBytes.samples,0);
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  const reader=response.body.getReader();
+  assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+  for(let i=0;i<150&&calls<2;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(calls,2);
+  secondWriter.enqueue(new Uint8Array(packet));
+  assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+  const evidence=broker.stats().mediaLatency;
+  assert.equal(evidence.scope,'shared_ts_transport_only');
+  assert.equal(evidence.decodedVideoVerified,false);
+  assert.deepEqual(evidence.admissionToFirstBytes,{samples:1,p50Ms:120,p95Ms:120,maxMs:120});
+  assert.deepEqual(evidence.lastBytesToRecoveredBytes,{samples:1,p50Ms:850,p95Ms:850,maxMs:850});
+  now+=3600001;
+  assert.equal(broker.stats().mediaLatency.admissionToFirstBytes.p95Ms,null);
+  assert.equal(broker.stats().mediaLatency.lastBytesToRecoveredBytes.samples,0);
+  await reader.cancel();
+ },{clock:()=>now,reconnectOnUpstreamEnd:true,fetchImpl:async()=>{
+  calls++;
+  if(calls===1){now+=120;return new Response(packet,{headers:{'content-type':'video/mp2t'}})}
+  now+=850;
+  return new Response(new ReadableStream({start(c){secondWriter=c}}),{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('failed source attempts do not generate misleading successful live latency',async()=>{
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live');
+  assert.equal(response.status,502);
+  await response.text();
+  const evidence=broker.stats().mediaLatency;
+  assert.equal(evidence.admissionToFirstBytes.samples,0);
+  assert.equal(evidence.lastBytesToRecoveredBytes.samples,0);
+ },{fetchImpl:async()=>new Response(null,{status:503})});
+});
