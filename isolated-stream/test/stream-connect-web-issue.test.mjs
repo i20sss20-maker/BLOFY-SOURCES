@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
 import {createConnectIssuer} from '../src/stream-connect-issuer.mjs';
-import {handleStreamConnect,renderStreamConnect} from '../src/stream-connect-page.mjs';
+import {handleStreamConnect,renderStreamConnect,parseConnectPaste} from '../src/stream-connect-page.mjs';
 const now=1800000000000;
 const pilotToken='x'.repeat(48);
 const authorization='Basic '+Buffer.from('operator:'+pilotToken).toString('base64');
@@ -73,7 +73,7 @@ test('public beta only permits unauthenticated issuance with explicit compatible
  assert.equal((await run(on,{...input,compatibleApp:true},{headers})).status,201);
  assert.equal(calls,1);
  const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});
- assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/طريقة الربط والتوافق/);assert.match(html,/الأكواد الرقمية/);assert.match(html,/HTTP غير المشفر/);assert.doesNotMatch(html,/github\.com|14942640054/);
+ assert.match(html,/الربط متاح/);assert.match(html,/compatible-app/);assert.match(html,/رابط السيرفر/);assert.match(html,/الأكواد الرقمية/);assert.match(html,/HTTP غير المشفر/);assert.match(html,/8 أرقام/);assert.doesNotMatch(html,/github\.com|14942640054/);
  assert.doesNotMatch(html,/الخدمة قيد التجهيز/);
  assert.match(renderStreamConnect('nonce'),/الخدمة قيد التجهيز/);
 });
@@ -101,8 +101,23 @@ test('copy falls back to selectable code when clipboard is missing or rejects',a
   elements.get('connect-code').textContent=validCode;
   await elements.get('connect-copy').click();
   if(mode==='denied'){assert.equal(copied,'');assert.equal(selected,true);assert.match(elements.get('connect-message').textContent,/يدويًا/);}
-  else{assert.equal(copied,validCode);assert.match(elements.get('connect-message').textContent,/تم النسخ/);}
+  else{assert.equal(copied,validCode);assert.match(elements.get('connect-message').textContent,/تم نسخ الكود/);}
  }
 });
 
 test('numeric code and HTTP consent are forwarded only explicitly',async()=>{let seen;const bridge={configured:true,connectIssue:async data=>{seen=data;return {status:201,body:{ok:true,code:'012345678901',oneTime:true,providerVerified:false,expiresAt:now+900000}}}};const on=createConnectIssuer({bridge,enabled:true,pilotToken,clock:()=>now});const http={...input,host:'http://provider.example.com:8080',numericCode:true};assert.equal((await run(on,http)).status,400);assert.equal(seen,undefined);const r=await run(on,{...http,allowHttp:true});assert.equal(r.status,201);assert.equal(r.body.code,'012345678901');assert.deepEqual(seen,{host:http.host,username:http.username,password:http.password,allowHttp:true,numericCode:true});});
+
+test('pasted host and full Xtream URL are normalized without copying surrounding text',()=>{
+ assert.deepEqual(parseConnectPaste('http://provider.example.com:8080/'),{host:'http://provider.example.com:8080'});
+ assert.deepEqual(parseConnectPaste('provider.example.com:8443'),{host:'https://provider.example.com:8443'});
+ assert.deepEqual(parseConnectPaste('Server: http://provider.example.com:8080/get.php?username=alice&password=a%2Bb&type=m3u\nOther text'),{host:'http://provider.example.com:8080',username:'alice',password:'a+b'});
+ for(const raw of ['https://one.example.com https://two.example.com','ftp://provider.example.com','https://provider.example.com/get.php?username=a&username=b&password=c','https://provider.example.com/anything'])assert.equal(parseConnectPaste(raw),null);
+});
+test('short issuance rejects long fallback and forwards HTTP consent',async()=>{
+ let seen;let code='01234567';
+ const bridge={configured:true,connectIssue:async data=>{seen=data;return {status:201,body:{ok:true,code,oneTime:true,providerVerified:false,expiresAt:now+300000}}}};
+ const on=createConnectIssuer({bridge,enabled:true,pilotToken,clock:()=>now});
+ const request={...input,host:'http://provider.example.com:8080',allowHttp:true,shortCode:true};
+ const r=await run(on,request);assert.equal(r.status,201);assert.equal(r.body.code,'01234567');assert.equal(seen.shortCode,true);assert.equal(seen.allowHttp,true);
+ code=validCode;assert.equal((await run(on,request)).status,503);
+});
