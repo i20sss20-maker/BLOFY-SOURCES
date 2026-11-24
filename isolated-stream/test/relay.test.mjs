@@ -519,3 +519,39 @@ test('provider 503 remains transient/unavailable, not mislabeled as 509',async()
     assert.equal(body.upstreamStatus,503);
   },{fetchImpl:async()=>new Response('secret body',{status:503})});
 });
+
+
+test('active direct movie relay is tracked while response is open and released on client disconnect', {timeout:8500},async()=>{
+ let sourceReaders=0;
+ const fetchImpl=async()=>new Response(new ReadableStream({
+   start(c){sourceReaders++;c.enqueue(new Uint8Array(ts))},
+   cancel(){sourceReaders=Math.max(0,sourceReaders-1)}
+ }),{status:200,headers:{'content-type':'video/mp2t'}});
+ await host(async base=>{
+   const grant=await issue(base,{kind:'movie',sourceUrl:'https://allowed.example/movie/a/b/1.mp4'});
+   assert.equal(grant.status,201);
+   const {path}=await grant.json();
+   const viewer=await fetch(base+path);
+   assert.equal(viewer.status,200);
+   const reader=viewer.body.getReader();
+   const first=await reader.read();
+   assert.equal(first.done,false);
+   assert.equal(Buffer.from(first.value)[0],0x47);
+   const readHealth=async()=>{
+     const result=await fetch(base+'/internal/relay-health',{headers:{authorization:'Bearer '+shared}});
+     assert.equal(result.status,200);
+     return result.json()
+   };
+   const during=await readHealth();
+   assert.equal(during.activeDirectMediaClients,1);
+   assert.equal(during.fanout.viewers,0);
+   await reader.cancel();
+   let drained=false;
+   for(let i=0;i<60;i++){
+     const health=await readHealth();
+     if(health.activeDirectMediaClients===0){drained=true;break}
+     await new Promise(r=>setTimeout(r,25));
+   }
+   assert.equal(drained,true,'a client close removes the direct relay viewer without waiting for provider cleanup');
+ });
+});
