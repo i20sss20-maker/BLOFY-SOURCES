@@ -464,8 +464,9 @@
 (() => {
  "use strict";
  const d=document;
- const productPath=/^\/product\/([1-9][0-9]{0,12})\/?$/.exec(location.pathname);
- const productId=productPath?Number(productPath[1]):null;
+ const productQuery=new URLSearchParams(location.search);
+ const productToken=productQuery.get("item");
+ const productId=/^[1-9][0-9]{0,12}$/.test(productToken||"")?Number(productToken):null;
  const find=id=>d.getElementById(id);
  const make=(tag,cls,text)=>{
    const a=d.createElement(tag);
@@ -479,7 +480,7 @@
    try{return new Intl.NumberFormat("ar-SA",{style:"currency",currency:"SAR",minimumFractionDigits:2,maximumFractionDigits:2}).format(val)}
    catch{return val.toFixed(2)+" ر.س"}
  }
- function productLink(item){return "/product/"+encodeURIComponent(String(item.id))}
+ function productLink(item){return "/?item="+encodeURIComponent(String(item.id))}
  function validPicture(url){
    return typeof url==="string"&&(url.startsWith("/media/")||url.startsWith("https://"));
  }
