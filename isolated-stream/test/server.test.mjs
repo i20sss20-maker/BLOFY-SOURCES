@@ -4,8 +4,8 @@ import {once} from 'node:events';
 import {createStreamServer} from '../src/server.mjs';
 
 const baseOpts={engineUrl:'http://blofy-stream-media.railway.internal:8888',runBootCanary:false};
-async function withApp(handler){
-  const {app}=createStreamServer({...baseOpts,port:3000});
+async function withApp(handler,options={}){
+  const {app}=createStreamServer({...baseOpts,port:3000,...options});
   app.listen(0,'127.0.0.1');
   await once(app,'listening');
   const origin='http://127.0.0.1:'+app.address().port;
@@ -59,4 +59,29 @@ test('public transport fixture is tiny, static, nonsensitive and not mistaken fo
     assert.equal(bytes.length,564);
     for(const offset of [0,188,376])assert.equal(bytes[offset],0x47);
   });
+});
+
+test('relay health provides bounded transport latency only to authenticated internal callers',async()=>{
+ const token='synthetic-test-relay-token-0123456789abcdef';
+ await withApp(async url=>{
+  const blocked=await fetch(url+'/internal/relay-health');
+  assert.equal(blocked.status,401);
+  const unauthorized=await fetch(url+'/internal/relay-health',{headers:{authorization:'Bearer incorrect'}});
+  assert.equal(unauthorized.status,401);
+  const response=await fetch(url+'/internal/relay-health',{headers:{authorization:'Bearer '+token}});
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  const body=await response.json();
+  assert.equal(body.customerTrafficEnabled,false);
+  assert.equal(body.fanout.pendingSourceHandoffs,0);
+  assert.equal(body.fanout.bufferedBootstrapBytes,0);
+  const timings=body.fanout.mediaLatency;
+  assert.equal(timings.scope,'shared_ts_transport_only');
+  assert.equal(timings.decodedVideoVerified,false);
+  assert.equal(timings.windowMs,3600000);
+  assert.equal(timings.maxSamplesPerKind,64);
+  assert.deepEqual(timings.admissionToFirstBytes,{samples:0,p50Ms:null,p95Ms:null,maxMs:null});
+  assert.deepEqual(timings.lastBytesToRecoveredBytes,{samples:0,p50Ms:null,p95Ms:null,maxMs:null});
+  assert.equal(JSON.stringify(body).includes(token),false);
+ },{relaySharedToken:token,sharedLiveEnabled:true});
 });
