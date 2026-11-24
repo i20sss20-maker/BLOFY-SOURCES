@@ -3398,3 +3398,20 @@ body.zid-store .v11-copy{
 @media(prefers-reduced-motion:reduce){
  body.zid-store .v11-manual-dock,body.zid-store .v11-manual-add{transition:none!important}
 }
+
+
+/* V11 Google Maps: optional in-place pin picker after key activation.
+   Legacy Redbox checkout is hidden because fulfillment is manual. */
+body.zid-store #checkoutmodal{display:none!important}
+body.zid-store .v11-live-google-map{
+ width:100%;height:320px;
+ margin:13px 0 16px;
+ border:1px solid #e1ddee;
+ border-radius:13px;
+ overflow:hidden;
+ background:#f6f5fa;
+}
+body.zid-store .v11-live-google-map[hidden]{display:none!important}
+@media(max-width:750px){
+ body.zid-store .v11-live-google-map{height:260px;border-radius:11px}
+}
