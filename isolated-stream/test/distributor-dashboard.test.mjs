@@ -113,7 +113,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   const html=await response.text();
   assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/value="365">سنة · 12/);
-  assert.doesNotMatch(html,/value="730"|سنتان|id="connections"|maxConnections:/);
+  assert.doesNotMatch(html,/<option[^>]*value="730"|id="connections"|maxConnections:/);
   assert.match(html,/id="renew-days"/);
   assert.match(html,/id="days"/);
   assert.match(html,/value="1">تجريبي · مجاني/);
@@ -139,7 +139,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
     'stat-expired','expiry-alert','clients-rows','clients-search','renew-dialog','customer-dialog',
     'customer-name','customer-phone','issues-more'])
     assert.match(html,new RegExp('id="'+id+'"'));
-  for(const action of ['relogin','renew','customer','clients'])
+  for(const action of ['relogin','renew','customer','list'])
     assert.match(html,new RegExp("request\\('"+action+"'"));
   assert.doesNotMatch(html,/id="trial-phone"|id="trial-field"/);
   assert.doesNotMatch(html,/data-tab="sources"/);
@@ -184,5 +184,19 @@ test('no privileged reseller route or source controls leak into distributor UI',
     body:'{}'
   });
   assert.equal(forbidden.status,404);
+ });
+});
+
+test('customer directory lists each subscription, including trials sharing a phone, with duration and actions',async()=>{
+ await withServer(async base=>{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const header of ['الكود / Xtream','المدة الأساسية','الإصدار','الانتهاء','المتبقي','الحالة'])assert.ok(html.includes('<th>'+header+'</th>'));
+  for(const id of ['clients-rows','clients-count','clients-more'])assert.ok(html.includes('id="'+id+'"'));
+  assert.match(html,/تجريبي · 24 ساعة/);assert.match(html,/تبدأ عند التفعيل/);
+  assert.ok(html.includes("request('list',{q:$('clients-search').value.trim(),status:'all',offset})"));
+  assert.ok(html.includes('for(const item of clientRows)'));
+  assert.ok(html.includes("showIssue(await request('reveal',{issueId:item.id}))"));
+  assert.ok(html.includes("$(\'clients-search\').value=\'\'"));
+  assert.doesNotThrow(()=>new vm.Script(html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1]));
  });
 });

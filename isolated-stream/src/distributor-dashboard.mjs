@@ -192,8 +192,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <button id="activity-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
 <div class="card" id="clients-card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
 <div class="searchbar"><input type="search" id="clients-search" maxlength="80" placeholder="بحث بالاسم أو الجوال" aria-label="بحث العملاء"></div>
-<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
-<tbody id="clients-rows"></tbody></table></div></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>الكود / Xtream</th><th>المدة الأساسية</th><th>الإصدار</th><th>الانتهاء</th><th>المتبقي</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+<tbody id="clients-rows"></tbody></table></div><div class="row" style="margin-top:12px"><span id="clients-count" class="muted" aria-live="polite">—</span><button id="clients-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
 <dialog id="manage-dialog" aria-labelledby="manage-title"><h2 id="manage-title">إدارة الاشتراك</h2>
 <div id="manage-info" class="details-grid"></div>
 <div class="dialog-buttons" style="justify-content:flex-start;flex-wrap:wrap">
@@ -272,6 +272,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
  let visibleSecretTimer=null;
+ let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
  function updateCost(){
@@ -377,6 +378,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   return timestamp?new Date(timestamp).toLocaleDateString('ar-SA',{
    timeZone:'Asia/Riyadh',day:'2-digit',month:'2-digit',year:'numeric'
   }):'—';
+ }
+ function durationLabel(item){
+  if(item.days===1)return item.converted?'تجربة محوّلة إلى مدفوع':'تجريبي · 24 ساعة';
+  return ({30:'شهر',90:'3 أشهر',180:'6 أشهر',365:'سنة',730:'سنتان'})[item.days]||String(item.days)+' يوم';
+ }
+ function timeLabel(timestamp){
+  return timestamp?new Date(timestamp).toLocaleString('en-GB',{timeZone:'Asia/Riyadh',
+   day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+ }
+ function remainingLabel(item){
+  if(item.subscriptionStatus==='unused')return 'تبدأ عند التفعيل';
+  if(item.subscriptionStatus==='disabled')return 'موقوف';
+  if(!item.expiresAt||item.status!=='done')return '—';
+  const minutes=Math.ceil((item.expiresAt-Date.now())/60000);
+  if(minutes<=0)return 'منتهي';
+  if(minutes<60)return minutes+' دقيقة';
+  const hours=Math.ceil(minutes/60);
+  return hours<24?hours+' ساعة':Math.ceil(hours/24)+' يوم';
  }
  function tableCell(tr,value){
   const td=document.createElement('td');td.textContent=String(value??'—');
@@ -492,8 +511,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   for(const item of issueRows){
    const row=document.createElement('tr');
    tableCell(row,item.type==='app'?
-     'كود · '+(item.codeHint||'عرضه من الإجراءات'):
-     'Xtream · '+(item.accountUsername||'عرض المستخدم من الإجراءات'));
+     'كود · '+(item.codeHint||'عرضه من الإجراءات')+' · '+durationLabel(item):
+     'Xtream · '+(item.accountUsername||'عرض المستخدم من الإجراءات')+' · '+durationLabel(item));
    const customer=tableCell(row,item.customerName||'—');
    if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
    tableCell(row,dateOnly(item.expiresAt));
@@ -529,23 +548,35 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    text('expiry-alert-text',count+' اشتراك ينتهي خلال 7 أيام');
   }
  }
- async function loadClients(){
-  const data=await request('clients',{q:$('clients-search').value.trim()});
+ async function loadClients(more=false){
+  const epoch=more?clientEpoch:++clientEpoch;
+  const offset=more?clientNext:0;
+  if(more&&offset==null)return;
+  const data=await request('list',{q:$('clients-search').value.trim(),status:'all',offset});
+  if(epoch!==clientEpoch)return;
+  clientRows=more?clientRows.concat(data.items||[]):data.items||[];
+  clientNext=data.nextOffset;
   const target=$('clients-rows');target.replaceChildren();
-  if(!data.items?.length){const tr=document.createElement('tr');
-    const td=tableCell(tr,'لا يوجد عملاء مسجلون');td.colSpan=4;target.appendChild(tr);return;}
-  for(const client of data.items){
+  if(!clientRows.length){const tr=document.createElement('tr');
+    const td=tableCell(tr,'لا توجد اشتراكات للعملاء');td.colSpan=9;target.appendChild(tr);}
+  for(const item of clientRows){
    const tr=document.createElement('tr');
-   tableCell(tr,client.name||'—');tableCell(tr,client.phone||'—');
-   tableCell(tr,client.subscriptions);
-   const td=document.createElement('td');
-   rowButton(td,'اشتراكاته',async()=>{
-    $('issue-search').value=client.phone||client.name;
-    $('issue-status').value='all';
-    await loadItems(false);
-    $('issue-search').scrollIntoView({behavior:'smooth',block:'center'});
-   });tr.appendChild(td);target.appendChild(tr);
+   tableCell(tr,item.customerName||'—');tableCell(tr,item.customerPhone||'—');
+   tableCell(tr,item.type==='app'?'كود · '+(item.codeHint||'عرضه من الإجراءات'):'Xtream · '+(item.accountUsername||'عرضه من الإجراءات'));
+   tableCell(tr,durationLabel(item));
+   tableCell(tr,timeLabel(item.createdAt));
+   tableCell(tr,item.subscriptionStatus==='unused'?'بعد التفعيل':timeLabel(item.expiresAt));
+   tableCell(tr,remainingLabel(item));
+   tableCell(tr,outcomeStatus(item));
+   const td=tableCell(tr,'');
+   if(item.status==='done')rowButton(td,'عرض/نسخ',async()=>{
+    showIssue(await request('reveal',{issueId:item.id}));
+   });
+   rowButton(td,'إدارة',()=>showManage(item));
+   target.appendChild(tr);
   }
+  text('clients-count','المعروض: '+clientRows.length);
+  $('clients-more').hidden=clientNext==null;
  }
  $('issues-more').addEventListener('click',()=>loadItems(true).catch(e=>msg(e.message,false)));
  $('issue-search').addEventListener('input',()=>{
@@ -559,9 +590,10 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('issue-status').scrollIntoView({behavior:'smooth',block:'center'});
  });
  $('clients-refresh').addEventListener('click',()=>loadClients().catch(e=>msg(e.message,false)));
+ $('clients-more').addEventListener('click',async()=>{const btn=$('clients-more');btn.disabled=true;try{await loadClients(true)}catch(e){msg(e.message,false)}finally{btn.disabled=false}});
  $('clients-search').addEventListener('input',()=>{
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>loadClients().catch(e=>msg(e.message,false)),260);
+  clearTimeout(clientSearchTimer);
+  clientSearchTimer=setTimeout(()=>loadClients().catch(e=>msg(e.message,false)),260);
  });
  document.querySelectorAll('[data-close-dialog]').forEach(btn=>
   btn.addEventListener('click',()=>$(
@@ -735,7 +767,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
-   inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
+   inflightRequest=null;$('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
    await refreshViews();
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
