@@ -253,6 +253,7 @@ export function createStreamServer({
       return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
         role:'media_plane',relayReady:true,customerTrafficEnabled:false,
         sharedLiveConfigured:relayBroker.stats().sharedLiveEnabled,
+        activeDirectMediaClients:relayBroker.stats().activeDirectMediaClients,
         // Aggregate counters ONLY. Source URL, ticket, provider identity,
         // subscriber IP and secrets are not disclosed by this endpoint.
         fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
