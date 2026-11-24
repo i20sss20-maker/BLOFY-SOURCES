@@ -75,3 +75,38 @@ test('synthetic HLS P50/P95 show measured startup without falsely claiming real 
  assert.equal(snap.engines.standby.syntheticHlsLatencyP95Ms,900);
  assert.equal(snap.realSourceVerified,false);
 });
+
+test('old successful samples remain historical but no longer prove readiness',async()=>{
+ let now=1000000;
+ const watch=createMediaHlsCanaryWatch({clock:()=>now,intervalMs:60000,
+  verify:async()=>({ok:true,stage:'segment',code:'synthetic_hls_ts_verified'})});
+ const complete=await watch.check();
+ assert.equal(complete.running,false);
+ assert.equal(complete.engines.primary.fresh,true);
+ now+=160001;
+ const stale=watch.snapshot();
+ assert.equal(stale.readiness,'synthetic_transport_unverified');
+ assert.equal(stale.engines.primary.fresh,false);
+ assert.equal(stale.engines.primary.samples,1);
+ assert.equal(stale.engines.primary.successRatePct,100);
+});
+test('paired observations publish only when both probes complete',async()=>{
+ let round=0,release,entered;
+ const wait=new Promise(resolve=>release=resolve);
+ const standbyEntered=new Promise(resolve=>entered=resolve);
+ const watch=createMediaHlsCanaryWatch({verify:async origin=>{
+  if(round&&origin.includes('-standby.')){entered();await wait;}
+  return{ok:!round,stage:'segment',code:round?'restream_smoke_segment_missing':'synthetic_hls_ts_verified'};
+ }});
+ await watch.check();round=1;
+ const pending=watch.check();
+ await standbyEntered;
+ assert.equal(watch.snapshot().engines.primary.samples,1);
+ assert.equal(watch.snapshot().engines.standby.samples,1);
+ release();
+ const done=await pending;
+ assert.equal(done.running,false);
+ assert.equal(done.readiness,'synthetic_transport_failure');
+ assert.equal(done.engines.primary.samples,2);
+ assert.equal(done.engines.standby.samples,2);
+});
