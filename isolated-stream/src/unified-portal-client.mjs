@@ -33,12 +33,42 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
           ...(body!==undefined?{'content-type':'application/json'}:{})},
         ...(body!==undefined?{body:JSON.stringify(body)}:{})
       });
-      if(response.status>=300&&response.status<400)
+      const maxBytes=512000;
+      if(response.status>=300&&response.status<400){
+        controller.abort();
+        void response.body?.cancel().catch(()=>{});
         return {status:502,body:{ok:false,code:'unified_bridge_redirect_denied'}};
-      if(Number(response.headers.get('content-length')||0)>512000)
+      }
+      if(Number(response.headers.get('content-length')||0)>maxBytes){
+        controller.abort();
+        void response.body?.cancel().catch(()=>{});
         return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
-      const raw=await response.text();
-      if(Buffer.byteLength(raw)>512000)
+      }
+      // Enforce the same response cap on chunked or compressed responses
+      // before allocating the complete body. Never trust Content-Length alone.
+      let raw='';
+      if(response.body){
+        const reader=response.body.getReader();
+        const decoder=new TextDecoder();
+        let size=0,complete=false;
+        try{
+          for(;;){
+            const part=await reader.read();
+            if(part.done){raw+=decoder.decode();complete=true;break;}
+            size+=part.value.byteLength;
+            if(size>maxBytes)
+              return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
+            raw+=decoder.decode(part.value,{stream:true});
+          }
+        }finally{
+          if(!complete){
+            controller.abort();
+            void reader.cancel().catch(()=>{});
+          }
+          try{reader.releaseLock()}catch{}
+        }
+      }
+      if(Buffer.byteLength(raw)>maxBytes)
         return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
       let data;try{data=JSON.parse(raw)}catch{
         return {status:502,body:{ok:false,code:'unified_bridge_invalid_response'}};

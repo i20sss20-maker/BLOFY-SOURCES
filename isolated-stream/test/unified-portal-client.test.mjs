@@ -263,3 +263,44 @@ test('catalog coalescing separates query scope and retries after failures',async
  await client.catalog({type:'live',offset:0});
  assert.equal(calls.length,4);
 });
+
+test('chunked oversized bridge responses are rejected before the full body is read',async()=>{
+ let pulls=0,cancelled=false,signal;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url,init)=>{
+  signal=init.signal;
+  return new Response(new ReadableStream({
+   pull(controller){pulls++;controller.enqueue(new Uint8Array(256001));},
+   cancel(){cancelled=true}
+  },{highWaterMark:0}));
+ }});
+ const result=await client.overview();
+ assert.equal(result.status,502);
+ assert.equal(result.body.code,'unified_bridge_large_response');
+ assert.equal(pulls,2);
+ assert.equal(signal.aborted,true);
+ assert.equal(cancelled,true);
+});
+test('bridge rejects oversized declared lengths and redirects without reading body',async()=>{
+ for(const [status,headers,code] of [
+  [200,{'content-length':'512001'},'unified_bridge_large_response'],
+  [302,{location:'https://example.test/'},'unified_bridge_redirect_denied']
+ ]){
+  let reads=0,cancelled=false;
+  const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+   pull(){reads++},cancel(){cancelled=true}
+  },{highWaterMark:0}),{status,headers})});
+  const result=await client.overview();
+  assert.equal(result.body.code,code);
+  assert.equal(reads,0);
+  assert.equal(cancelled,true);
+ }
+});
+test('bridge preserves split UTF-8 Arabic metadata in a valid bounded JSON response',async()=>{
+ const expected={ok:true,name:'القنوات والأفلام'};
+ const bytes=new TextEncoder().encode(JSON.stringify(expected));let index=0;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(controller){if(index===bytes.length)controller.close();else controller.enqueue(bytes.slice(index,index+=1));}
+ }))});
+ const result=await client.overview();
+ assert.equal(result.status,200);assert.deepEqual(result.body,expected);
+});
