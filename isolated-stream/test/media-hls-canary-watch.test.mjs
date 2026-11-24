@@ -110,3 +110,35 @@ test('paired observations publish only when both probes complete',async()=>{
  assert.equal(done.engines.primary.samples,2);
  assert.equal(done.engines.standby.samples,2);
 });
+
+test('hung primary probe expires and standby still publishes independently',async()=>{
+ let primarySignal,round=0;
+ const watch=createMediaHlsCanaryWatch({probeDeadlineMs:30,verify:async(origin,{signal})=>{
+  if(origin.includes('-standby.'))return {ok:true,stage:'segment',code:'synthetic_hls_ts_verified'};
+  if(round===0){primarySignal=signal;return new Promise(()=>{});}
+  return {ok:true,stage:'segment',code:'synthetic_hls_ts_verified'};
+ }});
+ const first=await watch.check();
+ assert.equal(primarySignal.aborted,true);
+ assert.equal(first.running,false);
+ assert.equal(first.engines.primary.lastCode,'synthetic_probe_deadline');
+ assert.equal(first.engines.standby.syntheticHlsState,'verified');
+ assert.equal(first.readiness,'synthetic_transport_failure');
+ round++;
+ const second=await watch.check();
+ assert.equal(second.readiness,'synthetic_transport_verified');
+ assert.equal(second.engines.primary.samples,2);
+});
+test('deadline propagates to real synthetic smoke fetch signal',async()=>{
+ let signal,requests=0;
+ const watch=createMediaHlsCanaryWatch({probeDeadlineMs:30,fetchImpl:async(url,options)=>{
+  requests++;signal=options.signal;
+  return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+ }});
+ const result=await watch.check();
+ assert.equal(requests,2);
+ assert.equal(signal.aborted,true);
+ assert.equal(result.engines.primary.lastCode,'synthetic_probe_deadline');
+ assert.equal(result.engines.standby.lastCode,'synthetic_probe_deadline');
+ assert.equal(result.running,false);
+});

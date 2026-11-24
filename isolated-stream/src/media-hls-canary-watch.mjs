@@ -15,7 +15,7 @@ const known=new Set(['synthetic_hls_ts_verified','restream_smoke_invalid_path',
  'restream_smoke_manifest_invalid','restream_smoke_variant_missing',
  'restream_smoke_segment_missing','restream_smoke_not_mpegts',
  'restream_smoke_redirect_invalid','restream_smoke_failed',
- 'restream_smoke_empty_body','restream_smoke_response_too_large']);
+ 'restream_smoke_empty_body','restream_smoke_response_too_large','synthetic_probe_deadline']);
 const safeCode=x=>known.has(x)?x:'synthetic_probe_failed';
 function percentile(values,p){
  if(!values.length)return null;
@@ -24,11 +24,12 @@ function percentile(values,p){
 }
 export function createMediaHlsCanaryWatch({
  verify=verifyRestreamSmoke,fetchImpl=fetch,clock=Date.now,
- intervalMs=300000,logger=()=>{}
+ intervalMs=300000,probeDeadlineMs=25000,logger=()=>{}
 }={}){
  if(typeof verify!=='function'||typeof fetchImpl!=='function'||
   typeof clock!=='function'||typeof logger!=='function'||
-  !Number.isSafeInteger(intervalMs)||intervalMs<60000||intervalMs>3600000)
+  !Number.isSafeInteger(intervalMs)||intervalMs<60000||intervalMs>3600000||
+  !Number.isSafeInteger(probeDeadlineMs)||probeDeadlineMs<10||probeDeadlineMs>25000)
   throw new Error('media_hls_canary_watch_invalid');
  const records=new Map(ROLES.map(role=>[role,[]]));
  let running=false,timer=null,nextAt=null,lastState=null;
@@ -72,6 +73,21 @@ export function createMediaHlsCanaryWatch({
     ?'synthetic_transport_failure':'synthetic_transport_unverified'
   };
  }
+ async function probe(role){
+  const controller=new AbortController();
+  let timer;
+  try{
+   const deadline=new Promise(resolve=>{
+    timer=setTimeout(()=>{
+     resolve({ok:false,code:'synthetic_probe_deadline',elapsedMs:probeDeadlineMs});
+     controller.abort();
+    },probeDeadlineMs)
+   });
+   return await Promise.race([deadline,Promise.resolve().then(()=>verify(ENGINES[role],{
+    fetchImpl,pathName:'smoke',timeoutMs:17000,signal:controller.signal
+   }))]);
+  }finally{clearTimeout(timer);controller.abort()}
+ }
  async function check(){
   if(running)return snapshot();
   running=true;
@@ -82,9 +98,7 @@ export function createMediaHlsCanaryWatch({
     try{
      // Each engine owns a local FFmpeg-generated 'smoke' path. The verifier
      // reads at most the first 564 bytes of its generated HLS segment.
-     result=await verify(ENGINES[role],{
-      fetchImpl,pathName:'smoke',timeoutMs:17000
-     });
+     result=await probe(role);
     }catch{result={ok:false,code:'synthetic_probe_failed'}}
     const item={
      at:clock(),ok:result?.ok===true&&result?.stage==='segment',
