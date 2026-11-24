@@ -121,3 +121,5 @@ test('short issuance rejects long fallback and forwards HTTP consent',async()=>{
  const r=await run(on,request);assert.equal(r.status,201);assert.equal(r.body.code,'01234567');assert.equal(seen.shortCode,true);assert.equal(seen.allowHttp,true);
  code=validCode;assert.equal((await run(on,request)).status,503);
 });
+
+test('website distinguishes CONNECT from regular paid activation',()=>{const html=renderStreamConnect('nonce',{enabled:true,publicBeta:true});assert.match(html,/لا تستخدم خانة التفعيل العادية/);assert.match(html,/56\.0\.7 أو أحدث/);assert.match(html,/أدخله في BLOFY CONNECT/);});
