@@ -38,6 +38,17 @@ test('both generated quality channels serve complete HLS and segments concurrent
     for(let offset=0;offset<r.body.length;offset+=188)assert.equal(r.body[offset],0x47);
    }
   }
+  const master=await request('/engine/quality-live/index.m3u8');
+  assert.equal(master.status,200);
+  assert.equal(master.headers['access-control-allow-origin'],'*');
+  assert.match(master.body.toString(),/RESOLUTION=1280x720,FRAME-RATE=25.000\nhd\/index.m3u8/);
+  assert.match(master.body.toString(),/RESOLUTION=1920x1080,FRAME-RATE=25.000\nfhd\/index.m3u8/);
+  assert.equal((master.body.toString().match(/#EXT-X-STREAM-INF:/g)||[]).length,2);
+  for(const match of master.body.toString().matchAll(/BANDWIDTH=(\d+),AVERAGE-BANDWIDTH=(\d+)/g))assert.ok(Number(match[1])>=Number(match[2]));
+  const liveList=await request('/engine/quality-live/test.m3u');
+  assert.equal(liveList.status,200);
+  assert.equal((liveList.body.toString().match(/https:\/\/engine.blofyplayer.com\/engine\/quality-live\//g)||[]).length,3);
+  assert.equal((await request('/engine/quality-live/index.m3u8','GET','connect.blofyplayer.com')).status,404);
   const livePaths=[];
   for(const channel of ['hd','fhd']){
    const prefix='/engine/quality-live/'+channel+'/';
