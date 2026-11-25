@@ -34,6 +34,7 @@ import {readOnlyOperatorSiteProof} from './operator-site-live-readiness.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 import {createEngineM3uPilot} from './engine-m3u-pilot.mjs';
 import {handleIndependentEngineTest} from './engine-independent-test.mjs';
+import {handleContinuousEngineTest} from './engine-continuous-test.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
@@ -213,6 +214,7 @@ export function createStreamServer({
     providerOrigin:process.env.BLOFY_ENGINE_PROVIDER_PILOT_ORIGIN||'',
     providerUsername:process.env.BLOFY_ENGINE_PROVIDER_PILOT_USERNAME||''});
   const app=http.createServer((req,res)=>{
+    if(handleContinuousEngineTest(req,res))return;
     if(handleIndependentEngineTest(req,res))return;
     if(engineM3uPilot.handle(req,res))return;
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
