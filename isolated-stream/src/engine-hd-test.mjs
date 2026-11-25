@@ -1,0 +1,39 @@
+// Fixed synthetic test media only. No remote URL handling, account or provider access.
+import {createReadStream,statSync,readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {pipeline} from 'node:stream/promises';
+const HOST='engine.blofyplayer.com';
+export function createEngineHdTest({root='/app/engine-fixtures'}={}){
+ const files=new Map();
+ for(const channel of ['hd','fhd']){
+  try{
+   const dir=join(root,channel),manifest=readFileSync(join(dir,'index.m3u8'),'utf8');
+   const refs=manifest.split(/\r?\n/).filter(x=>x&&!x.startsWith('#'));
+   if(!manifest.startsWith('#EXTM3U')||!manifest.includes('#EXT-X-ENDLIST')||refs.length!==6||
+       refs.some(x=>!/^seg-00[0-5]\.ts$/.test(x))||new Set(refs).size!==6)continue;
+   const entries=new Map();
+   for(const name of ['index.m3u8',...refs]){
+    const file=join(dir,name),stat=statSync(file);
+    if(!stat.isFile()||stat.size<1||stat.size>16*1024*1024)throw Error('fixture unavailable');
+    entries.set('/engine/quality/'+channel+'/'+name,{file,size:stat.size,mime:name.endsWith('.ts')?'video/mp2t':'application/vnd.apple.mpegurl'});
+   }
+   for(const [key,value] of entries)files.set(key,value);
+  }catch{}
+ }
+ const playlist=Buffer.from('#EXTM3U\n'+['hd','fhd'].filter(c=>files.has('/engine/quality/'+c+'/index.m3u8')).map(c=>'#EXTINF:24,BLOFY '+c.toUpperCase()+' audio and video test\nhttps://'+HOST+'/engine/quality/'+c+'/index.m3u8').join('\n')+'\n');
+ return function handle(req,res){
+  if(String(req.headers.host||'').toLowerCase().replace(/:443$/,'')!==HOST)return false;
+  const entry=files.get(req.url),list=req.url==='/engine/quality/test.m3u';
+  if(!entry&&!list)return false;
+  const h={'cache-control':'public, max-age=60','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
+  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{...h,allow:'GET, HEAD'});res.end();return true;}
+  if(list){
+   res.writeHead(files.size?200:503,{...h,'content-type':'audio/x-mpegurl; charset=utf-8','content-length':playlist.length});
+   res.end(req.method==='HEAD'?undefined:playlist);return true;
+  }
+  res.writeHead(200,{...h,'content-type':entry.mime,'content-length':entry.size});
+  if(req.method==='HEAD'){res.end();return true;}
+  void pipeline(createReadStream(entry.file),res).catch(()=>{if(!res.destroyed)res.destroy()});
+  return true;
+ };
+}
