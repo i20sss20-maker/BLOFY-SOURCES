@@ -32,6 +32,7 @@ import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-pr
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
 import {readOnlyOperatorSiteProof} from './operator-site-live-readiness.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
+import {createEngineM3uPilot} from './engine-m3u-pilot.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
@@ -207,7 +208,9 @@ export function createStreamServer({
   const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured&&connectPilotToken.length>=32;
   const connectPublicEnabled=connectEnabled&&process.env.BLOFY_CONNECT_PUBLIC_BETA==='1';
   const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,publicEnabled:connectPublicEnabled,pilotToken:connectPilotToken});
+  const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1'});
   const app=http.createServer((req,res)=>{
+    if(engineM3uPilot.handle(req,res))return;
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
