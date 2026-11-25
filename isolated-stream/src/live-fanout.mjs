@@ -229,7 +229,7 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
-  function nextChunk(reader,limitMs,attemptController){
+  function nextChunk(reader,limitMs,attemptController,retireReader=null){
     // A provider that opens a connection but never sends more TS data must
     // not hold viewers forever. End this feed; the player can re-request it.
     let timer;
@@ -237,7 +237,11 @@ export function createLiveFanout({
       timer=setTimeout(()=>{
         const error=new Error('fanout_read_idle_timeout');
         reject(error);
-        attemptController.abort(error);
+        // The idle reader is still locked by a pending read(). Retire it
+        // before aborting the fetch; abort-first produces a misleading
+        // AbortError from cancel() on native Undici streams.
+        if(retireReader)retireReader(error);
+        else attemptController.abort(error);
       },limitMs);
       timer.unref?.();
     });
@@ -380,7 +384,7 @@ export function createLiveFanout({
           if(/^(text\/|application\/(?:json|xml))/.test(contentType))
             throw Error('provider_not_media');
           reader=response.body.getReader();
-          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController);
+          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController,stopAttempt);
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
@@ -416,7 +420,7 @@ export function createLiveFanout({
           deliver(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
-            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController);
+            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
             if(part.done){
               if(row.viewers.size)throw Error('fanout_upstream_ended');
               break;
