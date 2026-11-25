@@ -1,0 +1,33 @@
+name: LIVE native fetch handoff regression
+on:
+  push:
+    branches:
+      - fix/live-confirm-cancel-before-abort-20261125
+    paths:
+      - isolated-stream/src/live-fanout.mjs
+      - isolated-stream/test/live-fanout.test.mjs
+      - isolated-stream/test/live-cancel-before-abort.test.mjs
+      - .github/workflows/live-cancel-before-abort.yml
+  pull_request:
+    paths:
+      - isolated-stream/src/live-fanout.mjs
+      - isolated-stream/test/live-fanout.test.mjs
+      - isolated-stream/test/live-cancel-before-abort.test.mjs
+      - .github/workflows/live-cancel-before-abort.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-cancellation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check isolated-stream/src/live-fanout.mjs
+      - run: node --check isolated-stream/test/live-cancel-before-abort.test.mjs
+      - run: node --test isolated-stream/test/live-cancel-before-abort.test.mjs
+      - run: node --test isolated-stream/test/live-fanout.test.mjs
+      - run: node --test isolated-stream/test/idle-fanout-release-recovery.test.mjs
