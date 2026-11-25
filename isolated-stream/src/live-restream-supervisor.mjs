@@ -400,9 +400,9 @@ export function createLiveRestreamSupervisor({
         }
         if(!upstream.ok){
           const status=upstream.status;
-          throw err(status===404?'restream_provider_not_found':
+          throw Object.assign(err(status===404?'restream_provider_not_found':
             [401,403,429,456].includes(status)?'restream_provider_denied':
-              'restream_provider_unavailable');
+              'restream_provider_unavailable'),{upstreamStatus:status});
         }
         if(!upstream.body)throw err('restream_invalid_media');
         const mime=String(upstream.headers.get('content-type')||'').toLowerCase();
@@ -432,7 +432,7 @@ export function createLiveRestreamSupervisor({
         try{
           active=await acquire(row.candidateUrls[index]);
           sourceIndex=index;break;
-        }catch(e){lastError=e;if(closedByReader)throw e;}
+        }catch(e){lastError=e;if(closedByReader||e?.code==='restream_provider_denied'||e?.code==='restream_provider_redirect_denied')throw e;}
       }
       if(!active)throw lastError||err('restream_provider_unavailable');
       if(sourceIndex!==row.preferredIndex){
@@ -517,7 +517,7 @@ export function createLiveRestreamSupervisor({
         row.lastError=classify(providerReadError||e);
         row.mediaHealth.sourceErrors++;
         if(row.lastError==='restream_provider_stalled')row.mediaHealth.readStalls++;
-        if(row.backupConfigured)
+        if(row.backupConfigured&& !['restream_provider_denied','restream_provider_redirect_denied'].includes(row.lastError))
           row.preferredIndex=sourceIndex===0?1:0;
       }
       // A test injection may observe exception classes without ever writing
@@ -526,9 +526,13 @@ export function createLiveRestreamSupervisor({
         try{onUnexpectedError({name:String(e?.name||'Error'),code:String(e?.code||''),
           message:String(e?.message||'').slice(0,170)})}catch{}
       }
-      if(!res.headersSent)
-        response(res,502,{ok:false,code:closedByReader?'restream_cancelled':
+      if(!res.headersSent){
+        // Do not translate upstream access or quota refusals into a retryable 502.
+        const status=row.lastError==='restream_provider_denied'?(e?.upstreamStatus===429?429:403):
+          row.lastError==='restream_provider_redirect_denied'?403:502;
+        response(res,status,{ok:false,code:closedByReader?'restream_cancelled':
           row.lastError||'restream_provider_unavailable'});
+      }
       else if(!res.destroyed)res.destroy();
     }finally{
       for(const controller of controllers)controller.abort();
