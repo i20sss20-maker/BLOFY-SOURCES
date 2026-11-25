@@ -208,7 +208,9 @@ export function createStreamServer({
   const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured&&connectPilotToken.length>=32;
   const connectPublicEnabled=connectEnabled&&process.env.BLOFY_CONNECT_PUBLIC_BETA==='1';
   const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,publicEnabled:connectPublicEnabled,pilotToken:connectPilotToken});
-  const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1'});
+  const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1',
+    providerOrigin:process.env.BLOFY_ENGINE_PROVIDER_PILOT_ORIGIN||'',
+    providerUsername:process.env.BLOFY_ENGINE_PROVIDER_PILOT_USERNAME||''});
   const app=http.createServer((req,res)=>{
     if(engineM3uPilot.handle(req,res))return;
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
