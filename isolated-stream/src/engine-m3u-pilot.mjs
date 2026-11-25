@@ -63,8 +63,10 @@ export function createEngineM3uPilot({fetchImpl=fetch,enabled=false,maxConcurren
       target.search=new URLSearchParams({username,password,type:'m3u_plus',output:'ts'}).toString();
       const upstream=await fetchImpl(target,{method:'GET',redirect:'manual',signal:controller.signal,
         cache:'no-store',headers:{accept:'audio/x-mpegurl, application/x-mpegurl','accept-encoding':'identity'}});
-      if(upstream.status!==200||!upstream.body||
-        !/^(audio\/x-mpegurl|application\/(x-mpegurl|vnd\.apple\.mpegurl|octet-stream))(?:\s*;|$)/i.test(upstream.headers.get('content-type')||'')){
+      const mime=String(upstream.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+      const mimeOk=['audio/x-mpegurl','application/x-mpegurl','application/vnd.apple.mpegurl'].includes(mime)||
+        (provider&&['application/octet-stream','audio/mpegurl','text/plain'].includes(mime));
+      if(upstream.status!==200||!upstream.body||!mimeOk){
         void upstream.body?.cancel().catch(()=>{});
         const status=[401,403,429,503].includes(upstream.status)?upstream.status:502;
         return reply(res,status,status===401||status===403?'Unauthorized':'Playlist unavailable',
@@ -84,10 +86,11 @@ export function createEngineM3uPilot({fetchImpl=fetch,enabled=false,maxConcurren
       if(provider){
         const iterator=stream[Symbol.asyncIterator]();
         const head=[];let size=0;
-        while(size<7){
+        while(size<128){
           const part=await iterator.next();if(part.done)break;
           head.push(Buffer.from(part.value));size+=part.value.length;
           if(size>MAX_BYTES){await iterator.return?.();return reply(res,502,'Playlist too large');}
+          if(Buffer.concat(head).subarray(0,128).includes(10))break;
         }
         if(!/^\s*#EXTM3U(?:\s|$)/.test(Buffer.concat(head).subarray(0,128).toString('utf8'))){
           await iterator.return?.();return reply(res,401,'Provider playlist not authorized');
