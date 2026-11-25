@@ -23,7 +23,7 @@ export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,max
     !Number.isSafeInteger(readDeadlineMs)||readDeadlineMs<10||readDeadlineMs>120000||
     typeof openStream!=='function')throw Error('quality_read_configuration_invalid');
  let activeReads=0;
- const files=new Map();
+ const files=new Map(),variants=[];
  for(const channel of ['hd','fhd']){
   try{
    const dir=join(root,channel),manifest=readFileSync(join(dir,'index.m3u8'),'utf8');
@@ -36,19 +36,38 @@ export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,max
     if(!stat.isFile()||stat.size<1||stat.size>16*1024*1024)throw Error('fixture unavailable');
     entries.set('/engine/quality/'+channel+'/'+name,{file,size:stat.size,mime:name.endsWith('.ts')?'video/mp2t':'application/vnd.apple.mpegurl'});
    }
+   const durations=[...manifest.matchAll(/^#EXTINF:([0-9.]+),/gm)].map(m=>Number(m[1]));
+   if(durations.length!==6||durations.some(d=>!Number.isFinite(d)||d<=0))continue;
+   const rates=refs.map((ref,i)=>entries.get('/engine/quality/'+channel+'/'+ref).size*8/durations[i]);
+   const totalBytes=refs.reduce((sum,ref)=>sum+entries.get('/engine/quality/'+channel+'/'+ref).size,0);
+   variants.push({channel,resolution:channel==='hd'?'1280x720':'1920x1080',
+    bandwidth:Math.ceil(Math.max(...rates)*1.05),average:Math.ceil(totalBytes*8/durations.reduce((a,b)=>a+b,0))});
    for(const [key,value] of entries)files.set(key,value);
   }catch{}
  }
  const playlist=Buffer.from('#EXTM3U\n'+['hd','fhd'].filter(c=>files.has('/engine/quality/'+c+'/index.m3u8')).map(c=>'#EXTINF:24,BLOFY '+c.toUpperCase()+' audio and video test\nhttps://'+HOST+'/engine/quality/'+c+'/index.m3u8').join('\n')+'\n');
+ const master=Buffer.from(['#EXTM3U','#EXT-X-VERSION:3','#EXT-X-INDEPENDENT-SEGMENTS',...variants.flatMap(v=>[
+  '#EXT-X-STREAM-INF:BANDWIDTH='+v.bandwidth+',AVERAGE-BANDWIDTH='+v.average+',RESOLUTION='+v.resolution+',FRAME-RATE=25.000',
+  v.channel+'/index.m3u8'
+ ])].join('\n')+'\n');
+ const liveList=Buffer.from(['#EXTM3U',...(variants.length?['#EXTINF:-1,BLOFY Auto quality test','https://'+HOST+'/engine/quality-live/index.m3u8']:[]),
+  ...variants.flatMap(v=>['#EXTINF:-1,BLOFY '+v.channel.toUpperCase()+' live test','https://'+HOST+'/engine/quality-live/'+v.channel+'/index.m3u8'])].join('\n')+'\n');
  return function handle(req,res){
   if(String(req.headers.host||'').toLowerCase().replace(/:443$/,'')!==HOST)return false;
   let entry=files.get(req.url),list=req.url==='/engine/quality/test.m3u';
   const live=/^\/engine\/quality-live\/(hd|fhd)\/(index\.m3u8|seg-([0-9]{1,10})\.ts)$/.exec(req.url||'');
-  if(!entry&&!list&&!live)return false;
-  const channel=list?'list':live?live[1]:req.url.split('/')[3];
+  const masterRoute=req.url==='/engine/quality-live/index.m3u8',liveListRoute=req.url==='/engine/quality-live/test.m3u';
+  if(!entry&&!list&&!live&&!masterRoute&&!liveListRoute)return false;
+  const channel=list||masterRoute||liveListRoute?'list':live?live[1]:req.url.split('/')[3];
   if(req.method==='GET')metrics?.observe(res,channel,req.url.endsWith('.ts')?'segment':'manifest');
-  const h={'cache-control':'public, max-age=60','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
+  const h={'cache-control':'public, max-age=60','x-content-type-options':'nosniff','referrer-policy':'no-referrer','access-control-allow-origin':'*'};
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{...h,allow:'GET, HEAD'});res.end();return true;}
+  if(masterRoute||liveListRoute){
+   const body=masterRoute?master:liveList;
+   if(!variants.length){res.writeHead(503,{...h,'cache-control':'no-store'});res.end();return true;}
+   res.writeHead(200,{...h,'cache-control':'no-store','content-type':masterRoute?'application/vnd.apple.mpegurl':'audio/x-mpegurl; charset=utf-8','content-length':body.length});
+   res.end(req.method==='HEAD'?undefined:body);return true;
+  }
   if(live){
    const channel=live[1],prefix='/engine/quality/'+channel+'/';
    if(!files.has(prefix+'index.m3u8')){
