@@ -46,3 +46,47 @@ test('denials and redirects are not forwarded with credentials or location',asyn
   });
  }
 });
+
+const providerQuery=query+'&provider=8k';
+const providerConfig={enabled:true,providerOrigin:'https://provider.example.com',
+ providerUsername:'pilot-user',validateProvider:async url=>new URL(url)};
+test('explicit provider manifest uses only pinned origin, validates prefix and retains official media routes',async()=>{
+ const fixture='#EXTM3U\n#EXTINF:-1,Test\nhttps://provider.example.com/live/pilot-user/pilot-secret/1.ts\n';
+ const calls=[];
+ await withPilot({...providerConfig,fetchImpl:async(url,options)=>{
+  calls.push(url.origin);assert.equal(options.redirect,'manual');
+  assert.equal(url.searchParams.get('username'),'pilot-user');
+  return new Response(fixture,{headers:{'content-type':'application/octet-stream'}});
+ }},async call=>{
+  assert.equal((await call(providerQuery.replace('pilot-user','other-user'))).status,401);
+  assert.equal((await call(providerQuery+'&provider=8k')).status,400);
+  assert.equal(calls.length,0);
+  const r=await call(providerQuery+'&host=https://evil.invalid');
+  assert.equal(r.status,200);assert.equal(r.body,fixture);
+  assert.deepEqual(calls,['https://provider.example.com']);
+  assert.equal((await call(providerQuery)).status,429);
+ });
+});
+test('provider selection fails closed without configured HTTPS origin and never falls back',async()=>{
+ for(const origin of ['', 'http://provider.example.com','https://engine.blofyplayer.com']){
+  await withPilot({...providerConfig,providerOrigin:origin,fetchImpl:async()=>{throw Error('unexpected')}},async call=>{
+   assert.equal((await call(providerQuery)).status,503);
+  });
+ }
+});
+test('local credentials are never forwarded to provider after gateway rejects them',async()=>{
+ const calls=[];
+ await withPilot({...providerConfig,fetchImpl:async url=>{calls.push(url.origin);return new Response('no',{status:401});}},async call=>{
+  assert.equal((await call(query)).status,401);
+  assert.deepEqual(calls,['https://blofy-activation-portal-production.up.railway.app']);
+ });
+});
+test('provider error document and redirect rejected before delivering manifest',async()=>{
+ for(const [status,expected] of [[200,401],[302,502]]){
+  await withPilot({...providerConfig,fetchImpl:async()=>new Response('private provider error',{status,
+   headers:{'content-type':'text/plain','location':'https://evil.invalid'}})},async call=>{
+   const r=await call(providerQuery);assert.equal(r.status,expected);assert.equal(r.headers.location,undefined);
+   assert.doesNotMatch(r.body,/private provider error/);
+  });
+ }
+});
