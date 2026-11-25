@@ -35,6 +35,7 @@ import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
 import {createEngineM3uPilot} from './engine-m3u-pilot.mjs';
 import {handleIndependentEngineTest} from './engine-independent-test.mjs';
 import {handleContinuousEngineTest} from './engine-continuous-test.mjs';
+import {createEngineHdTest} from './engine-hd-test.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
@@ -213,7 +214,9 @@ export function createStreamServer({
   const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1',
     providerOrigin:process.env.BLOFY_ENGINE_PROVIDER_PILOT_ORIGIN||'',
     providerUsername:process.env.BLOFY_ENGINE_PROVIDER_PILOT_USERNAME||''});
+  const handleEngineHdTest=createEngineHdTest();
   const app=http.createServer((req,res)=>{
+    if(handleEngineHdTest(req,res))return;
     if(handleContinuousEngineTest(req,res))return;
     if(handleIndependentEngineTest(req,res))return;
     if(engineM3uPilot.handle(req,res))return;
