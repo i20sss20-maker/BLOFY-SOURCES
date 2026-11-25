@@ -18,7 +18,7 @@ export function qualityLiveManifest(now){
  }
  return Buffer.from(lines.join('\n')+'\n');
 }
-export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,maxActiveReads=16}={}){
+export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,maxActiveReads=16,metrics=null}={}){
  let activeReads=0;
  const files=new Map();
  for(const channel of ['hd','fhd']){
@@ -42,6 +42,8 @@ export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,max
   let entry=files.get(req.url),list=req.url==='/engine/quality/test.m3u';
   const live=/^\/engine\/quality-live\/(hd|fhd)\/(index\.m3u8|seg-([0-9]{1,10})\.ts)$/.exec(req.url||'');
   if(!entry&&!list&&!live)return false;
+  const channel=list?'list':live?live[1]:req.url.split('/')[3];
+  if(req.method==='GET')metrics?.observe(res,channel,req.url.endsWith('.ts')?'segment':'manifest');
   const h={'cache-control':'public, max-age=60','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{...h,allow:'GET, HEAD'});res.end();return true;}
   if(live){
