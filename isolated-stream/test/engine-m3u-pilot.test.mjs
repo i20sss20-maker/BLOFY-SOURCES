@@ -9,7 +9,7 @@ async function withPilot(options,run){
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const address='http://127.0.0.1:'+server.address().port;
  const call=(path,host='engine.blofyplayer.com',method='GET')=>new Promise((resolve,reject)=>{
-   const req=http.request(address+path,{method,headers:{host}},res=>{
+   const req=http.request(address+path,{method,headers:{host,'x-forwarded-proto':'https'}},res=>{
     let body='';res.setEncoding('utf8');res.on('data',s=>body+=s);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body}));
    });req.on('error',reject);req.end();
  });
