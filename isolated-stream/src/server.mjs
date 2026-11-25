@@ -36,6 +36,7 @@ import {createEngineM3uPilot} from './engine-m3u-pilot.mjs';
 import {handleIndependentEngineTest} from './engine-independent-test.mjs';
 import {handleContinuousEngineTest} from './engine-continuous-test.mjs';
 import {createEngineHdTest} from './engine-hd-test.mjs';
+import {createEngineQualityMetrics} from './engine-quality-metrics.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
 const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
@@ -214,7 +215,8 @@ export function createStreamServer({
   const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1',
     providerOrigin:process.env.BLOFY_ENGINE_PROVIDER_PILOT_ORIGIN||'',
     providerUsername:process.env.BLOFY_ENGINE_PROVIDER_PILOT_USERNAME||''});
-  const handleEngineHdTest=createEngineHdTest();
+  const qualityMetrics=createEngineQualityMetrics();
+  const handleEngineHdTest=createEngineHdTest({metrics:qualityMetrics});
   const app=http.createServer((req,res)=>{
     if(handleEngineHdTest(req,res))return;
     if(handleContinuousEngineTest(req,res))return;
@@ -242,6 +244,11 @@ export function createStreamServer({
       return void officialM3uDiagnostic.handle(req,res);
     if(url.pathname==='/internal/xtream-media-client-profiles')
       return void clientProfiles.handle(req,res);
+    if(url.pathname==='/internal/engine-quality-metrics'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      return safeResponse(res,200,qualityMetrics.snapshot());
+    }
     if(url.pathname==='/internal/media-engine-health'&&req.method==='GET'){
       if(!authorized(req.headers.authorization,adminToken))
         return safeResponse(res,401,{ok:false,code:'not_authorized'});
@@ -358,7 +365,7 @@ export function createStreamServer({
     },20000);
     timer.unref?.();
   }
-  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
+  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,qualityMetrics,
     recordReplicaProof:proof=>{replicaBootProof={
       ok:proof?.ok===true,code:String(proof?.code||'replica_probe_failed').slice(0,65),
       stage:String(proof?.stage||'unknown').slice(0,32),
@@ -473,6 +480,16 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       }
     },60000);
     mediaAudit.unref?.();
+    // Passive aggregate test traffic only; empty windows emit nothing.
+    let previousQuality='';
+    const qualityAudit=setInterval(()=>{
+      const report=service.qualityMetrics.snapshot();
+      const key=JSON.stringify(report);
+      if(report.results.length&&key!==previousQuality)
+        console.info('BLOFY_ENGINE_QUALITY_AGGREGATE',key);
+      previousQuality=key;
+    },60000);
+    qualityAudit.unref?.();
     // A crashed/aborted licensed source can leave its body.cancel() Promise
     // unresolved even after all viewers leave. Its one-slot admission must
     // never be bypassed by starting a second provider connection. If ONLY
