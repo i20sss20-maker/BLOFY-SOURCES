@@ -229,7 +229,7 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
-  function nextChunk(reader,limitMs,attemptController){
+  function nextChunk(reader,limitMs,attemptController,retireReader=null){
     // A provider that opens a connection but never sends more TS data must
     // not hold viewers forever. End this feed; the player can re-request it.
     let timer;
@@ -237,7 +237,11 @@ export function createLiveFanout({
       timer=setTimeout(()=>{
         const error=new Error('fanout_read_idle_timeout');
         reject(error);
-        attemptController.abort(error);
+        // The idle reader is still locked by a pending read(). Retire it
+        // before aborting the fetch; abort-first produces a misleading
+        // AbortError from cancel() on native Undici streams.
+        if(retireReader)retireReader(error);
+        else attemptController.abort(error);
       },limitMs);
       timer.unref?.();
     });
@@ -265,13 +269,18 @@ export function createLiveFanout({
       clearTimeout(timer);signal.removeEventListener('abort',onAbort);
     });
   }
-  async function releaseUpstream(reader,response){
-    // Abort is always issued before this call. A stuck provider may delay
-    // stream cancellation; timing out here MUST NOT falsely prove its
-    // upstream connection was released. Retain a pending cleanup promise so
-    // another live channel cannot consume a second one-slot source feed.
-    if(!reader&&!response?.body)return {confirmed:Promise.resolve(true),settled:true};
-    const confirmed=Promise.resolve().then(()=>reader?
+  async function releaseUpstream(reader,response,{confirmed:startedRelease=null,abort=null}={}){
+    // For an active Node fetch body, aborting the signal *before* reader.cancel()
+    // makes cancel reject AbortError even after the TCP connection closes. The
+    // old false-negative then permanently quarantined a one-feed provider.
+    // Cancel the body first, confirm the result, and only then abort the
+    // request signal. A stalled cancellation still fails closed: never claim
+    // a licensed slot was freed based solely on a timer or AbortError.
+    if(!reader&&!response?.body){
+      if(abort)abort();
+      return {confirmed:Promise.resolve(true),settled:true};
+    }
+    const confirmed=startedRelease||Promise.resolve().then(()=>reader?
       reader.cancel():response.body.cancel()).then(()=>true,()=>false);
     let timer;
     try{
@@ -282,6 +291,7 @@ export function createLiveFanout({
       return {confirmed,settled:settled.done&&settled.ok===true};
     }finally{
       if(timer)clearTimeout(timer);
+      if(abort)abort();
       if(reader)try{reader.releaseLock()}catch{}
     }
   }
@@ -293,7 +303,27 @@ export function createLiveFanout({
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
         const attemptController=new AbortController();
-        const stopAttempt=()=>attemptController.abort();
+        let releaseStarted=null;
+        const beginRelease=()=>{
+          if(releaseStarted)return releaseStarted;
+          if(!reader&&!response?.body)return null;
+          releaseStarted=Promise.resolve().then(()=>reader?
+            reader.cancel():response.body.cancel()).then(()=>true,()=>false);
+          return releaseStarted;
+        };
+        const stopAttempt=()=>{
+          // Retiring an idle/changed channel must cancel its active stream
+          // before aborting the fetch; that is the only path that confirms
+          // normal Undici cancellation under a single-feed licence.
+          const release=beginRelease();
+          if(!release){attemptController.abort();return;}
+          const timer=setTimeout(()=>attemptController.abort(),250);
+          timer.unref?.();
+          void release.finally(()=>{
+            clearTimeout(timer);
+            attemptController.abort();
+          });
+        };
         row.controller.signal.addEventListener('abort',stopAttempt,{once:true});
         try{
           // Provider-issued TS redirects are validated at every hop; no
@@ -354,7 +384,7 @@ export function createLiveFanout({
           if(/^(text\/|application\/(?:json|xml))/.test(contentType))
             throw Error('provider_not_media');
           reader=response.body.getReader();
-          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController);
+          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController,stopAttempt);
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
@@ -390,7 +420,7 @@ export function createLiveFanout({
           deliver(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
-            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController);
+            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
             if(part.done){
               if(row.viewers.size)throw Error('fanout_upstream_ended');
               break;
@@ -448,9 +478,11 @@ export function createLiveFanout({
             }
           }
         }finally{
-          // Source reader is released BEFORE a replacement source GET.
-          attemptController.abort();
-          const cleanup=await releaseUpstream(reader,response);
+          // Do NOT abort before cancel: with native Node fetch that can reject
+          // cancel() with AbortError and falsely reserve a provider slot forever.
+          const cleanup=await releaseUpstream(reader,response,{
+            confirmed:beginRelease(),abort:()=>attemptController.abort()
+          });
           row.controller.signal.removeEventListener('abort',stopAttempt);
           if(!cleanup.settled&&row.licensedSourceId){
             // Only the explicitly licensed, upstream-quota-scoped feeds
