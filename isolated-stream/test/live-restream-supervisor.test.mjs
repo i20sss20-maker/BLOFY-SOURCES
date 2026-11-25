@@ -477,3 +477,36 @@ test('regular licensed operator path retains full FFmpeg input probing for compa
  const invalid=await service.start({...row(),fastStart:'true'});
  assert.equal(invalid.status,400);
 });
+
+test('synthetic source access and quota refusals do not open a backup or become retryable 502',async()=>{
+ for(const status of [401,403,429,456]){
+  const {portal,ts}=createFixture();const calls=[];let token;
+  const service=createLiveRestreamSupervisor({portal,mediaPassword:password,
+   lookup:async()=>[{address:'8.8.8.8',family:4}],
+   fetchImpl:async(url,opts={})=>{
+    const target=String(url);
+    if(target.includes(':9997/')){
+     if(opts.method==='POST')token=JSON.parse(opts.body).runOnDemand.match(/\/internal\/live-feed\/([a-f0-9]{48})/)[1];
+     return new Response('{}',{status:200,headers:{'content-type':'application/json'}});
+    }
+    calls.push(new URL(target).hostname);
+    if(target.startsWith('https://provider.example/'))return new Response('Denied',{status});
+    if(target.startsWith('https://backup.example/'))return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
+    throw Error('unexpected target');
+   }});
+  const started=await service.start({...row(),backupSourceId:'550e8400-e29b-41d4-a716-446655440001',backupChannelId:'99'});
+  assert.equal(started.status,201);
+  const server=http.createServer((req,res)=>service.streamFeed(req,res,token));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{
+   const result=await fetch('http://127.0.0.1:'+server.address().port+'/');
+   assert.equal(result.status,status===429?429:403);
+   assert.equal((await result.json()).code,'restream_provider_denied');
+   assert.deepEqual(calls,['provider.example']);
+   const info=service.list().items[0];
+   assert.equal(info.preferredSource,'primary');
+   assert.equal(info.failovers,0);
+   assert.equal(info.lastError,'restream_provider_denied');
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await service.stop(started.body.path);}
+ }
+});
