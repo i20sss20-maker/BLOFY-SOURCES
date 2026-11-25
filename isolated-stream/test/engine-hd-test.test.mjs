@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import http from 'node:http';
-import {createEngineHdTest} from '../src/engine-hd-test.mjs';
+import {createEngineHdTest,qualityLiveManifest} from '../src/engine-hd-test.mjs';
 const root='/app/engine-fixtures';
 test('both generated quality channels serve complete HLS and segments concurrently without shared session state',{skip:!existsSync(root)},async()=>{
- const handle=createEngineHdTest({root});
+ const clock=Date.UTC(2026,10,25);
+ const handle=createEngineHdTest({root,now:()=>clock});
  const server=http.createServer((req,res)=>{if(!handle(req,res)){res.writeHead(404);res.end()}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+server.address().port;
@@ -37,6 +38,27 @@ test('both generated quality channels serve complete HLS and segments concurrent
     for(let offset=0;offset<r.body.length;offset+=188)assert.equal(r.body[offset],0x47);
    }
   }
+  const livePaths=[];
+  for(const channel of ['hd','fhd']){
+   const prefix='/engine/quality-live/'+channel+'/';
+   const r=await request(prefix+'index.m3u8');
+   assert.equal(r.status,200);assert.equal(r.headers['cache-control'],'no-store');
+   const manifest=r.body.toString(),refs=manifest.split(/\r?\n/).filter(x=>x.endsWith('.ts'));
+   assert.equal(refs.length,6);assert.doesNotMatch(manifest,/#EXT-X-ENDLIST/);
+   const seq=Number(manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/)[1]);
+   assert.equal((await request(prefix+'seg-'+(seq+6)+'.ts')).status,404);
+   assert.equal((await request(prefix+'seg-'+(seq-20)+'.ts')).status,404);
+   for(const ref of refs)livePaths.push(prefix+ref);
+  }
+  // Eight concurrent downloads covering both independent channels.
+  for(let i=0;i<livePaths.length;i+=4){
+   const batch=livePaths.slice(i,i+4);
+   const responses=await Promise.all([...batch,...batch].map(p=>request(p)));
+   for(let j=0;j<batch.length;j++){
+    assert.equal(responses[j].status,200);assert.ok(responses[j].body.length>10000);
+    assert.deepEqual(responses[j].body,responses[j+batch.length].body);
+   }
+  }
   assert.equal((await request('/engine/quality/fhd/index.m3u8','HEAD')).body.length,0);
   assert.equal((await request('/engine/quality/hd/index.m3u8','POST')).status,405);
   assert.equal((await request('/engine/quality/hd/index.m3u8','GET','connect.blofyplayer.com')).status,404);
@@ -47,4 +69,12 @@ test('both generated quality channels serve complete HLS and segments concurrent
 test('missing synthetic fixture fails closed without fetching an external source',()=>{
  const handle=createEngineHdTest({root:'/nonexistent-engine-fixture'});
  let status;assert.equal(handle({headers:{host:'engine.blofyplayer.com'},method:'GET',url:'/engine/quality/test.m3u'},{writeHead(n){status=n},end(){}}),true);assert.equal(status,503);
+});
+
+test('quality live loop retains original AV timing within each six-segment cycle',()=>{
+ const epoch=Date.UTC(2026,0,1),a=qualityLiveManifest(epoch+24000).toString(),b=qualityLiveManifest(epoch+28000).toString();
+ assert.match(a,/#EXT-X-MEDIA-SEQUENCE:0\n/);assert.doesNotMatch(a,/#EXT-X-DISCONTINUITY\n/);
+ assert.match(b,/#EXT-X-MEDIA-SEQUENCE:1\n/);assert.match(b,/#EXT-X-DISCONTINUITY\n#EXTINF:4.000,\nseg-6.ts/);
+ const next=qualityLiveManifest(epoch+48000).toString();
+ assert.match(next,/#EXT-X-DISCONTINUITY-SEQUENCE:1\n/);assert.doesNotMatch(next,/#EXT-X-DISCONTINUITY\n/);
 });
