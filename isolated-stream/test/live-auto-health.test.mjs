@@ -53,7 +53,7 @@ test('one narrowly authorized backup re-probe is rate limited after two distinct
   f.item.lastProbe={at:999_000,ok:false,code:'restream_hls_unavailable'};
   await monitor.scan();
   assert.equal(f.probes(),0);
-  f.item.lastProbe={at:999_100,ok:false,code:'restream_provider_denied'};
+  f.item.lastProbe={at:999_100,ok:false,code:'restream_provider_unavailable'};
   await monitor.scan();
   await tick();
   assert.equal(f.probes(),1);
@@ -67,7 +67,7 @@ test('one narrowly authorized backup re-probe is rate limited after two distinct
   assert.equal(f.probes(),2);
   f.item.backupConfigured=false;
   f.time(1_150_000);
-  f.item.lastProbe={at:1_149_000,ok:false,code:'restream_provider_denied'};
+  f.item.lastProbe={at:1_149_000,ok:false,code:'restream_provider_unavailable'};
   await monitor.scan();
   await tick();
   assert.equal(f.probes(),2,'no re-probe for a channel without a backup');
@@ -108,4 +108,37 @@ test('real source EOF overrides a stale successful transport probe',async()=>{
  f.item.lastError=null;
  const healed=await monitor.scan();
  assert.equal(healed.totals.healthy,1);
+});
+
+test('distinct real EOF events override a stale green HLS sample, trigger at most one controlled recovery, then reset',async()=>{
+ const f=createFixture();
+ f.item.lastProbe={at:999900,ok:true,code:'ok'};
+ f.item.lastError='restream_source_eof';
+ f.item.mediaHealth={cleanSourceEnds:1,sourceErrors:0};
+ const monitor=createLiveAutoHealth({liveSupervisor:f.liveSupervisor,clock:f.clock,
+  recoveryProbeEnabled:true,reprobeAfterMs:60000});
+ await monitor.scan();await monitor.scan();await tick();
+ assert.equal(monitor.snapshot().paths[0].consecutiveFailures,1);
+ assert.equal(f.probes(),0);
+ f.item.mediaHealth.cleanSourceEnds++;
+ await monitor.scan();await tick();
+ assert.equal(monitor.snapshot().paths[0].consecutiveFailures,2);
+ assert.equal(f.probes(),1);
+ await monitor.scan();await tick();assert.equal(f.probes(),1);
+ f.item.lastError=null;f.item.lastProbe={at:1000000,ok:true,code:'ok'};
+ await monitor.scan();assert.equal(monitor.snapshot().paths[0].consecutiveFailures,0);
+ assert.equal(monitor.snapshot().totals.healthy,1);
+});
+test('access refusals override green probes and never schedule recovery probes',async()=>{
+ const f=createFixture();
+ const monitor=createLiveAutoHealth({liveSupervisor:f.liveSupervisor,clock:f.clock,recoveryProbeEnabled:true,reprobeAfterMs:60000});
+ f.item.lastProbe={at:999900,ok:true,code:'ok'};
+ f.item.lastError='restream_provider_denied';f.item.mediaHealth={sourceErrors:1};
+ await monitor.scan();
+ f.item.mediaHealth.sourceErrors=2;
+ const denied=await monitor.scan();await tick();
+ assert.equal(denied.totals.warning,1);assert.equal(denied.paths[0].reason,'restream_provider_denied');
+ assert.equal(f.probes(),0);
+ f.time(1100000);f.item.lastError='restream_provider_redirect_denied';
+ await monitor.scan();await tick();assert.equal(f.probes(),0);
 });
