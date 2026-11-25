@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
+import {createSourceReleaseGate,waitForSourceRelease} from './source-release-gate.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
@@ -130,13 +131,12 @@ export function createLiveFanout({
     if(!row.licensedSourceId||!row.pumpStarted||row.releaseGuarded)return;
     row.releaseGuarded=true;
     const scope=row.licensedSourceId;
-    const prior=pendingSourceReleases.get(scope)||Promise.resolve();
-    const gate=Promise.all([prior,row.upstreamReleasedPromise]).then(()=>{});
-    pendingSourceReleases.set(scope,gate);
-    void gate.finally(()=>{
-      if(pendingSourceReleases.get(scope)===gate)
+    const prior=pendingSourceReleases.get(scope);
+    const gate=createSourceReleaseGate(prior,row.upstreamReleasedPromise,settled=>{
+      if(pendingSourceReleases.get(scope)===settled)
         pendingSourceReleases.delete(scope);
-    });
+    },clock);
+    pendingSourceReleases.set(scope,gate);
   }
   function closeFeed(key,reason='closed',expectedRow=null){
     const row=feeds.get(key);
@@ -575,13 +575,9 @@ export function createLiveFanout({
       const pending=pendingSourceReleases.get(sourceScope);
       if(pending){
         counters.sourceHandoffWaits++;
-        let timer;
-        const completed=await Promise.race([
-          pending.then(()=>true),
-          new Promise(resolve=>{timer=setTimeout(()=>resolve(false),1500);})
-        ]);
-        if(timer)clearTimeout(timer);
-        if(viewerGone()){counters.abandonedViewerRequests++;return;}
+        const outcome=await waitForSourceRelease(pending,req,res);
+        if(outcome==='abandoned'||viewerGone()){counters.abandonedViewerRequests++;return;}
+        const completed=outcome==='released';
         // A concurrent eviction can add another release while we wait.
         if(!completed||(pendingSourceReleases.has(sourceScope)&&pendingSourceReleases.get(sourceScope)!==pending)){
           res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
@@ -706,6 +702,8 @@ export function createLiveFanout({
     events:recentEvents.map(item=>({...item})),
     maxFeeds,maxViewersPerFeed,
     pendingSourceHandoffs:pendingSourceReleases.size,
+    pendingSourceWaiters:[...pendingSourceReleases.values()].reduce((n,g)=>n+g.waiters.size,0),
+    oldestPendingSourceReleaseMs:pendingSourceReleases.size?Math.max(0,...[...pendingSourceReleases.values()].map(g=>clock()-g.since)):null,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
     bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}},

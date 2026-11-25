@@ -63,3 +63,30 @@ test('fails closed when a control API returns malformed or oversized JSON',async
  await watcher.check();
  assert.equal(watcher.snapshot().engines.primary.lastError,'engine_invalid_response');
 });
+
+test('stale or future-dated control observations cannot claim redundancy readiness',async()=>{
+ let now=1000000;
+ const watch=createMediaEngineRedundancyWatch({controlPassword:secret,clock:()=>now,fetchImpl:async()=>success()});
+ await watch.check();
+ assert.equal(watch.snapshot().readiness,'both_control_apis_reachable');
+ now+=125001;
+ const stale=watch.snapshot();
+ assert.equal(stale.readiness,'control_api_observation_unverified');
+ assert.equal(stale.engines.primary.state,'unknown');
+ assert.equal(stale.engines.standby.controlApiReachable,false);
+ assert.equal(stale.engines.primary.configuredPaths,null);
+ await watch.check();
+ assert.equal(watch.snapshot().readiness,'both_control_apis_reachable');
+ now=999999;
+ assert.equal(watch.snapshot().readiness,'control_api_observation_unverified');
+});
+test('caps actual streamed response size even without content-length',async()=>{
+ let pulls=0;
+ const watch=createMediaEngineRedundancyWatch({controlPassword:secret,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(c){pulls++;if(pulls>20)throw Error('unbounded_read');c.enqueue(new Uint8Array(65536));}
+ }),{status:200})});
+ await watch.check();
+ assert.equal(watch.snapshot().engines.primary.lastError,'engine_invalid_response');
+ assert.equal(watch.snapshot().engines.standby.lastError,'engine_invalid_response');
+ assert.ok(pulls<20);
+});

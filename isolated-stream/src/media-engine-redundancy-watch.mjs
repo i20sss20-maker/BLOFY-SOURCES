@@ -6,26 +6,27 @@ const CONTROL={
  standby:'http://blofy-stream-media-standby.railway.internal:9997'
 };
 const ROLES=Object.freeze(['primary','standby']);
-function safeSummary(row,now){
+function safeSummary(row,now,freshnessMs){
  const h=row.history;
  const cutoff=now-60*60*1000;
- const recent=h.filter(x=>x.at>=cutoff);
+ const recent=h.filter(x=>x.at>=cutoff&&x.at<=now);
  const last=recent[recent.length-1]||null;
  const up=recent.filter(x=>x.ok).length;
  const down=recent.length-up;
  const windowMinutes=recent.length<2?0:
    Math.max(0,Math.round((recent.at?.(-1)?.at-recent[0].at)/60000));
- const state=!last?'unknown':last.ok?'available':
+ const fresh=!!last&&now-last.at<=freshnessMs;
+ const state=!fresh?'unknown':last.ok?'available':
    !recent.at(-2)?.ok?'unavailable':'degraded';
  return {
-  state,samples:recent.length,healthySamples:up,failedSamples:down,
+  state,fresh,samples:recent.length,healthySamples:up,failedSamples:down,
   availabilityPct:recent.length?Math.round(10000*up/recent.length)/100:null,
   observationWindowMinutes:windowMinutes,
   checkedAt:last?new Date(last.at).toISOString():null,
   lastError:last?.ok?null:last?.code||null,
   // "available" means API is reachable, NOT media playback was tested.
-  controlApiReachable:last?.ok===true,
-  configuredPaths:last?.ok?last.paths:null
+  controlApiReachable:fresh&&last?.ok===true,
+  configuredPaths:fresh&&last?.ok?last.paths:null
  };
 }
 export function createMediaEngineRedundancyWatch({
@@ -60,9 +61,19 @@ export function createMediaEngineRedundancyWatch({
    const max=128*1024;
    if(Number(reply.headers.get('content-length')||0)>max)
     return {ok:false,code:'engine_invalid_response',paths:null};
-   const raw=await reply.text();
-   if(Buffer.byteLength(raw)>max)
-    return {ok:false,code:'engine_invalid_response',paths:null};
+   const reader=reply.body?.getReader();
+   if(!reader)return {ok:false,code:'engine_invalid_response',paths:null};
+   const chunks=[];let bytes=0;
+   try{
+    while(true){
+     const {done,value}=await reader.read();
+     if(done)break;
+     bytes+=value.byteLength;
+     if(bytes>max){controller.abort();return {ok:false,code:'engine_invalid_response',paths:null};}
+     chunks.push(Buffer.from(value));
+    }
+   }finally{reader.releaseLock();}
+   const raw=Buffer.concat(chunks,bytes).toString('utf8');
    let body;try{body=JSON.parse(raw)}catch{
     return {ok:false,code:'engine_invalid_response',paths:null};
    }
@@ -71,21 +82,22 @@ export function createMediaEngineRedundancyWatch({
    return {ok:true,code:'ok',paths:body.items.length};
   }catch{
    return {ok:false,code:'engine_unreachable',paths:null};
-  }finally{clearTimeout(t)}
+  }finally{clearTimeout(t);controller.abort()}
  }
  function snapshot(){
   const now=clock();
   const engines=Object.fromEntries(ROLES.map(role=>
-   [role,safeSummary(data[role],now)]));
+   [role,safeSummary(data[role],now,2*intervalMs+5000)]));
   const primary=engines.primary,standby=engines.standby;
   return {
    ok:true,configured,readOnly:true,scope:'private_mediamtx_control_apis',
    mediaBytesRead:0,providerRequests:0,customerTrafficChanged:false,
    autoFailoverEnabled:false,recordingEnabledByMonitor:false,
    livePlaybackVerified:false,monitoringActive:timer!==null,
-   observationWindowTargetMinutes:60,
+   observationWindowTargetMinutes:60,freshnessLimitMs:2*intervalMs+5000,
    checkedAt:primary.checkedAt||standby.checkedAt||null,engines,
    readiness:!configured?'control_credentials_unconfigured':
+    !primary.fresh||!standby.fresh?'control_api_observation_unverified':
     primary.controlApiReachable&&standby.controlApiReachable?
      'both_control_apis_reachable':
     !primary.controlApiReachable&&standby.controlApiReachable?
