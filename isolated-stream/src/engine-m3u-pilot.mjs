@@ -17,6 +17,8 @@ export function createEngineM3uPilot({fetchImpl=fetch,enabled=false,maxConcurren
   async function serve(req,res,url){
     if(!enabled)return reply(res,503,'M3U pilot disabled');
     if(req.method!=='GET')return reply(res,405,'Method not allowed',{allow:'GET'});
+    if(String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()!=='https'&&!req.socket?.encrypted)
+      return reply(res,400,'Use HTTPS for playlist credentials');
     // Never forward arbitrary parameters, duplicate credentials or credentials
     // to a second host. The old gateway owns all entitlement decisions.
     const q=url.searchParams;
