@@ -18,7 +18,10 @@ export function qualityLiveManifest(now){
  }
  return Buffer.from(lines.join('\n')+'\n');
 }
-export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,maxActiveReads=16,metrics=null}={}){
+export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,maxActiveReads=16,metrics=null,readDeadlineMs=15000,openStream=createReadStream}={}){
+ if(!Number.isSafeInteger(maxActiveReads)||maxActiveReads<1||maxActiveReads>64||
+    !Number.isSafeInteger(readDeadlineMs)||readDeadlineMs<10||readDeadlineMs>120000||
+    typeof openStream!=='function')throw Error('quality_read_configuration_invalid');
  let activeReads=0;
  const files=new Map();
  for(const channel of ['hd','fhd']){
@@ -70,7 +73,16 @@ export function createEngineHdTest({root='/app/engine-fixtures',now=Date.now,max
   res.writeHead(200,{...h,'content-type':entry.mime,'content-length':entry.size});
   if(req.method==='HEAD'){res.end();return true;}
   activeReads++;
-  void pipeline(createReadStream(entry.file),res).catch(()=>{if(!res.destroyed)res.destroy()}).finally(()=>{activeReads--});
+  // Bound the lifetime of a test file response even if the client stops
+  // consuming data. Release admission only when pipeline actually settles.
+  void (async()=>{
+   const controller=new AbortController();
+   const timer=setTimeout(()=>controller.abort(),readDeadlineMs);timer.unref?.();
+   try{
+    await pipeline(openStream(entry.file),res,{signal:controller.signal});
+   }catch{if(!res.destroyed)res.destroy();}
+   finally{clearTimeout(timer);activeReads--;}
+  })();
   return true;
  };
 }
