@@ -242,18 +242,31 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
-  // Large provider bursts must not be mistaken for a stalled viewer just
-  // because the entire burst arrived in one read. Yield to socket I/O
-  // between bounded slices; never await an individual viewer's drain.
+  // When the ONLY viewer is backpressured, temporarily pace the provider
+  // reader instead of killing a healthy decoder during a short startup burst.
+  // Never slow healthy peers: as soon as another live viewer joins, resume
+  // normal isolation. Bound waiting and retain the same strict queue cap.
+  async function paceSoleViewer(row,bytes){
+    const deadline=performance.now()+2000;
+    while(!row.controller.signal.aborted&&feeds.get(row.key)===row&&row.viewers.size===1){
+      const viewer=row.viewers.values().next().value;
+      if(viewer.destroyed||viewer.writableEnded||viewer.writableLength+bytes<=maxViewerQueueBytes)return;
+      if(performance.now()>=deadline)return;
+      await sleep(10);
+    }
+  }
   // Copy slices so the bootstrap cache cannot retain an oversized backing buffer.
   async function deliverBurst(row,chunk){
     counters.maxInputChunkBytes=Math.max(counters.maxInputChunkBytes,chunk.length);
     const sliceBytes=128*1024;
-    if(chunk.length<=sliceBytes){deliver(row,chunk);return;}
     for(let offset=0;offset<chunk.length;offset+=sliceBytes){
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
-      deliver(row,Buffer.from(chunk.subarray(offset,offset+sliceBytes)));
-      if(offset+sliceBytes<chunk.length)await yieldIo();
+      const size=Math.min(sliceBytes,chunk.length-offset);
+      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes)
+        await paceSoleViewer(row,size);
+      if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
+      deliver(row,chunk.length<=sliceBytes?chunk:Buffer.from(chunk.subarray(offset,offset+size)));
+      if(offset+size<chunk.length)await yieldIo();
     }
   }
   function nextChunk(reader,limitMs,attemptController,retireReader=null){
