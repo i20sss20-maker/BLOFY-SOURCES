@@ -13,7 +13,8 @@ export function createLiveFanout({
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
-  lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000
+  lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
+  maxViewerQueueBytes=2*1024*1024
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -26,6 +27,8 @@ export function createLiveFanout({
      !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5||
      !Number.isInteger(initialTransientRetries)||initialTransientRetries<0||
        initialTransientRetries>2||
+     !Number.isInteger(maxViewerQueueBytes)||maxViewerQueueBytes<512*1024||
+       maxViewerQueueBytes>4*1024*1024||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
        lateJoinReplayBytes>1024*1024||
      !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
@@ -187,7 +190,7 @@ export function createLiveFanout({
     if(row.state!=='ready'||viewer.destroyed||viewer.writableEnded)return;
     pruneRecent(row,clock());
     for(const {bytes:chunk} of row.recentChunks){
-      if(viewer.writableLength+chunk.length>512*1024){
+      if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
         if(!viewer.destroyed)viewer.destroy();
         return;
@@ -220,7 +223,7 @@ export function createLiveFanout({
     for(const viewer of [...row.viewers]){
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
-      if(viewer.writableLength+chunk.length>512*1024){
+      if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
         row.viewers.delete(viewer);
         if(!viewer.destroyed)viewer.destroy();
@@ -716,7 +719,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,
+    maxFeeds,maxViewersPerFeed,maxViewerQueueBytes,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
