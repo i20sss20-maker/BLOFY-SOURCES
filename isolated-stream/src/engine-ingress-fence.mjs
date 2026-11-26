@@ -2,7 +2,7 @@
 // the licensed single-slot account. During a handoff deny ALL media ingress,
 // including previously issued tickets. Do not trust an absent source ID.
 // A configured gate is fail-closed on timeouts or malformed replies.
-const ORIGIN='http://blofy-engine-control-qa.railway.internal:8080';
+const ORIGIN='https://blofy-engine-control-qa-production.up.railway.app';
 export function createRelayIngressFence({env=process.env,fetchImpl=fetch}={}){
  const enabled=env.BLOFY_RELAY_INGRESS_FENCE==='1';
  const token=env.BLOFY_RELAY_FENCE_TOKEN||'';
