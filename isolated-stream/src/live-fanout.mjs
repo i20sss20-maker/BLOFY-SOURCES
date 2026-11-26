@@ -87,6 +87,7 @@ export function createLiveFanout({
     sourceReleaseStalls:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
+    peakViewersOnOneFeed:0,viewerLimitRejections:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -660,12 +661,14 @@ export function createLiveFanout({
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
-      counters.capacityRejections++;
-      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
+      counters.capacityRejections++;counters.viewerLimitRejections++;
+      res.writeHead(503,{'retry-after':'3','cache-control':'no-store','content-type':'application/json'});
+      res.end('{"ok":false,"code":"fanout_viewer_limit"}');return;
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
     counters.viewersAccepted++;
+    counters.peakViewersOnOneFeed=Math.max(counters.peakViewersOnOneFeed,row.viewers.size);
     const onClose=()=>{
       row.viewers.delete(res);
       if(feeds.get(row.key)===row&&!row.viewers.size&&!row.idleTimer){
