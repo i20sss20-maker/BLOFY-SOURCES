@@ -381,7 +381,7 @@ export function createStreamServer({
       checkedAt:new Date().toISOString(),realSalehVerified:false
     }},
     liveSupervisor,autoHealth,streamOps,mediaRedundancy,mediaHlsCanary,mediaHourBuffer,operatorDashboard,sharedReadiness,
-    relayStats:()=>relayBroker.stats()};
+    drainRelay:()=>relayBroker.drain(),relayStats:()=>relayBroker.stats()};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -642,6 +642,11 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   process.on('SIGTERM',()=>{
     service.operatorDashboard.stop();
     service.streamOps.stop();service.autoHealth.stop();
-    service.app.close(()=>process.exit(0));
+    service.drainRelay();
+    service.app.close(()=>{
+      console.info('BLOFY_STREAM_SHUTDOWN_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
+      process.exit(0);
+    });
+    service.app.closeIdleConnections?.();
   });
 }
