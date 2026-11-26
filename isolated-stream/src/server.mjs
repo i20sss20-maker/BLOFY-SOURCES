@@ -16,6 +16,7 @@ import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from './linode-relay-maintenance.mjs';
+import {sharedLiveCapacityReport} from './shared-live-capacity-report.mjs';
 import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {createStreamOpsObservatory,summarizeMediaHour} from './stream-ops-observatory.mjs';
@@ -472,6 +473,17 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // Coarse on-instance media failure diagnosis; log aggregate-only reason
     // buckets when counts change. Never emit token paths, provider hosts,
     // subscriber IPs or upstream credentials.
+    let lastCapacityReport='';
+    const capacityAudit=setInterval(()=>{
+      const report=sharedLiveCapacityReport(service.relayStats());
+      if(!report)return;
+      const key=JSON.stringify(report);
+      if(key!==lastCapacityReport){
+        console.info('BLOFY_SHARED_LIVE_CAPACITY_AGGREGATE',key);
+        lastCapacityReport=key;
+      }
+    },15000);
+    capacityAudit.unref?.();
     let lastRelayFailureReport='';
     const mediaAudit=setInterval(()=>{
       const f=service.relayStats().fanout;
