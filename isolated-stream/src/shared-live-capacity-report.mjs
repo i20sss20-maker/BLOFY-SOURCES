@@ -4,6 +4,7 @@ export function sharedLiveCapacityReport(snapshot){
  const f=snapshot?.fanout;
  if(!f||snapshot.sharedLiveEnabled!==true)return null;
  const fields=['activeFeeds','viewers','upstreamSessionsOpened','viewersAccepted',
+  'peakViewersOnOneFeed','viewerLimitRejections','slowViewerDisconnects','maxViewersPerFeed',
   'sourceLimitRejections','capacityRejections','cooldownRejections','sourceHandoffWaits',
   'pendingSourceHandoffs','upstreamReconnects','reconnectRecovered','reconnectExhaustions',
   'sourceOutages','sourceReleaseStalls','sourceBytesReceived','viewerBytesQueued'];
