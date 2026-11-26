@@ -7,14 +7,22 @@ import {pathToFileURL} from 'node:url';
 import {verifyRestreamSmoke} from './restream-smoke.mjs';
 import {createOperatorDashboard} from './operator-dashboard.mjs';
 import {createDistributorDashboard} from './distributor-dashboard.mjs';
+import {handleStreamConnect} from './stream-connect-page.mjs';
+import {createConnectIssuer,connectPilotAuthorized,connectPilotChallenge} from './stream-connect-issuer.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
 import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from './linode-relay-maintenance.mjs';
+import {sharedLiveCapacityReport} from './shared-live-capacity-report.mjs';
+import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
-import {createStreamOpsObservatory} from './stream-ops-observatory.mjs';
+import {createStreamOpsObservatory,summarizeMediaHour} from './stream-ops-observatory.mjs';
+import {createMediaEngineRedundancyWatch} from './media-engine-redundancy-watch.mjs';
+import {createMediaHlsCanaryWatch} from './media-hls-canary-watch.mjs';
+import {createMediaHourBufferInspector} from './media-hour-buffer-inspector.mjs';
 import {probeLicensedSharedLive} from './shared-live-canary.mjs';
 import {createSharedLiveReadiness} from './shared-live-readiness.mjs';
 import {runOperatorEgressProbe} from './operator-egress-probe.mjs';
@@ -26,8 +34,14 @@ import {createXtreamMediaClientProfileDiagnostic} from './xtream-media-client-pr
 import {createReadReplicaObserver} from './read-replica-observer.mjs';
 import {readOnlyOperatorSiteProof} from './operator-site-live-readiness.mjs';
 import {verifyReadReplicaSynthetic} from './read-replica-synthetic.mjs';
+import {createEngineM3uPilot} from './engine-m3u-pilot.mjs';
+import {handleIndependentEngineTest} from './engine-independent-test.mjs';
+import {handleContinuousEngineTest} from './engine-continuous-test.mjs';
+import {createEngineHdTest} from './engine-hd-test.mjs';
+import {createEngineQualityMetrics} from './engine-quality-metrics.mjs';
 
 const DEFAULT_ENGINE='http://blofy-stream-media.railway.internal:8888';
+const STANDBY_ENGINE='http://blofy-stream-media-standby.railway.internal:8888';
 const startedAt=new Date().toISOString();
 const safeResponse=(res,status,data)=>{
   const body=Buffer.from(JSON.stringify(data));
@@ -65,6 +79,7 @@ export function createStreamServer({
   sharedLiveEnabled=false,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
+  maintenance=relayMaintenanceActive(),
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -140,6 +155,8 @@ export function createStreamServer({
     portal:unifiedPortal,fetchImpl,
     httpEofReconnect:process.env.BLOFY_STREAM_HLS_EOF_RECONNECT_EXPERIMENT==='1',
     mediaPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    standbyEnabled:process.env.BLOFY_STREAM_MEDIAMTX_STANDBY_PATH_FAILOVER==='1',
+    recordHourEnabled:process.env.BLOFY_STREAM_OPERATOR_HOUR_RECORDING_ENABLED==='1',
     // Requires explicit admin activation after a verified saleh source pilot.
     // Existing subscriber routing remains untouched by this operator control.
     salehOnlyOrigin:process.env.BLOFY_STREAM_SALEH_ORIGIN_ENABLED==='1',
@@ -150,9 +167,23 @@ export function createStreamServer({
     relayStats:()=>relayBroker.stats(),recoveryProbeEnabled:autoHealthProbeEnabled});
   const streamOps=createStreamOpsObservatory({
     relayStats:()=>relayBroker.stats(),autoHealth:()=>autoHealth.snapshot()});
+  const mediaHlsCanary=createMediaHlsCanaryWatch({
+    fetchImpl,logger:event=>console.info('BLOFY_MEDIA_SYNTHETIC_HEALTH',JSON.stringify(event))
+  });
+  const mediaHourBuffer=createMediaHourBufferInspector({
+    fetchImpl,controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    logger:event=>console.info('BLOFY_MEDIA_HOUR_BUFFER',JSON.stringify(event))
+  });
+  const mediaRedundancy=createMediaEngineRedundancyWatch({
+    fetchImpl,controlPassword:process.env.BLOFY_STREAM_MEDIAMTX_CONTROL_PASSWORD||'',
+    logger:record=>console.info('BLOFY_MEDIA_REDUNDANCY_WATCH',JSON.stringify(record))
+  });
   let replicaBootProof=null;
   const operatorDashboard=createOperatorDashboard({
     liveSupervisor,vodBroker,sharedReadiness,streamOps:()=>streamOps.snapshot(),
+    mediaRedundancy:()=>mediaRedundancy.snapshot(),
+    mediaHlsCanary:()=>mediaHlsCanary.snapshot(),
+    mediaHourBuffer:()=>mediaHourBuffer.snapshot(),
     getReplicaSynthetic:()=>replicaBootProof,
     sharedRelayStats:()=>relayBroker.stats(),
     autoHealth:()=>autoHealth.snapshot(),
@@ -180,11 +211,35 @@ export function createStreamServer({
     }
   });
   const distributorDashboard=createDistributorDashboard({bridge:unifiedPortal,log});
+  const connectPilotToken=process.env.BLOFY_CONNECT_PILOT_TOKEN||'';
+  const connectEnabled=process.env.BLOFY_CONNECT_WEB_ENABLED==='1'&&unifiedPortal.configured&&connectPilotToken.length>=32;
+  const connectPublicEnabled=connectEnabled&&process.env.BLOFY_CONNECT_PUBLIC_BETA==='1';
+  const connectIssuer=createConnectIssuer({bridge:unifiedPortal,enabled:connectEnabled,publicEnabled:connectPublicEnabled,pilotToken:connectPilotToken});
+  const engineM3uPilot=createEngineM3uPilot({enabled:process.env.BLOFY_ENGINE_M3U_PILOT==='1',
+    providerOrigin:process.env.BLOFY_ENGINE_PROVIDER_PILOT_ORIGIN||'',
+    providerUsername:process.env.BLOFY_ENGINE_PROVIDER_PILOT_USERNAME||''});
+  const qualityMetrics=createEngineQualityMetrics();
+  const handleEngineHdTest=createEngineHdTest({metrics:qualityMetrics});
   const app=http.createServer((req,res)=>{
+    if(relayMaintenanceBlocks(req.method,req.url,maintenance)){
+      res.setHeader('retry-after','60');
+      return safeResponse(res,503,{ok:false,code:'temporary_media_maintenance'});
+    }
+    if(handleEngineHdTest(req,res))return;
+    if(handleContinuousEngineTest(req,res))return;
+    if(handleIndependentEngineTest(req,res))return;
+    if(engineM3uPilot.handle(req,res))return;
     const privateLive=req.url?.split('?')[0].match(/^\/internal\/live-feed\/([a-f0-9]{48})$/);
     if(privateLive)return void liveSupervisor.streamFeed(req,res,privateLive[1]);
     if(operatorDashboard.handle(req,res))return;
     if(distributorDashboard.handle(req,res))return;
+    if(connectIssuer.handle(req,res))return;
+    if((req.url||'').split('?')[0]==='/connect/pilot'){
+      if(!connectEnabled){res.writeHead(503,{'cache-control':'no-store'});res.end('CONNECT pilot is disabled');return;}
+      if(!connectPilotAuthorized(req,connectPilotToken)){connectPilotChallenge(res);return;}
+      return handleStreamConnect(req,res,{enabled:true,pilot:true});
+    }
+    if(handleStreamConnect(req,res,{enabled:connectPublicEnabled,publicBeta:connectPublicEnabled}))return;
     const url=new URL(req.url||'/', 'http://localhost');
     if(url.pathname==='/internal/xtream-account-diagnostic')
       return void sourceDiagnostic.handle(req,res);
@@ -196,6 +251,27 @@ export function createStreamServer({
       return void officialM3uDiagnostic.handle(req,res);
     if(url.pathname==='/internal/xtream-media-client-profiles')
       return void clientProfiles.handle(req,res);
+    if(url.pathname==='/internal/engine-quality-metrics'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      return safeResponse(res,200,qualityMetrics.snapshot());
+    }
+    if(url.pathname==='/internal/media-engine-health'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      void liveSupervisor.mediaEngineHealth().then(report=>
+        safeResponse(res,report.ok?200:503,report)).catch(()=>
+        safeResponse(res,503,{ok:false,code:'restream_control_unavailable',
+          customerTrafficChanged:false,providerRequests:0}));
+      return;
+    }
+    // Last-hour operator transport report; read-only, no IPTV media reads.
+    if(url.pathname==='/internal/media-hour-report'&&req.method==='GET'){
+      if(!authorized(req.headers.authorization,adminToken))
+        return safeResponse(res,401,{ok:false,code:'not_authorized'});
+      const report=summarizeMediaHour(streamOps.snapshot());
+      return safeResponse(res,report.ok?200:503,report);
+    }
     if(url.pathname==='/internal/relay-health'&&req.method==='GET'){
       if(!relayBroker.enabled||!authorized(req.headers.authorization,relaySharedToken))
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
@@ -203,6 +279,7 @@ export function createStreamServer({
       return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
         role:'media_plane',relayReady:true,customerTrafficEnabled:false,
         sharedLiveConfigured:relayBroker.stats().sharedLiveEnabled,
+        activeDirectMediaClients:relayBroker.stats().activeDirectMediaClients,
         // Aggregate counters ONLY. Source URL, ticket, provider identity,
         // subscriber IP and secrets are not disclosed by this endpoint.
         fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
@@ -215,7 +292,11 @@ export function createStreamServer({
           slowViewerDisconnects:f.slowViewerDisconnects,
           sourceBytesReceived:f.sourceBytesReceived,
           viewerBytesQueued:f.viewerBytesQueued,
-          viewersAccepted:f.viewersAccepted}});
+          viewersAccepted:f.viewersAccepted,
+          // Authenticated aggregate timings only; null without observations.
+          mediaLatency:f.mediaLatency,
+          pendingSourceHandoffs:f.pendingSourceHandoffs,
+          bufferedBootstrapBytes:f.bufferedBootstrapBytes}});
     }
     if(url.pathname==='/internal/relay-grants')
       return void relayBroker.issue(req,res);
@@ -278,7 +359,7 @@ export function createStreamServer({
     t.unref?.();
   }
   function startBootSourceReadiness(){
-    if(!realSourceReadinessOnBoot)return;
+    if(maintenance||!realSourceReadinessOnBoot)return;
     // Only the uniquely named licensed 'saleh' source and a uniquely matching
     // 4K V SPORT channel are eligible for this single two-reader, 26s probe.
     // It does NOT publish a MediaMTX path or redirect any paying customer.
@@ -291,7 +372,7 @@ export function createStreamServer({
     },20000);
     timer.unref?.();
   }
-  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,
+  return {app,config:cfg,startBootCanary,startBootSourceReadiness,canary,qualityMetrics,
     recordReplicaProof:proof=>{replicaBootProof={
       ok:proof?.ok===true,code:String(proof?.code||'replica_probe_failed').slice(0,65),
       stage:String(proof?.stage||'unknown').slice(0,32),
@@ -300,8 +381,8 @@ export function createStreamServer({
       elapsedMs:Number.isSafeInteger(proof?.elapsedMs)?proof.elapsedMs:null,
       checkedAt:new Date().toISOString(),realSalehVerified:false
     }},
-    liveSupervisor,autoHealth,streamOps,operatorDashboard,sharedReadiness,
-    relayStats:()=>relayBroker.stats()};
+    liveSupervisor,autoHealth,streamOps,mediaRedundancy,mediaHlsCanary,mediaHourBuffer,operatorDashboard,sharedReadiness,
+    drainRelay:()=>relayBroker.drain(),relayStats:()=>relayBroker.stats()};
 }
 
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -322,7 +403,11 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
     service.startBootSourceReadiness();
-    service.autoHealth.start();
+    if(!relayMaintenanceActive())service.autoHealth.start();
+    else {
+      const report=()=>console.info('BLOFY_LINODE_RELAY_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
+      report();const drainTimer=setInterval(report,5000);drainTimer.unref?.();
+    }
     // Contact only the MediaMTX replica's private, non-media HLS root.
     // 404 is expected and means transport is reachable. No source stream
     // path, Xtream credential, subscriber or public media URL is requested.
@@ -358,12 +443,47 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     // Passive in-memory snapshots continue while the admin page is closed.
     // No extra source/media requests, no customer cutover, no account writes.
     service.streamOps.start();
+    service.mediaRedundancy.start();
+    service.mediaHlsCanary.start({delayMs:40000});
+    service.mediaHourBuffer.start({delayMs:90000});
+    // Independently prove HLS transport on the standby with an internal
+    // synthetic 2-track source; this is NOT a real provider or customer test.
+    // No customer cutover, source credential, or recording is performed.
+    if(process.env.BLOFY_STREAM_STANDBY_SYNTHETIC_ON_BOOT==='1'){
+      const standbySmokeTimer=setTimeout(()=>{
+        void verifyRestreamSmoke(STANDBY_ENGINE,{
+          pathName:'smoke',timeoutMs:22000
+        }).then(report=>console.info('BLOFY_MEDIA_STANDBY_SYNTHETIC',
+          JSON.stringify({
+            ok:report.ok,code:report.code,stage:report.stage,
+            elapsedMs:report.elapsedMs,
+            bytesVerified:report.bytesVerified||0,
+            providerRequests:0,customerTrafficChanged:false,
+            audioVideoDecoded:false,realSourceVerified:false
+          })))
+        .catch(()=>console.warn('BLOFY_MEDIA_STANDBY_SYNTHETIC',
+          JSON.stringify({ok:false,code:'standby_synthetic_probe_failed',
+            providerRequests:0,customerTrafficChanged:false})));
+      },17000);
+      standbySmokeTimer.unref?.();
+    }
     // Read-only Smart Playback Health runs while admin UI is closed.
     // Samples only fixed internal monitoring APIs once per minute.
     service.operatorDashboard.start();
     // Coarse on-instance media failure diagnosis; log aggregate-only reason
     // buckets when counts change. Never emit token paths, provider hosts,
     // subscriber IPs or upstream credentials.
+    let lastCapacityReport='';
+    const capacityAudit=setInterval(()=>{
+      const report=sharedLiveCapacityReport(service.relayStats());
+      if(!report)return;
+      const key=JSON.stringify(report);
+      if(key!==lastCapacityReport){
+        console.info('BLOFY_SHARED_LIVE_CAPACITY_AGGREGATE',key);
+        lastCapacityReport=key;
+      }
+    },15000);
+    capacityAudit.unref?.();
     let lastRelayFailureReport='';
     const mediaAudit=setInterval(()=>{
       const f=service.relayStats().fanout;
@@ -382,6 +502,46 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       }
     },60000);
     mediaAudit.unref?.();
+    // Passive aggregate test traffic only; empty windows emit nothing.
+    let previousQuality='';
+    const qualityAudit=setInterval(()=>{
+      const report=service.qualityMetrics.snapshot();
+      const key=JSON.stringify(report);
+      if(report.results.length&&key!==previousQuality)
+        console.info('BLOFY_ENGINE_QUALITY_AGGREGATE',key);
+      previousQuality=key;
+    },60000);
+    qualityAudit.unref?.();
+    // A crashed/aborted licensed source can leave its body.cancel() Promise
+    // unresolved even after all viewers leave. Its one-slot admission must
+    // never be bypassed by starting a second provider connection. If ONLY
+    // an orphaned release remains for >=15s, no active feeds and zero
+    // shared OR direct viewers, let Railway close our real sockets by restarting this
+    // isolated API. Healthy streams are NEVER interrupted by this guard.
+    // Emergency rollback: BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED=1.
+    const verifyStaleRelease=createIdleFanoutReleaseRecovery({
+      minStallMs:15000,minSamples:3
+    });
+    const releaseGuard=setInterval(()=>{
+      const snapshot=service.relayStats();
+      if(snapshot?.sharedLiveEnabled!==true||
+         process.env.BLOFY_STREAM_IDLE_FANOUT_RECOVERY_DISABLED==='1')return;
+      const decision=verifyStaleRelease(snapshot.fanout,
+        snapshot.activeDirectMediaClients);
+      if(!decision.restart)return;
+      console.error('BLOFY_STREAM_LICENSED_SOURCE_RELEASE_RECOVERY',JSON.stringify({
+        code:'orphaned_provider_release_requires_process_socket_close',
+        pendingSourceHandoffs:snapshot.fanout.pendingSourceHandoffs,
+        activeFeeds:0,viewers:0,activeDirectMediaClients:0,
+        reason:'only_after_15s_with_zero_customers',
+        customerConnectionsInterrupted:false,
+        providerQuotaBypassed:false
+      }));
+      // No privileged force-free: termination actually closes the process
+      // sockets. Railway restarts the stateless control service normally.
+      process.exit(76)
+    },5000);
+    releaseGuard.unref?.();
     // Restore safety after app restarts: the prior process held short-lived
     // private feed credentials only in memory. Clear orphaned worker configs.
     let recoveryAttempts=0;
@@ -494,6 +654,11 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   process.on('SIGTERM',()=>{
     service.operatorDashboard.stop();
     service.streamOps.stop();service.autoHealth.stop();
-    service.app.close(()=>process.exit(0));
+    service.drainRelay();
+    service.app.close(()=>{
+      console.info('BLOFY_STREAM_SHUTDOWN_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
+      process.exit(0);
+    });
+    service.app.closeIdleConnections?.();
   });
 }

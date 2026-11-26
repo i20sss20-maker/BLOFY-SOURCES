@@ -21,7 +21,7 @@ async function host(fn,{token=shared,fetchImpl=async()=>new Response(ts,{headers
     port:3000,runBootCanary:false});
   server.app.listen(0,'127.0.0.1');await once(server.app,'listening');
   const origin='http://127.0.0.1:'+server.app.address().port;
-  try{await fn(origin)}finally{
+  try{await fn(origin,server)}finally{
     server.app.closeAllConnections();
     await new Promise(resolve=>server.app.close(resolve));
   }
@@ -518,4 +518,45 @@ test('provider 503 remains transient/unavailable, not mislabeled as 509',async()
     assert.equal(body.code,'relay_provider_unavailable');
     assert.equal(body.upstreamStatus,503);
   },{fetchImpl:async()=>new Response('secret body',{status:503})});
+});
+
+
+test('direct movie relay in-flight is counted and released when its HTTP request completes',{timeout:8500},async()=>{
+ let notifySourceStarted,releaseProvider;
+ const started=new Promise(resolve=>notifySourceStarted=resolve);
+ const gate=new Promise(resolve=>releaseProvider=resolve);
+ let requests=0;
+ const fetchImpl=async()=>{
+  requests++;
+  notifySourceStarted();
+  await gate;
+  return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}})
+ };
+ try{
+  await host(async(base,service)=>{
+   const grant=await issue(base,{kind:'movie',sourceUrl:'https://allowed.example/movie/a/b/1.mp4'});
+   assert.equal(grant.status,201);
+   const {path}=await grant.json();
+   const viewerPromise=fetch(base+path);
+   await Promise.race([started,new Promise((_,reject)=>setTimeout(()=>reject(Error('source_did_not_start')),2500))]);
+   assert.equal(service.relayStats().activeDirectMediaClients,1,
+    'an in-flight direct media request must block isolated source watchdog');
+   const before=await fetch(base+'/internal/relay-health',{
+    headers:{authorization:'Bearer '+shared}});
+   assert.equal(before.status,200);
+   assert.equal((await before.json()).activeDirectMediaClients,1);
+   releaseProvider();
+   const viewer=await viewerPromise;
+   assert.equal(viewer.status,200);
+   const result=Buffer.from(await viewer.arrayBuffer());
+   assert.deepEqual(result,ts);
+   let cleared=false;
+   for(let i=0;i<40;i++){
+    if(service.relayStats().activeDirectMediaClients===0){cleared=true;break}
+    await new Promise(resolve=>setTimeout(resolve,25))
+   }
+   assert.equal(cleared,true,'a completed media response releases the direct reader count');
+   assert.equal(requests,1);
+  },{fetchImpl});
+ }finally{releaseProvider?.()}
 });

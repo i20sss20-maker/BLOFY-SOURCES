@@ -5,6 +5,7 @@ import {renderOperatorDashboard} from './operator-unified-view.mjs';
 import {streamOperatorOwnerPreview} from './operator-content-hub-preview.mjs';
 import {streamOperatorOriginalRange} from './operator-original-range.mjs';
 import {createMediaControlClient} from './mediamtx-private-control.mjs';
+import {assessMediaProductionGate} from './media-production-gate.mjs';
 import {createUnifiedPortalClient} from './unified-portal-client.mjs';
 import {createPlatformSystemAudit} from './platform-system-audit.mjs';
 import {createStreamReleaseInspector} from './stream-release-inspector.mjs';
@@ -63,6 +64,9 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
   liveSupervisor=null,vodBroker=null,
   sharedRelayStats=()=>null,autoHealth=()=>({ok:false,code:'not_configured'}),
   streamOps=()=>({ok:false,code:'not_configured'}),
+  mediaRedundancy=()=>({ok:false,code:'not_configured'}),
+  mediaHlsCanary=()=>({ok:false,code:'not_configured'}),
+  mediaHourBuffer=()=>({ok:false,code:'not_configured'}),
   sharedReadiness=null}={}){
   const control=createMediaControlClient({fetchImpl,username:controlUsername,password:controlPassword});
   const portal=createUnifiedPortalClient({fetchImpl,secret:unifiedSecret});
@@ -411,6 +415,60 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       }));
       return true;
     }
+    if(req.method==='GET'&&path==='/operator/api/media-production-gate'){
+      // In-memory, signed-in operator visibility only. No actual customer
+      // source is contacted and the response can NEVER trigger a rollout.
+      try{json(res,200,assessMediaProductionGate({
+        redundancy:mediaRedundancy(),synthetic:mediaHlsCanary()
+      }));}
+      catch{json(res,503,{ok:false,code:'media_production_gate_unavailable'});}
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-hour-buffer'){
+      try{json(res,200,mediaHourBuffer());}
+      catch{json(res,503,{ok:false,code:'hour_buffer_unavailable'});}
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-hls-canary'){
+      try{json(res,200,mediaHlsCanary());}
+      catch{json(res,503,{ok:false,code:'synthetic_canary_unavailable'});}
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-redundancy'){
+      // Existing operator Basic auth is checked before reaching this route.
+      // Passive last-hour control API samples never use subscriber credentials.
+      try{json(res,200,mediaRedundancy());}
+      catch{json(res,503,{ok:false,code:'media_redundancy_unavailable'});}
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-engine-health'){
+      // Authenticated private MediaMTX control check, zero source video reads.
+      void liveSupervisor.mediaEngineHealth().then(report=>
+        json(res,report.ok?200:503,report)).catch(()=>
+        json(res,503,{ok:false,code:'restream_control_unavailable',
+          customerTrafficChanged:false,providerRequests:0}));
+      return true;
+    }
+    if(req.method==='GET'&&path==='/operator/api/media-hour-report'){
+      try{
+        const snapshot=streamOps()||{};
+        const trend=Array.isArray(snapshot.trend)?snapshot.trend.slice(-240):[];
+        const first=trend[0]?.at,last=trend[trend.length-1]?.at;
+        const coverage=Number.isFinite(first)&&Number.isFinite(last)
+          ?Math.max(0,Math.round((last-first)/60000)):0;
+        json(res,200,{ok:true,readOnly:true,
+          scope:'operator_fanout_and_hls_1h',customerTrafficChanged:false,
+          mediaCopied:false,isAllSubscribersMeasured:false,
+          checkedAt:new Date().toISOString(),samples:trend.length,
+          observedWindowMinutes:coverage,
+          providerFailures:trend.reduce((n,x)=>n+(x.providerErrors||0),0),
+          reconnects:trend.reduce((n,x)=>n+(x.reconnects||0),0),
+          capacityRejections:trend.reduce((n,x)=>n+(x.capacityRejections||0),0),
+          criticalAlerts:snapshot.criticalCount||0,
+          rollingWindowConfiguredMinutes:snapshot.historyWindowMinutes||60});
+      }catch{json(res,503,{ok:false,code:'media_hour_report_unavailable'});}
+      return true;
+    }
     if(req.method==='GET'&&path==='/operator/api/auto-health'){
       json(res,200,autoHealth());return true;
     }
@@ -698,7 +756,7 @@ export function createOperatorDashboard({adminToken='',operatorProxyToken='',eng
       const src=path.match(/^\/operator\/api\/source\/([0-9a-f-]{36})\/(test|sync|probe|pause|resume|publish|unpublish|cancel-sync)$/i);
       const acc=path.match(/^\/operator\/api\/account\/([0-9a-f-]{36})\/(enable|disable|reset)$/i);
       const code=path.match(/^\/operator\/api\/code\/([0-9a-f-]{36})\/(revoke|sell|extend|transfer|relogin)$/i);
-      const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits)$/i);
+      const distributor=path.match(/^\/operator\/api\/distributors\/([0-9a-f-]{36})\/(credits|status|reset|limits|bonus|bonus-policy|permissions|report)$/i);
       const action=path==='/operator/api/content-hub/seasons/retry'?'season-retry':
         path==='/operator/api/content-hub/seasons/concurrent-read'?'season-concurrent-read':
         path==='/operator/api/content-hub/seasons/audit'?'season-audit':

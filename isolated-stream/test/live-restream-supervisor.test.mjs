@@ -318,3 +318,195 @@ test('manual passive TS capture reuses original publisher bytes with zero extra 
   const final=await service.stop(path);
   assert.equal(final.status,200);
 });
+
+
+test('private MediaMTX health uses only one control-plane GET, no media',async()=>{
+ const {service,calls}=createFixture();
+ const n=calls.length;
+ const health=await service.mediaEngineHealth();
+ assert.equal(health.ok,true);
+ assert.equal(health.providerRequests,0);
+ assert.equal(health.customerTrafficChanged,false);
+ assert.equal(calls.length,n+1);
+ assert.equal(calls.at(-1).method,'GET');
+ assert.ok(calls.at(-1).url.endsWith('/v3/config/paths/list'));
+});
+
+
+test('cold standby engine accepts new operator path when primary control 503s',async()=>{
+ const seen=[];
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Licensed preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async(url,options={})=>{
+   const target=String(url);seen.push({url:target,method:options.method||'GET'});
+   if(target.includes('media-standby.railway.internal:9997')){
+    return Response.json(target.endsWith('/paths/list')?{items:[]}:{});
+   }
+   if(target.includes('media.railway.internal:9997'))
+    return Response.json({error:'unavailable'},{status:503});
+   throw Error('unexpected outgoing fetch');
+  }
+ });
+ const result=await service.start(row());
+ assert.equal(result.status,201);
+ assert.equal(result.body.engine,'standby');
+ assert.equal(result.body.customerTrafficChanged,false);
+ assert.equal(service.list().items[0].engine,'standby');
+ assert.ok(seen.some(x=>x.url.includes('media-standby.railway.internal:9997/v3/config/paths/add/')));
+ assert.equal(seen.filter(x=>x.url.includes('provider.example')).length,0);
+ const stopped=await service.stop(result.body.path);
+ assert.equal(stopped.status,200);
+ assert.ok(seen.some(x=>x.method==='DELETE'&&x.url.includes('media-standby.railway.internal')));
+});
+test('MediaMTX authorization denial never triggers standby or extra origin connection',async()=>{
+ let backupRequests=0;
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Test preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   if(String(url).includes('standby')){
+    backupRequests++;
+    return Response.json({items:[]});
+   }
+   return Response.json({error:'unauthorized'},{status:401});
+  }
+ });
+ const result=await service.start(row());
+ assert.equal(result.status,503);
+ assert.equal(result.body.code,'restream_control_denied');
+ assert.equal(backupRequests,0);
+});
+test('standby engine is disabled unless the operator explicitly enables it',async()=>{
+ let second=0;
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Test preview',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({
+  portal,mediaPassword:password,standbyEnabled:false,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   if(String(url).includes('standby'))second++;
+   return Response.json({error:'unavailable'},{status:503});
+  }
+ });
+ assert.equal((await service.start(row())).status,503);
+ assert.equal(second,0);
+});
+
+test('hour recording requires separate rights and opt-in; no provider requests when disabled',async()=>{
+ const {service,calls}=createFixture();
+ const denied=await service.start({...row(),recordOneHour:true});
+ assert.equal(denied.status,403);
+ assert.equal(denied.body.code,'hour_recording_rights_confirmation_required');
+ assert.equal(calls.length,0);
+ const unavailable=await service.start({...row(),recordOneHour:true,
+   recordingRightsConfirmed:true});
+ assert.equal(unavailable.status,409);
+ assert.equal(unavailable.body.code,'hour_recording_feature_disabled');
+ assert.equal(calls.length,0);
+});
+test('one-hour recording is isolated on standby, bounded and only configured on-demand',async()=>{
+ const calls=[];
+ const portal={configured:true,liveChannel:async()=>({
+  status:200,body:{ok:true,kind:'live',extension:'ts',sourceId:UUID,
+   channelId:'88',name:'Licensed pilot',sourceUrl}
+ })};
+ const service=createLiveRestreamSupervisor({portal,mediaPassword:password,
+  standbyEnabled:true,recordHourEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async(url,options={})=>{
+   calls.push({url:String(url),method:options.method,body:options.body});
+   return Response.json(String(url).endsWith('/paths/list')?{items:[]}:{});
+  }
+ });
+ const result=await service.start({...row(),recordOneHour:true,
+  recordingRightsConfirmed:true});
+ assert.equal(result.status,201);
+ assert.equal(result.body.engine,'standby');
+ assert.equal(result.body.recordOneHour,true);
+ assert.equal(result.body.recordingVerified,false);
+ const post=calls.find(x=>x.method==='POST'&&x.url.includes('media-standby.'));
+ assert.ok(post);
+ const config=JSON.parse(post.body);
+ assert.equal(config.record,true);
+ assert.equal(config.recordDeleteAfter,'1h');
+ assert.equal(config.recordSegmentDuration,'15s');
+ assert.equal(config.recordPartDuration,'1s');
+ assert.equal(config.recordPath,'/recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z');
+ assert.ok(!post.body.includes('provider.example'));
+ assert.equal(calls.filter(x=>x.url.includes('media.railway.internal:9997')).length,0,
+  'licensed recording must never be configured on the unmounted primary');
+ const duplicate=await service.start({...row(),recordOneHour:false});
+ assert.equal(duplicate.status,409);
+});
+
+test('operator opt-in quick start reduces FFmpeg input analysis without changing video/audio codecs',async()=>{
+ const {service,calls}=createFixture();
+ const start=await service.start({...row(),fastStart:true});
+ assert.equal(start.status,201);
+ assert.equal(start.body.fastStart,true);
+ const m=calls.find(x=>x.method==='POST'&&mediaName.test(x.url));
+ assert.ok(m);
+ const config=JSON.parse(m.body);
+ assert.match(config.runOnDemand,/-probesize 262144 -analyzeduration 2000000 /);
+ assert.match(config.runOnDemand,/-map 0:v:0\?/);
+ assert.match(config.runOnDemand,/-map 0:a:0\?/);
+ assert.match(config.runOnDemand,/-c copy/);
+ assert.doesNotMatch(config.runOnDemand,/provider\.example|secret-password/);
+ const incompatible=await service.start({...row(),fastStart:false});
+ assert.equal(incompatible.status,409,'cannot silently change an active profile');
+ assert.equal(calls.filter(x=>x.method==='POST'&&mediaName.test(x.url)).length,1);
+});
+test('regular licensed operator path retains full FFmpeg input probing for compatibility',async()=>{
+ const {service,calls}=createFixture();
+ const first=await service.start(row());
+ assert.equal(first.body.fastStart,false);
+ const config=JSON.parse(calls.find(x=>x.method==='POST'&&mediaName.test(x.url)).body);
+ assert.doesNotMatch(config.runOnDemand,/-probesize 262144/);
+ assert.doesNotMatch(config.runOnDemand,/-analyzeduration 2000000/);
+ const invalid=await service.start({...row(),fastStart:'true'});
+ assert.equal(invalid.status,400);
+});
+
+test('synthetic source access and quota refusals do not open a backup or become retryable 502',async()=>{
+ for(const status of [401,403,429,456]){
+  const {portal,ts}=createFixture();const calls=[];let token;
+  const service=createLiveRestreamSupervisor({portal,mediaPassword:password,
+   lookup:async()=>[{address:'8.8.8.8',family:4}],
+   fetchImpl:async(url,opts={})=>{
+    const target=String(url);
+    if(target.includes(':9997/')){
+     if(opts.method==='POST')token=JSON.parse(opts.body).runOnDemand.match(/\/internal\/live-feed\/([a-f0-9]{48})/)[1];
+     return new Response('{}',{status:200,headers:{'content-type':'application/json'}});
+    }
+    calls.push(new URL(target).hostname);
+    if(target.startsWith('https://provider.example/'))return new Response('Denied',{status});
+    if(target.startsWith('https://backup.example/'))return new Response(ts,{status:200,headers:{'content-type':'video/mp2t'}});
+    throw Error('unexpected target');
+   }});
+  const started=await service.start({...row(),backupSourceId:'550e8400-e29b-41d4-a716-446655440001',backupChannelId:'99'});
+  assert.equal(started.status,201);
+  const server=http.createServer((req,res)=>service.streamFeed(req,res,token));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{
+   const result=await fetch('http://127.0.0.1:'+server.address().port+'/');
+   assert.equal(result.status,status===429?429:403);
+   assert.equal((await result.json()).code,'restream_provider_denied');
+   assert.deepEqual(calls,['provider.example']);
+   const info=service.list().items[0];
+   assert.equal(info.preferredSource,'primary');
+   assert.equal(info.failovers,0);
+   assert.equal(info.lastError,'restream_provider_denied');
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await service.stop(started.body.path);}
+ }
+});

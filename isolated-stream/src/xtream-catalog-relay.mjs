@@ -13,7 +13,7 @@ const ALLOWED_ACTIONS=new Set(['','get_live_categories','get_vod_categories',
  'get_series_categories','get_live_streams','get_vod_streams','get_series',
  'get_series_info','get_vod_info','get_short_epg','get_simple_data_table']);
 function safeWrite(res,code,data){
- if(res.headersSent)return;
+ if(res.headersSent||res.destroyed||res.writableEnded)return;
  const bytes=Buffer.from(JSON.stringify(data));
  res.writeHead(code,{'content-type':'application/json; charset=utf-8',
   'content-length':bytes.length,'cache-control':'no-store',
@@ -49,8 +49,11 @@ export function createXtreamCatalogRelay({
   if(req.method!=='POST')return safeWrite(res,405,{ok:false,code:'method_not_allowed'});
   if(concurrent>=maxConcurrent)return safeWrite(res,429,{ok:false,code:'relay_busy'});
   concurrent++;
-  let upstream;
+  let upstream,finishResponse;
   const signal=new AbortController();
+  const responseDone=new Promise(resolve=>{finishResponse=resolve});
+  res.once('finish',finishResponse);
+  res.once('close',finishResponse);
   const aborted=()=>signal.abort();
   req.once('aborted',aborted);
   const disconnected=()=>{if(!res.writableEnded)signal.abort()};
@@ -61,7 +64,9 @@ export function createXtreamCatalogRelay({
    const body=await getJson(req);
    if(typeof body?.sourceUrl!=='string'||body.sourceUrl.length>2500)
      return safeWrite(res,400,{ok:false,code:'source_url_invalid'});
+   if(signal.signal.aborted||res.destroyed||res.writableEnded)return;
    const target=await validate(body.sourceUrl);
+   if(signal.signal.aborted||res.destroyed||res.writableEnded)return;
    const action=target.searchParams.get('action')||'';
    const isVodInfo=action==='get_vod_info';
    const validVodInfo=!isVodInfo||(
@@ -86,6 +91,7 @@ export function createXtreamCatalogRelay({
     headers:{connection:'close','user-agent':'BLOFY-Xtream/1.0',
      accept:'application/json,text/plain;q=0.8,*/*;q=0.1'}
    },response=>{
+    if(signal.signal.aborted||res.destroyed||res.writableEnded){response.destroy();return;}
     const status=Number(response.statusCode)||502;
     if(status!==200){
      response.resume();
@@ -114,13 +120,16 @@ export function createXtreamCatalogRelay({
    upstream.setTimeout(30000,()=>upstream.destroy(Object.assign(new Error('timeout'),{code:'ETIMEDOUT'})));
    upstream.once('error',()=>safeWrite(res,502,{ok:false,code:'upstream_unavailable'}));
    signal.signal.addEventListener('abort',()=>upstream.destroy(),{once:true});
+   if(signal.signal.aborted||res.destroyed||res.writableEnded)return;
    upstream.end();
-   // Keep the concurrent slot until the response stream has ended.
-   await new Promise(resolve=>res.once('close',resolve));
+   // Install completion listeners before any async work to avoid missing a
+   // close event while validating a source. Never occupy a slot after exit.
+   if(!res.destroyed&&!res.writableEnded)await responseDone;
   }catch{
    safeWrite(res,400,{ok:false,code:'relay_request_invalid'});
   }finally{
    concurrent--;signal.abort();
+   res.off('finish',finishResponse);res.off('close',finishResponse);
    req.off('aborted',aborted);res.off('close',disconnected);
    if(upstream&&!upstream.destroyed)upstream.destroy();
   }

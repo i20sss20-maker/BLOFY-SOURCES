@@ -207,3 +207,100 @@ test('paged season queue never permits unbounded query or malformed page',async(
  assert.equal(invalid.status,400);
  assert.equal(calls.length,2);
 });
+
+test('all existing distributor dashboard commands reach the fixed authenticated bridge',async()=>{
+ const calls=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+  calls.push({path:new URL(input).pathname,method:init.method,body:JSON.parse(init.body)});
+  return new Response(JSON.stringify({ok:true}),{status:200});
+ }});
+ for(const command of ['change-password','rotate-xtream','library-categories','organize-bulk','library-preview']){
+  assert.equal((await client.distributorRequest(command,{sessionToken:'scoped-test'})).status,200);
+  assert.deepEqual(calls.at(-1),{path:'/internal/blofy-stream/distributor/'+command,method:'POST',body:{sessionToken:'scoped-test'}});
+ }
+ const before=calls.length;for(const command of ['sources','../distributors','delete-source'])assert.equal((await client.distributorRequest(command,{})).status,400);
+ assert.equal(calls.length,before);
+});
+
+test('owner permission and report routes are fixed and never exposed through distributor bridge',async()=>{
+ const seen=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{seen.push(new URL(input).pathname);return new Response(JSON.stringify({ok:true}),{status:200})}});
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ for(const kind of ['permissions','report']){assert.equal((await client.distributorAdminAction(id,kind,{})).status,200);assert.equal(seen.at(-1),'/internal/blofy-stream/distributors/'+id+'/'+kind);assert.equal((await client.distributorRequest(kind,{})).status,400)}
+ assert.equal(seen.length,2);
+});
+
+test('identical concurrent owner catalog reads share one upstream call, without stale cache',async()=>{
+ let calls=0,release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>{
+  calls++;await gate;
+  return new Response(JSON.stringify({ok:true,items:[{id:1}]}),{status:200});
+ }});
+ const a=client.catalog({type:'movie',q:'same'});
+ const b=client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,1);
+ release();
+ const [x,y]=await Promise.all([a,b]);
+ assert.deepEqual(x,y);
+ x.body.items[0].id=99;
+ assert.equal(y.body.items[0].id,1);
+ await client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,2,'completed results must not be cached');
+});
+test('catalog coalescing separates query scope and retries after failures',async()=>{
+ const calls=[];
+ let release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url)=>{
+  calls.push(String(url));await gate;
+  return new Response(JSON.stringify({ok:false}),{status:503});
+ }});
+ const requests=[client.catalog({type:'live',offset:0}),client.catalog({type:'live',offset:20}),
+  client.catalog({type:'movie',offset:0}),client.catalog({type:'live',offset:0})];
+ assert.equal(calls.length,3);
+ release();
+ const results=await Promise.all(requests);
+ assert.ok(results.every(r=>r.status===503));
+ await client.catalog({type:'live',offset:0});
+ assert.equal(calls.length,4);
+});
+
+test('chunked oversized bridge responses are rejected before the full body is read',async()=>{
+ let pulls=0,cancelled=false,signal;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url,init)=>{
+  signal=init.signal;
+  return new Response(new ReadableStream({
+   pull(controller){pulls++;controller.enqueue(new Uint8Array(256001));},
+   cancel(){cancelled=true}
+  },{highWaterMark:0}));
+ }});
+ const result=await client.overview();
+ assert.equal(result.status,502);
+ assert.equal(result.body.code,'unified_bridge_large_response');
+ assert.equal(pulls,2);
+ assert.equal(signal.aborted,true);
+ assert.equal(cancelled,true);
+});
+test('bridge rejects oversized declared lengths and redirects without reading body',async()=>{
+ for(const [status,headers,code] of [
+  [200,{'content-length':'512001'},'unified_bridge_large_response'],
+  [302,{location:'https://example.test/'},'unified_bridge_redirect_denied']
+ ]){
+  let reads=0,cancelled=false;
+  const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+   pull(){reads++},cancel(){cancelled=true}
+  },{highWaterMark:0}),{status,headers})});
+  const result=await client.overview();
+  assert.equal(result.body.code,code);
+  assert.equal(reads,0);
+  assert.equal(cancelled,true);
+ }
+});
+test('bridge preserves split UTF-8 Arabic metadata in a valid bounded JSON response',async()=>{
+ const expected={ok:true,name:'القنوات والأفلام'};
+ const bytes=new TextEncoder().encode(JSON.stringify(expected));let index=0;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(controller){if(index===bytes.length)controller.close();else controller.enqueue(bytes.slice(index,index+=1));}
+ }))});
+ const result=await client.overview();
+ assert.equal(result.status,200);assert.deepEqual(result.body,expected);
+});

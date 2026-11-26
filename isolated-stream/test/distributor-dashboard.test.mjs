@@ -113,7 +113,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
   const html=await response.text();
   assert.match(html,/<small>الرصيد<\/small>/);
   assert.match(html,/value="365">سنة · 12/);
-  assert.doesNotMatch(html,/value="730"|سنتان|id="connections"|maxConnections:/);
+  assert.doesNotMatch(html,/<option[^>]*value="730"|id="connections"|maxConnections:/);
   assert.match(html,/id="renew-days"/);
   assert.match(html,/id="days"/);
   assert.match(html,/value="1">تجريبي · مجاني/);
@@ -139,7 +139,7 @@ test('distributor page shows month-credit pricing, free daily trial and own sale
     'stat-expired','expiry-alert','clients-rows','clients-search','renew-dialog','customer-dialog',
     'customer-name','customer-phone','issues-more'])
     assert.match(html,new RegExp('id="'+id+'"'));
-  for(const action of ['relogin','renew','customer','clients'])
+  for(const action of ['relogin','renew','customer','list'])
     assert.match(html,new RegExp("request\\('"+action+"'"));
   assert.doesNotMatch(html,/id="trial-phone"|id="trial-field"/);
   assert.doesNotMatch(html,/data-tab="sources"/);
@@ -185,4 +185,38 @@ test('no privileged reseller route or source controls leak into distributor UI',
   });
   assert.equal(forbidden.status,404);
  });
+});
+
+test('customer directory lists each subscription, including trials sharing a phone, with duration and actions',async()=>{
+ await withServer(async base=>{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const header of ['الكود / Xtream','المدة الأساسية','الإصدار','الانتهاء','المتبقي','الحالة'])assert.ok(html.includes('<th>'+header+'</th>'));
+  for(const id of ['clients-rows','clients-count','clients-more'])assert.ok(html.includes('id="'+id+'"'));
+  assert.match(html,/تجريبي · 24 ساعة/);assert.match(html,/تبدأ عند التفعيل/);
+  assert.ok(html.includes("request('list',{q:$('clients-search').value.trim(),status:'all',offset})"));
+  assert.ok(html.includes('for(const item of clientRows)'));
+  assert.ok(html.includes("showIssue(await request('reveal',{issueId:item.id}))"));
+  assert.ok(html.includes("$(\'clients-search\').value=\'\'"));
+  assert.doesNotThrow(()=>new vm.Script(html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1]));
+ });
+});
+
+test('rewards and dual access UI use only authenticated, explicit, scoped actions',async()=>{
+ const calls=[],sessionToken='R'.repeat(43);
+ const dashboard=createDistributorDashboard({bridge:{async distributorRequest(action,data){
+  calls.push({action,data});return {status:200,body:{ok:true}};
+ }}});
+ const server=createServer((req,res)=>{if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port,origin='https://'+new URL(base).host;
+ try{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const id of ['reward-earned','reward-available','reward-redeem','reward-level','manage-dual','wallet-credits','wallet-pending','issue-bonus','renew-bonus'])assert.ok(html.includes('id="'+id+'"'));
+  const post=(action,body,withCookie=true)=>fetch(base+'/distributor/api/'+action,{method:'POST',headers:{origin,'content-type':'application/json','x-blofy-distributor-action':action,...(withCookie?{cookie:'blofy_dist='+sessionToken}:{})},body:JSON.stringify(body)});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req'},false)).status,401);
+  assert.equal((await post('reveal',{issueId:'owned',includeXtream:true,code:'foreign',accountId:'foreign'})).status,200);
+  assert.deepEqual(calls[0],{action:'reveal',data:{sessionToken,issueId:'owned',includeXtream:true}});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req',points:99999,distributorId:'foreign'})).status,200);
+  assert.deepEqual(calls[1],{action:'redeem-rewards',data:{sessionToken,credits:1,requestId:'req'}});
+ }finally{await new Promise(resolve=>server.close(resolve))}
 });

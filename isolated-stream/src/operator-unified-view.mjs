@@ -431,7 +431,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <span class="pill">ذروة المشاهدين خلال المراقبة: <strong id="smart-ops-peak-viewers">—</strong></span>
 <span class="pill">اتجاه المصدر (KiB/s): <strong id="smart-ops-ingress">—</strong></span>
 <span class="pill">تنبيهات سجلت أثناء إغلاق اللوحة: <strong id="smart-ops-incidents">—</strong></span>
+<span class="pill">وصول أول بيانات البث P95: <strong id="smart-ops-startup-latency">—</strong></span>
+<span class="pill">استعادة بيانات البث P95: <strong id="smart-ops-recovery-latency">—</strong></span>
 </div>
+<p class="muted">مؤشرات زمن النقل خلال آخر ساعة لمسارات المشاركة فقط؛ لا تقيس زمن ظهور الصورة أو جودة المشاهدة. P95 يعني أن 95٪ من العينات المرصودة تقع عند هذه المدة أو أقل.</p>
 <p id="smart-ops-scope" class="muted">لن نستنتج عدد عملاء التطبيق من بيانات مشاركة البث؛ ولا نغير حدود الاشتراك الأصلية.</p>
 <div class="grid">
 <div><h3>حالة مسارات المشاركة</h3>
@@ -581,6 +584,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <select id="live-channel" aria-label="القناة المراد تشغيلها"><option value="">حدد قناة من البحث</option></select>
 <label><input id="live-rights" type="checkbox"> أملك صلاحية إعادة بث هذه القناة</label>
 <label><input id="live-aac-audio" type="checkbox"> تجربة تحويل الصوت إلى AAC</label>
+<label><input id="live-fast-start" type="checkbox"> ⚡ بدء سريع تجريبي للمشرف (فحص أقل، قد لا يناسب بعض القنوات)</label>
+<label><input id="live-hour-record" type="checkbox" disabled> 💾 حفظ آخر ساعة لقناة أملك حق تسجيلها (على الاحتياطي، بعد اعتماد وضع التسجيل)</label>
 <button class="btn" id="live-start" type="button">▶ بدء إعادة البث</button>
 <button class="btn secondary" id="shared-live-probe" type="button">🧪 فحص المشاركة 26 ثانية</button>
 </div>
@@ -610,6 +615,19 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
 <video id="live-preview" controls playsinline preload="none" style="display:none;width:min(100%,850px);margin:16px 0;border-radius:10px;background:black" aria-label="معاينة القناة"></video>
 <pre id="live-result" class="log">اختر قناة من مكتبتك ثم ابدأ إعادة البث.</pre>
 </div><div class="panel"><h3>وضع خدمة إعادة البث</h3><p id="stream-note" class="muted">تُقرأ الحالة من MediaMTX؛ لن تظهر قنوات نشطة لم يتم ربطها فعليًا.</p></div>
+<div class="panel" id="media-resilience-console">
+  <div class="controls">
+    <div><h3>🛡️ مركز ثبات MediaMTX والنسخة الاحتياطية</h3>
+    <p class="muted">تشخيص آمن لآخر ساعة واتصال المحرك الفعلي. لا يشغّل بثًا جديدًا ولا ينقل المشتركين ولا يخزّن ملفات الفيديو.</p></div>
+    <button class="btn secondary" id="media-resilience-refresh" type="button">↻ فحص المحرك وتقرير الساعة</button>
+  </div>
+  <p class="muted" id="media-engine-readiness" role="status">اضغط فحص المحرك للتحقق من MediaMTX.</p>
+  <p class="muted" id="media-hour-summary" role="status">تقرير الساعة جاهز للقراءة من المؤشرات التشغيلية، وليس تسجيل فيديو.</p>
+  <p class="muted" id="media-standby-readiness" role="status">جارٍ تجهيز مراقبة المحرك الأساسي والاحتياطي كل دقيقة…</p>
+  <p class="muted" id="media-standby-hls-proof" role="status">جارٍ التحقق من خروج HLS الحقيقي لمصدر الاختبار الداخلي على المحركين…</p>
+  <p class="muted" id="media-hour-buffer-state" role="status">💾 تخزين آخر ساعة: مساحة 8GB للاختبار الاصطناعي على الاحتياطي؛ لا يتم تسجيل قنوات العملاء.</p>
+  <p class="muted" id="media-launch-gate" role="status">🚦 إطلاق جميع العملاء: بانتظار نتائج بث حقيقي لمدة ساعة، صلاحيات المصدر، اختبار الأجهزة والضغط.</p>
+</div>
 </section>
 <section class="view" id="page-library">
 <div class="heading"><div><h2>المكتبة</h2><p>ترتيب الأقسام والقنوات والأفلام والمسلسلات يأتي من لوحة Xtream، بعد مزامنة المصدر.</p></div></div>
@@ -4739,6 +4757,45 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
           show("تم تحديث حالة اللوحة.",true);await loadDistributors();
         }catch(e){show("تعذر تغيير الحالة: "+e.message,false)}
       },d.enabled?"danger":"secondary"));
+      actions.appendChild(button("تقرير الموزع",async function(){
+        try{
+          var r=await action("distributors/"+d.id+"/report","distributor-report",{}),stats=r.stats||{};
+          var dialog=document.createElement("dialog"),heading=node("h2","تقرير "+d.name),fields=node("div",undefined,"formgrid");
+          dialog.appendChild(heading);
+          var labels={walletCredits:"رصيد الأشهر",rewardPointsAvailable:"البونص المتاح",rewardPointsPending:"البونص المعلق",rewardPointsRedeemed:"البونص المسترد",paidTotal:"الاشتراكات المدفوعة",trialsTotal:"التجارب",convertedTrials:"التجارب المحولة",renewalsMonth:"تجديدات الشهر",spentMonth:"رصيد الاستخراج المصروف هذا الشهر",renewedCreditsMonth:"رصيد التجديد المصروف هذا الشهر",pendingReview:"طلبات تحتاج مراجعة"};
+          for(var key of Object.keys(labels)){var tile=node("div",undefined,"stat");tile.append(node("small",labels[key]),node("strong",String(stats[key]??0)));fields.appendChild(tile);}
+          dialog.appendChild(fields);var close=node("button","إغلاق","btn");close.type="button";close.addEventListener("click",function(){dialog.close()});dialog.appendChild(close);dialog.addEventListener("close",function(){dialog.remove()});document.body.appendChild(dialog);dialog.showModal();
+        }catch(e){show("تعذر تحميل التقرير: "+e.message,false);}
+      },"secondary"));
+      actions.appendChild(button("الصلاحيات",async function(){
+        var labels={paidIssue:"إصدار مدفوع",trialIssue:"إصدار تجريبي",renew:"التجديد",redeem:"استرداد البونص",export:"التصدير",customerEdit:"تعديل العملاء",relogin:"إعادة الدخول",rotate:"تغيير بيانات Xtream",libraryEdit:"تنظيم المكتبة",dualAccess:"عرض Xtream لنفس الكود"};
+        var dialog=document.createElement("dialog"),form=document.createElement("form");form.method="dialog";
+        var heading=node("h2","صلاحيات "+d.name);form.appendChild(heading);
+        var fields={};for(var key of Object.keys(labels)){var label=document.createElement("label"),input=document.createElement("input");input.type="checkbox";input.checked=d.permissions?.[key]!==false;fields[key]=input;label.append(input,document.createTextNode(" "+labels[key]));var row=document.createElement("p");row.appendChild(label);form.appendChild(row);}
+        var save=node("button","حفظ الصلاحيات"),cancel=node("button","إلغاء");save.type="submit";save.value="save";cancel.type="submit";cancel.value="cancel";form.append(save,cancel);dialog.appendChild(form);document.body.appendChild(dialog);
+        dialog.addEventListener("close",async function(){var result=dialog.returnValue;dialog.remove();if(result!=="save")return;var settings=Object.fromEntries(Object.entries(fields).map(function(pair){return [pair[0],pair[1].checked]}));try{await action("distributors/"+d.id+"/permissions","distributor-permissions",{permissionSettings:settings});show("تم تحديث الصلاحيات دون تغيير الرصيد.",true);await loadDistributors();}catch(e){show("تعذر تحديث الصلاحيات: "+e.message,false);}});
+        dialog.showModal();
+      },"secondary"));
+      actions.appendChild(button("نسب البونص",async function(){
+        var labels={30:"شهر",90:"3 أشهر",180:"6 أشهر",365:"سنة"},defaults={30:1,90:2,180:4,365:8},rates={};
+        for(var day of [30,90,180,365]){
+          var input=prompt("بونص "+labels[day]+" بالنقاط (0 إلى 10، بمضاعفات 0.25):",String((d.bonusPolicy?.[day]??defaults[day])/4));
+          if(input===null)return;if(!input.trim()){show("أدخل قيمة البونص.",false);return;}
+          var n=Number(input)*4;if(!Number.isSafeInteger(n)||n<0||n>40){show("قيمة البونص غير صالحة.",false);return;}rates[day]=n;
+        }
+        if(!confirm("اعتماد النسب الجديدة للموزع "+d.name+" للعمليات المستقبلية فقط؟ لن تتغير المكافآت السابقة."))return;
+        try{await action("distributors/"+d.id+"/bonus-policy","distributor-bonus-policy",{bonusRates:rates});show("تم تحديث نسب البونص.",true);await loadDistributors();}
+        catch(e){show("تعذر تحديث النسب: "+e.message,false);}
+      },"secondary"));
+      actions.appendChild(button("إهداء بونص",async function(){
+        var input=prompt("عدد نقاط البونص (0.25 إلى 1000):","2");if(input===null)return;
+        var quarters=Number(input)*4;if(!Number.isSafeInteger(quarters)||quarters<1||quarters>4000){show("أدخل عدد نقاط صحيحًا بمضاعفات ربع نقطة.",false);return;}
+        var reason=prompt("سبب المكافأة:","مكافأة خاصة");if(!reason||!reason.trim())return;
+        if(!confirm("إضافة "+quarters/4+" نقطة بونص إلى "+d.name+"؟"))return;
+        var requestId=crypto.randomUUID();
+        try{await action("distributors/"+d.id+"/bonus","distributor-bonus",{bonusQuarters:quarters,reason,requestId});show("تمت إضافة البونص.",true);await loadDistributors();}
+        catch(e){show("تعذر تأكيد إضافة البونص: "+e.message+"؛ راجع سجل المحفظة قبل التكرار.",false);}
+      },"secondary"));
       actions.appendChild(button("حد الإصدار",async function(){
         var input=prompt("الحد الأقصى لإصدارات الموزّع خلال 24 ساعة (1–10000):",
           String(d.dailyLimit||100));
@@ -5662,6 +5719,13 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   async function loadSmartOps(){
     try{
       var d=await api("smart-ops");
+      if(!d||d.ok!==true)throw new Error("مؤشرات القياس غير متاحة");
+      function latencyText(row){
+        return row&&row.samples>0&&Number.isFinite(row.p95Ms)?
+          count(Math.round(row.p95Ms))+" مللي ثانية ("+count(row.samples)+" عينة)":"لا توجد عينات";
+      }
+      value("smart-ops-startup-latency",latencyText(d.mediaLatency?.admissionToFirstBytes));
+      value("smart-ops-recovery-latency",latencyText(d.mediaLatency?.lastBytesToRecoveredBytes));
       value("smart-ops-status",d.alertCount===0?"لا توجد تنبيهات تشغيل نشطة":"يوجد "+count(d.alertCount)+" تنبيه");
       value("smart-ops-viewers",count(d.capacity?.activeViewers));
       value("smart-ops-feeds",count(d.capacity?.activeFeeds));
@@ -5726,6 +5790,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         ". لا يتم إنشاء طلبات بث إضافية لهذا الفحص.");
     }catch(e){
       value("smart-ops-status","تعذر قراءة مؤشرات الاتصال");
+      value("smart-ops-startup-latency","غير متاح");
+      value("smart-ops-recovery-latency","غير متاح");
       value("smart-ops-last-check","البيانات غير متاحة، ولا يجوز اعتبار جميع القنوات سليمة. "+e.message);
     }
   }
@@ -5834,12 +5900,128 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
   }
   $("security-refresh").addEventListener("click",loadSecurity);
   $("auto-health-refresh").addEventListener("click",loadAutoHealth);
+  async function loadMediaResilience(){
+    var button=$("media-resilience-refresh");
+    if(!button)return;
+    button.disabled=true;
+    var oldText=button.textContent;
+    button.textContent="جارٍ فحص MediaMTX…";
+    try{
+      var reports=await Promise.allSettled([api("media-engine-health"),api("media-hour-report"),api("media-redundancy"),api("media-hls-canary"),api("media-hour-buffer"),api("media-production-gate")]);
+      if(reports[0].status==="fulfilled"){
+        var a=reports[0].value;
+        $("media-engine-readiness").textContent="✅ MediaMTX متصل فعليًا · مسارات المشرف "+
+          Number(a.managedOperatorPaths||0)+" · ناشرون نشطون "+
+          Number(a.activeOperatorPublishers||0)+
+          " · بدون فتح أي اتصال بث من المصدر.";
+      }else{
+        $("media-engine-readiness").textContent="⚠️ تعذر الوصول لواجهة تحكم MediaMTX. لا يثبت ذلك توقف قنوات العملاء.";
+      }
+      if(reports[2].status==="fulfilled"){
+        var r=reports[2].value,p=r.engines&&r.engines.primary||{},
+          s=r.engines&&r.engines.standby||{};
+        var readable={"available":"يستجيب","degraded":"تنبيه مؤقت",
+          "unavailable":"غير متاح","unknown":"لم يُفحص بعد"};
+        $("media-standby-readiness").textContent=
+          "🛡️ محرك أساسي: "+(readable[p.state]||"غير معروف")+
+          " · احتياطي مستقل: "+(readable[s.state]||"غير معروف")+
+          " · تغطية أساسي "+Number(p.observationWindowMinutes||0)+"/60 دقيقة"+
+          " · احتياطي "+Number(s.observationWindowMinutes||0)+"/60 دقيقة"+
+          " · لا يوجد تحويل تلقائي للعملاء ولا تسجيل فيديو.";
+      }else{
+        $("media-standby-readiness").textContent=
+         "⚠️ تقرير جاهزية المحركين غير متاح الآن؛ لا يعني ذلك توقف البث.";
+      }
+      if(reports[3].status==="fulfilled"){
+        var c=reports[3].value,cp=c.engines&&c.engines.primary||{},
+          cs=c.engines&&c.engines.standby||{};
+        var textState={"verified":"المقطع سليم","failed":"فشل اختبار المقطع",
+          "unknown":"لا توجد عينة"};
+        $("media-standby-hls-proof").textContent=
+          "🎞️ فحص HLS كل "+Number(c.intervalMinutes||5)+" دقائق · الأساسي: "+
+          (textState[cp.syntheticHlsState]||"غير معروف")+" ("+
+          Number(cp.successfulSamples||0)+"/"+Number(cp.samples||0)+") · الاحتياطي: "+
+          (textState[cs.syntheticHlsState]||"غير معروف")+" ("+
+          Number(cs.successfulSamples||0)+"/"+Number(cs.samples||0)+
+          ") · بدء HLS الاصطناعي P95 أساسي "+
+          (Number.isFinite(cp.syntheticHlsLatencyP95Ms)?
+           cp.syntheticHlsLatencyP95Ms+"ms":"—")+" / احتياطي "+
+          (Number.isFinite(cs.syntheticHlsLatencyP95Ms)?
+           cs.syntheticHlsLatencyP95Ms+"ms":"—")+
+          " · اختبار داخلي، لا يثبت تشغيل قنوات المزوّد.";
+      }else{
+        $("media-standby-hls-proof").textContent=
+         "⚠️ لم تتوفر عينات HLS الداخلية. لا يمكن إثبات جاهزية المقاطع حتى يُستكمل الفحص.";
+      }
+      if(reports[4].status==="fulfilled"){
+        var h=reports[4].value;
+        $("media-hour-buffer-state").textContent=
+          "💾 تخزين ساعة تجريبي على الاحتياطي: "+
+          (h.state==="synthetic_hour_buffer_has_segments"
+          ?"✅ تم إثبات وجود "+Number(h.syntheticSegmentsWithinHour||0)+
+            " مقطعًا اختباريًا محفوظًا خلال آخر ساعة"
+          :h.state==="synthetic_hour_buffer_not_yet_verified"
+          ?"الواجهة متصلة؛ لم يثبت حفظ مقاطع بعد"
+          :"الفحص لم يكتمل ("+String(h.state||"unknown")+")")+
+          " · لا يسجل بث العملاء ولا يفعّل إعادة مشاهدة القنوات.";
+      }else{
+        $("media-hour-buffer-state").textContent=
+         "💾 تخزين آخر ساعة: يتعذر فحص التسجيل الداخلي حاليًا.";
+      }
+      if(reports[5].status==="fulfilled"){
+        var gate=reports[5].value;
+        var blockers=(gate.blockers||[]).map(function(code){
+          return ({
+            primary_engine_control_not_verified:"التحكم بالأساسي",
+            standby_engine_control_not_verified:"التحكم بالاحتياطي",
+            primary_synthetic_hls_not_verified:"HLS الأساسي",
+            standby_synthetic_hls_not_verified:"HLS الاحتياطي",
+            full_hour_engine_transport_not_observed:"ساعة مراقبة كاملة",
+            licensedOriginPermissionVerified_missing:"توثيق حق إعادة التوزيع",
+            realLive60MinutePlaybackVerified_missing:"ساعة بث حقيقي",
+            multiViewerCapacityVerified_missing:"اختبار المشاهدين وحد الاتصالات",
+            tvAndroid9CodecAudioVerified_missing:"اختبار صوت وصورة Android 9",
+            webAndVidaPlaybackVerified_missing:"اختبار الويب وVIDAA",
+            rollbackDrillVerified_missing:"اختبار العودة للنسخة السابقة"
+          })[code]||"فحص غير مكتمل";
+        });
+        $("media-launch-gate").textContent=
+          "🚦 إطلاق الجميع: غير معتمد حاليًا · "+
+          (gate.syntheticInfrastructureStatus==="two_engines_synthetic_media_verified"
+           ?"المحركان سليمان في الاختبار الداخلي"
+           :"فحص المحركين غير مكتمل")+
+          " · متبقٍ: "+(blockers.join("، ")||"مراجعة الاعتماد النهائي")+
+          " · لم يتم تغيير قنوات العملاء.";
+      }else{
+        $("media-launch-gate").textContent="⚠️ تعذر قراءة بوابة اعتماد الإنتاج؛ يُحظر التوسع التلقائي.";
+      }
+      if(reports[1].status==="fulfilled"){
+        var b=reports[1].value;
+        $("media-hour-summary").textContent="📊 آخر ساعة تشغيلية · تغطية "+
+          Number(b.observedWindowMinutes||0)+" دقيقة · أعطال المصدر "+
+          Number(b.providerFailures||0)+" · إعادات الاتصال "+
+          Number(b.reconnects||0)+" · رفض السعة "+
+          Number(b.capacityRejections||0)+" · إنذارات حرجة حاليًا "+
+          Number(b.criticalAlerts||0)+
+          " · هذه إحصاءات المحرك المنفصل فقط، وليست كافة عملاء BLOFY.";
+      }else{
+        $("media-hour-summary").textContent="تعذر استخراج تقرير الساعة. لا يعني ذلك اختفاء سجل الانقطاعات.";
+      }
+    }finally{button.disabled=false;button.textContent=oldText;}
+  }
+  $("media-resilience-refresh").addEventListener("click",loadMediaResilience);
   async function loadLive(){
     if(liveProbeRefresh){clearTimeout(liveProbeRefresh);liveProbeRefresh=null;}
     try{
       var results=await Promise.allSettled([api("live"),api("state")]);
       if(results[0].status!=="fulfilled")throw results[0].reason;
       var d=results[0].value;
+      var recordingToggle=$("live-hour-record");
+      recordingToggle.disabled=d.hourRecordingEnabled!==true;
+      if(recordingToggle.disabled)recordingToggle.checked=false;
+      recordingToggle.title=recordingToggle.disabled
+        ?"تم اختبار التخزين الاصطناعي، لكن تسجيل القنوات الحقيقية غير معتمد حتى الآن."
+        :"يسمح لمسار مشرف واحد فقط بعد تأكيد صلاحية تسجيل القناة.";
       var media=results[1].status==="fulfilled"?results[1].value.mediaControl:null;
       renderLive(d.items||[],media&&media.paths||[]);
       var pilot=d.salehOrigin;
@@ -5980,6 +6162,10 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         show("اختر المصدر والقناة الاحتياطية معًا أو اتركهما فارغين.",false);return;
       }
       var audioMode=$("live-aac-audio").checked?"aac":"copy";
+      var fastStart=$("live-fast-start").checked;
+      var recordOneHour=$("live-hour-record").checked;
+      if(recordOneHour&&!confirm(
+        "أؤكد امتلاك حقوق تسجيل وتخزين هذه القناة، وأوافق على تشغيل حفظ اختباري لا يتجاوز ساعة في وحدة التخزين المستقلة. لم يُعتمد التسجيل الجماعي. متابعة؟"))return;
       if(audioMode==="aac"&&!confirm(
         "تجربة AAC تخص مسار المشرف فقط وتستهلك CPU. لن تتغير أكواد أو قنوات العملاء. متابعة؟"))
         return;
@@ -5987,6 +6173,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         sourceId:sourceId,channelId:channelId,
         backupSourceId:backupSourceId,backupChannelId:backupChannelId,
         audioMode:audioMode,audioTranscodeConfirmed:audioMode==="aac",
+        fastStart:fastStart,
+        recordOneHour:recordOneHour,recordingRightsConfirmed:recordOneHour,
         rightsConfirmed:true
       });
       $("live-result").textContent=
@@ -5996,6 +6184,8 @@ body.sidebar-compact .sidebar-body{padding-inline:0}
         "\nالخطوة التالية: اضغط فحص HLS في صف القناة، ثم انتظر النتيجة."+
         "\nفحص HLS يختبر وصول مقطع، ولا يغني عن معاينة الصورة والصوت."+
         "\nالصوت: "+(result.audioMode==="aac"?"تحويل AAC للمشرف فقط":"نسخ دون تحويل")+
+        "\nبدء التشغيل: "+(result.fastStart?"⚡ تجريبي سريع":"قياسي متوافق")+
+        "\nتسجيل تجريبي: "+(result.recordOneHour?"مهيأ عند بدء البث، لم يتم إثبات حفظ ملف بعد":"غير مفعّل")+
         "\nالمسار: "+String(result.path||"");
       show("تم تجهيز المسار فقط. لا يعتبر البث شغالًا حتى ينجح فحص HLS.",true);
       await loadLive();

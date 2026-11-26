@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prestart": "node --check src/live-restream-supervisor.mjs && node --test test/operator-media-resilience.test.mjs",
     "start": "node src/server.mjs",
     "test": "node --test test/*.test.mjs"
   },

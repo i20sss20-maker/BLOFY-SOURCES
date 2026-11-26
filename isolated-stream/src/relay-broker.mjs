@@ -100,6 +100,13 @@ export function createRelayBroker({
     failureCounts[code]=(failureCounts[code]||0)+1;
     return respond(res,502,{ok:false,code,...extra});
   };
+  // Non-shared VOD/TS relay clients are not counted by shared fanout.
+  // Track their response lifecycle so an idle shared-source recovery can
+  // NEVER restart this process during an unrelated customer download.
+  let activeDirectMediaClients=0;
+  let draining=false;
+  const directControllers=new Set();
+  const rejectDrain=res=>respond(res,503,{ok:false,code:'relay_draining'},{'retry-after':'3'});
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
@@ -123,6 +130,7 @@ export function createRelayBroker({
     // An attacker must not force other subscribers to lose valid tickets.
   }
   async function issue(req,res){
+    if(draining)return rejectDrain(res);
     if(!enabled)return respond(res,503,{ok:false,code:'relay_disabled'});
     if(!sameBearer(req.headers.authorization,sharedToken)){
       quota.issuerAuthDenied++;
@@ -146,6 +154,7 @@ export function createRelayBroker({
         ?error.message:'relay_issue_invalid';
       return respond(res,400,{ok:false,code});
     }
+    if(draining)return rejectDrain(res);
     prune();
     if(tickets.size>=maxTickets){
       quota.capacityRejected++;
@@ -182,6 +191,7 @@ export function createRelayBroker({
       ...(input.sharedLive===true?{sharedLiveGranted}:{})});
   }
   async function relay(req,res){
+    if(draining)return rejectDrain(res);
     if(!enabled)return respond(res,503,{ok:false,code:'relay_disabled'});
     if(!['GET','HEAD'].includes(req.method))
       return respond(res,405,{ok:false,code:'relay_bad_method'});
@@ -206,7 +216,18 @@ export function createRelayBroker({
         return failRelay(res,'relay_provider_unavailable');
       }
     }
+    let directTracked=req.method==='GET';
+    const releaseDirectViewer=()=>{
+      if(!directTracked)return;
+      directTracked=false;
+      activeDirectMediaClients=Math.max(0,activeDirectMediaClients-1)
+    };
+    if(directTracked){
+      activeDirectMediaClients++;
+      res.once('close',releaseDirectViewer)
+    }
     const controller=new AbortController();
+    directControllers.add(controller);
     const onClose=()=>{if(!res.writableEnded)controller.abort()};
     const onAborted=()=>controller.abort();
     req.once('aborted',onAborted);
@@ -317,12 +338,19 @@ export function createRelayBroker({
       if(!res.destroyed)res.destroy();
     }finally{
       req.off('aborted',onAborted);res.off('close',onClose);
+      res.off('close',releaseDirectViewer);
+      releaseDirectViewer();
+      directControllers.delete(controller);
       controller.abort();
       if(upstream?.body&&!upstream.bodyUsed){try{await upstream.body.cancel()}catch{}}
     }
   }
-  return {enabled,issue,relay,stats:()=>({enabled,activeTickets:tickets.size,
-    sharedLiveEnabled,fanout:fanout.stats(),
+  function drain(){
+    draining=true;tickets.clear();fanout.drain();
+    for(const controller of directControllers)controller.abort();
+  }
+  return {enabled,issue,relay,drain,stats:()=>({enabled,activeTickets:tickets.size,
+    sharedLiveEnabled,activeDirectMediaClients,fanout:fanout.stats(),
     security:{grantsIssued:quota.grantsIssued,
       issuerAuthDenied:quota.issuerAuthDenied,
       issuanceThrottled:quota.issuanceThrottled,

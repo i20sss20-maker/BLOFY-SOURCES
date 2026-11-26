@@ -751,3 +751,495 @@ test('Retry-After is bounded and source denial never triggers a second initial u
   }
 });
 
+
+test('slow failed reconnect handshakes do not reset the playback recovery budget',async()=>{
+ let calls=0,now=100000;
+ await service(async(base,fanout)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  const bytes=await response.arrayBuffer();
+  assert.deepEqual(Buffer.from(bytes),packet);
+  assert.equal(calls,3,'initial stream plus exactly two reconnect attempts');
+  assert.equal(fanout.stats().upstreamReconnects,2);
+  assert.equal(fanout.stats().reconnectExhaustions,1);
+ },{clock:()=>now,reconnectOnUpstreamEnd:true,maxReconnectAttempts:2,
+  fetchImpl:async()=>{
+   calls++;
+   if(calls===1)return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+   now+=9000;
+   return new Response(null,{status:503});
+  }});
+});
+test('a source that resolves to a private address after EOF is never retried',async()=>{
+ let calls=0,lookups=0;
+ await service(async(base,fanout)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(calls,1);
+  assert.equal(lookups,3,'admission, initial source validation and one rejected reconnect');
+  assert.equal(fanout.stats().upstreamReconnects,1);
+ },{lookup:async()=>[{address:++lookups<=2?'8.8.8.8':'127.0.0.1',family:4}],
+  reconnectOnUpstreamEnd:true,maxReconnectAttempts:3,
+  fetchImpl:async()=>{
+   calls++;
+   return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+  }});
+});
+
+test('late viewers never receive expired bootstrap packets while existing viewers remain connected',async()=>{
+ let now=100000,writer,calls=0;
+ const source=new ReadableStream({start(c){writer=c}});
+ await service(async(base,fanout)=>{
+  const pending=fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  for(let i=0;i<100&&calls===0;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(calls,1);
+  writer.enqueue(new Uint8Array(packet));
+  const first=await pending;
+  const a=first.body.getReader();
+  assert.deepEqual(Buffer.from((await a.read()).value),packet);
+  now+=3001;
+  const joining=fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  for(let i=0;i<100&&fanout.stats().viewers<2;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(fanout.stats().viewers,2);
+  assert.equal(fanout.stats().lateJoinReplays,0);
+  const fresh=Buffer.from(packet);fresh[10]=0x22;
+  writer.enqueue(new Uint8Array(fresh));
+  const second=await joining,b=second.body.getReader();
+  assert.deepEqual(Buffer.from((await b.read()).value),fresh);
+  assert.deepEqual(Buffer.from((await a.read()).value),fresh);
+  assert.equal(calls,1);
+  await Promise.all([a.cancel(),b.cancel()]);
+ },{clock:()=>now,lateJoinReplayAgeMs:3000,fetchImpl:async()=>{
+  calls++;return new Response(source,{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('bootstrap freshness settings are bounded',()=>{
+ assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:0}),/fanout_capacity_invalid/);
+ assert.throws(()=>createLiveFanout({lateJoinReplayAgeMs:16000}),/fanout_capacity_invalid/);
+});
+
+for(const retirement of ['idle expiry','global eviction']){
+ test('licensed quota remains reserved after '+retirement+' until actual release',async()=>{
+  const scope='550e8400-e29b-41d4-a716-446655440000';
+  let release,oldCancelStarted=false;
+  const gate=new Promise(resolve=>release=resolve);
+  const calls=[];
+  const broker=createLiveFanout({maxFeeds:1,idleMs:retirement==='idle expiry'?40:5000,
+   readIdleTimeoutMs:400,lookup:async()=>[{address:'8.8.8.8',family:4}],
+   fetchImpl:async url=>{
+    const name=url.pathname.split('/').pop();calls.push(name);
+    return new Response(new ReadableStream({
+     start(c){c.enqueue(new Uint8Array(packet))},
+     cancel(){if(name==='old.ts'){oldCancelStarted=true;return gate}}
+    }),{headers:{'content-type':'video/mp2t'}});
+   }});
+  const server=http.createServer((req,res)=>void broker.handle(req,res,
+   'https://licensed.example/live/a/b'+req.url,
+   req.url==='/other.ts'?{}:{licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base='http://127.0.0.1:'+server.address().port;
+  async function until(predicate){
+   for(let i=0;i<150&&!predicate();i++)await new Promise(r=>setTimeout(r,10));
+   assert.ok(predicate(),'expected state transition');
+  }
+  try{
+   const old=await fetch(base+'/old.ts',{signal:AbortSignal.timeout(5000)});
+   const reader=old.body.getReader();await reader.read();await reader.cancel();
+   await until(()=>broker.stats().viewers===0);
+   if(retirement==='global eviction'){
+    const other=await fetch(base+'/other.ts',{signal:AbortSignal.timeout(5000)});
+    assert.equal(other.status,200);
+    const b=other.body.getReader();await b.read();await b.cancel();
+    await until(()=>broker.stats().viewers===0);
+   }
+   await until(()=>oldCancelStarted);
+   assert.equal(broker.stats().pendingSourceHandoffs,1);
+   const blocked=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(5000)});
+   assert.equal(blocked.status,503);
+   assert.equal((await blocked.json()).code,'fanout_source_handoff_pending');
+   assert.equal(calls.filter(n=>n==='next.ts').length,0);
+   release();
+   await until(()=>broker.stats().pendingSourceHandoffs===0);
+   const next=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(5000)});
+   assert.equal(next.status,200);
+   const b=next.body.getReader();await b.read();await b.cancel();
+   assert.equal(calls.filter(n=>n==='next.ts').length,1);
+  }finally{
+   release();broker.close();server.closeAllConnections();
+   await new Promise(resolve=>server.close(resolve));
+  }
+ });
+}
+
+test('empty first transport chunks are skipped without rejecting later valid TS',async()=>{
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(broker.stats().sourceBytesReceived,packet.length);
+ },{fetchImpl:async()=>new Response(new ReadableStream({
+  start(c){c.enqueue(new Uint8Array(0));c.enqueue(new Uint8Array(packet));c.close()}
+ }),{headers:{'content-type':'video/mp2t'}})});
+});
+test('continuous empty chunks cannot keep an otherwise stalled live source alive',async()=>{
+ let sent=false;
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+  assert.equal(response.status,200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+  assert.equal(broker.stats().failureReasons.fanout_read_idle_timeout,1);
+  assert.equal(broker.stats().sourceBytesReceived,packet.length);
+ },{readIdleTimeoutMs:75,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(c){if(!sent){sent=true;c.enqueue(new Uint8Array(packet));}
+   else c.enqueue(new Uint8Array(0))}
+ }),{headers:{'content-type':'video/mp2t'}})});
+});
+test('an idle closed feed cannot open upstream after pending DNS completes',async()=>{
+ let release,lookups=0,calls=0;
+ const gate=new Promise(resolve=>release=resolve);
+ await service(async(base,broker)=>{
+  const abort=new AbortController();
+  const request=fetch(base+'/live',{signal:abort.signal}).catch(()=>null);
+  try{
+   for(let i=0;i<100&&lookups<2;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(lookups,2);
+   abort.abort();await request;
+   for(let i=0;i<100&&broker.stats().activeFeeds;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(broker.stats().activeFeeds,0);
+   release();
+   await new Promise(r=>setTimeout(r,30));
+   assert.equal(calls,0);
+  }finally{abort.abort();release()}
+ },{idleMs:20,lookup:async()=>{
+  if(++lookups===2)await gate;
+  return [{address:'8.8.8.8',family:4}];
+ },fetchImpl:async()=>{calls++;return new Response(packet)}});
+});
+
+test('a stalled redirect body cannot hang viewers or open a second upstream request',async()=>{
+ let calls=0,release;
+ const gate=new Promise(resolve=>release=resolve);
+ try{
+  await service(async(base,broker)=>{
+   const res=await fetch(base+'/live',{signal:AbortSignal.timeout(3000)});
+   assert.equal(res.status,502);
+   assert.equal((await res.json()).code,'fanout_source_unavailable');
+   assert.equal(calls,1);
+   assert.equal(broker.stats().failureReasons.provider_redirect_denied,1);
+  },{initialTransientRetries:2,fetchImpl:async()=>{
+   calls++;
+   return new Response(new ReadableStream({cancel(){return gate}}),{
+    status:302,headers:{location:'/live/a/b/index.ts'}});
+  }});
+ }finally{release()}
+});
+test('licensed stalled redirect retains source quota until cancellation completes',async()=>{
+ const scope='550e8400-e29b-41d4-a716-446655440000';
+ let release,calls=[];
+ const gate=new Promise(resolve=>release=resolve);
+ const broker=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   calls.push(url.pathname);
+   if(url.pathname.endsWith('/redirect.ts'))return new Response(new ReadableStream({
+    cancel(){return gate}
+   }),{status:302,headers:{location:'/live/a/b/target.ts'}});
+   return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>void broker.handle(req,res,
+  'https://licensed.example/live/a/b'+req.url,{
+   licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const first=await fetch(base+'/redirect.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(first.status,502);await first.text();
+  for(let i=0;i<100&&!broker.stats().pendingSourceHandoffs;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().pendingSourceHandoffs,1);
+  const blocked=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(blocked.status,503);
+  assert.equal((await blocked.json()).code,'fanout_source_handoff_pending');
+  assert.deepEqual(calls,['/live/a/b/redirect.ts']);
+  release();
+  for(let i=0;i<100&&broker.stats().pendingSourceHandoffs;i++)
+   await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().pendingSourceHandoffs,0);
+  const next=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(next.status,200);
+  assert.deepEqual(Buffer.from(await next.arrayBuffer()),packet);
+  assert.deepEqual(calls,['/live/a/b/redirect.ts','/live/a/b/next.ts']);
+ }finally{
+  release();broker.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
+
+test('shared live latency distinguishes first bytes from recovered bytes and expires old evidence',async()=>{
+ let now=100000,calls=0,secondWriter;
+ await service(async(base,broker)=>{
+  assert.equal(broker.stats().mediaLatency.admissionToFirstBytes.samples,0);
+  const response=await fetch(base+'/live',{signal:AbortSignal.timeout(4000)});
+  assert.equal(response.status,200);
+  const reader=response.body.getReader();
+  assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+  for(let i=0;i<150&&calls<2;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(calls,2);
+  secondWriter.enqueue(new Uint8Array(packet));
+  assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+  const evidence=broker.stats().mediaLatency;
+  assert.equal(evidence.scope,'shared_ts_transport_only');
+  assert.equal(evidence.decodedVideoVerified,false);
+  assert.deepEqual(evidence.admissionToFirstBytes,{samples:1,p50Ms:120,p95Ms:120,maxMs:120});
+  assert.deepEqual(evidence.lastBytesToRecoveredBytes,{samples:1,p50Ms:850,p95Ms:850,maxMs:850});
+  now+=3600001;
+  assert.equal(broker.stats().mediaLatency.admissionToFirstBytes.p95Ms,null);
+  assert.equal(broker.stats().mediaLatency.lastBytesToRecoveredBytes.samples,0);
+  await reader.cancel();
+ },{clock:()=>now,reconnectOnUpstreamEnd:true,fetchImpl:async()=>{
+  calls++;
+  if(calls===1){now+=120;return new Response(packet,{headers:{'content-type':'video/mp2t'}})}
+  now+=850;
+  return new Response(new ReadableStream({start(c){secondWriter=c}}),{headers:{'content-type':'video/mp2t'}});
+ }});
+});
+test('failed source attempts do not generate misleading successful live latency',async()=>{
+ await service(async(base,broker)=>{
+  const response=await fetch(base+'/live');
+  assert.equal(response.status,502);
+  await response.text();
+  const evidence=broker.stats().mediaLatency;
+  assert.equal(evidence.admissionToFirstBytes.samples,0);
+  assert.equal(evidence.lastBytesToRecoveredBytes.samples,0);
+ },{fetchImpl:async()=>new Response(null,{status:503})});
+});
+
+test('licensed channel handoff cancels blocked reader promptly instead of waiting for idle timeout',async()=>{
+ const scope='550e8400-e29b-41d4-a716-446655440000';
+ const calls=[];let cancelled=false;
+ const broker=createLiveFanout({idleMs:5000,readIdleTimeoutMs:15000,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   calls.push(url.pathname);
+   return new Response(new ReadableStream({
+    start(c){c.enqueue(new Uint8Array(packet))},
+    cancel(){if(url.pathname.endsWith('/old.ts'))cancelled=true}
+   }),{headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>void broker.handle(req,res,
+  'https://licensed.example/live/a/b'+req.url,{
+   licensedSourceId:scope,providerMaxConcurrentFeeds:1}));
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const a=await fetch(base+'/old.ts',{signal:AbortSignal.timeout(4000)});
+  const reader=a.body.getReader();await reader.read();await reader.cancel();
+  for(let i=0;i<100&&broker.stats().viewers;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(broker.stats().viewers,0);
+  const b=await fetch(base+'/next.ts',{signal:AbortSignal.timeout(4000)});
+  assert.equal(b.status,200);
+  assert.equal(cancelled,true);
+  assert.deepEqual(calls,['/live/a/b/old.ts','/live/a/b/next.ts']);
+  const next=b.body.getReader();
+  assert.deepEqual(Buffer.from((await next.read()).value),packet);
+  await next.cancel();
+ }finally{
+  broker.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
+test('retired feed waiting for first bytes releases source without waiting for first-byte timeout',async()=>{
+ let opened=false,cancelled=false;
+ await service(async(base,broker)=>{
+  const abort=new AbortController();
+  const pending=fetch(base+'/live',{signal:abort.signal}).catch(()=>null);
+  try{
+   for(let i=0;i<100&&!opened;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(opened,true);
+   abort.abort();await pending;
+   for(let i=0;i<100&&!cancelled;i++)await new Promise(r=>setTimeout(r,10));
+   assert.equal(cancelled,true);
+   assert.equal(broker.stats().activeFeeds,0);
+   assert.equal(broker.stats().providerFailures,0);
+  }finally{abort.abort()}
+ },{idleMs:20,firstByteTimeoutMs:12000,fetchImpl:async()=>{
+  opened=true;
+  return new Response(new ReadableStream({cancel(){cancelled=true}}),
+   {headers:{'content-type':'video/mp2t'}});
+ }});
+});
+
+test('250 synthetic viewers keep healthy source running during isolated licensed source recovery',{timeout:20000},async()=>{
+ const scopes={a:'550e8400-e29b-41d4-a716-446655440000',b:'550e8400-e29b-41d4-a716-446655440001'};
+ const calls={a:0,b:0},writers={};
+ const media=mark=>{const bytes=Buffer.alloc(188*3,mark);for(let i=0;i<bytes.length;i+=188)bytes[i]=0x47;return bytes};
+ const aFirst=media(0x21),aRecovered=media(0x42),bFirst=media(0x31),bDuring=media(0x32),bAfter=media(0x33);
+ let releaseRecovery;
+ const recoveryGate=new Promise(resolve=>releaseRecovery=resolve);
+ const fanout=createLiveFanout({maxFeeds:4,maxViewersPerFeed:128,
+  reconnectOnUpstreamEnd:true,lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async url=>{
+   const key=url.pathname.endsWith('/b.ts')?'b':'a';
+   calls[key]++;
+   if(key==='a'&&calls.a===2)await recoveryGate;
+   return new Response(new ReadableStream({start(c){writers[key]=c}}),
+    {headers:{'content-type':'video/mp2t'}});
+  }});
+ const server=http.createServer((req,res)=>{
+  const key=req.url==='/b'?'b':'a';
+  void fanout.handle(req,res,'https://licensed.example/live/account/'+(req.url==='/other-a'?'other-a':key)+'.ts',
+   {licensedSourceId:scopes[key],providerMaxConcurrentFeeds:1});
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ const abort=new AbortController();
+ const deadline=setTimeout(()=>abort.abort(),15000);
+ const request=path=>fetch(base+path,{signal:abort.signal});
+ async function until(fn){
+  for(let i=0;i<450&&!fn();i++)await new Promise(r=>setTimeout(r,10));
+  assert.ok(fn(),'expected bounded load-test state');
+ }
+ async function receive(readers,expected){
+  const chunks=await Promise.all(readers.map(reader=>reader.read()));
+  for(const x of chunks){assert.equal(x.done,false);assert.deepEqual(Buffer.from(x.value),expected)}
+ }
+ try{
+  const pendingA=Array.from({length:125},()=>request('/a'));
+  const pendingB=Array.from({length:125},()=>request('/b'));
+  // Handle rejections even if a state assertion fails before awaiting responses.
+  const joined=Promise.all([...pendingA,...pendingB]);void joined.catch(()=>{});
+  await until(()=>fanout.stats().viewers===250&&writers.a&&writers.b);
+  writers.a.enqueue(new Uint8Array(aFirst));writers.b.enqueue(new Uint8Array(bFirst));
+  const responses=await joined;assert.ok(responses.every(r=>r.status===200));
+  const readers=responses.map(r=>r.body.getReader()),a=readers.slice(0,125),b=readers.slice(125);
+  await Promise.all([receive(a,aFirst),receive(b,bFirst)]);
+  assert.deepEqual(calls,{a:1,b:1});
+  const retired=writers.a;retired.close();
+  await until(()=>calls.a===2);
+  // Keep A blocked while proving B's original viewers receive fresh bytes.
+  writers.b.enqueue(new Uint8Array(bDuring));await receive(b,bDuring);
+  const refused=await request('/other-a');
+  assert.equal(refused.status,503);
+  assert.equal((await refused.json()).code,'fanout_source_channel_limit');
+  assert.deepEqual(calls,{a:2,b:1});
+  const newA=Promise.all(Array.from({length:3},()=>request('/a')));void newA.catch(()=>{});
+  await until(()=>fanout.stats().viewers===253);
+  const full=await request('/a');
+  assert.equal(full.status,503);assert.equal(await full.text(),'fanout_viewer_limit');
+  releaseRecovery();await until(()=>writers.a!==retired);
+  writers.a.enqueue(new Uint8Array(aRecovered));
+  writers.b.enqueue(new Uint8Array(bAfter));
+  const late=await newA;assert.ok(late.every(r=>r.status===200));
+  const lateReaders=late.map(r=>r.body.getReader());
+  await Promise.all([receive([...a,...lateReaders],aRecovered),receive(b,bAfter)]);
+  const stats=fanout.stats();
+  assert.equal(stats.viewers,253);assert.equal(stats.activeFeeds,2);
+  assert.equal(stats.reconnectRecovered,1);assert.equal(stats.upstreamSessionsOpened,3);
+  assert.equal(stats.sourceLimitRejections,1);assert.equal(stats.capacityRejections,1);
+  assert.equal(stats.slowViewerDisconnects,0);
+  assert.deepEqual(calls,{a:2,b:1});
+  await Promise.all([...readers,...lateReaders].map(r=>r.cancel().catch(()=>{})));
+ }finally{
+  clearTimeout(deadline);abort.abort();releaseRecovery();fanout.close();server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
+});
+
+
+test('a transient DNS failure during live reconnect preserves the viewer response',async()=>{
+ let calls=0,lookups=0;
+ const restored=Buffer.from(packet);restored[10]=0x55;
+ let resumed;
+ await service(async(base,fanout)=>{
+   const response=await fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   assert.equal(response.status,200);
+   const reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.deepEqual(Buffer.from((await reader.read()).value),restored);
+   assert.equal(calls,2,'failed DNS must not open any upstream GET');
+   assert.equal(lookups,4);
+   assert.equal(fanout.stats().upstreamReconnects,2);
+   assert.equal(fanout.stats().reconnectRecovered,1);
+   await reader.cancel();
+ },{lookup:async()=>{
+    lookups++;
+    if(lookups===3)throw Object.assign(Error('temporary resolver issue'),{code:'EAI_AGAIN'});
+    return [{address:'8.8.8.8',family:4}];
+   },reconnectOnUpstreamEnd:true,maxReconnectAttempts:3,
+   fetchImpl:async()=>{
+     calls++;
+     if(calls===1)return new Response(packet,{headers:{'content-type':'video/mp2t'}});
+     return new Response(new ReadableStream({start(c){resumed=c;c.enqueue(restored)}}),
+        {headers:{'content-type':'video/mp2t'}});
+   }});
+});
+
+test('unresolved DNS on every recovery attempt ends the feed within the existing budget',async()=>{
+ let calls=0,lookups=0;
+ await service(async(base,fanout)=>{
+   const response=await fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   assert.equal(response.status,200);
+   assert.deepEqual(Buffer.from(await response.arrayBuffer()),packet);
+   assert.equal(calls,1);
+   assert.equal(lookups,4);
+   assert.equal(fanout.stats().upstreamReconnects,2);
+   assert.equal(fanout.stats().reconnectExhaustions,1);
+ },{lookup:async()=>{
+     if(++lookups>2)return [];
+     return [{address:'8.8.8.8',family:4}];
+   },reconnectOnUpstreamEnd:true,maxReconnectAttempts:2,
+   fetchImpl:async()=>{calls++;return new Response(packet,{headers:{'content-type':'video/mp2t'}})}});
+});
+
+
+test('background sampling expires bootstrap bytes during a stall without disconnecting viewers',async()=>{
+ let now=100000,writer;
+ const upstream=new ReadableStream({start(c){writer=c}});
+ await service(async(base,fanout)=>{
+   const pending=fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   writer.enqueue(packet);
+   const response=await pending,reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,packet.length);
+   now+=3001;
+   assert.equal(fanout.stats().bufferedBootstrapBytes,0);
+   assert.equal(fanout.stats().viewers,1);
+   const fresh=Buffer.from(packet);fresh[10]=0x65;
+   writer.enqueue(fresh);
+   assert.deepEqual(Buffer.from((await reader.read()).value),fresh);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,fresh.length);
+   await reader.cancel();
+ },{clock:()=>now,lateJoinReplayAgeMs:3000,fetchImpl:async()=>new Response(upstream)});
+});
+
+test('retired bootstrap bytes are released as soon as a reconnect begins',async()=>{
+ let calls=0,writer,continueLookup;
+ const gate=new Promise(resolve=>continueLookup=resolve);
+ let lookups=0;
+ const initial=new ReadableStream({start(c){writer=c}});
+ const fresh=Buffer.from(packet);fresh[10]=0x66;
+ await service(async(base,fanout)=>{
+   const pending=fetch(base+'/live',{signal:AbortSignal.timeout(5000)});
+   writer.enqueue(packet);
+   const response=await pending,reader=response.body.getReader();
+   assert.deepEqual(Buffer.from((await reader.read()).value),packet);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,packet.length);
+   writer.close();
+   for(let i=0;i<100&&fanout.stats().upstreamReconnects===0;i++)
+     await new Promise(resolve=>setTimeout(resolve,10));
+   assert.equal(fanout.stats().channels[0].state,'reconnecting');
+   assert.equal(fanout.stats().bufferedBootstrapBytes,0);
+   assert.equal(fanout.stats().viewers,1);
+   continueLookup();
+   assert.deepEqual(Buffer.from((await reader.read()).value),fresh);
+   assert.equal(calls,2);
+   assert.equal(fanout.stats().bufferedBootstrapBytes,fresh.length);
+   await reader.cancel();
+ },{reconnectOnUpstreamEnd:true,lookup:async()=>{
+   if(++lookups===3)await gate;
+   return [{address:'8.8.8.8',family:4}];
+ },fetchImpl:async()=>{
+   if(++calls===1)return new Response(initial);
+   return new Response(new ReadableStream({start(c){c.enqueue(fresh)}}));
+ }});
+});

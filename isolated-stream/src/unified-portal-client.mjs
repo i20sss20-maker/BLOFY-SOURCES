@@ -33,12 +33,42 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
           ...(body!==undefined?{'content-type':'application/json'}:{})},
         ...(body!==undefined?{body:JSON.stringify(body)}:{})
       });
-      if(response.status>=300&&response.status<400)
+      const maxBytes=512000;
+      if(response.status>=300&&response.status<400){
+        controller.abort();
+        void response.body?.cancel().catch(()=>{});
         return {status:502,body:{ok:false,code:'unified_bridge_redirect_denied'}};
-      if(Number(response.headers.get('content-length')||0)>512000)
+      }
+      if(Number(response.headers.get('content-length')||0)>maxBytes){
+        controller.abort();
+        void response.body?.cancel().catch(()=>{});
         return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
-      const raw=await response.text();
-      if(Buffer.byteLength(raw)>512000)
+      }
+      // Enforce the same response cap on chunked or compressed responses
+      // before allocating the complete body. Never trust Content-Length alone.
+      let raw='';
+      if(response.body){
+        const reader=response.body.getReader();
+        const decoder=new TextDecoder();
+        let size=0,complete=false;
+        try{
+          for(;;){
+            const part=await reader.read();
+            if(part.done){raw+=decoder.decode();complete=true;break;}
+            size+=part.value.byteLength;
+            if(size>maxBytes)
+              return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
+            raw+=decoder.decode(part.value,{stream:true});
+          }
+        }finally{
+          if(!complete){
+            controller.abort();
+            void reader.cancel().catch(()=>{});
+          }
+          try{reader.releaseLock()}catch{}
+        }
+      }
+      if(Buffer.byteLength(raw)>maxBytes)
         return {status:502,body:{ok:false,code:'unified_bridge_large_response'}};
       let data;try{data=JSON.parse(raw)}catch{
         return {status:502,body:{ok:false,code:'unified_bridge_invalid_response'}};
@@ -48,6 +78,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     finally{clearTimeout(timer);}
   }
 
+  const connectIssue=({host,username,password,allowHttp,numericCode,shortCode}={})=>call(ROOT+'/connect/issue',{method:'POST',body:{host,username,password,...(allowHttp===true?{allowHttp:true}:{}),...(numericCode===true?{numericCode:true}:{}),...(shortCode===true?{shortCode:true}:{})}});
   const distributorAdmins=()=>call(ROOT+'/distributors');
   function createDistributor(data){
     return call(ROOT+'/distributors',{method:'POST',body:{
@@ -57,12 +88,12 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     }});
   }
   function distributorAdminAction(id,kind,data={}){
-    if(!UUID.test(id)||!['credits','status','reset','limits'].includes(kind))
+    if(!UUID.test(id)||!['credits','status','reset','limits','bonus','bonus-policy','permissions','report'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_action_denied'}});
     return call(ROOT+'/distributors/'+id+'/'+kind,{method:'POST',body:data});
   }
   function distributorRequest(kind,body={}){
-    if(!['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','activity','analytics','export'].includes(kind))
+    if(!['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','activity','analytics','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards','quality'].includes(kind))
       return Promise.resolve({status:400,body:{ok:false,code:'distributor_route_denied'}});
     return call(ROOT+'/distributor/'+kind,{method:'POST',body});
   }
@@ -242,6 +273,9 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     return call(ROOT+'/library-title',{method:'POST',
       body:{sourceId,type,itemId,currentName,proposedName}});
   }
+  // Coalesce only concurrent, identical owner-catalog reads for this client.
+  // No persistent cache, no stale results, no distributor/account requests.
+  const catalogInFlight=new Map();
   function catalog({type,serverId='',q='',offset=0}={}){
     if(!['live','movie','series'].includes(type))
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_media_type'}});
@@ -250,7 +284,13 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
     const query=new URLSearchParams({type,offset:String(Math.max(0,Math.min(1000000,Number(offset)||0)))});
     if(serverId)query.set('serverId',serverId);
     if(q)query.set('q',String(q).slice(0,85));
-    return call(ROOT+'/catalog?'+query);
+    const path=ROOT+'/catalog?'+query;
+    const pending=catalogInFlight.get(path);
+    if(pending)return pending.then(result=>structuredClone(result));
+    if(catalogInFlight.size>=32)return call(path);
+    const task=call(path).finally(()=>catalogInFlight.delete(path));
+    catalogInFlight.set(path,task);
+    return task.then(result=>structuredClone(result));
   }
   function addSource(data){
     return call(ROOT+'/sources',{method:'POST',body:{
@@ -553,7 +593,7 @@ export function createUnifiedPortalClient({secret='',fetchImpl=fetch,timeoutMs=1
       return Promise.resolve({status:400,body:{ok:false,code:'invalid_account_action'}});
     return call(ROOT+'/accounts/'+id+'/'+action,{method:'POST',body:{}});
   }
-  return {configured,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,ownerAdminReadiness,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
+  return {configured,connectIssue,distributorAdmins,createDistributor,distributorAdminAction,distributorRequest,overview,sourceCapacity,sources,accounts,codes,issueCodes,revokeCode,codeReveal,salesSummary,mediaQuality,ownerAdminReadiness,codeAction,resetAccount,accountCredentials,accountCompatibility,catalog,libraryReview,libraryTitle,opsScheduleStatus,opsSchedule,opsSnapshots,opsSnapshot,opsSourceStats,opsDailyCatalogStatus,opsMirrorInventory,opsPhysicalHeadAudit,opsMirrorIntakeList,opsMirrorIntakeStage,opsMirrorIntakeCancel,
     libraryAIStatus,libraryAIConnectionTest,libraryAIScanProgress,libraryAIPublishStatus,libraryAIRollback,libraryAIChat,libraryAIApply,libraryAISuggest,addSource,sourceAction,addAccount,accountAction,liveChannel,episodes,vodItem,mediaFailures,mediaFailureItems,mediaFailuresRecheck,
     contentHubStatus,contentHubEpisodeCandidates,contentHubProbeEpisode,
     contentHubNextEpisodeChunk,contentHubStartEpisodeCopy,

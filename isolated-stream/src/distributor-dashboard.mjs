@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 const COOKIE='blofy_dist';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
-const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview']);
+const paths=new Set(['login','me','logout','list','issue','reveal','library','organize','clients','customer','renew','relogin','analytics','activity','export','change-password','rotate-xtream','library-categories','organize-bulk','library-preview','redeem-rewards','quality']);
 const okJson=(res,status,body,headers={})=>{
  const data=Buffer.from(JSON.stringify(body));
  res.writeHead(status,{'content-type':'application/json; charset=utf-8',
@@ -37,7 +37,7 @@ function renderPage(nonce){
  const template=String.raw`<!doctype html><html lang="ar" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0f1420">
-<title>لوحة توزيع</title>
+<title>BLOFY DISTRIBUTION 2.0</title>
 <style>
 :root{--bg:#0f1420;--card:#171e2c;--stroke:#343e51;--white:#f2f5fb;--muted:#a8b4c6;--purple:#c2cbdc;--mint:#68dab0;--red:#ff9aa6}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--white);font:15px/1.7 system-ui,Segoe UI,Tahoma,sans-serif;background:radial-gradient(ellipse 1100px 500px at 75% -170px,#14374b 0%,transparent 65%),var(--bg)}
@@ -111,7 +111,18 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 .btn.danger{background:#753448;border-color:#b9697c}
 @media(prefers-reduced-motion:no-preference){.card,.btn{transition:transform .16s ease,filter .16s ease,border-color .16s ease}.card:hover{border-color:#50617d}.btn:active{transform:scale(.985)}}
 @media(max-width:720px){.formgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}main{padding:16px 11px 40px}header{gap:6px}}
-</style></head><body><main>
+/* Distribution 2.0: keep the existing layout, improve hierarchy and focus. */
+ :root{--bg:#0b1020;--card:#141e32;--stroke:#2a3953;--mint:#61e6bf}
+ main{max-width:1280px}.card{border-radius:20px;box-shadow:0 12px 32px #02061728}
+ .btn{background:#315fa9;border-color:#5881bd}.quicknav a{border-radius:12px}
+ .stat{background:var(--card);border-color:var(--stroke)}
+ .reward-card{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-color:#a68c4f;background:var(--card)}
+ .bonus-preview{display:inline-block;padding:8px 12px;border:1px solid #a68c4f;border-radius:10px;color:#e6b951;font-weight:700}.reward-value{font-size:34px;font-weight:800;color:#e6b951;font-variant-numeric:tabular-nums}
+ .dual-btn{border-color:#427e81!important;color:#c2fff0!important;background:#1b4a4e!important}
+ body[data-theme="light"] .dual-btn{color:#155451!important;background:#e0f8f1!important}
+ button:focus-visible,a:focus-visible{outline:2px solid #72bbff;outline-offset:3px}
+ @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+ </style></head><body><main>
 <header><h1 class="page-title">لوحة توزيع</h1>
 <div class="issue-actions"><button class="btn secondary mini" id="theme-toggle" type="button" aria-label="تغيير المظهر">المظهر</button>
 <button class="btn secondary mini" id="logout" type="button" hidden>خروج</button></div></header>
@@ -130,7 +141,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  <a href="#issues-card">اشتراكاتي</a>
  <a href="#library-panel">المكتبة</a>
  <a href="#clients-card">العملاء</a>
- <a href="#activity-card">الرصيد</a>
+ <a href="#reward-card">المحفظة</a><a href="#activity-card">حركة المحفظة</a>
 </nav>
 <div class="card" id="account-card">
  <div class="row"><div><h2>حساب التاجر</h2><p class="muted" style="margin:0">بيانات دخول لوحتك آمنة. كلمة مرور اللوحة القديمة لا يمكن عرضها، ويمكن تغييرها بعد التحقق منها.</p></div>
@@ -148,7 +159,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <div class="stat"><small>قريبة الانتهاء</small><strong id="stat-expiring">—</strong></div>
 <div class="stat"><small>المنتهية</small><strong id="stat-expired">—</strong></div>
 </div></div>
-<div class="compact-kpis" aria-label="ملخص التوزيع">
+<section class="card reward-card" id="reward-card"><div><h2>محفظة BLOFY</h2><p class="muted"><span id="wallet-bonus-rates">شهر: 0.25 · 3 أشهر: 0.5 · 6 أشهر: 1 · سنة: 2 نقطة.</span> يضاف البونص بعد التفعيل أو التجديد المدفوع. استرده إلى رصيد الاشتراكات من المحفظة.</p></div><div><small>رصيد الاشتراكات</small><div class="reward-value" id="wallet-credits">—</div><small>شهر</small></div><div><small>بونص قيد التفعيل</small><div class="reward-value" id="wallet-pending">—</div></div><div><small>إجمالي البونص المكتسب</small><div class="reward-value" id="reward-earned">—</div></div><div><small>بونص قابل للاسترداد</small><div class="reward-value" id="reward-available">—</div><small id="reward-spent">—</small></div><div><strong id="reward-level">—</strong><p class="muted" id="reward-progress">—</p><progress id="reward-level-progress" max="100" value="0" aria-label="تقدم مستوى المكافآت"></progress></div><div><button class="btn" type="button" id="reward-redeem" disabled>استرداد للمحفظة</button><p class="muted" id="reward-rate">—</p></div></section><div class="compact-kpis" aria-label="ملخص التوزيع">
 <span>اليوم <strong id="stat-today">—</strong></span>
 <span>الشهر <strong id="stat-month">—</strong></span>
 <span>التجارب <strong id="stat-trials">—</strong></span>
@@ -157,13 +168,13 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <span>الأكثر <strong id="stat-top-plan">—</strong></span>
 <span>الحد اليومي <strong id="stat-quota">—</strong></span></div>
 <div id="balance-alert" class="minor-alert" hidden>الرصيد منخفض</div>
-<div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
+<section class="card" id="notification-card"><div class="row"><h2>الإشعارات وحالة الاتصال</h2><button class="btn secondary mini" id="connection-check" type="button">فحص الاتصال</button></div><p id="connection-status" role="status" class="muted">لم يُفحص الاتصال بعد</p><p id="notification-summary" aria-live="polite" class="muted">—</p><button class="btn secondary mini" type="button" id="notification-expiry">عرض الاشتراكات القريبة من الانتهاء</button></section><section class="card" id="relay-quality-card"><div class="row"><h2>جودة نقل البث</h2><button class="btn secondary mini" id="relay-quality-refresh" type="button">تحديث القياس</button></div><p class="muted">عينة حقيقية من بوابة نقل المصدر المشترك خلال آخر 60 دقيقة، على نسخة خادم واحدة. لا تمثل جميع الأجهزة أو جودة فك الفيديو على جهاز العميل.</p><div id="relay-quality-result" aria-live="polite" class="details-grid"></div><p id="relay-quality-status" role="status" class="muted">اضغط تحديث القياس لعرض العينة.</p></section><div id="expiry-alert" hidden><span id="expiry-alert-text"></span>
 <button type="button" id="expiry-alert-open" class="btn secondary mini">عرض</button></div>
 <div class="card" id="issue-card"><h2>استخراج اشتراك</h2>
 
 <div class="chips"><button class="chip active" data-kind="app" type="button">كود</button>
 <button class="chip" data-kind="xtream" type="button">Xtream</button></div>
-<form id="issue-form"><div class="formgrid">
+<p class="muted">كود STREAM واحد؛ يمكنك عرض بيانات Xtream لنفس الاشتراك بعد تفعيله.</p><form id="issue-form"><div class="formgrid">
 <div class="field"><label for="customer-name">اسم العميل</label><input id="customer-name" maxlength="80" autocomplete="off"></div>
 <div class="field"><label for="customer-phone">جوال العميل</label><input id="customer-phone" type="tel" maxlength="19" autocomplete="off" placeholder="05xxxxxxxx"></div>
 <div class="field"><label for="days">المدة</label><select id="days">
@@ -171,7 +182,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
 </div><div class="row" style="margin-top:17px">
 
-<button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
+<span id="issue-bonus" class="bonus-preview" aria-live="polite"></span><button class="btn secondary mini" type="button" id="bulk-issue">استخراج دفعة مدفوعة</button><span id="bulk-status" role="status" class="muted"></span><button class="btn" id="issue-button" type="submit">استخراج كود</button></div></form>
 <div id="issued-result" class="secret" hidden></div></div>
 <div class="card" id="issues-card"><div class="row"><h2>الاشتراكات</h2><div class="issue-actions">
 <button class="btn secondary mini" id="export-csv" type="button">Excel</button>
@@ -185,23 +196,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <tbody id="items"></tbody></table></div>
 <div class="row" style="margin-top:13px"><span id="issues-count" class="muted">—</span>
 <button type="button" id="issues-more" class="btn secondary mini" hidden>المزيد</button></div></div>
-<div class="card" id="activity-card"><div class="row"><h2>حركة الرصيد</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
-<div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
+<div class="card" id="activity-card"><div class="row"><h2>حركة المحفظة</h2><button class="btn secondary mini" id="activity-refresh" type="button">تحديث</button></div>
+<div class="searchbar"><input id="activity-search" type="search" placeholder="بحث في الحركات المحمّلة"><select id="activity-filter"><option value="all">كل الحركات</option><option value="bonus">البونص والاسترداد</option><option value="issue">الاستخراج</option><option value="renew">التجديد</option><option value="refund">الاسترجاع</option><option value="adjustment">الشحن والتعديلات</option></select></div><div class="tablewrap"><table><thead><tr><th>العملية</th><th>التغيير</th><th>الرصيد بعد العملية</th><th>التاريخ</th></tr></thead>
 <tbody id="activity-rows"></tbody></table></div>
 <div class="row" style="margin-top:12px"><span id="activity-count" class="muted">—</span>
 <button id="activity-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
 <div class="card" id="clients-card"><div class="row"><h2>العملاء</h2><button id="clients-refresh" type="button" class="btn secondary mini">تحديث</button></div>
 <div class="searchbar"><input type="search" id="clients-search" maxlength="80" placeholder="بحث بالاسم أو الجوال" aria-label="بحث العملاء"></div>
-<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>اشتراكات</th><th>إجراء</th></tr></thead>
-<tbody id="clients-rows"></tbody></table></div></div>
+<div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الجوال</th><th>الكود / Xtream</th><th>المدة الأساسية</th><th>الإصدار</th><th>الانتهاء</th><th>المتبقي</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+<tbody id="clients-rows"></tbody></table></div><div class="row" style="margin-top:12px"><span id="clients-count" class="muted" aria-live="polite">—</span><button id="clients-more" class="btn secondary mini" type="button" hidden>المزيد</button></div></div>
 <dialog id="manage-dialog" aria-labelledby="manage-title"><h2 id="manage-title">إدارة الاشتراك</h2>
 <div id="manage-info" class="details-grid"></div>
 <div class="dialog-buttons" style="justify-content:flex-start;flex-wrap:wrap">
 <button class="btn secondary mini" id="manage-copy" type="button">عرض ونسخ الكود أو بيانات Xtream</button>
+<button class="btn dual-btn mini" id="manage-dual" type="button" hidden>عرض Xtream لنفس الاشتراك</button>
 <button class="btn danger mini" id="manage-rotate" type="button" hidden>تغيير اسم المستخدم وكلمة مرور Xtream</button>
 <button class="btn secondary mini" id="manage-renew" type="button">تجديد</button>
 <button class="btn secondary mini" id="manage-relogin" type="button">إعادة دخول</button>
-<button class="btn secondary mini" id="manage-customer" type="button">العميل</button>
+<button class="btn secondary mini" id="manage-customer" type="button">العميل</button><button class="btn secondary mini" id="manage-history" type="button">سجل الاشتراك</button><div id="manage-history-result" role="status" class="muted"></div>
 <button class="btn secondary mini" data-close-dialog="manage-dialog" type="button">إغلاق</button></div></dialog>
 <dialog id="merchant-password-dialog" aria-labelledby="merchant-password-title">
 <h2 id="merchant-password-title">تغيير كلمة مرور التاجر</h2>
@@ -220,11 +232,11 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 <select id="renew-days"><option value="30">شهر · 1</option><option value="90">3 أشهر · 3</option>
 <option value="180">6 أشهر · 6</option><option value="365">سنة · 12</option></select></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="renew-dialog" class="btn secondary">إلغاء</button>
-<button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
+<span id="renew-bonus" class="bonus-preview" aria-live="polite"></span><button id="renew-confirm" class="btn" type="submit">تجديد</button></div></form></dialog>
 <dialog id="customer-dialog" aria-labelledby="customer-title"><h2 id="customer-title">بيانات العميل</h2>
 <form id="customer-form"><div class="formgrid"><div class="field"><label for="edit-customer-name">الاسم</label>
 <input id="edit-customer-name" maxlength="80"></div><div class="field"><label for="edit-customer-phone">الجوال</label>
-<input id="edit-customer-phone" maxlength="19" type="tel"></div></div>
+<input id="edit-customer-phone" maxlength="19" type="tel"></div><div class="field full"><label for="edit-customer-note">ملاحظات خاصة بالموزع</label><textarea id="edit-customer-note" maxlength="500" rows="3"></textarea></div></div>
 <div class="dialog-buttons"><button type="button" data-close-dialog="customer-dialog" class="btn secondary">إلغاء</button>
 <button id="customer-confirm" class="btn" type="submit">حفظ</button></div></form></dialog>
 <div class="card" id="library-panel"><div class="row"><h2>المكتبة</h2></div>
@@ -271,13 +283,21 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  let currentKind='app',inflightRequest=null,libraryNext=null,libraryOffset=0;
  let issueRows=[],listOffset=0,listNext=null,listEpoch=0,activeIssue=null,activeLibraryItem=null;
  const retryActions=new Map();let searchTimer=null,activityOffset=0,activityNext=null,activityRows=[];
- let visibleSecretTimer=null;
+ let visibleSecretTimer=null,bulkJob=null,bulkBusy=false,access={};
+ const allowed=key=>access[key]!==false;
+ let clientRows=[],clientNext=null,clientEpoch=0,clientSearchTimer=null;
  const COST={1:0,30:1,90:3,180:6,365:12};
  const currentCost=()=>COST[Number($('days').value)]??1;
+ const BONUS={1:0,30:.25,90:.5,180:1,365:2};
+ function bonusPreview(days,renew=false){const n=BONUS[Number(days)]||0;return n?'+'+n+' بونص '+(renew?'بعد التجديد':'بعد التفعيل'):Number(days)===1?'تجربة مجانية · بدون بونص':'هذه الباقة بدون بونص'}
  function updateCost(){
   $('customer-phone').required=currentCost()===0;
+  text('issue-bonus',bonusPreview($('days').value));
+  $('issue-button').disabled=bulkBusy||!!bulkJob||!allowed(currentCost()===0?'trialIssue':'paidIssue');
+  $('bulk-issue').hidden=!allowed('paidIssue');
  }
  $('days').addEventListener('change',updateCost);updateCost();
+ $('renew-days').addEventListener('change',()=>text('renew-bonus',bonusPreview($('renew-days').value,true)));
  function text(id,v){$(id).textContent=String(v??"—")}
  function msg(value,ok){let e=$("notice");e.hidden=false;e.textContent=value;e.className="notice "+(ok?"ok":"");}
  async function request(method,data){
@@ -287,6 +307,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   let result;try{result=await response.json()}catch{throw Error('استجابة الخادم غير صالحة')}
   if(!response.ok||result.ok===false){
    const codes={
+    distributor_permission_denied:'هذه العملية غير متاحة حسب صلاحيات الموزع',
     distributor_no_credits:'الرصيد غير كافٍ',
     distributor_issue_daily_limit:'بلغت حد الاستخراج اليومي',
     distributor_trial_daily_limit:'بلغت حد التجارب اليومية',
@@ -314,7 +335,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  function setLogged(yes){$("workspace").hidden=!yes;$("login-panel").hidden=yes;$("logout").hidden=!yes}
  async function profile(){
   const d=await request('me');
-  setLogged(true);text("credits",d.item.credits);text("used",d.item.used);
+  setLogged(true);access=d.item.permissions||{};$('export-csv').hidden=!allowed('export');for(const day of [30,90,180,365])if(Number.isInteger(d.item.bonusPolicy?.[day]))BONUS[day]=d.item.bonusPolicy[day]/4;
+   text("wallet-bonus-rates","شهر: "+BONUS[30]+" · 3 أشهر: "+BONUS[90]+" · 6 أشهر: "+BONUS[180]+" · سنة: "+BONUS[365]+" نقطة.");updateCost();text("credits",d.item.credits);text("wallet-credits",d.item.credits);text("used",d.item.used);
   text("merchant-username",d.item.username||"—");
   text("who",d.item.name+" · "+d.item.username);text("enabled",d.item.enabled?"نشطة":"موقوفة");
   const credits=Number(d.item.credits)||0;
@@ -349,7 +371,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    d.credentials?.m3uUrl&&'M3U: '+d.credentials.m3uUrl].filter(Boolean).join('\n');
   if(all){const copyAll=document.createElement('button');copyAll.className='btn secondary mini';
     copyAll.type='button';copyAll.textContent='نسخ الكل';
-    copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll)}
+    copyAll.addEventListener('click',()=>copy(all));box.appendChild(copyAll);
+    const share=document.createElement('button');share.type='button';share.className='btn secondary mini';share.textContent='نسخ رسالة واتساب';share.addEventListener('click',()=>copy('اشتراك BLOFY STREAM\n'+all+'\nاحتفظ ببيانات اشتراكك ولا تشاركها مع الآخرين.'));box.appendChild(share)}
   const hide=document.createElement('button');hide.type='button';
   hide.className='btn secondary mini';hide.textContent='إخفاء البيانات';
   hide.addEventListener('click',()=>{clearTimeout(visibleSecretTimer);
@@ -378,6 +401,24 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    timeZone:'Asia/Riyadh',day:'2-digit',month:'2-digit',year:'numeric'
   }):'—';
  }
+ function durationLabel(item){
+  if(item.days===1)return item.converted?'تجربة محوّلة إلى مدفوع':'تجريبي · 24 ساعة';
+  return ({30:'شهر',90:'3 أشهر',180:'6 أشهر',365:'سنة',730:'سنتان'})[item.days]||String(item.days)+' يوم';
+ }
+ function timeLabel(timestamp){
+  return timestamp?new Date(timestamp).toLocaleString('en-GB',{timeZone:'Asia/Riyadh',
+   day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+ }
+ function remainingLabel(item){
+  if(item.subscriptionStatus==='unused')return 'تبدأ عند التفعيل';
+  if(item.subscriptionStatus==='disabled')return 'موقوف';
+  if(!item.expiresAt||item.status!=='done')return '—';
+  const minutes=Math.ceil((item.expiresAt-Date.now())/60000);
+  if(minutes<=0)return 'منتهي';
+  if(minutes<60)return minutes+' دقيقة';
+  const hours=Math.ceil(minutes/60);
+  return hours<24?hours+' ساعة':Math.ceil(hours/24)+' يوم';
+ }
  function tableCell(tr,value){
   const td=document.createElement('td');td.textContent=String(value??'—');
   tr.appendChild(td);return td;
@@ -396,7 +437,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    return msg('التجديد غير متاح لهذا الاشتراك',false);
   activeIssue=item;
   if($('manage-dialog').open)$('manage-dialog').close();
-  $('renew-days').value='30';
+  $('renew-days').value='30';text('renew-bonus',bonusPreview(30,true));
   text('renew-title',item.days===1&&!item.converted?'تحويل إلى اشتراك مدفوع':'تجديد الاشتراك');
   $('renew-dialog').showModal();
  }
@@ -405,6 +446,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   if($('manage-dialog').open)$('manage-dialog').close();
   $('edit-customer-name').value=item.customerName||'';
   $('edit-customer-phone').value=item.customerPhone||'';
+  $('edit-customer-note').value=item.customerNote||'';
   $('customer-dialog').showModal();
  }
  async function reloginFor(item){
@@ -418,7 +460,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   await refreshViews();
  }
  function showManage(item){
-  activeIssue=item;const box=$('manage-info');box.replaceChildren();
+  activeIssue=item;const box=$('manage-info');box.replaceChildren();$('manage-history-result').replaceChildren();
   const fields=[
     ['النوع',item.type==='app'?'كود':'Xtream'],
     ['العميل',item.customerName||'—'],
@@ -426,6 +468,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
        item.type==='xtream'?(item.accountUsername||'اعرض البيانات'):
          (item.codeHint||'اعرض الكود')],
     ['الجوال',item.customerPhone||'—'],
+    ['ملاحظات خاصة',item.customerNote||'—'],
     ['الحالة',outcomeStatus(item)],
     ['الصلاحية',dateOnly(item.expiresAt)],
     ['تاريخ الإصدار',dateOnly(item.createdAt)],
@@ -444,10 +487,11 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }
   const canEdit=item.status==='done';
   $('manage-copy').hidden=!canEdit;
-  $('manage-rotate').hidden=!canEdit||item.type!=='xtream';
-  $('manage-renew').hidden=!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
-  $('manage-relogin').hidden=!item.canRelogin;
-  $('manage-customer').hidden=false;
+   $('manage-dual').hidden=!allowed('dualAccess')||!canEdit||item.type!=='app'||!['active','expiring'].includes(item.subscriptionStatus);
+  $('manage-rotate').hidden=!allowed('rotate')||!canEdit||item.type!=='xtream';
+  $('manage-renew').hidden=!allowed('renew')||!canEdit||['unused','disabled'].includes(item.subscriptionStatus);
+  $('manage-relogin').hidden=!allowed('relogin')||!item.canRelogin;
+  $('manage-customer').hidden=!allowed('customerEdit');
   text('manage-renew',item.days===1&&!item.converted?'تحويل إلى مدفوع':'تجديد');
   $('manage-dialog').showModal();
  }
@@ -460,7 +504,16 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }catch(e){msg('تعذر نسخ الاشتراك: '+e.message,false)}
   finally{btn.disabled=false}
  });
- $('manage-rotate').addEventListener('click',async()=>{
+ $('manage-dual').addEventListener('click',async()=>{
+    if(!activeIssue||activeIssue.type!=='app')return;
+    const btn=$('manage-dual');btn.disabled=true;
+    try{const result=await request('reveal',{issueId:activeIssue.id,includeXtream:true});
+     if($('manage-dialog').open)$('manage-dialog').close();
+     showIssue(result);msg('نفس الاشتراك والكود، دون خصم جديد أو تغيير الصلاحية.',true);
+    }catch(e){msg('تعذر عرض Xtream. تأكد من تفعيل الكود وصلاحيته.',false)}
+    finally{btn.disabled=false}
+  });
+  $('manage-rotate').addEventListener('click',async()=>{
     if(!activeIssue||activeIssue.type!=='xtream'||activeIssue.status!=='done')return;
     if(!confirm('سيتم إنشاء اسم مستخدم وكلمة مرور Xtream جديدين؛ ستتوقف بيانات الدخول القديمة فورًا. هل توافق على إيقاف الجلسات القديمة وإرسال الجديدة إلى العميل؟'))return;
     const issue=activeIssue,btn=$('manage-rotate');btn.disabled=true;
@@ -485,6 +538,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   finally{btn.disabled=false}
  });
  $('manage-customer').addEventListener('click',()=>activeIssue&&openCustomer(activeIssue));
+ $('manage-history').addEventListener('click',async()=>{if(!activeIssue)return;const id=activeIssue.id,box=$('manage-history-result'),btn=$('manage-history');btn.disabled=true;box.textContent='جار التحميل...';try{const r=await request('activity',{issueId:id,offset:0});if(activeIssue?.id!==id)return;box.replaceChildren();const labels={issue:'استخراج',renew:'تجديد',refund:'استرجاع',relogin:'إعادة دخول'};for(const item of r.items||[]){const p=document.createElement('p');p.textContent=(labels[item.type]||item.type)+' · '+timeLabel(item.date)+' · '+item.delta+' شهر';box.appendChild(p)}if(!r.items?.length)box.textContent='لا توجد حركات رصيد مسجلة؛ تاريخ الإصدار والحالة موضحان أعلاه.';if(r.nextOffset!=null){const p=document.createElement('p');p.textContent='عرض آخر 100 حركة.';box.appendChild(p)}}catch(e){box.textContent='تعذر تحميل السجل: '+e.message}finally{btn.disabled=false}});
  function renderIssueRows(){
   const target=$('items');target.replaceChildren();
   if(!issueRows.length){const tr=document.createElement('tr');
@@ -492,8 +546,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   for(const item of issueRows){
    const row=document.createElement('tr');
    tableCell(row,item.type==='app'?
-     'كود · '+(item.codeHint||'عرضه من الإجراءات'):
-     'Xtream · '+(item.accountUsername||'عرض المستخدم من الإجراءات'));
+     'كود · '+(item.codeHint||'عرضه من الإجراءات')+' · '+durationLabel(item):
+     'Xtream · '+(item.accountUsername||'عرض المستخدم من الإجراءات')+' · '+durationLabel(item));
    const customer=tableCell(row,item.customerName||'—');
    if(item.customerPhone)customer.appendChild(document.createTextNode(' · '+item.customerPhone));
    tableCell(row,dateOnly(item.expiresAt));
@@ -503,7 +557,12 @@ body[data-theme="light"] .secret{background:#e1f7eb}
       const result=await request('reveal',{issueId:item.id});
       showIssue(result);
     });
-   if(item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
+   if(allowed('dualAccess')&&item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))
+      rowButton(actions,'عرض Xtream',async()=>{
+       const result=await request('reveal',{issueId:item.id,includeXtream:true});
+       showIssue(result);msg('نفس الاشتراك دون خصم إضافي.',true);
+      });
+    if(allowed('relogin')&&item.canRelogin)rowButton(actions,'إعادة دخول',()=>reloginFor(item));
    rowButton(actions,'إدارة',()=>showManage(item));
    target.appendChild(row);
   }
@@ -527,25 +586,39 @@ body[data-theme="light"] .secret{background:#e1f7eb}
    const count=Number(d.stats.expiring||0);
    $('expiry-alert').hidden=count===0;
    text('expiry-alert-text',count+' اشتراك ينتهي خلال 7 أيام');
+    text('notification-summary',count+' اشتراك ينتهي خلال 7 أيام · '+Number(d.stats.expired||0)+' اشتراك منتهي');
   }
  }
- async function loadClients(){
-  const data=await request('clients',{q:$('clients-search').value.trim()});
+ async function loadClients(more=false){
+  const epoch=more?clientEpoch:++clientEpoch;
+  const offset=more?clientNext:0;
+  if(more&&offset==null)return;
+  const data=await request('list',{q:$('clients-search').value.trim(),status:'all',offset});
+  if(epoch!==clientEpoch)return;
+  clientRows=more?clientRows.concat(data.items||[]):data.items||[];
+  clientNext=data.nextOffset;
   const target=$('clients-rows');target.replaceChildren();
-  if(!data.items?.length){const tr=document.createElement('tr');
-    const td=tableCell(tr,'لا يوجد عملاء مسجلون');td.colSpan=4;target.appendChild(tr);return;}
-  for(const client of data.items){
+  if(!clientRows.length){const tr=document.createElement('tr');
+    const td=tableCell(tr,'لا توجد اشتراكات للعملاء');td.colSpan=9;target.appendChild(tr);}
+  for(const item of clientRows){
    const tr=document.createElement('tr');
-   tableCell(tr,client.name||'—');tableCell(tr,client.phone||'—');
-   tableCell(tr,client.subscriptions);
-   const td=document.createElement('td');
-   rowButton(td,'اشتراكاته',async()=>{
-    $('issue-search').value=client.phone||client.name;
-    $('issue-status').value='all';
-    await loadItems(false);
-    $('issue-search').scrollIntoView({behavior:'smooth',block:'center'});
-   });tr.appendChild(td);target.appendChild(tr);
+   tableCell(tr,item.customerName||'—');tableCell(tr,item.customerPhone||'—');
+   tableCell(tr,item.type==='app'?'كود · '+(item.codeHint||'عرضه من الإجراءات'):'Xtream · '+(item.accountUsername||'عرضه من الإجراءات'));
+   tableCell(tr,durationLabel(item));
+   tableCell(tr,timeLabel(item.createdAt));
+   tableCell(tr,item.subscriptionStatus==='unused'?'بعد التفعيل':timeLabel(item.expiresAt));
+   tableCell(tr,remainingLabel(item));
+   tableCell(tr,outcomeStatus(item));
+   const td=tableCell(tr,'');
+   if(item.status==='done')rowButton(td,'عرض/نسخ',async()=>{
+    showIssue(await request('reveal',{issueId:item.id}));
+   });
+   if(allowed('dualAccess')&&item.status==='done'&&item.type==='app'&&['active','expiring'].includes(item.subscriptionStatus))rowButton(td,'عرض Xtream',async()=>{showIssue(await request('reveal',{issueId:item.id,includeXtream:true}));msg('نفس الاشتراك دون خصم إضافي.',true);});
+   rowButton(td,'إدارة',()=>showManage(item));
+   target.appendChild(tr);
   }
+  text('clients-count','المعروض: '+clientRows.length);
+  $('clients-more').hidden=clientNext==null;
  }
  $('issues-more').addEventListener('click',()=>loadItems(true).catch(e=>msg(e.message,false)));
  $('issue-search').addEventListener('input',()=>{
@@ -553,15 +626,30 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   searchTimer=setTimeout(()=>loadItems(false).catch(e=>msg(e.message,false)),260);
  });
  $('issue-status').addEventListener('change',()=>loadItems(false).catch(e=>msg(e.message,false)));
+ $('relay-quality-refresh').addEventListener('click',async()=>{
+  const btn=$('relay-quality-refresh'),box=$('relay-quality-result');btn.disabled=true;
+  text('relay-quality-status','جار قراءة قياسات البث...');
+  try{
+    const r=await request('quality');box.replaceChildren();
+    const ms=v=>v==null?'غير متاح':v+' ms';
+    const fields=[['بدء النقل',r.started],['فشل البدء',r.failed],['انقطاعات النقل',r.interrupted],['استعادة النقل',r.recovered],['انقطاعات المصدر المباشر',r.sourceDrops],['زمن بدء النقل P95',ms(r.p95StartMs)],['زمن الاستعادة P95',ms(r.p95RecoveryGapMs)]];
+    for(const [label,value] of fields){const tile=document.createElement('div'),name=document.createElement('small'),n=document.createElement('strong');name.textContent=label;n.textContent=String(value??'—');tile.append(name,n);box.appendChild(tile);}
+    for(const [key,label] of [['live','البث المباشر'],['movie','الأفلام'],['series','المسلسلات']]){const v=r.byKind?.[key]||{},p=document.createElement('p');p.textContent=label+': بدء '+Number(v.started||0)+' · فشل '+Number(v.failed||0)+' · انقطاع '+Number(v.interrupted||0);box.appendChild(p);}
+    text('relay-quality-status',r.started+r.failed+r.interrupted+r.recovered+r.sourceDrops===0?'لا توجد عينة بث كافية في هذه النسخة؛ لا يمكن تأكيد الجودة.':'عينة آخر ساعة · '+timeLabel(r.checkedAt)+' · ليست اختبار تشغيل على جهاز العميل');
+  }catch(e){box.replaceChildren();text('relay-quality-status','تعذر قراءة القياسات: '+e.message)}finally{btn.disabled=false;}
+ });
+ $('notification-expiry').addEventListener('click',()=>$('expiry-alert-open').click());
+ $('connection-check').addEventListener('click',async()=>{const btn=$('connection-check'),start=performance.now();btn.disabled=true;text('connection-status','جار فحص اتصال لوحة التوزيع...');try{await request('me');text('connection-status','اتصال اللوحة بالخادم ناجح · '+Math.round(performance.now()-start)+' ms (لا يقيس جودة البث)')}catch(e){text('connection-status','تعذر الاتصال باللوحة: '+e.message)}finally{btn.disabled=false}});
  $('expiry-alert-open').addEventListener('click',()=>{
   $('issue-search').value='';$('issue-status').value='expiring';
   loadItems(false).catch(e=>msg(e.message,false));
   $('issue-status').scrollIntoView({behavior:'smooth',block:'center'});
  });
  $('clients-refresh').addEventListener('click',()=>loadClients().catch(e=>msg(e.message,false)));
+ $('clients-more').addEventListener('click',async()=>{const btn=$('clients-more');btn.disabled=true;try{await loadClients(true)}catch(e){msg(e.message,false)}finally{btn.disabled=false}});
  $('clients-search').addEventListener('input',()=>{
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>loadClients().catch(e=>msg(e.message,false)),260);
+  clearTimeout(clientSearchTimer);
+  clientSearchTimer=setTimeout(()=>loadClients().catch(e=>msg(e.message,false)),260);
  });
  document.querySelectorAll('[data-close-dialog]').forEach(btn=>
   btn.addEventListener('click',()=>$(
@@ -584,7 +672,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   const btn=$('customer-confirm');btn.disabled=true;
   try{
    await request('customer',{issueId:activeIssue.id,
-    name:$('edit-customer-name').value,phone:$('edit-customer-phone').value});
+    name:$('edit-customer-name').value,phone:$('edit-customer-phone').value,note:$('edit-customer-note').value});
    $('customer-dialog').close();msg('تم حفظ بيانات العميل',true);
    await refreshViews();
   }catch(err){msg('تعذر الحفظ: '+err.message,false)}
@@ -593,6 +681,20 @@ body[data-theme="light"] .secret{background:#e1f7eb}
 
  async function loadAnalytics(){
   const data=await request('analytics');const x=data.stats||{};
+   const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+   const earned=Number(x.rewardPointsEarned||0),available=Number(x.rewardPointsAvailable||0),rate=Number(x.rewardPointsPerCredit||1);
+   text('reward-earned',x.rewardPointsEarned==null?'—':fmt(earned));
+   text('wallet-pending',x.rewardPointsPending==null?'—':fmt(x.rewardPointsPending));
+   text('reward-available',x.rewardPointsAvailable==null?'—':fmt(available));
+   text('reward-spent','مستردة للمحفظة: '+fmt(x.rewardPointsRedeemed||0));
+   const tiers=[{name:'Bronze',at:0},{name:'Silver',at:40},{name:'Gold',at:100},{name:'Platinum',at:200},{name:'Diamond',at:500}];
+   const i=tiers.reduce((n,t,j)=>earned>=t.at?j:n,0),tier=tiers[i],next=tiers[i+1];
+   text('reward-level',tier.name);
+   text('reward-progress',next?'باقي '+fmt(next.at-earned)+' نقطة إلى '+next.name:'أعلى مستوى');
+   $('reward-level-progress').value=next?Math.max(0,Math.min(100,100*(earned-tier.at)/(next.at-tier.at))):100;
+   $('reward-redeem').disabled=!allowed('redeem')||x.rewardRedemptionEnabled!==true||available<rate;
+   $('reward-redeem').dataset.rate=String(rate);
+   text('reward-rate',x.rewardRedemptionEnabled===true?fmt(rate)+' نقطة = شهر واحد من الرصيد':'الاستبدال غير مفعّل حاليًا');
   text('stat-today',x.today||0);text('stat-month',x.month||0);
   text('stat-trials',x.trialsTotal||0);text('stat-renewals',x.renewalsMonth||0);
   text('stat-converted',x.convertedTrials||0);
@@ -603,23 +705,37 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   $('balance-alert').hidden=credits>3;
   $('balance-alert').textContent=credits===0?'الرصيد انتهى':'الرصيد منخفض: '+credits;
  }
+ $('reward-redeem').addEventListener('click',async()=>{
+   const btn=$('reward-redeem'),rate=Number(btn.dataset.rate);
+   if(btn.disabled||!Number.isFinite(rate)||rate<1)return;
+   if(!confirm('استرداد '+rate+' بونص وإضافة شهر واحد إلى رصيد محفظتك؟'))return;
+   const id=actionId('reward-redemption','one-credit');btn.disabled=true;
+   try{
+     const result=await request('redeem-rewards',{credits:1,requestId:id.id});
+     retryActions.delete(id.key);msg(result.repeated?'تم استرجاع عملية الاستبدال السابقة':'تم استبدال النقاط وإضافة شهر إلى رصيدك.',true);
+     await refreshViews();
+   }catch(e){msg('تعذر الاستبدال: '+e.message,false);await loadAnalytics().catch(()=>{});}
+ });
  function renderActivity(){
   const body=$('activity-rows');body.replaceChildren();
   const types={opening:'رصيد افتتاحي',adjustment:'شحن رصيد',issue:'استخراج',
     refund:'استرجاع',renew:'تجديد',relogin:'إعادة دخول'};
-  for(const item of activityRows){
+  const filter=$('activity-filter').value,term=$('activity-search').value.trim().toLowerCase();
+  const label=item=>item.details?.reason==='admin_bonus'?'بونص إداري':item.details?.reason==='reward_redemption'?'استرداد بونص للمحفظة':(types[item.type]||item.type);
+  const visible=activityRows.filter(item=>(filter==='all'||(filter==='bonus'?['admin_bonus','reward_redemption'].includes(item.details?.reason):item.type===filter))&&(!term||[label(item),item.details?.description,item.delta,item.balanceAfter,dateOnly(item.date)].join(' ').toLowerCase().includes(term)));
+  for(const item of visible){
    const tr=document.createElement('tr');
-   tableCell(tr,types[item.type]||item.type);
+   tableCell(tr,label(item)+(item.details?.reason==='admin_bonus'?' · +'+Number(item.details.bonusQuarters)/4+' نقطة · '+(item.details.description||''):''));
    tableCell(tr,(item.delta>0?'+':'')+item.delta);
    tableCell(tr,item.balanceAfter==null?'—':item.balanceAfter);
    tableCell(tr,dateOnly(item.date));
    body.appendChild(tr);
   }
-  if(!activityRows.length){
+  if(!visible.length){
    const tr=document.createElement('tr');
    const td=tableCell(tr,'لا توجد حركات حديثة');td.colSpan=4;body.appendChild(tr);
   }
-  text('activity-count','المعروض: '+activityRows.length);
+  text('activity-count','المعروض: '+visible.length+' / '+activityRows.length);
   $('activity-more').hidden=activityNext==null;
  }
  async function loadActivity(more=false){
@@ -629,6 +745,8 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   activityNext=d.nextOffset;
   renderActivity();
  }
+ $('activity-search').addEventListener('input',renderActivity);
+ $('activity-filter').addEventListener('change',renderActivity);
  $('activity-refresh').addEventListener('click',()=>loadActivity().catch(e=>msg('تعذر تحميل الحركة: '+e.message,false)));
  $('activity-more').addEventListener('click',()=>loadActivity(true).catch(e=>msg(e.message,false)));
  function csvField(raw){
@@ -728,6 +846,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  });
  $('issue-form').addEventListener('submit',async e=>{
   e.preventDefault();const btn=$('issue-button');const cost=currentCost();
+  if(bulkBusy||bulkJob)return msg('أكمل الدفعة المعلقة أولًا أو تحقق من الاشتراكات بعد إعادة تسجيل الدخول.',false);
 
   btn.disabled=true;const requestId=inflightRequest||crypto.randomUUID();inflightRequest=requestId;
   try{
@@ -735,7 +854,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
     durationDays:Number($('days').value),
     customerName:$('customer-name').value,customerPhone:$('customer-phone').value,
     trialPhone:cost===0?$('customer-phone').value:'',requestId});
-   inflightRequest=null;showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" من رصيد الأشهر",true);
+   inflightRequest=null;$('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';showIssue(d);msg(cost===0?"تم إصدار تجربة مجانية":"تم الخصم: "+cost+" شهر · "+bonusPreview($('days').value),true);
    await refreshViews();
   }catch(err){
    msg('تعذر الإصدار: '+err.message,false);
@@ -744,6 +863,31 @@ body[data-theme="light"] .secret{background:#e1f7eb}
   }finally{btn.disabled=false}
  });
 
+ $('bulk-issue').addEventListener('click',async()=>{
+   if(!allowed('paidIssue')||bulkBusy||inflightRequest)return;
+   const btn=$('bulk-issue'),single=$('issue-button');
+   if(!bulkJob){
+     const days=Number($('days').value),cost=currentCost();
+     if(!cost)return msg('استخراج الدفعات متاح للباقات المدفوعة فقط.',false);
+     const raw=prompt('عدد الاشتراكات (2 إلى 10):','2');if(raw===null)return;
+     const count=Number(raw);
+     if(!Number.isInteger(count)||count<2||count>10)return msg('العدد يجب أن يكون من 2 إلى 10.',false);
+     if(Number($('credits').textContent)<count*cost)return msg('الرصيد لا يكفي لهذه الدفعة.',false);
+     if(!confirm('إصدار '+count+' اشتراكات وخصم '+count*cost+' شهرًا من المحفظة؟'))return;
+     bulkJob={payload:{kind:currentKind,durationDays:days,customerName:$('customer-name').value,customerPhone:$('customer-phone').value},ids:Array.from({length:count},()=>crypto.randomUUID()),done:0};
+   }else if(!confirm('استئناف الدفعة بنفس معرفات الطلبات دون إعادة إصدار ما تم؟'))return;
+   bulkBusy=true;btn.disabled=true;single.disabled=true;
+   try{
+     while(bulkJob.done<bulkJob.ids.length){
+       await request('issue',{...bulkJob.payload,requestId:bulkJob.ids[bulkJob.done]});
+       bulkJob.done++;
+       text('bulk-status','تم '+bulkJob.done+' من '+bulkJob.ids.length);
+     }
+     bulkJob=null;msg('تم إصدار الدفعة، افتح الاشتراكات لعرض بيانات كل كود.',true);
+     $('issue-search').value='';$('issue-status').value='all';$('clients-search').value='';
+   }catch(e){text('bulk-status','توقفت الدفعة عند '+bulkJob.done+'؛ راجع القائمة ثم استأنف بنفس الطلب.');msg(e.message,false);}
+   finally{bulkBusy=false;btn.disabled=false;single.disabled=false;btn.textContent=bulkJob?'استئناف الدفعة':'استخراج دفعة مدفوعة';await refreshViews();}
+ });
  let libraryEpoch=0;
  const selectedLibrary=new Map(),loadedLibrary=new Map();
  function selectionState(){
@@ -912,7 +1056,7 @@ body[data-theme="light"] .secret{background:#e1f7eb}
  $('refresh').addEventListener('click',refresh);
  $('logout').addEventListener('click',async()=>{
    try{await request('logout')}catch{}
-   inflightRequest=null;setLogged(false);
+   inflightRequest=null;bulkJob=null;bulkBusy=false;access={};setLogged(false);
     clearTimeout(visibleSecretTimer);$('issued-result').replaceChildren();
     $('issued-result').hidden=true;
    msg('تم تسجيل الخروج',true);
@@ -981,17 +1125,18 @@ export function createDistributorDashboard({bridge,log=console}={}){
       kind:data.kind,label:'BLOFY STREAM',durationDays:data.durationDays,
       trialPhone:data.trialPhone,
       customerName:data.customerName,customerPhone:data.customerPhone,requestId:data.requestId}:
-     action==='reveal'?{issueId:data.issueId}:
+     action==='redeem-rewards'?{credits:data.credits,requestId:data.requestId}:
+      action==='reveal'?{issueId:data.issueId,includeXtream:data.includeXtream===true}:
      action==='list'?{q:data.q,offset:data.offset,status:data.status}:
      action==='clients'?{q:data.q}:
-     action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone}:
+     action==='customer'?{issueId:data.issueId,name:data.name,phone:data.phone,note:data.note}:
      action==='renew'?{issueId:data.issueId,days:data.days,requestId:data.requestId}:
      action==='relogin'?{issueId:data.issueId,requestId:data.requestId}:
      action==='rotate-xtream'?{issueId:data.issueId,requestId:data.requestId,
        acknowledgeDisconnect:data.acknowledgeDisconnect===true}:
      action==='change-password'?{currentPassword:data.currentPassword,
        newPassword:data.newPassword}:
-     action==='activity'?{offset:data.offset}:
+     action==='activity'?{offset:data.offset,issueId:data.issueId??null}:
      action==='export'?{offset:data.offset}:
      action==='library'?{type:data.type,q:data.q,offset:data.offset,
        categoryId:data.categoryId}:

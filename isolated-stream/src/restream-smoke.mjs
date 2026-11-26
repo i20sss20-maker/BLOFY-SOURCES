@@ -53,7 +53,7 @@ async function readBounded(response,{limitBytes=48*1024,firstBytesOnly=false}={}
 }
 export async function verifyRestreamSmoke(originInput,{
   fetchImpl=fetch,timeoutMs=12000,wait=ms=>new Promise(r=>setTimeout(r,ms)),
-  pathName='smoke'
+  pathName='smoke',signal
 }={}){
   const origin=normalizePrivateRestreamOrigin(originInput);
   if(!['smoke','blofy-demo'].includes(pathName)&&!/^live-[a-f0-9]{12}$/.test(pathName))
@@ -65,15 +65,17 @@ export async function verifyRestreamSmoke(originInput,{
   async function load(ref,base){
     let url=targetUrl(ref,base,origin,pathPrefix);
     for(let redirects=0;redirects<=3;redirects++){
+      signal?.throwIfAborted();
       let response;
       try{
         response=await fetchImpl(url,{method:'GET',redirect:'manual',
-          signal:AbortSignal.timeout(timeoutMs),
+          signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs),
           headers:{accept:'application/vnd.apple.mpegurl,video/mp2t,*/*',
             ...(cookie?{cookie}:{})}});
       }catch{
         throw new Error('restream_smoke_engine_unreachable');
       }
+      if(signal?.aborted){void response.body?.cancel().catch(()=>{});signal.throwIfAborted();}
       cookie=cookiesFrom(response.headers,cookie);
       if([301,302,303,307,308].includes(response.status)){
         const next=response.headers.get('location');
@@ -112,11 +114,12 @@ export async function verifyRestreamSmoke(originInput,{
     let segment=null;
     // MediaMTX can publish the first playlist before its first complete TS
     // segment. Only retry the private playlist, never the source provider.
-    for(let attempt=0;attempt<4;attempt++){
+    for(let attempt=0;attempt<9;attempt++){
       const match=/#EXTINF:[^\r\n]*\r?\n([^#\r\n]+)/.exec(playlist);
       if(match){segment=match[1].trim();break;}
-      if(attempt===3)break;
-      await wait(1200);
+      if(attempt===8)break;
+      await wait(450);
+      signal?.throwIfAborted();
       const next=await load(playlistUrl.toString(),playlistUrl);
       playlist=(await readBounded(next.response)).toString('utf8');
     }

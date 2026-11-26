@@ -11,6 +11,14 @@ const FEED_STATES=new Set(['starting','ready','reconnecting','failed','idle']);
 const HLS_PATH=/^live-[a-f0-9]{12}$/;
 const positive=value=>Number.isSafeInteger(value)&&value>=0?value:0;
 const bounded=(value,max)=>Math.min(max,positive(value));
+function safeLatency(input){
+  const empty={samples:0,p50Ms:null,p95Ms:null,maxMs:null};
+  if(!input||!Number.isInteger(input.samples)||input.samples<1||input.samples>64)return empty;
+  const {samples,p50Ms,p95Ms,maxMs}=input;
+  if(![p50Ms,p95Ms,maxMs].every(v=>Number.isFinite(v)&&v>=0)||
+     p50Ms>p95Ms||p95Ms>maxMs)return empty;
+  return {samples,p50Ms,p95Ms,maxMs};
+}
 function countedDiff(current,old){
   // Counters are process-lifetime. Restart/reset must never appear as a spike.
   return old===null||current<old?0:current-old;
@@ -141,6 +149,10 @@ export function createStreamOpsObservatory({
         activeViewers:bounded(f.viewers,32768),maxFeeds,
         maxViewersPerFeed:maxViewers,
         capacityNote:'Internal shared-relay limits; not licensed provider capacity'},
+      mediaLatency:{scope:'shared_ts_transport_only',decodedVideoVerified:false,
+        windowMs:3600000,
+        admissionToFirstBytes:safeLatency(f.mediaLatency?.admissionToFirstBytes),
+        lastBytesToRecoveredBytes:safeLatency(f.mediaLatency?.lastBytesToRecoveredBytes)},
       channels,alertCount:alerts.length,criticalCount:
         alerts.filter(a=>a.level==='critical').length,
       alerts:alerts.slice(0,96),recentChanges:history.slice(0,historyLimit),
@@ -183,4 +195,43 @@ export function createStreamOpsObservatory({
     return sample();
   }
   return {snapshot,start,stop,sample};
+}
+
+
+// Process-local counters only. Do not treat stale or failed telemetry as
+// evidence of zero incidents. A delta crossing the rolling boundary or a
+// sampling gap is not attributable to the measured window.
+export function summarizeMediaHour(snap,now=Date.now()){
+  const windowStart=now-3600000,maxGap=45000;
+  const trend=(Array.isArray(snap?.trend)?snap.trend:[]).slice(-480)
+    .filter(p=>Number.isSafeInteger(p?.at)&&p.at>=windowStart&&p.at<=now);
+  const latest=trend[trend.length-1];
+  const fresh=snap?.ok===true&&Number.isSafeInteger(snap.checkedAt)&&
+    snap.checkedAt<=now&&now-snap.checkedAt<=maxGap&&
+    latest?.at===snap.checkedAt;
+  let coveredMs=0,measuredIntervals=0,lastEnd=windowStart;
+  const totals={totalProviderFailures:0,totalReconnects:0,totalCapacityRejections:0};
+  for(const p of trend){
+    const interval=p.intervalMs;
+    if(!Number.isSafeInteger(interval)||interval<=0||interval>maxGap||
+       p.at-interval<lastEnd||
+       ![p.providerErrors,p.reconnects,p.capacityRejections].every(n=>Number.isSafeInteger(n)&&n>=0))
+      continue;
+    lastEnd=p.at;coveredMs+=interval;measuredIntervals++;
+    totals.totalProviderFailures+=p.providerErrors;
+    totals.totalReconnects+=p.reconnects;
+    totals.totalCapacityRejections+=p.capacityRejections;
+  }
+  const measured=fresh&&measuredIntervals>0&&Object.values(totals).every(Number.isSafeInteger);
+  return {ok:fresh,readOnly:true,mediaCopied:false,customerTrafficChanged:false,
+    isAllSubscribersMeasured:false,type:'rolling_media_observability_1h',
+    evidenceState:!fresh?'unavailable':measured?'measured_intervals_only':'baseline_only',
+    ...(!fresh?{code:'media_hour_metrics_unavailable'}:{}),
+    samples:trend.length,measuredIntervals:fresh?measuredIntervals:0,
+    observedWindowMinutes:measured?Math.round(coveredMs/60000*100)/100:0,
+    totalProviderFailures:measured?totals.totalProviderFailures:null,
+    totalReconnects:measured?totals.totalReconnects:null,
+    totalCapacityRejections:measured?totals.totalCapacityRejections:null,
+    lastCriticalCount:fresh&&Number.isSafeInteger(snap.criticalCount)&&snap.criticalCount>=0?snap.criticalCount:null,
+    checkedAt:new Date(now).toISOString()};
 }

@@ -4,6 +4,8 @@
 // licensed source is unavailable or that a particular video codec is broken.
 const PATH=/^live-[a-f0-9]{12}$/;
 const MAX_EVENTS=60;
+const TRANSIENT=new Set(['restream_source_eof','restream_provider_stalled','restream_provider_unavailable','restream_hls_unavailable','restream_first_byte_timeout','restream_short_primary_disconnect','restream_smoke_engine_unreachable','restream_smoke_http_error','restream_smoke_segment_missing']);
+const SOURCE_WARNING=new Set(['restream_source_eof','restream_provider_stalled','restream_short_primary_disconnect','restream_provider_denied','restream_provider_redirect_denied']);
 export function createLiveAutoHealth({
   liveSupervisor,relayStats=()=>null,clock=Date.now,
   scanIntervalMs=60000,staleAfterMs=600000,
@@ -27,6 +29,10 @@ export function createLiveAutoHealth({
   }
   function statusOf(row){
     if(row.probePending===true)return 'checking';
+    // A real upstream stall or unexpected EOF overrides a previously green
+    // HLS sample. That sample cannot prove the source is still producing bytes.
+    if(SOURCE_WARNING.has(row.lastError))
+      return 'warning';
     const probe=row.lastProbe;
     if(probe&&Number.isFinite(probe.at)&&clock()-probe.at>staleAfterMs)
       return 'stale';
@@ -38,7 +44,8 @@ export function createLiveAutoHealth({
     return 'untested';
   }
   function safeCode(row){
-    const code=row.lastProbe?.code||row.lastError||'no_probe';
+    const code=SOURCE_WARNING.has(row.lastError)
+      ?row.lastError:row.lastProbe?.code||row.lastError||'no_probe';
     return /^restream_[a-z_]{3,65}$/.test(code)||code==='ok'
       ?code:'unknown';
   }
@@ -59,20 +66,23 @@ export function createLiveAutoHealth({
         const status=statusOf(item),reason=safeCode(item);
         let old=tracking.get(item.path);
         if(!old){
-          old={lastSignal:null,failures:0,lastRecoveryAt:0,lastStatus:null};
+          old={lastSignal:null,failures:0,transientFailures:0,lastRecoveryAt:0,lastStatus:null};
           tracking.set(item.path,old);
         }
-        const signal=typeof item.lastProbe?.at==='number'
-          ?'probe:'+item.lastProbe.at+':'+String(item.lastProbe.ok)
-          :item.lastError?'error:'+item.lastError:null;
+        const counters=item.mediaHealth||{};
+        const failureCount=['cleanSourceEnds','readStalls','sourceErrors','backupSelections'].map(k=>Number.isSafeInteger(counters[k])&&counters[k]>=0?counters[k]:0).join(':');
+        const signal=SOURCE_WARNING.has(item.lastError)?'source:'+item.lastError+':'+failureCount:
+          typeof item.lastProbe?.at==='number'?'probe:'+item.lastProbe.at+':'+String(item.lastProbe.ok):
+          item.lastError?'error:'+item.lastError:null;
         const failed=status==='failed'||status==='warning';
         if(failed&&signal&&signal!==old.lastSignal){
           old.failures++;old.lastSignal=signal;
+          old.transientFailures=TRANSIENT.has(reason)?old.transientFailures+1:0;
           event(item.path,'transport_failure',reason);
         }
         if(status==='healthy'){
           if(old.failures>0)event(item.path,'transport_restored','probe_success');
-          old.failures=0;old.lastSignal=signal;
+          old.failures=0;old.transientFailures=0;old.lastSignal=signal;
         }
         old.lastStatus=status;
         totals.paths++;totals[status]++;
@@ -85,7 +95,7 @@ export function createLiveAutoHealth({
         // Recovery is strictly opt-in: one operator HLS re-probe per cycle,
         // only on a path with a configured backup after distinct failures.
         if(recoveryProbeEnabled&&item.backupConfigured===true&&
-           !item.probePending&&old.failures>=2&&
+           !item.probePending&&failed&&TRANSIENT.has(reason)&&old.transientFailures>=2&&
            clock()-old.lastRecoveryAt>=reprobeAfterMs&&!eligible){
           eligible={path:item.path,old};
         }

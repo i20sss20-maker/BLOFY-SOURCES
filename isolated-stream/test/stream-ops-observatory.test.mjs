@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {once} from 'node:events';
 import vm from 'node:vm';
-import {createStreamOpsObservatory} from '../src/stream-ops-observatory.mjs';
+import {createStreamOpsObservatory,summarizeMediaHour} from '../src/stream-ops-observatory.mjs';
 import {createOperatorDashboard} from '../src/operator-dashboard.mjs';
 import {renderOperatorDashboard} from '../src/operator-unified-view.mjs';
 
@@ -144,11 +144,71 @@ test('single nonce-protected operator UI contains Smart Ops safety scope and val
   for(const id of ['smart-ops-panel','smart-ops-refresh','smart-ops-status',
     'smart-ops-viewers','smart-ops-feeds','smart-ops-alerts',
     'smart-ops-critical','smart-ops-capacity-delta',
-    'smart-ops-channels','smart-ops-issues'])
+    'smart-ops-channels','smart-ops-issues','smart-ops-startup-latency','smart-ops-recovery-latency'])
     assert.ok(html.includes('id="'+id+'"'),id+' missing');
   assert.match(html,/لا تشمل جميع المشتركين/);
   assert.match(html,/api\("smart-ops"\)/);
   const script=html.match(/<script nonce="qa-safe-nonce">([\s\S]*?)<\/script>/);
   assert.ok(script,'nonce script missing');
   assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+
+test('Smart Ops publishes only sanitized transport timing and does not invent empty samples',()=>{
+ const fanout=makeFanout();
+ const obs=createStreamOpsObservatory({relayStats:()=>({fanout})});
+ const empty={samples:0,p50Ms:null,p95Ms:null,maxMs:null};
+ assert.deepEqual(obs.snapshot().mediaLatency.admissionToFirstBytes,empty);
+ fanout.mediaLatency={
+  admissionToFirstBytes:{samples:5,p50Ms:240,p95Ms:530,maxMs:600,sourceUrl:'https://secret.example/private'},
+  lastBytesToRecoveredBytes:{samples:2,p50Ms:900,p95Ms:800,maxMs:1000}
+ };
+ const report=obs.snapshot();
+ assert.equal(report.mediaLatency.scope,'shared_ts_transport_only');
+ assert.equal(report.mediaLatency.decodedVideoVerified,false);
+ assert.deepEqual(report.mediaLatency.admissionToFirstBytes,{samples:5,p50Ms:240,p95Ms:530,maxMs:600});
+ assert.deepEqual(report.mediaLatency.lastBytesToRecoveredBytes,empty);
+ assert.equal(JSON.stringify(report).includes('secret.example'),false);
+ fanout.mediaLatency.admissionToFirstBytes.samples=65;
+ assert.deepEqual(obs.snapshot().mediaLatency.admissionToFirstBytes,empty);
+});
+
+
+test('last hour reports measured intervals only, excluding expired, crossing, duplicate and future points',()=>{
+  const now=7200000,start=now-3600000;
+  const p=(at,intervalMs,providerErrors=1)=>({at,intervalMs,providerErrors,reconnects:2,capacityRejections:3});
+  const trend=[p(start-1,15000,99),p(start+5000,15000,99),
+    p(now-60000,600000,99),p(now-15000,15000,2),
+    p(now-15000,15000,99),p(now,15000,3),p(now+1,15000,99)];
+  const report=summarizeMediaHour({ok:true,checkedAt:now,criticalCount:0,trend},now);
+  assert.equal(report.ok,true);
+  assert.equal(report.evidenceState,'measured_intervals_only');
+  assert.equal(report.measuredIntervals,2);
+  assert.equal(report.observedWindowMinutes,0.5);
+  assert.equal(report.totalProviderFailures,5);
+  assert.equal(report.totalReconnects,4);
+  assert.equal(report.totalCapacityRejections,6);
+  assert.equal(report.isAllSubscribersMeasured,false);
+});
+test('failed, stale and future telemetry never appear as zero incidents',()=>{
+ const now=7200000;
+ const point={at:now,intervalMs:15000,providerErrors:0,reconnects:0,capacityRejections:0};
+ for(const snap of [
+   {ok:false,checkedAt:now,trend:[point]},
+   {ok:true,checkedAt:now-45001,trend:[{...point,at:now-45001}]},
+   {ok:true,checkedAt:now+1,trend:[{...point,at:now+1}]},
+   {ok:true,checkedAt:now,trend:[]}
+ ]){
+   const report=summarizeMediaHour(snap,now);
+   assert.equal(report.ok,false);
+   assert.equal(report.evidenceState,'unavailable');
+   assert.equal(report.totalProviderFailures,null);
+   assert.equal(report.lastCriticalCount,null);
+ }
+ const baseline=summarizeMediaHour({ok:true,checkedAt:now,trend:[{...point,intervalMs:null}]},now);
+ assert.equal(baseline.ok,true);
+ assert.equal(baseline.evidenceState,'baseline_only');
+ assert.equal(baseline.totalProviderFailures,null);
+ const measured=summarizeMediaHour({ok:true,checkedAt:now,trend:[point]},now);
+ assert.equal(measured.totalProviderFailures,0);
+ assert.equal(measured.measuredIntervals,1);
 });

@@ -2,6 +2,7 @@
 // A single validated provider HTTP response can be fanned out to multiple
 // viewers. Never store source URLs or credentials in logs or public responses.
 import {createHash} from 'node:crypto';
+import {setTimeout as sleep,setImmediate as yieldIo} from 'node:timers/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 
@@ -12,7 +13,8 @@ export function createLiveFanout({
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
-  lateJoinReplayBytes=256*1024
+  lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
+  maxViewerQueueBytes=2*1024*1024
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -25,8 +27,11 @@ export function createLiveFanout({
      !Number.isInteger(maxReconnectAttempts)||maxReconnectAttempts<0||maxReconnectAttempts>5||
      !Number.isInteger(initialTransientRetries)||initialTransientRetries<0||
        initialTransientRetries>2||
+     !Number.isInteger(maxViewerQueueBytes)||maxViewerQueueBytes<512*1024||
+       maxViewerQueueBytes>4*1024*1024||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
-       lateJoinReplayBytes>1024*1024)
+       lateJoinReplayBytes>1024*1024||
+     !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
     throw new Error('fanout_capacity_invalid');
   let approvedRedirectOrigin='';
   try{
@@ -37,6 +42,12 @@ export function createLiveFanout({
   }catch{}
   const feeds=new Map();
   const cooldowns=new Map();
+  let draining=false;
+  function rejectDuringDrain(res){
+    if(!draining)return false;
+    if(!res.destroyed&&!res.writableEnded){res.writeHead(503,{'retry-after':'3','cache-control':'no-store'});res.end('fanout_draining');}
+    return true;
+  }
   // An idle feed is removed from admission immediately, but a provider
   // connection can take a moment to close. Never open the replacement
   // one-slot channel until the previous provider stream is released.
@@ -45,6 +56,23 @@ export function createLiveFanout({
   // an ordinal per source feed (not source URL, account, token or IP).
   let feedSequence=0;
   const recentEvents=[];
+  // Bounded, process-local measurements of transport bytes, NOT decoded video.
+  const mediaLatency={startup:[],recovery:[]};
+  function recordLatency(kind,since){
+    const now=clock(),elapsed=now-since;
+    if(!Number.isFinite(elapsed)||elapsed<0)return;
+    const samples=mediaLatency[kind];
+    samples.push({at:now,ms:elapsed});
+    if(samples.length>64)samples.shift();
+  }
+  function latencySummary(kind){
+    const now=clock();
+    const values=mediaLatency[kind].filter(s=>s.at<=now&&now-s.at<=3600000)
+      .map(s=>s.ms).sort((a,b)=>a-b);
+    const percentile=p=>values.length?values[Math.ceil(values.length*p)-1]:null;
+    return {samples:values.length,p50Ms:percentile(0.5),p95Ms:percentile(0.95),
+      maxMs:values.length?values[values.length-1]:null};
+  }
   function event(row,kind,reason=''){
     const knownKinds=new Set(['connected','reconnecting','recovered','failed','idle']);
     if(!knownKinds.has(kind))return;
@@ -59,9 +87,11 @@ export function createLiveFanout({
   const counters={providerFailures:0,slowViewerDisconnects:0,
     capacityRejections:0,sourceLimitRejections:0,cooldownRejections:0,
     sourceHandoffs:0,sourceHandoffWaits:0,abandonedViewerRequests:0,
-    upstreamReconnects:0,
+    sourceReleaseStalls:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
+    peakViewersOnOneFeed:0,viewerLimitRejections:0,
+    maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -70,7 +100,7 @@ export function createLiveFanout({
   const allowedReasons=new Set(['provider_denied','provider_not_media',
     'provider_not_ts','provider_unavailable','fanout_upstream_ended',
     'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
-    'provider_redirect_denied']);
+    'provider_redirect_denied','relay_bad_origin']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   function admittedRetryAfterMs(header){
     // RFC 9110 Retry-After is delta seconds or an HTTP-date. Provider
@@ -107,9 +137,24 @@ export function createLiveFanout({
     while(cooldowns.size>64)cooldowns.delete(cooldowns.keys().next().value);
     counters.providerFailures++;
   }
+  function guardSourceRelease(row){
+    if(!row.licensedSourceId||!row.pumpStarted||row.releaseGuarded)return;
+    row.releaseGuarded=true;
+    const scope=row.licensedSourceId;
+    const prior=pendingSourceReleases.get(scope)||Promise.resolve();
+    const gate=Promise.all([prior,row.upstreamReleasedPromise]).then(()=>{});
+    pendingSourceReleases.set(scope,gate);
+    void gate.finally(()=>{
+      if(pendingSourceReleases.get(scope)===gate)
+        pendingSourceReleases.delete(scope);
+    });
+  }
   function closeFeed(key,reason='closed',expectedRow=null){
     const row=feeds.get(key);
     if(!row||(expectedRow&&row!==expectedRow))return;
+    // Register release BEFORE removing admission: applies to timer expiry,
+    // global pool eviction, same-source handoff and terminal failure alike.
+    guardSourceRelease(row);
     feeds.delete(key);clearTimeout(row.idleTimer);
     row.controller.abort();
     if(reason==='idle')event(row,'idle');
@@ -122,26 +167,33 @@ export function createLiveFanout({
   // A viewer joining an already running TS feed needs recent transport
   // packets (often PAT/PMT and a nearby keyframe). Keep only a small in-memory
   // tail of the CURRENT upstream session, never disk or a separate source GET.
+  function pruneRecent(row,now){
+    while(row.recentChunks.length&&(row.recentChunks[0].at>now||
+      now-row.recentChunks[0].at>lateJoinReplayAgeMs||
+      row.recentBytes>lateJoinReplayBytes||row.recentChunks.length>256)){
+      row.recentBytes-=row.recentChunks.shift().bytes.length;
+    }
+  }
+  function discardRecent(row){
+    row.recentChunks=[];row.recentBytes=0;
+  }
   function rememberRecent(row,chunk){
-    if(lateJoinReplayBytes===0)return;
+    if(lateJoinReplayBytes===0||!chunk.length)return;
     const value=chunk.length>lateJoinReplayBytes
       ?Buffer.from(chunk.subarray(chunk.length-lateJoinReplayBytes))
-      :Buffer.from(chunk);
-    row.recentChunks.push(value);
+      :chunk; // deliver owns this immutable Buffer; do not duplicate every packet.
+    const now=clock();
+    row.recentChunks.push({at:now,bytes:value});
     row.recentBytes+=value.length;
-    while(row.recentBytes>lateJoinReplayBytes&&row.recentChunks.length>1){
-      row.recentBytes-=row.recentChunks.shift().length;
-    }
-    if(row.recentBytes>lateJoinReplayBytes){
-      row.recentChunks=[Buffer.from(value.subarray(value.length-lateJoinReplayBytes))];
-      row.recentBytes=row.recentChunks[0].length;
-    }
+    pruneRecent(row,now);
   }
   function replayRecent(row,viewer){
     if(row.state!=='ready'||viewer.destroyed||viewer.writableEnded)return;
-    for(const chunk of row.recentChunks){
-      if(viewer.writableLength+chunk.length>512*1024){
+    pruneRecent(row,clock());
+    for(const {bytes:chunk} of row.recentChunks){
+      if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
+        counters.maxQueuedAtSlowDisconnectBytes=Math.max(counters.maxQueuedAtSlowDisconnectBytes,viewer.writableLength);
         if(!viewer.destroyed)viewer.destroy();
         return;
       }
@@ -173,8 +225,9 @@ export function createLiveFanout({
     for(const viewer of [...row.viewers]){
       if(viewer.destroyed||viewer.writableEnded){row.viewers.delete(viewer);continue;}
       // Never let a stalled receiver accumulate unbounded data in memory.
-      if(viewer.writableLength+chunk.length>512*1024){
+      if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
+        counters.maxQueuedAtSlowDisconnectBytes=Math.max(counters.maxQueuedAtSlowDisconnectBytes,viewer.writableLength);
         row.viewers.delete(viewer);
         if(!viewer.destroyed)viewer.destroy();
         continue;
@@ -189,51 +242,138 @@ export function createLiveFanout({
       row.idleTimer.unref?.();
     }
   }
-  function nextChunk(reader,limitMs,attemptController){
+  // When the ONLY viewer is backpressured, temporarily pace the provider
+  // reader instead of killing a healthy decoder during a short startup burst.
+  // Never slow healthy peers: as soon as another live viewer joins, resume
+  // normal isolation. Bound waiting and retain the same strict queue cap.
+  async function paceSoleViewer(row,bytes){
+    const deadline=performance.now()+2000;
+    while(!row.controller.signal.aborted&&feeds.get(row.key)===row&&row.viewers.size===1){
+      const viewer=row.viewers.values().next().value;
+      if(viewer.destroyed||viewer.writableEnded||viewer.writableLength+bytes<=maxViewerQueueBytes)return;
+      if(performance.now()>=deadline)return;
+      await sleep(10);
+    }
+  }
+  // Copy slices so the bootstrap cache cannot retain an oversized backing buffer.
+  async function deliverBurst(row,chunk){
+    counters.maxInputChunkBytes=Math.max(counters.maxInputChunkBytes,chunk.length);
+    const sliceBytes=128*1024;
+    for(let offset=0;offset<chunk.length;offset+=sliceBytes){
+      if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
+      const size=Math.min(sliceBytes,chunk.length-offset);
+      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes)
+        await paceSoleViewer(row,size);
+      if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
+      deliver(row,chunk.length<=sliceBytes?chunk:Buffer.from(chunk.subarray(offset,offset+size)));
+      if(offset+size<chunk.length)await yieldIo();
+    }
+  }
+  function nextChunk(reader,limitMs,attemptController,retireReader=null){
     // A provider that opens a connection but never sends more TS data must
     // not hold viewers forever. End this feed; the player can re-request it.
     let timer;
     const timeout=new Promise((_,reject)=>{
       timer=setTimeout(()=>{
-        attemptController.abort();
-        reject(new Error('fanout_read_idle_timeout'));
+        const error=new Error('fanout_read_idle_timeout');
+        reject(error);
+        // The idle reader is still locked by a pending read(). Retire it
+        // before aborting the fetch; abort-first produces a misleading
+        // AbortError from cancel() on native Undici streams.
+        if(retireReader)retireReader(error);
+        else attemptController.abort(error);
       },limitMs);
       timer.unref?.();
     });
-    return Promise.race([reader.read(),timeout]).finally(()=>clearTimeout(timer));
+    // Zero-byte chunks are not media progress and must not extend the idle
+    // budget. Yield on empty chunks so a broken upstream cannot starve timers.
+    async function readMedia(){
+      for(;;){
+        attemptController.signal.throwIfAborted();
+        const part=await reader.read();
+        if(part.done||part.value?.length)return part;
+        await new Promise(resolve=>setImmediate(resolve));
+      }
+    }
+    // A provider body need not respond to fetch's abort signal. Wake the
+    // pump immediately on viewer retirement, then confirm reader release
+    // via the existing licensed-source guard before allowing replacement.
+    const signal=attemptController.signal;
+    let onAbort;
+    const aborted=new Promise((_,reject)=>{
+      onAbort=()=>reject(signal.reason||new Error('fanout_aborted'));
+      if(signal.aborted)onAbort();
+      else signal.addEventListener('abort',onAbort,{once:true});
+    });
+    return Promise.race([readMedia(),timeout,aborted]).finally(()=>{
+      clearTimeout(timer);signal.removeEventListener('abort',onAbort);
+    });
   }
-  async function releaseUpstream(reader,response){
-    // Some sources never settle ReadableStream.cancel() after a stalled read.
-    // The fetch AbortController is already aborted by the caller; cleanup
-    // must not indefinitely block the next single-source retry.
+  async function releaseUpstream(reader,response,{confirmed:startedRelease=null,abort=null}={}){
+    // For an active Node fetch body, aborting the signal *before* reader.cancel()
+    // makes cancel reject AbortError even after the TCP connection closes. The
+    // old false-negative then permanently quarantined a one-feed provider.
+    // Cancel the body first, confirm the result, and only then abort the
+    // request signal. A stalled cancellation still fails closed: never claim
+    // a licensed slot was freed based solely on a timer or AbortError.
+    if(!reader&&!response?.body){
+      if(abort)abort();
+      return {confirmed:Promise.resolve(true),settled:true};
+    }
+    const confirmed=startedRelease||Promise.resolve().then(()=>reader?
+      reader.cancel():response.body.cancel()).then(()=>true,()=>false);
     let timer;
     try{
-      await Promise.race([
-        Promise.resolve().then(()=>reader?
-          reader.cancel():response?.body?.cancel()).catch(()=>{}),
-        new Promise(resolve=>{timer=setTimeout(resolve,250);})
+      const settled=await Promise.race([
+        confirmed.then(ok=>({done:true,ok})),
+        new Promise(resolve=>{timer=setTimeout(()=>resolve({done:false}),250);})
       ]);
+      return {confirmed,settled:settled.done&&settled.ok===true};
     }finally{
       if(timer)clearTimeout(timer);
+      if(abort)abort();
       if(reader)try{reader.releaseLock()}catch{}
     }
   }
   async function pump(row){
     let everDelivered=false,failedAttempts=0,initialFailures=0;
     let reopening=false;
+    const pendingReleases=[];
     try{
       while(!row.controller.signal.aborted&&row.viewers.size){
-        let reader=null,response=null,retry=false,connectedAt=clock();
+        let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
         const attemptController=new AbortController();
-        const stopAttempt=()=>attemptController.abort();
+        let releaseStarted=null;
+        const beginRelease=()=>{
+          if(releaseStarted)return releaseStarted;
+          if(!reader&&!response?.body)return null;
+          releaseStarted=Promise.resolve().then(()=>reader?
+            reader.cancel():response.body.cancel()).then(()=>true,()=>false);
+          return releaseStarted;
+        };
+        const stopAttempt=()=>{
+          // Retiring an idle/changed channel must cancel its active stream
+          // before aborting the fetch; that is the only path that confirms
+          // normal Undici cancellation under a single-feed licence.
+          const release=beginRelease();
+          if(!release){attemptController.abort();return;}
+          const timer=setTimeout(()=>attemptController.abort(),250);
+          timer.unref?.();
+          void release.finally(()=>{
+            clearTimeout(timer);
+            attemptController.abort();
+          });
+        };
         row.controller.signal.addEventListener('abort',stopAttempt,{once:true});
         try{
           // Provider-issued TS redirects are validated at every hop; no
           // arbitrary origin hops and no source credential headers.
           let target=await assertPublicMediaUrl(row.sourceUrl,{lookup});
+          attemptController.signal.throwIfAborted();
           const originalOrigin=target.origin;
           let crossOriginHops=0,redirectCount=0;
           while(true){
+            attemptController.signal.throwIfAborted();
             const headerTimer=setTimeout(()=>attemptController.abort(),firstByteTimeoutMs);
             headerTimer.unref?.();
             try{
@@ -241,6 +381,7 @@ export function createLiveFanout({
                 headers:{accept:'video/mp2t,application/octet-stream;q=0.9,*/*;q=0.5',
                   'accept-encoding':'identity','user-agent':'BLOFY-STREAM-Fanout/1.0'}});
             }finally{clearTimeout(headerTimer)}
+            attemptController.signal.throwIfAborted();
             if(![301,302,303,307,308].includes(response.status))break;
             const location=response.headers.get('location');
             if(!location||redirectCount>=3)throw Error('provider_redirect_denied');
@@ -256,8 +397,19 @@ export function createLiveFanout({
                 throw Error('provider_redirect_denied');
               crossOriginHops++;
             }
-            await response.body?.cancel().catch(()=>{});
-            response=null;target=next;redirectCount++;
+            // Do not let a stalled redirect response hold all viewers
+            // indefinitely or open a second licensed upstream connection.
+            const redirectedRelease=await releaseUpstream(null,response);
+            response=null;
+            if(!redirectedRelease.settled){
+              if(row.licensedSourceId){
+                pendingReleases.push(redirectedRelease.confirmed);
+                counters.sourceReleaseStalls++;
+              }
+              throw Error('provider_redirect_denied');
+            }
+            attemptController.signal.throwIfAborted();
+            target=next;redirectCount++;
           }
           if(!response.ok||!response.body){
             if([401,403,404,429,456].includes(response.status)){
@@ -272,7 +424,7 @@ export function createLiveFanout({
           if(/^(text\/|application\/(?:json|xml))/.test(contentType))
             throw Error('provider_not_media');
           reader=response.body.getReader();
-          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController);
+          const first=await nextChunk(reader,firstByteTimeoutMs,attemptController,stopAttempt);
           if(first.done||!first.value?.length||first.value[0]!==0x47)
             throw Error('provider_not_ts');
           counters.upstreamSessionsOpened++;
@@ -302,16 +454,22 @@ export function createLiveFanout({
               'referrer-policy':'no-referrer','x-frame-options':'DENY',
               'x-content-type-options':'nosniff'});
           }
-          deliver(row,Buffer.from(first.value));
+          firstMediaAt=lastMediaAt=clock();
+          if(!everDelivered)recordLatency('startup',row.admittedAt);
+          else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
+          await deliverBurst(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
-            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController);
+            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
             if(part.done){
               if(row.viewers.size)throw Error('fanout_upstream_ended');
               break;
             }
-            if(part.value?.length)deliver(row,Buffer.from(part.value));
-            if(clock()-connectedAt>=8000)cooldowns.delete(row.key);
+            if(part.value?.length){
+              lastMediaAt=clock();
+              await deliverBurst(row,Buffer.from(part.value));
+              if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+            }
           }
           if(!row.viewers.size||row.controller.signal.aborted)break;
         }catch(error){
@@ -319,24 +477,29 @@ export function createLiveFanout({
           const message=String(error?.message||'');
           const reason=allowedReasons.has(message)?message:'other_transport';
           failureReasons[reason]=(failureReasons[reason]||0)+1;
-          const forbidden=['provider_denied','provider_not_media','provider_not_ts',
-            'provider_redirect_denied'];
+          // A failed DNS resolution can be temporary, unlike an explicitly
+          // private address or invalid redirect. Retry only within the
+          // existing sequential budget; validate again before any GET.
+          const transient=['provider_unavailable','other_transport','fanout_read_idle_timeout','relay_origin_unresolved'];
           // A transient initial upstream 5xx or transport reset may succeed
           // on ONE bounded sequential retry. Never retry source access denial,
           // malformed media, private addresses or redirect violations.
           const transientInitial=!everDelivered&&
-            ['provider_unavailable','other_transport','fanout_read_idle_timeout']
-              .includes(reason)&&initialFailures<initialTransientRetries;
+            transient.includes(reason)&&initialFailures<initialTransientRetries;
           const canReconnect=reconnectOnUpstreamEnd===true&&
-            everDelivered&&maxReconnectAttempts>0&&!forbidden.includes(message);
-          // A healthy 8s+ upstream session resets short-failure budget;
-          // a series of fast failures stops after three attempts.
-          if(clock()-connectedAt>=8000)failedAttempts=0;
+            everDelivered&&maxReconnectAttempts>0&&
+            (transient.includes(reason)||reason==='fanout_upstream_ended');
+          // Only a sustained interval of delivered media resets the retry budget.
+          // Connection setup time and idle stalls are not healthy playback.
+          if(firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000)failedAttempts=0;
           if(transientInitial){
             initialFailures++;retry=true;counters.initialRetries++;
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
             failedAttempts++;retry=true;reopening=true;
             row.state='reconnecting';
+            // No viewer may replay the retired publisher's cached media.
+            // Release that memory immediately, including during DNS or backoff.
+            discardRecent(row);
             row.reconnects++;
             event(row,'reconnecting',reason);
             counters.upstreamReconnects++;
@@ -355,25 +518,48 @@ export function createLiveFanout({
             }
           }
         }finally{
-          // Source reader is released BEFORE a replacement source GET.
-          attemptController.abort();
-          await releaseUpstream(reader,response);
+          // Do NOT abort before cancel: with native Node fetch that can reject
+          // cancel() with AbortError and falsely reserve a provider slot forever.
+          const cleanup=await releaseUpstream(reader,response,{
+            confirmed:beginRelease(),abort:()=>attemptController.abort()
+          });
           row.controller.signal.removeEventListener('abort',stopAttempt);
+          if(!cleanup.settled&&row.licensedSourceId){
+            // Only the explicitly licensed, upstream-quota-scoped feeds
+            // must fail closed until actual provider release is confirmed.
+            // Independent unscoped streams keep their existing bounded
+            // retry behavior, without claiming a shared provider slot.
+            pendingReleases.push(cleanup.confirmed);
+            counters.sourceReleaseStalls++;
+            retry=false;
+          }
         }
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
         const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
-        await new Promise(resolve=>setTimeout(resolve,delay));
+        try{await sleep(delay,undefined,{signal:row.controller.signal});}
+        catch(error){if(!row.controller.signal.aborted)throw error;break;}
       }
     }finally{
-      // Every sequential reconnect already awaited releaseUpstream before
-      // exiting this pump; this resolves an in-progress channel handoff.
-      row.signalUpstreamReleased?.();
+      if(pendingReleases.length){
+        // A resolved cancellation is the only condition that releases
+        // a quarantined source. Do not open fresh source GETs after a
+        // rejected/hanging cleanup; a service restart may be needed.
+        const confirmed=Promise.all(pendingReleases).then(results=>{
+          if(results.every(Boolean))return true;
+          return new Promise(()=>{});
+        });
+        void confirmed.then(()=>row.signalUpstreamReleased?.());
+        guardSourceRelease(row);
+      }else{
+        row.signalUpstreamReleased?.();
+      }
       closeFeed(row.key,'closed',row);
     }
   }
   async function handle(req,res,sourceUrl,{allowProviderCdn=false,
     licensedSourceId=null,providerMaxConcurrentFeeds=null}={}){
+    if(rejectDuringDrain(res))return;
     if(req.method==='HEAD'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
@@ -390,6 +576,7 @@ export function createLiveFanout({
     // while its response remains healthy; check response state instead.
     const viewerGone=()=>res.destroyed||res.writableEnded||req.aborted===true;
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
+    if(rejectDuringDrain(res))return;
     // Different signed provider-redirect scopes must NOT merge into the
     // same feed, even when their upstream URL is identical. Two granted
     // viewers still share exactly one feed under the same licensed scope.
@@ -424,15 +611,7 @@ export function createLiveFanout({
       for(const [oldKey,old] of [...feeds]){
         if(oldKey===key||old.licensedSourceId!==sourceScope||
            old.viewers.size!==0||!old.idleTimer)continue;
-        const release=old.pumpStarted?old.upstreamReleasedPromise:Promise.resolve();
         closeFeed(oldKey,'idle',old);
-        const previous=pendingSourceReleases.get(sourceScope)||Promise.resolve();
-        const done=Promise.all([previous,release]).then(()=>{});
-        pendingSourceReleases.set(sourceScope,done);
-        void done.finally(()=>{
-          if(pendingSourceReleases.get(sourceScope)===done)
-            pendingSourceReleases.delete(sourceScope);
-        });
         counters.sourceHandoffs++;
       }
       const pending=pendingSourceReleases.get(sourceScope);
@@ -445,7 +624,9 @@ export function createLiveFanout({
         ]);
         if(timer)clearTimeout(timer);
         if(viewerGone()){counters.abandonedViewerRequests++;return;}
-        if(!completed){
+    if(rejectDuringDrain(res))return;
+        // A concurrent eviction can add another release while we wait.
+        if(!completed||(pendingSourceReleases.has(sourceScope)&&pendingSourceReleases.get(sourceScope)!==pending)){
           res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
             'content-type':'application/json'});
           res.end('{"ok":false,"code":"fanout_source_handoff_pending"}');
@@ -477,6 +658,7 @@ export function createLiveFanout({
       }
     }
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
+    if(rejectDuringDrain(res))return;
     if(!row){
       // During rapid channel zapping, old feeds remain alive for idleMs
       // after their last viewer leaves. Reclaim ONLY those idle feeds if
@@ -506,21 +688,22 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
-        state:'starting',idleTimer:null,startedAt:null,providerRetryAfterMs:0,
+        state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
       feeds.set(key,row);
     }
     if(row.viewers.size>=maxViewersPerFeed){
-      counters.capacityRejections++;
+      counters.capacityRejections++;counters.viewerLimitRejections++;
       res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
     counters.viewersAccepted++;
+    counters.peakViewersOnOneFeed=Math.max(counters.peakViewersOnOneFeed,row.viewers.size);
     const onClose=()=>{
       row.viewers.delete(res);
-      if(!row.viewers.size&&!row.idleTimer){
+      if(feeds.get(row.key)===row&&!row.viewers.size&&!row.idleTimer){
         row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
         row.idleTimer.unref?.();
       }
@@ -537,7 +720,12 @@ export function createLiveFanout({
       row.pumpStarted=true;void pump(row);
     }
   }
-  return {handle,stats:()=>({activeFeeds:feeds.size,
+  return {handle,stats:()=>{
+    // Background operator sampling also expires old tails when no new bytes
+    // arrive. This keeps reported cache occupancy honest during stalls.
+    const now=clock();
+    for(const row of feeds.values())pruneRecent(row,now);
+    return {activeFeeds:feeds.size,
     viewers:[...feeds.values()].reduce((n,row)=>n+row.viewers.size,0),
     // This media instance enforces its licensed channel quota locally.
     // Scaling replicas without a single shared origin / distributed lease
@@ -545,6 +733,9 @@ export function createLiveFanout({
     quotaScope:'one_media_process',crossReplicaQuotaGuaranteed:false,
     cooldownFeeds:[...cooldowns.values()].filter(v=>v.retryAt>clock()).length,
     ...counters,failureReasons:{...failureReasons},
+    mediaLatency:{scope:'shared_ts_transport_only',decodedVideoVerified:false,
+      windowMs:3600000,maxSamplesPerKind:64,
+      admissionToFirstBytes:latencySummary('startup'),lastBytesToRecoveredBytes:latencySummary('recovery')},
     // Up to maxFeeds (64) active sources and only 32 recent incidents:
     // no URLs, credentials, subscriber identifiers or IP addresses.
     channels:[...feeds.values()].map(row=>({
@@ -558,9 +749,11 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,
+    maxFeeds,maxViewersPerFeed,maxViewerQueueBytes,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
-    bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}),
+    lateJoinReplayAgeMs,
+    bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}},
+    drain:()=>{draining=true;for(const key of [...feeds.keys()])closeFeed(key)},
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
