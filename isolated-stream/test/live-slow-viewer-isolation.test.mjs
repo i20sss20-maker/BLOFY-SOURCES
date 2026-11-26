@@ -24,7 +24,7 @@ class Sink extends EventEmitter{
 test('127 draining viewers survive one stalled viewer with bounded queue and cache',{timeout:15000},async()=>{
  let writer,calls=0,now=100000;
  const upstream=new ReadableStream({start(c){writer=c}});
- const broker=createLiveFanout({maxViewersPerFeed:128,clock:()=>now,
+ const broker=createLiveFanout({maxViewersPerFeed:128,maxViewerQueueBytes:512*1024,clock:()=>now,
   lookup:async()=>[{address:'8.8.8.8',family:4}],
   fetchImpl:async()=>{calls++;return new Response(upstream,{headers:{'content-type':'video/mp2t'}})}});
  const fast=Array.from({length:127},()=>new Sink()),slow=new Sink(true);
