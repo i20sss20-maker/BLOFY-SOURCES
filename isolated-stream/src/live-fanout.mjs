@@ -39,6 +39,12 @@ export function createLiveFanout({
   }catch{}
   const feeds=new Map();
   const cooldowns=new Map();
+  let draining=false;
+  function rejectDuringDrain(res){
+    if(!draining)return false;
+    if(!res.destroyed&&!res.writableEnded){res.writeHead(503,{'retry-after':'3','cache-control':'no-store'});res.end('fanout_draining');}
+    return true;
+  }
   // An idle feed is removed from admission immediately, but a provider
   // connection can take a moment to close. Never open the replacement
   // one-slot channel until the previous provider stream is released.
@@ -519,6 +525,7 @@ export function createLiveFanout({
   }
   async function handle(req,res,sourceUrl,{allowProviderCdn=false,
     licensedSourceId=null,providerMaxConcurrentFeeds=null}={}){
+    if(rejectDuringDrain(res))return;
     if(req.method==='HEAD'){
       res.writeHead(200,{'content-type':'video/mp2t','cache-control':'no-store',
         'referrer-policy':'no-referrer','x-frame-options':'DENY',
@@ -535,6 +542,7 @@ export function createLiveFanout({
     // while its response remains healthy; check response state instead.
     const viewerGone=()=>res.destroyed||res.writableEnded||req.aborted===true;
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
+    if(rejectDuringDrain(res))return;
     // Different signed provider-redirect scopes must NOT merge into the
     // same feed, even when their upstream URL is identical. Two granted
     // viewers still share exactly one feed under the same licensed scope.
@@ -582,6 +590,7 @@ export function createLiveFanout({
         ]);
         if(timer)clearTimeout(timer);
         if(viewerGone()){counters.abandonedViewerRequests++;return;}
+    if(rejectDuringDrain(res))return;
         // A concurrent eviction can add another release while we wait.
         if(!completed||(pendingSourceReleases.has(sourceScope)&&pendingSourceReleases.get(sourceScope)!==pending)){
           res.writeHead(503,{'retry-after':'1','cache-control':'no-store',
@@ -615,6 +624,7 @@ export function createLiveFanout({
       }
     }
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
+    if(rejectDuringDrain(res))return;
     if(!row){
       // During rapid channel zapping, old feeds remain alive for idleMs
       // after their last viewer leaves. Reclaim ONLY those idle feeds if
@@ -709,5 +719,6 @@ export function createLiveFanout({
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
     bufferedBootstrapBytes:[...feeds.values()].reduce((n,row)=>n+(row.recentBytes||0),0)}},
+    drain:()=>{draining=true;for(const key of [...feeds.keys()])closeFeed(key)},
     close:()=>{for(const key of [...feeds.keys()])closeFeed(key)}};
 }
