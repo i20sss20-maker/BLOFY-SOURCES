@@ -6,6 +6,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createLiveFanout} from './live-fanout.mjs';
+import {createRelayIngressFence} from './engine-ingress-fence.mjs';
 
 const TTL=45_000,MAX_TICKETS=1024,MAX_ISSUE_BYTES=4096;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,7 +67,7 @@ export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
   sharedLiveEnabled=false,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
-  onSharedLiveEvent=()=>{}
+  onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence()
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
@@ -154,7 +155,7 @@ export function createRelayBroker({
         ?error.message:'relay_issue_invalid';
       return respond(res,400,{ok:false,code});
     }
-    if(draining)return rejectDrain(res);
+    if(draining||!await allowIngress()||draining)return rejectDrain(res);
     prune();
     if(tickets.size>=maxTickets){
       quota.capacityRejected++;
@@ -203,6 +204,10 @@ export function createRelayBroker({
       tickets.delete(match[1]);
       return respond(res,410,{ok:false,code:'relay_ticket_expired'});
     }
+    if(!await allowIngress()||draining)return rejectDrain(res);
+    // Recheck after the asynchronous gate call, since concurrent redemption
+    // or drain may have removed this capability in the meantime.
+    if(tickets.get(match[1])!==row||row.expiresAt<=clock()||row.uses>=5)return respond(res,410,{ok:false,code:'relay_ticket_expired'});
     row.uses++;
     if(row.uses>=5)tickets.delete(match[1]);
     if(row.sharedLive){
