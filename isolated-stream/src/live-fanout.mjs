@@ -662,8 +662,7 @@ export function createLiveFanout({
     }
     if(row.viewers.size>=maxViewersPerFeed){
       counters.capacityRejections++;counters.viewerLimitRejections++;
-      res.writeHead(503,{'retry-after':'3','cache-control':'no-store','content-type':'application/json'});
-      res.end('{"ok":false,"code":"fanout_viewer_limit"}');return;
+      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
