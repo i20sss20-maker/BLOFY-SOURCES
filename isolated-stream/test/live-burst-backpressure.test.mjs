@@ -35,3 +35,31 @@ test('viewer queue remains strictly bounded',()=>{
  assert.throws(()=>createLiveFanout({maxViewerQueueBytes:0}),/fanout_capacity_invalid/);
  assert.throws(()=>createLiveFanout({maxViewerQueueBytes:8*1024*1024}),/fanout_capacity_invalid/);
 });
+
+test('oversized input burst yields to draining sockets while an indefinitely stalled sink is removed',{timeout:5000},async()=>{
+ let calls=0,emitter;
+ const upstream=new ReadableStream({start(c){emitter=c}});
+ const f=createLiveFanout({lookup:async()=>[{address:'93.184.216.34',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(upstream,{headers:{'content-type':'video/mp2t'}})}});
+ const good=Array.from({length:5},()=>{
+  const r=viewer();
+  r.write=b=>{r.bytes+=b.length;r.writableLength+=b.length;
+   setImmediate(()=>{r.writableLength-=b.length});return false};
+  return r;
+ }),slow=viewer(true);
+ const burst=Buffer.alloc(188*20000,0x11);
+ for(let i=0;i<burst.length;i+=188)burst[i]=0x47;
+ try{
+  await Promise.all([...good,slow].map(r=>f.handle({method:'GET'},r,source,{licensedSourceId:sourceId,providerMaxConcurrentFeeds:1})));
+  await until(()=>calls===1);
+  emitter.enqueue(burst);
+  await until(()=>good.every(r=>r.bytes===burst.length));
+  assert.ok(good.every(r=>!r.destroyed));
+  assert.equal(slow.destroyed,true);
+  const s=f.stats();
+  assert.equal(s.viewers,5);assert.equal(s.activeFeeds,1);
+  assert.equal(s.sourceBytesReceived,burst.length);
+  assert.equal(s.maxInputChunkBytes,burst.length);
+  assert.equal(s.slowViewerDisconnects,1);assert.equal(calls,1);
+ }finally{f.drain()}
+});
