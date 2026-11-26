@@ -15,6 +15,7 @@ import {createLiveRestreamSupervisor} from './live-restream-supervisor.mjs';
 import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
+import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from './linode-relay-maintenance.mjs';
 import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
 import {createStreamOpsObservatory,summarizeMediaHour} from './stream-ops-observatory.mjs';
@@ -77,6 +78,7 @@ export function createStreamServer({
   sharedLiveEnabled=false,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
+  maintenance=relayMaintenanceActive(),
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -218,6 +220,10 @@ export function createStreamServer({
   const qualityMetrics=createEngineQualityMetrics();
   const handleEngineHdTest=createEngineHdTest({metrics:qualityMetrics});
   const app=http.createServer((req,res)=>{
+    if(relayMaintenanceBlocks(req.method,req.url,maintenance)){
+      res.setHeader('retry-after','60');
+      return safeResponse(res,503,{ok:false,code:'temporary_media_maintenance'});
+    }
     if(handleEngineHdTest(req,res))return;
     if(handleContinuousEngineTest(req,res))return;
     if(handleIndependentEngineTest(req,res))return;
@@ -352,7 +358,7 @@ export function createStreamServer({
     t.unref?.();
   }
   function startBootSourceReadiness(){
-    if(!realSourceReadinessOnBoot)return;
+    if(maintenance||!realSourceReadinessOnBoot)return;
     // Only the uniquely named licensed 'saleh' source and a uniquely matching
     // 4K V SPORT channel are eligible for this single two-reader, 26s probe.
     // It does NOT publish a MediaMTX path or redirect any paying customer.
@@ -396,7 +402,11 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
     service.startBootSourceReadiness();
-    service.autoHealth.start();
+    if(!relayMaintenanceActive())service.autoHealth.start();
+    else {
+      const report=()=>console.info('BLOFY_LINODE_RELAY_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
+      report();const drainTimer=setInterval(report,5000);drainTimer.unref?.();
+    }
     // Contact only the MediaMTX replica's private, non-media HLS root.
     // 404 is expected and means transport is reachable. No source stream
     // path, Xtream credential, subscriber or public media URL is requested.
