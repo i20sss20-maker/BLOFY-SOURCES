@@ -2,7 +2,7 @@
 // A single validated provider HTTP response can be fanned out to multiple
 // viewers. Never store source URLs or credentials in logs or public responses.
 import {createHash} from 'node:crypto';
-import {setTimeout as sleep} from 'node:timers/promises';
+import {setTimeout as sleep,setImmediate as yieldIo} from 'node:timers/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 
@@ -91,6 +91,7 @@ export function createLiveFanout({
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     peakViewersOnOneFeed:0,viewerLimitRejections:0,
+    maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -192,6 +193,7 @@ export function createLiveFanout({
     for(const {bytes:chunk} of row.recentChunks){
       if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
+        counters.maxQueuedAtSlowDisconnectBytes=Math.max(counters.maxQueuedAtSlowDisconnectBytes,viewer.writableLength);
         if(!viewer.destroyed)viewer.destroy();
         return;
       }
@@ -225,6 +227,7 @@ export function createLiveFanout({
       // Never let a stalled receiver accumulate unbounded data in memory.
       if(viewer.writableLength+chunk.length>maxViewerQueueBytes){
         counters.slowViewerDisconnects++;
+        counters.maxQueuedAtSlowDisconnectBytes=Math.max(counters.maxQueuedAtSlowDisconnectBytes,viewer.writableLength);
         row.viewers.delete(viewer);
         if(!viewer.destroyed)viewer.destroy();
         continue;
@@ -237,6 +240,20 @@ export function createLiveFanout({
     if(!row.viewers.size&&!row.idleTimer){
       row.idleTimer=setTimeout(()=>closeFeed(row.key,'idle',row),idleMs);
       row.idleTimer.unref?.();
+    }
+  }
+  // Large provider bursts must not be mistaken for a stalled viewer just
+  // because the entire burst arrived in one read. Yield to socket I/O
+  // between bounded slices; never await an individual viewer's drain.
+  // Copy slices so the bootstrap cache cannot retain an oversized backing buffer.
+  async function deliverBurst(row,chunk){
+    counters.maxInputChunkBytes=Math.max(counters.maxInputChunkBytes,chunk.length);
+    const sliceBytes=128*1024;
+    if(chunk.length<=sliceBytes){deliver(row,chunk);return;}
+    for(let offset=0;offset<chunk.length;offset+=sliceBytes){
+      if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
+      deliver(row,Buffer.from(chunk.subarray(offset,offset+sliceBytes)));
+      if(offset+sliceBytes<chunk.length)await yieldIo();
     }
   }
   function nextChunk(reader,limitMs,attemptController,retireReader=null){
@@ -427,7 +444,7 @@ export function createLiveFanout({
           firstMediaAt=lastMediaAt=clock();
           if(!everDelivered)recordLatency('startup',row.admittedAt);
           else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
-          deliver(row,Buffer.from(first.value));
+          await deliverBurst(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
             const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
@@ -437,7 +454,7 @@ export function createLiveFanout({
             }
             if(part.value?.length){
               lastMediaAt=clock();
-              deliver(row,Buffer.from(part.value));
+              await deliverBurst(row,Buffer.from(part.value));
               if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
             }
           }
