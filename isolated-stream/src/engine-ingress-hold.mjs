@@ -67,15 +67,18 @@ export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=ra
   const p=attemptCleanup(operation,id).finally(()=>inFlight.delete(key));
   inFlight.set(key,p);return p;
  }
- let replaying=false;
+ let replaying=false,replayCursor=0;
  async function replay(){
   if(!journalReady||replaying||token.length<32)return;
   replaying=true;
   try{
-   const names=readdirSync(journal).filter(n=>entryPattern.test(n)).slice(0,16);
+   const all=readdirSync(journal).filter(n=>entryPattern.test(n)).sort();
+   const names=all.length?Array.from({length:Math.min(16,all.length)},(_,i)=>all[(replayCursor+i)%all.length]):[];
+   replayCursor=all.length?(replayCursor+names.length)%all.length:0;
    await Promise.allSettled(names.map(n=>{const [,operation,id]=entryPattern.exec(n);return cleanup(operation,id)}));
   }catch{}finally{replaying=false}
  }
+ if(enabled&&journal&&!journalReady)console.warn('BLOFY_RELAY_INGRESS_JOURNAL_UNAVAILABLE');
  if(journalReady&&token.length>=32){
   const t=setInterval(()=>void replay(),30000);t.unref?.();
   queueMicrotask(()=>void replay());
