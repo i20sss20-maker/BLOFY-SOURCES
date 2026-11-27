@@ -79,6 +79,7 @@ export function createStreamServer({
   relayRedirectSourceOrigin='',
   relayFirstByteTimeoutMs=12000,
   sharedLiveEnabled=false,
+  sharedLiveMaxFeeds=8,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
   maintenance=relayMaintenanceActive(),
@@ -92,7 +93,7 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,
     onSharedLiveEvent:evt=>{
       // Persist bounded, sanitized connection lifecycle via Railway logs
       // across restarts while retaining zero URLs or customer identifiers.
@@ -394,6 +395,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     operatorProxyToken:process.env.BLOFY_STREAM_OPERATOR_PROXY_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
+    sharedLiveMaxFeeds:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_FEEDS||8),
     autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
     realSourceReadinessOnBoot:process.env.BLOFY_STREAM_SHARED_REAL_SOURCE_PROBE_ON_BOOT==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
