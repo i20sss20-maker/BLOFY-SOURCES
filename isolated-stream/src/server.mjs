@@ -80,6 +80,8 @@ export function createStreamServer({
   relayFirstByteTimeoutMs=12000,
   sharedLiveEnabled=false,
   sharedLiveMaxFeeds=8,
+  sharedLiveMaxViewersPerFeed=128,
+  sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
   maintenance=relayMaintenanceActive(),
@@ -93,7 +95,7 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,sharedLiveMaxViewersPerFeed,sharedLiveMaxTotalViewers,
     onSharedLiveEvent:evt=>{
       // Persist bounded, sanitized connection lifecycle via Railway logs
       // across restarts while retaining zero URLs or customer identifiers.
@@ -286,7 +288,8 @@ export function createStreamServer({
         // Aggregate counters ONLY. Source URL, ticket, provider identity,
         // subscriber IP and secrets are not disclosed by this endpoint.
         fanout:{activeFeeds:f.activeFeeds,viewers:f.viewers,
-          maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,
+          maxViewersPerFeed:f.maxViewersPerFeed,maxFeeds:f.maxFeeds,maxTotalViewers:f.maxTotalViewers,
+          peakTotalViewers:f.peakTotalViewers,totalViewerLimitRejections:f.totalViewerLimitRejections,
           upstreamReconnects:f.upstreamReconnects,
           initialRetries:f.initialRetries,
           reconnectRecovered:f.reconnectRecovered,
@@ -396,6 +399,8 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
     sharedLiveMaxFeeds:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_FEEDS||8),
+    sharedLiveMaxViewersPerFeed:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_VIEWERS_PER_FEED||128),
+    sharedLiveMaxTotalViewers:process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS===undefined?undefined:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS),
     autoHealthProbeEnabled:process.env.BLOFY_STREAM_AUTO_HEALTH_REPROBE_ENABLED==='1',
     realSourceReadinessOnBoot:process.env.BLOFY_STREAM_SHARED_REAL_SOURCE_PROBE_ON_BOOT==='1',
     relayRedirectSourceOrigin:process.env.BLOFY_STREAM_MEDIA_REDIRECT_SOURCE_ORIGIN||'',
