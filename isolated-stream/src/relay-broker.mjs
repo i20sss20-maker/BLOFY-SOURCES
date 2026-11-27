@@ -6,6 +6,8 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createLiveFanout} from './live-fanout.mjs';
+import {createRelayIngressFence} from './engine-ingress-fence.mjs';
+import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 
 const TTL=45_000,MAX_TICKETS=1024,MAX_ISSUE_BYTES=4096;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,7 +68,7 @@ export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
   sharedLiveEnabled=false,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
-  onSharedLiveEvent=()=>{}
+  onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
@@ -110,7 +112,7 @@ export function createRelayBroker({
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
-    onEvent:onSharedLiveEvent});
+    onEvent:onSharedLiveEvent,acquireIngressHold});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.
@@ -154,7 +156,7 @@ export function createRelayBroker({
         ?error.message:'relay_issue_invalid';
       return respond(res,400,{ok:false,code});
     }
-    if(draining)return rejectDrain(res);
+    if(draining||!await allowIngress()||draining)return rejectDrain(res);
     prune();
     if(tickets.size>=maxTickets){
       quota.capacityRejected++;
@@ -203,6 +205,10 @@ export function createRelayBroker({
       tickets.delete(match[1]);
       return respond(res,410,{ok:false,code:'relay_ticket_expired'});
     }
+    if(!await allowIngress()||draining)return rejectDrain(res);
+    // Recheck after the asynchronous gate call, since concurrent redemption
+    // or drain may have removed this capability in the meantime.
+    if(tickets.get(match[1])!==row||row.expiresAt<=clock()||row.uses>=5)return respond(res,410,{ok:false,code:'relay_ticket_expired'});
     row.uses++;
     if(row.uses>=5)tickets.delete(match[1]);
     if(row.sharedLive){
@@ -215,6 +221,14 @@ export function createRelayBroker({
         if(res.headersSent||res.destroyed)return;
         return failRelay(res,'relay_provider_unavailable');
       }
+    }
+    let ingressHold;
+    try{ingressHold=await acquireIngressHold()}catch{}
+    if(!ingressHold?.ok)return rejectDrain(res);
+    if(draining||req.aborted||res.destroyed||res.writableEnded){
+      await ingressHold.close().catch(()=>{});
+      if(!res.destroyed&&!res.writableEnded)return rejectDrain(res);
+      return;
     }
     let directTracked=req.method==='GET';
     const releaseDirectViewer=()=>{
@@ -343,6 +357,9 @@ export function createRelayBroker({
       directControllers.delete(controller);
       controller.abort();
       if(upstream?.body&&!upstream.bodyUsed){try{await upstream.body.cancel()}catch{}}
+      // The registered local request ended; provider-wide release remains an
+      // independent check. A lost close acknowledgement leaves a durable hold.
+      await ingressHold.close().catch(()=>{});
     }
   }
   function drain(){

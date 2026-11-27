@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {setTimeout as sleep,setImmediate as yieldIo} from 'node:timers/promises';
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
+import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
@@ -14,7 +15,7 @@ export function createLiveFanout({
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
   lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
-  maxViewerQueueBytes=2*1024*1024
+  maxViewerQueueBytes=2*1024*1024,acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -339,7 +340,13 @@ export function createLiveFanout({
     let everDelivered=false,failedAttempts=0,initialFailures=0;
     let reopening=false;
     const pendingReleases=[];
+    let hold;
     try{
+      try{hold=await acquireIngressHold()}catch{}
+      if(!hold?.ok){
+        for(const viewer of row.viewers){if(!viewer.headersSent&&!viewer.destroyed&&!viewer.writableEnded){viewer.writeHead(503,{'retry-after':'3','cache-control':'no-store'});viewer.end('fanout_ingress_unavailable')}}
+        return;
+      }
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
         const attemptController=new AbortController();
@@ -549,10 +556,11 @@ export function createLiveFanout({
           if(results.every(Boolean))return true;
           return new Promise(()=>{});
         });
-        void confirmed.then(()=>row.signalUpstreamReleased?.());
+        void confirmed.then(()=>{row.signalUpstreamReleased?.();if(hold?.ok)void Promise.resolve().then(()=>hold.close()).catch(()=>{});});
         guardSourceRelease(row);
       }else{
         row.signalUpstreamReleased?.();
+        if(hold?.ok)void Promise.resolve().then(()=>hold.close()).catch(()=>{});
       }
       closeFeed(row.key,'closed',row);
     }
