@@ -157,3 +157,42 @@ test('changed provider limit cannot expand existing single-feed grant while live
   await one.body.cancel().catch(()=>{});
  }finally{fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r))}
 });
+
+
+test('five authorized simulated source slots accept five feeds and reject a sixth', {timeout:22000},async()=>{
+ let calls=0;
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(packet));
+  }}),{headers:{'content-type':'video/mp2t'}});},
+  maxFeeds:8
+ });
+ const srv=http.createServer((req,res)=>{
+  const channel=Number(req.url.slice(1));
+  void fanout.handle(req,res,'https://licensed.example/live/channel-'+channel+'.ts',{
+   licensedSourceId:SOURCE_ID,providerMaxConcurrentFeeds:5
+  });
+ });
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ const responses=[];
+ try{
+  const base='http://127.0.0.1:'+srv.address().port;
+  for(let i=1;i<=5;i++){
+   const response=await fetch(base+'/'+i);
+   responses.push(response);
+   assert.equal(response.status,200);
+  }
+  const rejected=await fetch(base+'/6');
+  assert.equal(rejected.status,503);
+  assert.equal((await rejected.json()).code,'fanout_source_channel_limit');
+  assert.equal(calls,5);
+  assert.equal(fanout.stats().activeFeeds,5);
+  assert.equal(fanout.stats().viewers,5);
+  assert.equal(fanout.stats().sourceLimitRejections,1);
+  // Existing viewers are retained; no extra upstream opened for sixth channel.
+  assert.equal(fanout.stats().upstreamSessionsOpened,5);
+ }finally{
+  await Promise.all(responses.map(x=>x.body.cancel().catch(()=>{})));
+  fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r));
+ }
+});
