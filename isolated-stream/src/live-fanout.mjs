@@ -680,6 +680,10 @@ export function createLiveFanout({
     }
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
     if(rejectDuringDrain(res))return;
+    if(row&&row.viewers.size>=maxViewersPerFeed){
+      counters.capacityRejections++;counters.viewerLimitRejections++;
+      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
+    }
     // Process-wide budget is checked before allocating a feed, with no await
     // between this count and viewer admission. Existing viewers are untouched.
     const totalViewers=[...feeds.values()].reduce((n,item)=>n+item.viewers.size,0);
@@ -720,10 +724,6 @@ export function createLiveFanout({
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
       feeds.set(key,row);
-    }
-    if(row.viewers.size>=maxViewersPerFeed){
-      counters.capacityRejections++;counters.viewerLimitRejections++;
-      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
     }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
