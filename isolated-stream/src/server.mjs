@@ -17,7 +17,7 @@ import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createRelayIngressFence} from './engine-ingress-fence.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
-import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from './linode-relay-maintenance.mjs';
+import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation,relayRetired,retiredRelayBlocks} from './linode-relay-maintenance.mjs';
 import {sharedLiveCapacityReport} from './shared-live-capacity-report.mjs';
 import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
 import {createLiveAutoHealth} from './live-auto-health.mjs';
@@ -85,6 +85,7 @@ export function createStreamServer({
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
   maintenance=relayMaintenanceActive(),
+  retired=relayRetired(),
   diagnosticAllowedOrigin='',
   fetchImpl=fetch,
   runBootCanary=false,
@@ -226,7 +227,7 @@ export function createStreamServer({
   const qualityMetrics=createEngineQualityMetrics();
   const handleEngineHdTest=createEngineHdTest({metrics:qualityMetrics});
   const app=http.createServer((req,res)=>{
-    if(relayMaintenanceBlocks(req.method,req.url,maintenance)){
+    if(retiredRelayBlocks(req.url,retired)||relayMaintenanceBlocks(req.method,req.url,maintenance)){
       res.setHeader('retry-after','60');
       return safeResponse(res,503,{ok:false,code:'temporary_media_maintenance'});
     }
@@ -282,7 +283,7 @@ export function createStreamServer({
         return safeResponse(res,401,{ok:false,code:'relay_not_authorized'});
       const f=relayBroker.stats().fanout;
       return safeResponse(res,200,{ok:true,service:'BLOFY-STREAM',
-        role:'media_plane',relayReady:true,customerTrafficEnabled:false,
+        role:'media_plane',relayReady:!retired,customerTrafficEnabled:false,
         sharedLiveConfigured:relayBroker.stats().sharedLiveEnabled,
         activeDirectMediaClients:relayBroker.stats().activeDirectMediaClients,
         // Aggregate counters ONLY. Source URL, ticket, provider identity,
@@ -365,7 +366,7 @@ export function createStreamServer({
     t.unref?.();
   }
   function startBootSourceReadiness(){
-    if(maintenance||!realSourceReadinessOnBoot)return;
+    if(maintenance||retired||!realSourceReadinessOnBoot)return;
     // Only the uniquely named licensed 'saleh' source and a uniquely matching
     // 4K V SPORT channel are eligible for this single two-reader, 26s probe.
     // It does NOT publish a MediaMTX path or redirect any paying customer.
@@ -412,7 +413,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     console.info('BLOFY STREAM isolated control API ready on :'+service.config.port);
     service.startBootCanary();
     service.startBootSourceReadiness();
-    if(!relayMaintenanceActive())service.autoHealth.start();
+    if(!relayMaintenanceActive()&&!relayRetired())service.autoHealth.start();
     else {
       const report=()=>console.info('BLOFY_LINODE_RELAY_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
       report();const drainTimer=setInterval(report,5000);drainTimer.unref?.();
