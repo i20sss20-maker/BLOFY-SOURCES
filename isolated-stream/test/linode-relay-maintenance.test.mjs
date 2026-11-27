@@ -21,3 +21,10 @@ test('local idle requires all four counters and never claims provider slot free'
  assert.equal(drainObservation({...zero,activeDirectMediaClients:1}).localRelayIdle,false);
  assert.equal(drainObservation({...zero,fanout:{...zero.fanout,pendingSourceHandoffs:1}}).localRelayIdle,false);
 });
+
+test('maintenance permits only the authenticated account-check transport exception',()=>{
+ assert.equal(relayMaintenanceBlocks('POST','/internal/xtream-catalog-relay',true),false);
+ assert.equal(relayMaintenanceBlocks('POST','/internal/xtream-catalog-relay?extra=1',true),true);
+ assert.equal(relayMaintenanceBlocks('POST','/internal/relay-grants',true),true);
+ assert.equal(relayMaintenanceBlocks('GET','/relay/ticket',true),true);
+});
