@@ -72,3 +72,33 @@ test('garbage, short fragments, invalid budgets and untrusted IDs cannot crash d
  const different=createTsAudioInspector();
  assert.equal(different.push(ts(0,pat())).status,'waiting-for-pmt');
 });
+
+
+function validPat(programs,{section=0,last=0}={}){
+ const body=Buffer.from([0,0xb0,9+4*programs.length,0,1,0xc1,section,last,
+  ...programs.flatMap(([n,pid])=>[n>>8,n&255,0xe0|(pid>>8),pid&255])]);
+ let crc=0xffffffff;
+ for(const byte of body){
+  crc=(crc^(byte<<24))>>>0;
+  for(let bit=0;bit<8;bit++)crc=((crc<<1)^((crc&0x80000000)?0x04c11db7:0))>>>0;
+ }
+ const tail=Buffer.alloc(4);tail.writeUInt32BE(crc);
+ return Buffer.concat([body,tail]);
+}
+test('passive program count requires a complete CRC-valid current PAT; excludes network PID',()=>{
+ const single=createTsAudioInspector();
+ const one=validPat([[0,16],[1,256]]);
+ assert.equal(single.push(ts(0,one)).patProgramCount,1);
+ assert.equal(single.summary().patProgramEvidence,'crc_valid_complete_current_pat');
+ const multi=createTsAudioInspector();
+ const bytes=ts(0,validPat([[0,16],[1,256],[2,257],[3,258]]));
+ multi.push(bytes.subarray(0,89));
+ assert.equal(multi.push(bytes.subarray(89)).patProgramCount,3);
+ assert.equal(multi.summary().programCountProvesDecodedChannels,false);
+ const corrupt=Buffer.from(one);corrupt[corrupt.length-1]^=1;
+ assert.equal(createTsAudioInspector().push(ts(0,corrupt)).patProgramCount,null);
+ assert.equal(createTsAudioInspector().push(ts(0,validPat([[1,256]],{last:1}))).patProgramCount,null);
+ single.push(bytes);
+ assert.equal(single.summary().patProgramCount,null);
+ assert.equal(single.summary().patProgramEvidence,'changed_during_sample');
+});
