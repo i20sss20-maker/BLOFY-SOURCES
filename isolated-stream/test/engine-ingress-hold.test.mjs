@@ -7,17 +7,45 @@ import {createLiveFanout} from '../src/live-fanout.mjs';
 const source='https://licensed.example/live/a/b/123.ts';
 const packet=Buffer.alloc(188*3,0x11);for(let i=0;i<packet.length;i+=188)packet[i]=0x47;
 const wait=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,10))}throw Error('condition timeout')};
-test('hold client rejects ambiguous or denied admission; idempotent local close',async()=>{
+test('a definitive denial opens no media and does not retire another hold',async()=>{
  const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'x'.repeat(40)};
  const requests=[];let status=200;
  const hold=createRelayIngressHold({env,fetchImpl:async(url,opt)=>{
   assert.equal(opt.redirect,'error');assert.equal(opt.headers.authorization,'Bearer '+env.BLOFY_STREAM_RELAY_SHARED_TOKEN);
   requests.push(JSON.parse(opt.body));return new Response('{"ok":true}',{status});
  }});
- status=503;assert.equal((await hold()).ok,false);
+ status=409;assert.equal((await hold()).ok,false);
  status=200;const h=await hold();assert.equal(h.ok,true);
  assert.equal(await h.close(),true);assert.equal(await h.close(),true);
  assert.equal(requests.length,3);assert.equal(requests[1].holdId,requests[2].holdId);
+});
+test('an unacknowledged enter is abandoned with the same id and never grants access',async()=>{
+ const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'x'.repeat(40)};
+ const requests=[];
+ const hold=createRelayIngressHold({env,sleep:async()=>{},fetchImpl:async(url,opt)=>{
+  const operation=JSON.parse(opt.body);requests.push(operation);
+  if(operation.operation==='enter'||requests.length===2)throw Error('response lost');
+  return new Response('{"ok":true}');
+ }});
+ assert.deepEqual(await hold(),{ok:false});
+ await wait(()=>requests.length===3);
+ assert.deepEqual(requests.map(x=>x.operation),['enter','abandon','abandon']);
+ assert.equal(new Set(requests.map(x=>x.holdId)).size,1);
+});
+test('a lost close response retries the same hold and concurrent close calls share the attempt',async()=>{
+ const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'x'.repeat(40)};
+ const requests=[];
+ const acquire=createRelayIngressHold({env,sleep:async()=>{},fetchImpl:async(url,opt)=>{
+  requests.push(JSON.parse(opt.body));
+  if(requests.length===2)throw Error('close response lost');
+  return new Response('{"ok":true}');
+ }});
+ const hold=await acquire();
+ assert.equal(hold.ok,true);
+ assert.deepEqual(await Promise.all([hold.close(),hold.close()]),[true,true]);
+ assert.equal(await hold.close(),true);
+ assert.deepEqual(requests.map(x=>x.operation),['enter','close','close']);
+ assert.equal(new Set(requests.map(x=>x.holdId)).size,1);
 });
 test('shared feed cannot access upstream before hold; two viewers share one hold until cleanup',async()=>{
  let admissions=0,closed=0,media=0,emitter,releaseAdmission;
