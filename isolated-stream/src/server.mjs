@@ -16,6 +16,7 @@ import {createVodPreviewBroker} from './vod-preview-broker.mjs';
 import {normalizePrivateRestreamOrigin} from './restream-engine-core.mjs';
 import {createRelayBroker} from './relay-broker.mjs';
 import {createRelayIngressFence} from './engine-ingress-fence.mjs';
+import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from './linode-relay-maintenance.mjs';
 import {sharedLiveCapacityReport} from './shared-live-capacity-report.mjs';
 import {createIdleFanoutReleaseRecovery} from './idle-fanout-release-recovery.mjs';
@@ -591,6 +592,15 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
         void probe().then(ok=>console.info('BLOFY_RELAY_FENCE_PREFLIGHT',JSON.stringify({ok,legacyModeVerified:ok,providerMediaRequests:0,customerTrafficChanged:false})))
         .catch(()=>console.warn('BLOFY_RELAY_FENCE_PREFLIGHT',JSON.stringify({ok:false,customerTrafficChanged:false})));
       },12000);timer.unref?.();
+    }
+    // Test an actual central hold and close without touching source media.
+    if(process.env.BLOFY_RELAY_HOLD_PROBE_ON_BOOT==='1'){
+      const timer=setTimeout(async()=>{
+        const acquire=createRelayIngressHold({env:{...process.env,BLOFY_RELAY_INGRESS_HOLDS:'1'}});
+        let entered=false,closed=false;
+        try{const h=await acquire();entered=h?.ok===true;if(entered)closed=await h.close()===true;}catch{}
+        console.info('BLOFY_RELAY_HOLD_PREFLIGHT',JSON.stringify({ok:entered&&closed,entered,closed,providerMediaRequests:0,customerTrafficChanged:false}));
+      },18000);timer.unref?.();
     }
     // Prove the unified admin bridge talks to the authoritative database.
     // Only source/account aggregate counts are logged; no customer identities.
