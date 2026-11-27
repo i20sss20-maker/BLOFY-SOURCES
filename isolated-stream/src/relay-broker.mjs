@@ -67,7 +67,7 @@ function permittedReturnHeaders(response){
 export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
-  sharedLiveEnabled=false,sharedLiveMaxFeeds=8,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
+  sharedLiveEnabled=false,sharedLiveMaxFeeds=8,sharedLiveMaxViewersPerFeed=128,sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
   onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
@@ -109,7 +109,7 @@ export function createRelayBroker({
   let draining=false;
   const directControllers=new Set();
   const rejectDrain=res=>respond(res,503,{ok:false,code:'relay_draining'},{'retry-after':'3'});
-  const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,maxFeeds:sharedLiveMaxFeeds,
+  const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,maxFeeds:sharedLiveMaxFeeds,maxViewersPerFeed:sharedLiveMaxViewersPerFeed,maxTotalViewers:sharedLiveMaxTotalViewers,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
     onEvent:onSharedLiveEvent,acquireIngressHold});
