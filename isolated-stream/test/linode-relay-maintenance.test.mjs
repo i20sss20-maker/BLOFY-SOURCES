@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation} from '../src/linode-relay-maintenance.mjs';
+import {relayMaintenanceActive,relayMaintenanceBlocks,drainObservation,relayRetired,retiredRelayBlocks} from '../src/linode-relay-maintenance.mjs';
 test('maintenance is explicitly enabled and denies all non-health paths',()=>{
  assert.equal(relayMaintenanceActive({}),false);
  assert.equal(relayMaintenanceActive({BLOFY_LINODE_RELAY_MAINTENANCE:'1'}),true);
@@ -27,4 +27,14 @@ test('maintenance permits only the authenticated account-check transport excepti
  assert.equal(relayMaintenanceBlocks('POST','/internal/xtream-catalog-relay?extra=1',true),true);
  assert.equal(relayMaintenanceBlocks('POST','/internal/relay-grants',true),true);
  assert.equal(relayMaintenanceBlocks('GET','/relay/ticket',true),true);
+});
+
+test('retire old broker only, while keeping control-plane and health available',()=>{
+ assert.equal(relayRetired({}),false);
+ assert.equal(relayRetired({BLOFY_STREAM_RELAY_RETIRED:'1'}),true);
+ for(const path of ['/internal/relay-grants','/internal/relay-grants?x=1','/relay','/relay/ticket']){
+  assert.equal(retiredRelayBlocks(path,true),true);
+  assert.equal(retiredRelayBlocks(path,false),false);
+ }
+ for(const path of ['/internal/relay-health','/health','/internal/xtream-catalog-relay','/internal/xtream-manifest-relay','/operator'])assert.equal(retiredRelayBlocks(path,true),false);
 });
