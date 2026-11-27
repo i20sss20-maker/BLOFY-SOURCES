@@ -97,3 +97,47 @@ test('shared relay grant fails closed when upstream capacity or source ID is not
   await new Promise(done=>server.close(done));
  }
 });
+
+
+test('media relay process feed budget is configurable and bounded',()=>{
+ assert.equal(createRelayBroker().stats().fanout.maxFeeds,8);
+ for(const n of [5,8,16,32,64])
+  assert.equal(createRelayBroker({sharedLiveMaxFeeds:n}).stats().fanout.maxFeeds,n);
+ for(const n of [0,65,-1,8.5,NaN,Infinity])
+  assert.throws(()=>createRelayBroker({sharedLiveMaxFeeds:n}));
+});
+
+test('sixteen simulated distinct authorized feeds coexist and the seventeenth is rejected', {timeout:22000},async()=>{
+ let calls=0;
+ const fanout=createLiveFanout({lookup:async()=>[{address:'8.8.8.8',family:4}],
+  fetchImpl:async()=>{calls++;return new Response(new ReadableStream({start(c){
+    c.enqueue(new Uint8Array(TS));
+  }}),{headers:{'content-type':'video/mp2t'}});},
+  maxFeeds:16
+ });
+ const srv=http.createServer((req,res)=>{
+  const channel=Number(req.url.slice(1));
+  void fanout.handle(req,res,'https://licensed.example/live/channel-'+channel+'.ts',{
+   licensedSourceId:SALEH,providerMaxConcurrentFeeds:16
+  });
+ });
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ const responses=[];
+ try{
+  const base='http://127.0.0.1:'+srv.address().port;
+  for(let i=1;i<=16;i++){
+   const response=await fetch(base+'/'+i);
+   responses.push(response);
+   assert.equal(response.status,200);
+  }
+  const rejected=await fetch(base+'/17');
+  assert.equal(rejected.status,503);
+  assert.equal((await rejected.json()).code,'fanout_source_channel_limit');
+  assert.equal(calls,16);
+  assert.equal(fanout.stats().activeFeeds,16);
+  assert.equal(fanout.stats().viewers,16);
+ }finally{
+  await Promise.all(responses.map(x=>x.body.cancel().catch(()=>{})));
+  fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r));
+ }
+});
