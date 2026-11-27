@@ -214,3 +214,26 @@ test('disconnect during source validation opens no upstream and frees the catalo
   });
  });
 });
+
+test('maintenance account-only relay rejects all catalog, media and extra query requests',async()=>{
+ let calls=0;
+ await fixture((req,res)=>{
+   calls++;
+   assert.deepEqual([...new URL(req.url,'http://localhost').searchParams.keys()].sort(),['password','username']);
+   res.end(JSON.stringify({user_info:{auth:1,active_cons:'0',max_connections:'1'}}));
+ },async origin=>{
+   const relay=createXtreamCatalogRelay({sharedToken:secret,allowedOrigin:origin,accountOnly:true,validate:async x=>new URL(x)});
+   await fixture((req,res)=>relay.handle(req,res),async gateway=>{
+     const url=origin+'/player_api.php?username=u&password=p';
+     const send=(sourceUrl,auth=true)=>fetch(gateway,{method:'POST',headers:{'content-type':'application/json',...(auth?{authorization:'Bearer '+secret}:{})},body:JSON.stringify({sourceUrl})});
+     assert.equal((await send(url,false)).status,401);
+     for(const bad of [url+'&action=get_live_streams',url+'&action=',url+'&username=second',url+'&extra=1',url.replace('player_api.php','get.php')]){
+       assert.equal((await send(bad)).status,400);
+     }
+     assert.equal(calls,0);
+     const r=await send(url);assert.equal(r.status,200);
+     assert.equal((await r.json()).user_info.active_cons,'0');
+     assert.equal(calls,1);
+   });
+ });
+});

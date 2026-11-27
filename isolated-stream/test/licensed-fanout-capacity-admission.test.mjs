@@ -141,3 +141,63 @@ test('sixteen simulated distinct authorized feeds coexist and the seventeenth is
   fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r));
  }
 });
+
+
+for(const channels of [1,16]){
+ test('150 simulated concurrent viewers across '+channels+' channels receive media and retain capacity', {timeout:60000},async()=>{
+  const upstreams=new Map();
+  let calls=0;
+  const fanout=createLiveFanout({
+   lookup:async()=>[{address:'8.8.8.8',family:4}],
+   fetchImpl:async(url)=>{
+    calls++;
+    const key=String(url);
+    return new Response(new ReadableStream({start(controller){
+     upstreams.set(key,controller);
+    }}),{headers:{'content-type':'video/mp2t'}});
+   },
+   maxFeeds:16,maxViewersPerFeed:160,maxTotalViewers:150,
+   firstByteTimeoutMs:25000,readIdleTimeoutMs:25000
+  });
+  const server=http.createServer((req,res)=>void fanout.handle(req,res,
+   'https://licensed.example/live/channel-'+Number(req.url.slice(1))+'.ts',{
+    licensedSourceId:SALEH,providerMaxConcurrentFeeds:16
+   }));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base='http://127.0.0.1:'+server.address().port;
+  const readers=[];
+  const requests=[];
+  try{
+   for(let i=0;i<150;i++)requests.push(fetch(base+'/'+(i%channels+1)));
+   await waitFor(()=>fanout.stats().viewers===150&&upstreams.size===channels);
+   const rejected=await fetch(base+'/1');
+   assert.equal(rejected.status,503);
+   assert.equal(await rejected.text(),'fanout_total_viewer_limit');
+   assert.equal(fanout.stats().viewers,150);
+   assert.equal(calls,channels);
+   for(const c of upstreams.values())c.enqueue(new Uint8Array(TS));
+   const responses=await Promise.all(requests);
+   for(const response of responses){
+    assert.equal(response.status,200);
+    readers.push(response.body.getReader());
+   }
+   const first=await Promise.all(readers.map(reader=>reader.read()));
+   assert.ok(first.every(x=>!x.done&&Buffer.compare(Buffer.from(x.value),TS)===0));
+   for(const c of upstreams.values())c.enqueue(new Uint8Array(TS));
+   const second=await Promise.all(readers.map(reader=>reader.read()));
+   assert.ok(second.every(x=>!x.done&&Buffer.compare(Buffer.from(x.value),TS)===0));
+   const s=fanout.stats();
+   assert.equal(s.activeFeeds,channels);
+   assert.equal(s.peakTotalViewers,150);
+   assert.equal(s.totalViewerLimitRejections,1);
+   assert.equal(s.sourceLimitRejections,0);
+   assert.equal(s.slowViewerDisconnects,0);
+  }finally{
+   fanout.close();
+   server.closeAllConnections();
+   await Promise.allSettled(requests);
+   await Promise.allSettled(readers.map(reader=>reader.cancel()));
+   await new Promise(resolve=>server.close(resolve));
+  }
+ });
+}

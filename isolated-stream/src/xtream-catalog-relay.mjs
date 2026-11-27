@@ -38,7 +38,7 @@ async function getJson(req){
 export function createXtreamCatalogRelay({
  sharedToken='',allowedOrigin='',validate=assertPublicMediaUrl,
  httpRequest=http.request,httpsRequest=https.request,maxConcurrent=2,
- manifestOnly=false
+ manifestOnly=false,accountOnly=false
 }={}){
  const enabled=sharedToken.length>=32&&/^https?:\/\/[a-z0-9.-]+(?::\d{2,5})?$/i.test(allowedOrigin);
  let concurrent=0;
@@ -73,8 +73,9 @@ export function createXtreamCatalogRelay({
      /^[A-Za-z0-9_-]{1,128}$/.test(target.searchParams.get('vod_id')||'')&&
      [...target.searchParams.keys()].sort().join(',')==='action,password,username,vod_id'
    );
+   const isAccount=action===''&&[...target.searchParams.keys()].sort().join(',')==='password,username';
    const isApi=target.pathname.endsWith('/player_api.php')&&
-     ALLOWED_ACTIONS.has(action)&&validVodInfo;
+     ALLOWED_ACTIONS.has(action)&&validVodInfo&&(!accountOnly||isAccount);
    const isManifest=target.pathname.endsWith('/get.php')&&
      target.searchParams.get('type')==='m3u_plus'&&
      target.searchParams.get('output')==='ts'&&
@@ -101,7 +102,7 @@ export function createXtreamCatalogRelay({
     // Content is streamed with backpressure. Manifest audits are capped
     // at 256 MiB, streamed with backpressure, never buffered or public.
     // The real provider's official export exceeds our initial 64 MiB cap.
-    const maxData=MAX_DATA;
+    const maxData=accountOnly?131072:MAX_DATA;
     const len=Number(response.headers['content-length']||0);
     if(len>maxData){response.destroy();return safeWrite(res,413,{ok:false,code:'catalog_too_large'});}
     let total=0;

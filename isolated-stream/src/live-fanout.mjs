@@ -8,7 +8,7 @@ import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 
 export function createLiveFanout({
-  fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,
+  fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,maxTotalViewers=maxFeeds*maxViewersPerFeed,
   minViewersToStart=1,
   firstByteTimeoutMs=12000,readIdleTimeoutMs=15000,idleMs=3000,clock=Date.now,
   providerCooldownMs=2000,maxProviderCooldownMs=30000,
@@ -19,6 +19,7 @@ export function createLiveFanout({
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
+     !Number.isInteger(maxTotalViewers)||maxTotalViewers<1||maxTotalViewers>32768||
      !Number.isInteger(minViewersToStart)||minViewersToStart<1||
        minViewersToStart>maxViewersPerFeed||
      !Number.isInteger(readIdleTimeoutMs)||readIdleTimeoutMs<50||readIdleTimeoutMs>120000||
@@ -91,7 +92,7 @@ export function createLiveFanout({
     sourceReleaseStalls:0,upstreamReconnects:0,
     reconnectExhaustions:0,upstreamSessionsOpened:0,
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
-    peakViewersOnOneFeed:0,viewerLimitRejections:0,
+    peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
@@ -679,6 +680,17 @@ export function createLiveFanout({
     }
     if(viewerGone()){counters.abandonedViewerRequests++;return;}
     if(rejectDuringDrain(res))return;
+    if(row&&row.viewers.size>=maxViewersPerFeed){
+      counters.capacityRejections++;counters.viewerLimitRejections++;
+      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
+    }
+    // Process-wide budget is checked before allocating a feed, with no await
+    // between this count and viewer admission. Existing viewers are untouched.
+    const totalViewers=[...feeds.values()].reduce((n,item)=>n+item.viewers.size,0);
+    if(totalViewers>=maxTotalViewers){
+      counters.capacityRejections++;counters.totalViewerLimitRejections++;
+      res.writeHead(503,{'retry-after':'3'});res.end('fanout_total_viewer_limit');return;
+    }
     if(!row){
       // During rapid channel zapping, old feeds remain alive for idleMs
       // after their last viewer leaves. Reclaim ONLY those idle feeds if
@@ -713,13 +725,10 @@ export function createLiveFanout({
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
       feeds.set(key,row);
     }
-    if(row.viewers.size>=maxViewersPerFeed){
-      counters.capacityRejections++;counters.viewerLimitRejections++;
-      res.writeHead(503,{'retry-after':'3'});res.end('fanout_viewer_limit');return;
-    }
     if(row.idleTimer){clearTimeout(row.idleTimer);row.idleTimer=null;}
     row.viewers.add(res);
     counters.viewersAccepted++;
+    counters.peakTotalViewers=Math.max(counters.peakTotalViewers,totalViewers+1);
     counters.peakViewersOnOneFeed=Math.max(counters.peakViewersOnOneFeed,row.viewers.size);
     const onClose=()=>{
       row.viewers.delete(res);
@@ -769,7 +778,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,maxViewerQueueBytes,
+    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
