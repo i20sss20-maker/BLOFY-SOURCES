@@ -9,6 +9,7 @@ export function relayMaintenanceActive(env=process.env){
 }
 export function relayMaintenanceBlocks(method,url,active){
  if(active!==true)return false;
+ if(method==='POST'&&url==='/internal/xtream-catalog-relay')return false;
  if(method!=='GET'&&method!=='HEAD')return true;
  try{return !healthPaths.has(new URL(url||'/','http://localhost').pathname)}
  catch{return true}

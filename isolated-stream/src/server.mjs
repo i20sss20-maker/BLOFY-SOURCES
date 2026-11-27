@@ -108,7 +108,7 @@ export function createStreamServer({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
   });
   const catalogRelay=createXtreamCatalogRelay({
-    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
+    sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin,accountOnly:maintenance
   });
   const manifestRelay=createXtreamManifestRelay({
     sharedToken:relaySharedToken,allowedOrigin:diagnosticAllowedOrigin
