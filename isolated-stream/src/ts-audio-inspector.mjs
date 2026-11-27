@@ -34,9 +34,36 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
     audioDuplicateCounters=0,videoDuplicateCounters=0;
   const sections=new Map(),audio=new Set(),video=new Set(),
     audioPids=new Set(),videoPids=new Set(),continuity=new Map();
+  // Only a complete current PAT with a valid MPEG-2 CRC is evidence.
+  // This bounded inspector deliberately does not claim a complete count
+  // for multi-section PATs or partial/corrupt samples.
+  let programCount=null,patIdentity=null,patConflict=false;
+  function observeProgramCount(section){
+    if(section.length<12||!(section[1]&0x80)||!(section[5]&1)||
+       section[6]!==0||section[7]!==0||(section.length-12)%4!==0)return;
+    let crc=0xffffffff;
+    for(const byte of section){
+      crc=(crc^(byte<<24))>>>0;
+      for(let bit=0;bit<8;bit++)crc=((crc<<1)^((crc&0x80000000)?0x04c11db7:0))>>>0;
+    }
+    if(crc!==0)return;
+    const programs=new Map();
+    for(let i=8;i<section.length-4;i+=4){
+      const number=section.readUInt16BE(i);
+      if(!number)continue; // network PID is not a television program
+      const pid=((section[i+2]&31)<<8)|section[i+3];
+      if(pid===0||pid===8191||programs.has(number))return;
+      programs.set(number,pid);
+    }
+    const identity=section.toString('hex');
+    if(patIdentity!==null&&patIdentity!==identity)patConflict=true;
+    patIdentity=identity;
+    programCount=programs.size||null;
+  }
   function pat(section){
     if(section[0]!==0)return;
     patSeen=true;
+    observeProgramCount(section);
     for(let i=8;i+4<=section.length-4;i+=4){
       const program=(section[i]<<8)|section[i+1];
       if(!program)continue;
@@ -169,7 +196,9 @@ export function createTsAudioInspector({maxBytes=188*900}={}){
     const status=pmtSeen?(audio.size?'audio-stream-declared':'no-audio-stream-declared'):
       used>=maxBytes?'pmt-not-observed':
       patSeen?'waiting-for-pmt':packets?'waiting-for-pat':'not-observed';
-    return {status,audioCodecs:[...audio].slice(0,5),
+    return {status,patProgramCount:patConflict?null:programCount,
+      patProgramEvidence:patConflict?'changed_during_sample':programCount===null?'unconfirmed':'crc_valid_complete_current_pat',
+      programCountProvesDecodedChannels:false,audioCodecs:[...audio].slice(0,5),
       videoCodecs:[...video].slice(0,5),
       inspectedBytes:used,checkedPackets:packets,
       audioPayloadPackets,videoPayloadPackets,

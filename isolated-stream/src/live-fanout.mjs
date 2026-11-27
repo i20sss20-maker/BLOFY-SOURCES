@@ -213,7 +213,19 @@ export function createLiveFanout({
         const before=row.trackInspector.summary().inspectedBytes;
         const observed=row.trackInspector.push(chunk);
         if(observed.inspectedBytes>before)row.trackInspectedAt=clock();
-        if(observed.samplingComplete)row.trackBudgetComplete=true;
+        if(observed.samplingComplete){
+          row.trackBudgetComplete=true;
+          // Existing licensed upstream only. No media reads beyond the
+          // established feed, and no customer/source identifiers or bytes.
+          if(row.licensedSourceId){
+            try{onEvent({kind:'passive_ts_program_evidence',at:clock(),
+              channel:row.channelNumber,inspectedBytes:observed.inspectedBytes,
+              patProgramCount:observed.patProgramCount,
+              patProgramEvidence:observed.patProgramEvidence,
+              programCountProvesDecodedChannels:false,
+              extraProviderRequests:0})}catch{}
+          }
+        }
       }catch{
         row.trackInspector=null;row.trackInspectedAt=null;
         row.trackBudgetComplete=true;
