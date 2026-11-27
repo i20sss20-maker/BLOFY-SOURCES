@@ -678,14 +678,20 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
       timer.unref?.();
     }
   });
-  process.on('SIGTERM',()=>{
+  process.once('SIGTERM',async()=>{
     service.operatorDashboard.stop();
     service.streamOps.stop();service.autoHealth.stop();
-    service.drainRelay();
-    service.app.close(()=>{
-      console.info('BLOFY_STREAM_SHUTDOWN_DRAIN',JSON.stringify(drainObservation(service.relayStats())));
-      process.exit(0);
-    });
+    const released=service.drainRelay();
+    const closed=new Promise(resolve=>service.app.close(resolve));
     service.app.closeIdleConnections?.();
+    let timer;
+    await Promise.race([Promise.all([closed,released]),new Promise(resolve=>{timer=setTimeout(resolve,15000);})]);
+    clearTimeout(timer);
+    const stats=service.relayStats();
+    console.info('BLOFY_STREAM_SHUTDOWN_DRAIN',JSON.stringify({...drainObservation(stats),
+      pendingIngressHolds:stats.pendingIngressHolds,
+      unconfirmedIngressReleases:stats.unconfirmedIngressReleases,
+      ingressCleanupComplete:stats.pendingIngressHolds===0&&stats.unconfirmedIngressReleases===0}));
+    process.exit(0);
   });
 }

@@ -107,12 +107,44 @@ export function createRelayBroker({
   // NEVER restart this process during an unrelated customer download.
   let activeDirectMediaClients=0;
   let draining=false;
+  let pendingIngressHolds=0,unconfirmedIngressReleases=0;
+  let finishDrain;
+  const ingressDrained=new Promise(resolve=>{finishDrain=resolve;});
+  function checkDrain(){
+    if(draining&&pendingIngressHolds===0)finishDrain({unconfirmedIngressReleases});
+  }
+  function ingressSettled(confirmed){
+    pendingIngressHolds--;
+    if(confirmed!==true)unconfirmedIngressReleases++;
+    checkDrain();
+  }
+  async function acquireTrackedHold(){
+    pendingIngressHolds++;
+    let hold;
+    try{hold=await acquireIngressHold();}catch{
+      ingressSettled(false);
+      return {ok:false};
+    }
+    if(!hold?.ok){
+      if(hold?.cleanup)void hold.cleanup.then(ingressSettled,()=>ingressSettled(false));
+      else ingressSettled(true);
+      return {ok:false};
+    }
+    let closing;
+    return {ok:true,close(){
+      closing??=Promise.resolve().then(()=>hold.close()).catch(()=>false).then(confirmed=>{
+        ingressSettled(confirmed);
+        return confirmed;
+      });
+      return closing;
+    }};
+  }
   const directControllers=new Set();
   const rejectDrain=res=>respond(res,503,{ok:false,code:'relay_draining'},{'retry-after':'3'});
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,maxFeeds:sharedLiveMaxFeeds,maxViewersPerFeed:sharedLiveMaxViewersPerFeed,maxTotalViewers:sharedLiveMaxTotalViewers,
     redirectSourceOrigin,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
-    onEvent:onSharedLiveEvent,acquireIngressHold});
+    onEvent:onSharedLiveEvent,acquireIngressHold:acquireTrackedHold});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
   // Cross-origin media hops are OFF unless explicitly allowed by operator for
   // one licensed source origin. The provider itself must issue the HTTP 302.
@@ -222,8 +254,7 @@ export function createRelayBroker({
         return failRelay(res,'relay_provider_unavailable');
       }
     }
-    let ingressHold;
-    try{ingressHold=await acquireIngressHold()}catch{}
+    const ingressHold=await acquireTrackedHold();
     if(!ingressHold?.ok)return rejectDrain(res);
     if(draining||req.aborted||res.destroyed||res.writableEnded){
       await ingressHold.close().catch(()=>{});
@@ -365,9 +396,11 @@ export function createRelayBroker({
   function drain(){
     draining=true;tickets.clear();fanout.drain();
     for(const controller of directControllers)controller.abort();
+    checkDrain();
+    return ingressDrained;
   }
   return {enabled,issue,relay,drain,stats:()=>({enabled,activeTickets:tickets.size,
-    sharedLiveEnabled,activeDirectMediaClients,fanout:fanout.stats(),
+    sharedLiveEnabled,activeDirectMediaClients,pendingIngressHolds,unconfirmedIngressReleases,fanout:fanout.stats(),
     security:{grantsIssued:quota.grantsIssued,
       issuerAuthDenied:quota.issuerAuthDenied,
       issuanceThrottled:quota.issuanceThrottled,

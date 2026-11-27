@@ -4,6 +4,7 @@ import http from 'node:http';
 import {once} from 'node:events';
 import {createRelayIngressHold} from '../src/engine-ingress-hold.mjs';
 import {createLiveFanout} from '../src/live-fanout.mjs';
+import {createRelayBroker} from '../src/relay-broker.mjs';
 const source='https://licensed.example/live/a/b/123.ts';
 const packet=Buffer.alloc(188*3,0x11);for(let i=0;i<packet.length;i+=188)packet[i]=0x47;
 const wait=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,10))}throw Error('condition timeout')};
@@ -27,8 +28,9 @@ test('an unacknowledged enter is abandoned with the same id and never grants acc
   if(operation.operation==='enter'||requests.length===2)throw Error('response lost');
   return new Response('{"ok":true}');
  }});
- assert.deepEqual(await hold(),{ok:false});
- await wait(()=>requests.length===3);
+ const denied=await hold();
+ assert.equal(denied.ok,false);
+ assert.equal(await denied.cleanup,true);
  assert.deepEqual(requests.map(x=>x.operation),['enter','abandon','abandon']);
  assert.equal(new Set(requests.map(x=>x.holdId)).size,1);
 });
@@ -74,4 +76,37 @@ test('denied hold opens no upstream media request',async()=>{
  srv.listen(0,'127.0.0.1');await once(srv,'listening');
  try{const r=await fetch('http://127.0.0.1:'+srv.address().port+'/live');assert.equal(r.status,503);await r.text();assert.equal(calls,0)}
  finally{fanout.close();srv.closeAllConnections();await new Promise(r=>srv.close(r))}
+});
+test('relay shutdown waits for acknowledgement after retiring the feed',async()=>{
+ const token='x'.repeat(40);
+ let closeStarted=false,finishClose;
+ const closeAck=new Promise(resolve=>{finishClose=resolve;});
+ const relay=createRelayBroker({sharedToken:token,sharedLiveEnabled:true,
+  lookup:async()=>[{address:'8.8.8.8',family:4}],allowIngress:async()=>true,
+  acquireIngressHold:async()=>({ok:true,close(){closeStarted=true;return closeAck;}}),
+  fetchImpl:async()=>new Response(new ReadableStream({start(c){c.enqueue(new Uint8Array(packet));}}),
+   {headers:{'content-type':'video/mp2t'}})
+ });
+ const srv=http.createServer((req,res)=>void (req.method==='POST'?relay.issue(req,res):relay.relay(req,res)));
+ srv.listen(0,'127.0.0.1');await once(srv,'listening');
+ try{
+  const url='http://127.0.0.1:'+srv.address().port;
+  const issued=await fetch(url+'/issue',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+   body:JSON.stringify({sourceUrl:source,kind:'live',sharedLive:true,
+    licensedSourceId:'11111111-1111-4111-8111-111111111111',providerMaxConcurrentFeeds:1})});
+  assert.equal(issued.status,201);
+  const response=await fetch(url+(await issued.json()).path);
+  assert.equal(response.status,200);
+  let completed=false;
+  const drain=relay.drain().then(result=>{completed=true;return result;});
+  await wait(()=>closeStarted);
+  assert.equal(relay.stats().pendingIngressHolds,1);
+  assert.equal(completed,false);
+  finishClose(true);
+  assert.deepEqual(await drain,{unconfirmedIngressReleases:0});
+  assert.equal(relay.stats().pendingIngressHolds,0);
+  await response.arrayBuffer();
+ }finally{
+  finishClose(false);srv.closeAllConnections();await new Promise(r=>srv.close(r));
+ }
 });

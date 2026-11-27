@@ -34,7 +34,7 @@ export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=ra
   const id=newId();
   const entered=await post('enter',id);
   if(entered!==true){
-   if(entered===null)void cleanup('abandon',id);
+   if(entered===null)return {ok:false,cleanup:cleanup('abandon',id)};
    return {ok:false};
   }
   let closing;
