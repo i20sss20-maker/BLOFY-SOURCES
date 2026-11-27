@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {once} from 'node:events';
+import {mkdtempSync,readdirSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {createRelayIngressHold} from '../src/engine-ingress-hold.mjs';
 import {createLiveFanout} from '../src/live-fanout.mjs';
 import {createRelayBroker} from '../src/relay-broker.mjs';
@@ -109,4 +112,43 @@ test('relay shutdown waits for acknowledgement after retiring the feed',async()=
  }finally{
   finishClose(false);srv.closeAllConnections();await new Promise(r=>srv.close(r));
  }
+});
+
+test('rate-limited enter is ambiguous and abandoned without granting media',async()=>{
+ const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'x'.repeat(40)};
+ const calls=[];
+ const acquire=createRelayIngressHold({env,sleep:async()=>{},fetchImpl:async(url,opt)=>{
+  const p=JSON.parse(opt.body);calls.push(p);
+  if(calls.length===1||calls.length===2)return new Response('',{status:429});
+  return new Response('{"ok":true}');
+ }});
+ const hold=await acquire();assert.equal(hold.ok,false);
+ assert.equal(await hold.cleanup,true);
+ assert.deepEqual(calls.map(x=>x.operation),['enter','abandon','abandon']);
+ assert.equal(new Set(calls.map(x=>x.holdId)).size,1);
+});
+test('only confirmed cleanup intents survive a failed acknowledgement and replay on restart',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'blofy-hold-'));
+ const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'x'.repeat(40),BLOFY_RELAY_CLEANUP_JOURNAL_DIR:dir};
+ const calls=[];
+ try{
+  const a=createRelayIngressHold({env,sleep:async()=>{},fetchImpl:async(url,opt)=>{
+   const p=JSON.parse(opt.body);calls.push(p);
+   if(p.operation==='enter')return new Response('{"ok":true}');
+   return new Response('',{status:503});
+  }});
+  const active=await a();assert.equal(active.ok,true);
+  assert.deepEqual(readdirSync(dir),[]);
+  const closed=await a();assert.equal(closed.ok,true);
+  assert.equal(await closed.close(),false);
+  assert.deepEqual(readdirSync(dir),['close-'+calls[1].holdId]);
+  const replayed=[];
+  const b=createRelayIngressHold({env,sleep:async()=>{},fetchImpl:async(url,opt)=>{
+   replayed.push(JSON.parse(opt.body));return new Response('{"ok":true}');
+  }});
+  await b.replayCleanup();
+  await wait(()=>readdirSync(dir).length===0);
+  assert.deepEqual(replayed,[{operation:'close',holdId:calls[1].holdId}]);
+  assert.notEqual(calls[0].holdId,calls[1].holdId);
+ }finally{rmSync(dir,{recursive:true,force:true})}
 });
