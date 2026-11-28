@@ -53,9 +53,9 @@ test('abort retires buffered session without mixing data into next session',{tim
 test('stale backlog retires session without delivering old queued bytes',{timeout:3000},async()=>{
   let now=0,reads=0,release,started;
   const waiting=new Promise(r=>release=r),entered=new Promise(r=>started=r);
-  const got=[];
+  const got=[],ages=[];
   const run=runLiveIngressSession({
-    first:p(1),maxDeliveryAgeMs:1000,clock:()=>now,
+    first:p(1),maxDeliveryAgeMs:1000,clock:()=>now,onDeliveryAge:age=>ages.push(age),
     read:async()=>++reads===1?{value:p(2),done:false}:{done:true},
     deliver:async v=>{got.push(v[0]);if(got.length===1){started();await waiting}}
   });
@@ -68,6 +68,7 @@ test('stale backlog retires session without delivering old queued bytes',{timeou
   }finally{release()}
   await rejected;
   assert.deepEqual(got,[1]);
+  assert.deepEqual(ages,[0,1001]);
 });
 test('disabled age guard preserves original ordered delivery behavior',{timeout:3000},async()=>{
   let now=0,reads=0;
