@@ -21,3 +21,16 @@ test('central relay fence defaults off, configured mode denies stale or missing 
  assert.equal(await check({ok:true,mode:'legacy',observedAt:now,extra:'x'.repeat(600)}),false);
  assert.equal(await createRelayIngressFence({env,fetchImpl:async()=>{throw Error('network')}})(),false);
 });
+
+test('ownership fence requires distinct credential and fails closed if not configured',async()=>{
+ const env={BLOFY_RELAY_INGRESS_FENCE:'1',BLOFY_RELAY_ENGINE_OWNERSHIP:'1',BLOFY_STREAM_RELAY_SHARED_TOKEN:'s'.repeat(40),BLOFY_RELAY_ENGINE_HOLD_TOKEN:'o'.repeat(40)};
+ let calls=0;
+ const fetchImpl=async(url,opts)=>{calls++;assert.equal(opts.headers.authorization,'Bearer '+env.BLOFY_RELAY_ENGINE_HOLD_TOKEN);return new Response(JSON.stringify({ok:true,mode:'legacy',observedAt:Date.now()}))};
+ assert.equal(await createRelayIngressFence({env:{...env,BLOFY_RELAY_INGRESS_FENCE:'0'},fetchImpl})(),false);
+ assert.equal(await createRelayIngressFence({env:{...env,BLOFY_RELAY_ENGINE_HOLD_TOKEN:''},fetchImpl})(),false);
+ assert.equal(await createRelayIngressFence({env:{...env,BLOFY_RELAY_ENGINE_HOLD_TOKEN:env.BLOFY_STREAM_RELAY_SHARED_TOKEN},fetchImpl})(),false);
+ assert.equal(calls,0);
+ assert.equal(await createRelayIngressFence({env,fetchImpl})(),true);
+ assert.equal(calls,1);
+ assert.equal(await createRelayIngressFence({env,fetchImpl:async()=>new Response('{}',{status:503})})(),false);
+});
