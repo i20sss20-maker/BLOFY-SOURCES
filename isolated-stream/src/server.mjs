@@ -82,7 +82,7 @@ export function createStreamServer({
   sharedLiveMaxFeeds=8,
   sharedLiveMaxViewersPerFeed=128,
   sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,
-  sharedLiveSoleViewerPaceMs=2000,sharedLiveIndependentIngress=false,
+  sharedLiveSoleViewerPaceMs=2000,sharedLiveIndependentIngress=false,sharedLiveIngressMaxDeliveryAgeMs=0,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
   maintenance=relayMaintenanceActive(),
@@ -97,7 +97,7 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,sharedLiveMaxViewersPerFeed,sharedLiveMaxTotalViewers,sharedLiveSoleViewerPaceMs,sharedLiveIndependentIngress,
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,sharedLiveMaxViewersPerFeed,sharedLiveMaxTotalViewers,sharedLiveSoleViewerPaceMs,sharedLiveIndependentIngress,sharedLiveIngressMaxDeliveryAgeMs,
     onSharedLiveEvent:evt=>{
       // Persist bounded, sanitized connection lifecycle via Railway logs
       // across restarts while retaining zero URLs or customer identifiers.
@@ -303,6 +303,7 @@ export function createStreamServer({
           downstreamPaceCount:f.downstreamPaceCount,downstreamPaceMs:f.downstreamPaceMs,
           maxDownstreamPaceMs:f.maxDownstreamPaceMs,soleViewerPaceMs:f.soleViewerPaceMs,independentIngress:f.independentIngress,
           ingressQueuePeakBytes:f.ingressQueuePeakBytes,ingressQueueFullCount:f.ingressQueueFullCount,
+          ingressStaleRetirements:f.ingressStaleRetirements,ingressMaxDeliveryAgeMs:f.ingressMaxDeliveryAgeMs,
           tsClockSamples:f.tsClockSamples,tsClockBackwards:f.tsClockBackwards,
           tsClockLargeForward:f.tsClockLargeForward,tsClockDiscontinuities:f.tsClockDiscontinuities,
           viewerBytesQueued:f.viewerBytesQueued,
@@ -408,6 +409,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
     sharedLiveSoleViewerPaceMs:Number(process.env.BLOFY_STREAM_SHARED_LIVE_SOLE_VIEWER_PACE_MS??2000),
     sharedLiveIndependentIngress:process.env.BLOFY_STREAM_SHARED_LIVE_INDEPENDENT_INGRESS==='1',
+    sharedLiveIngressMaxDeliveryAgeMs:Number(process.env.BLOFY_STREAM_SHARED_LIVE_INGRESS_MAX_DELIVERY_AGE_MS??0),
     sharedLiveMaxFeeds:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_FEEDS||8),
     sharedLiveMaxViewersPerFeed:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_VIEWERS_PER_FEED||128),
     sharedLiveMaxTotalViewers:process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS===undefined?undefined:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS),
