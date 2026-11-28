@@ -5,11 +5,15 @@ const ORIGIN='https://blofy-activation-portal-production.up.railway.app';
 // A failed or ambiguous acknowledgement never grants a media connection.
 // Closing local holds is NOT evidence of provider-wide capacity.
 export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=randomUUID,sleep=delay}={}){
- const enabled=env.BLOFY_RELAY_INGRESS_HOLDS==='1',token=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const owned=env.BLOFY_RELAY_ENGINE_OWNERSHIP==='1';
+ const enabled=env.BLOFY_RELAY_INGRESS_HOLDS==='1';
+ const shared=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const token=owned?(env.BLOFY_RELAY_ENGINE_HOLD_TOKEN||''):shared;
+ const validToken=token.length>=32&&(!owned||token!==shared);
  const post=async(operation,holdId)=>{
   try{
    const r=await fetchImpl(ORIGIN+'/internal/legacy-ingress-hold',{method:'POST',redirect:'error',signal:AbortSignal.timeout(2500),headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({operation,holdId})});
-   if(r.status!==200){await r.body?.cancel().catch(()=>{});return r.status>=400&&r.status<500?false:null}
+   if(r.status!==200){await r.body?.cancel().catch(()=>{});return r.status>=400&&r.status<500&&![408,425,429].includes(r.status)?false:null}
    const rd=r.body?.getReader();if(!rd)return null;
    let n=0;const parts=[];
    try{for(;;){const x=await rd.read();if(x.done)break;n+=x.value.byteLength;if(n>128)return null;parts.push(Buffer.from(x.value))}}
@@ -29,8 +33,8 @@ export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=ra
   return false;
  };
  return async()=>{
-  if(!enabled)return {ok:true,close:async()=>true};
-  if(token.length<32)return {ok:false};
+  if(!enabled)return owned?{ok:false}:{ok:true,close:async()=>true};
+  if(!validToken)return {ok:false};
   const id=newId();
   const entered=await post('enter',id);
   if(entered!==true){
