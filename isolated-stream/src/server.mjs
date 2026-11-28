@@ -82,6 +82,7 @@ export function createStreamServer({
   sharedLiveMaxFeeds=8,
   sharedLiveMaxViewersPerFeed=128,
   sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,
+  sharedLiveSoleViewerPaceMs=2000,
   autoHealthProbeEnabled=false,
   realSourceReadinessOnBoot=false,
   maintenance=relayMaintenanceActive(),
@@ -96,7 +97,7 @@ export function createStreamServer({
   const relayBroker=createRelayBroker({sharedToken:relaySharedToken,
     fetchImpl:relayFetchImpl,lookup:relayLookup,
     redirectSourceOrigin:relayRedirectSourceOrigin,
-    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,sharedLiveMaxViewersPerFeed,sharedLiveMaxTotalViewers,
+    firstByteTimeoutMs:relayFirstByteTimeoutMs,sharedLiveEnabled,sharedLiveMaxFeeds,sharedLiveMaxViewersPerFeed,sharedLiveMaxTotalViewers,sharedLiveSoleViewerPaceMs,
     onSharedLiveEvent:evt=>{
       // Persist bounded, sanitized connection lifecycle via Railway logs
       // across restarts while retaining zero URLs or customer identifiers.
@@ -300,7 +301,7 @@ export function createStreamServer({
           sourceBytesReceived:f.sourceBytesReceived,
           sourceReadBytes:f.sourceReadBytes,sourceEofWhileViewing:f.sourceEofWhileViewing,
           downstreamPaceCount:f.downstreamPaceCount,downstreamPaceMs:f.downstreamPaceMs,
-          maxDownstreamPaceMs:f.maxDownstreamPaceMs,
+          maxDownstreamPaceMs:f.maxDownstreamPaceMs,soleViewerPaceMs:f.soleViewerPaceMs,
           viewerBytesQueued:f.viewerBytesQueued,
           viewersAccepted:f.viewersAccepted,
           // Authenticated aggregate timings only; null without observations.
@@ -402,6 +403,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
     operatorProxyToken:process.env.BLOFY_STREAM_OPERATOR_PROXY_TOKEN||'',
     relaySharedToken:process.env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'',
     sharedLiveEnabled:process.env.BLOFY_STREAM_SHARED_LIVE_ENABLED==='1',
+    sharedLiveSoleViewerPaceMs:Number(process.env.BLOFY_STREAM_SHARED_LIVE_SOLE_VIEWER_PACE_MS??2000),
     sharedLiveMaxFeeds:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_FEEDS||8),
     sharedLiveMaxViewersPerFeed:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_VIEWERS_PER_FEED||128),
     sharedLiveMaxTotalViewers:process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS===undefined?undefined:Number(process.env.BLOFY_STREAM_SHARED_LIVE_MAX_TOTAL_VIEWERS),
