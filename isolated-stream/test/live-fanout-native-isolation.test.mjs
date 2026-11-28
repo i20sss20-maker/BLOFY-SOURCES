@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {once} from 'node:events';
+import {once,EventEmitter} from 'node:events';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {createLiveFanout} from '../src/live-fanout.mjs';
 
@@ -80,4 +80,39 @@ test('native HTTP: two channels under one authorized scope remain independent on
     clearTimeout(deadline);abort.abort();relay.close();
     await close(edge);await close(origin);
   }
+});
+
+test('QA zero pacing isolates an overloaded viewer without changing source admission',{timeout:8000},async()=>{
+  assert.throws(()=>createLiveFanout({soleViewerPaceMs:2001}),/fanout_capacity_invalid/);
+  const calls={a:0,b:0},writers={};
+  class Viewer extends EventEmitter {
+    constructor(backlogged=false){super();this.writableLength=backlogged?512*1024:0;this.chunks=[];}
+    writeHead(){this.headersSent=true;}
+    write(chunk){this.chunks.push(Buffer.from(chunk));return true;}
+    end(){this.writableEnded=true;this.emit('close');}
+    destroy(){this.destroyed=true;this.emit('close');}
+  }
+  const relay=createLiveFanout({soleViewerPaceMs:0,maxViewerQueueBytes:512*1024,
+    lookup:async()=>[{address:'8.8.8.8',family:4}],
+    fetchImpl:async url=>{
+      const k=url.pathname==='/a.ts'?'a':'b';calls[k]++;
+      return new Response(new ReadableStream({start(c){writers[k]=c;}}),
+        {headers:{'content-type':'video/mp2t'}});
+    }});
+  const options={licensedSourceId:'550e8400-e29b-41d4-a716-446655440000',providerMaxConcurrentFeeds:2};
+  const a=new Viewer(true),b=new Viewer();
+  try{
+    await Promise.all([relay.handle({method:'GET'},a,'https://licensed.example/a.ts',options),
+      relay.handle({method:'GET'},b,'https://licensed.example/b.ts',options)]);
+    await until(()=>writers.a&&writers.b);
+    writers.a.enqueue(packet(0x21));writers.b.enqueue(packet(0x31));
+    await until(()=>a.destroyed&&b.chunks.length===1);
+    writers.b.enqueue(packet(0x32));
+    await until(()=>b.chunks.length===2);
+    assert.deepEqual(b.chunks,[packet(0x31),packet(0x32)]);
+    assert.equal(relay.stats().slowViewerDisconnects,1);
+    assert.equal(relay.stats().downstreamPaceCount,0);
+    assert.equal(relay.stats().sourceLimitRejections,0);
+    assert.deepEqual(calls,{a:1,b:1});
+  }finally{relay.close();}
 });
