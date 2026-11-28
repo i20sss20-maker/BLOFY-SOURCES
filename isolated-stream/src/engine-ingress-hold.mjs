@@ -7,7 +7,11 @@ const ORIGIN='https://blofy-activation-portal-production.up.railway.app';
 // A failed or ambiguous acknowledgement never grants a media connection.
 // Closing local holds is NOT evidence of provider-wide capacity.
 export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=randomUUID,sleep=delay}={}){
- const enabled=env.BLOFY_RELAY_INGRESS_HOLDS==='1',token=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const owned=env.BLOFY_RELAY_ENGINE_OWNERSHIP==='1';
+ const enabled=env.BLOFY_RELAY_INGRESS_HOLDS==='1';
+ const shared=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const token=owned?(env.BLOFY_RELAY_ENGINE_HOLD_TOKEN||''):shared;
+ const validToken=token.length>=32&&(!owned||token!==shared);
  const journal=String(env.BLOFY_RELAY_CLEANUP_JOURNAL_DIR||'').trim();
  const entryPattern=/^(close|abandon)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
  const validJournal=journal.startsWith('/')&&journal.length>1;
@@ -69,7 +73,7 @@ export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=ra
  }
  let replaying=false,replayCursor=0;
  async function replay(){
-  if(!journalReady||replaying||token.length<32)return;
+  if(!journalReady||replaying||!validToken)return;
   replaying=true;
   try{
    const all=readdirSync(journal).filter(n=>entryPattern.test(n)).sort();
@@ -79,13 +83,13 @@ export function createRelayIngressHold({env=process.env,fetchImpl=fetch,newId=ra
   }catch{}finally{replaying=false}
  }
  if(enabled&&journal&&!journalReady)console.warn('BLOFY_RELAY_INGRESS_JOURNAL_UNAVAILABLE');
- if(journalReady&&token.length>=32){
+ if(journalReady&&validToken){
   const t=setInterval(()=>void replay(),30000);t.unref?.();
   queueMicrotask(()=>void replay());
  }
  const acquire=async()=>{
-  if(!enabled)return {ok:true,close:async()=>true};
-  if(token.length<32)return {ok:false};
+  if(!enabled)return owned?{ok:false}:{ok:true,close:async()=>true};
+  if(!validToken)return {ok:false};
   const id=newId();
   const entered=await post('enter',id);
   if(entered!==true){
