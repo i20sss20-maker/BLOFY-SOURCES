@@ -4,7 +4,7 @@ import {createLiveIngressQueue} from './live-ingress-queue.mjs';
 // On error/abort discard the queue and wait for both workers before the
 // caller releases its existing upstream reservation. Never opens a socket.
 export async function runLiveIngressSession({
-  first,read,deliver,signal,stopRead=()=>{},onRead=()=>{},onQueue=()=>{},
+  first,read,deliver,signal,stopRead=()=>{},onRead=()=>{},onQueue=()=>{},onDeliveryAge=()=>{},
   maxBytes=4*1024*1024,maxChunks=256,maxDeliveryAgeMs=0,clock=()=>performance.now()
 }){
   if(!Number.isInteger(maxDeliveryAgeMs)||maxDeliveryAgeMs<0||maxDeliveryAgeMs>30000)
@@ -52,6 +52,7 @@ export async function runLiveIngressSession({
         if(chunk===null)return;
         if(failure)throw failure;
         const age=Math.max(0,clock()-arrivalTimes.shift());
+        onDeliveryAge(age);
         if(maxDeliveryAgeMs>0&&age>maxDeliveryAgeMs)
           throw Error('fanout_ingress_delivery_stale');
         await deliver(chunk);
