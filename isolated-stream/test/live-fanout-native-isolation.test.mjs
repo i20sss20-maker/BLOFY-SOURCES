@@ -27,7 +27,7 @@ async function until(predicate){
   assert.fail('timed out awaiting expected transport state');
 }
 
-test('native HTTP: two channels under one authorized scope remain independent on EOF',{timeout:12000},async()=>{
+for(const independentIngress of [false,true])test('native HTTP: two channels under one authorized scope remain independent on EOF; independentIngress='+independentIngress,{timeout:12000},async()=>{
   const requests={a:0,b:0},writers={};
   const origin=http.createServer((req,res)=>{
     const key=req.url==='/a.ts'?'a':'b';
@@ -40,7 +40,7 @@ test('native HTTP: two channels under one authorized scope remain independent on
   // Test-only transport injection. All media is generated on loopback;
   // production DNS/URL validation and provider limits are unchanged.
   const relay=createLiveFanout({
-    maxFeeds:2,maxViewersPerFeed:4,maxTotalViewers:8,
+    maxFeeds:2,maxViewersPerFeed:4,maxTotalViewers:8,independentIngress,
     reconnectOnUpstreamEnd:true,
     lookup:async()=>[{address:'8.8.8.8',family:4}],
     fetchImpl:(url,options)=>fetch(upstream+url.pathname,options)
@@ -68,6 +68,7 @@ test('native HTTP: two channels under one authorized scope remain independent on
     const stats=relay.stats();
     assert.equal(stats.activeFeeds,2);
     assert.equal(stats.sourceEofWhileViewing,1);
+    if(independentIngress)assert.ok(stats.ingressQueuePeakBytes>0);
     assert.equal(stats.reconnectRecovered,1);
     assert.equal(stats.downstreamPaceCount,0);
     assert.equal(stats.sourceLimitRejections,0);
