@@ -8,6 +8,13 @@ import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 import {runLiveIngressSession} from './live-ingress-session.mjs';
 
+// Faster first retry only for clean EOF after sustained source progress.
+// Never change denial handling, sequential release, or the retry budget.
+export function liveRecoveryDelayMs({retryNumber,cleanEof=false,sustained=false}){
+  if(retryNumber===1&&cleanEof&&sustained)return 100;
+  return Math.min(2000,250*Math.pow(2,retryNumber-1));
+}
+
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,maxTotalViewers=maxFeeds*maxViewersPerFeed,
   minViewersToStart=1,
@@ -372,6 +379,7 @@ export function createLiveFanout({
       }
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
+        let firstSourceAt=null,lastSourceAt=null,cleanEof=false,sustained=false;
         const attemptController=new AbortController();
         let releaseStarted=null;
         const beginRelease=()=>{
@@ -484,7 +492,7 @@ export function createLiveFanout({
               'referrer-policy':'no-referrer','x-frame-options':'DENY',
               'x-content-type-options':'nosniff'});
           }
-          firstMediaAt=lastMediaAt=clock();
+          firstMediaAt=lastMediaAt=firstSourceAt=lastSourceAt=clock();
           if(!everDelivered)recordLatency('startup',row.admittedAt);
           else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
           if(independentIngress){
@@ -492,7 +500,8 @@ export function createLiveFanout({
             const result=await runLiveIngressSession({
               first:first.value,signal:row.controller.signal,stopRead:stopAttempt,
               read:()=>nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt),
-              onRead:n=>{row.lastSourceReadAt=clock();counters.sourceReadBytes+=n},
+              onRead:n=>{lastSourceAt=row.lastSourceReadAt=clock();counters.sourceReadBytes+=n;
+                if(lastSourceAt-firstSourceAt>=8000)cooldowns.delete(row.key);},
               onQueue:s=>{
                 counters.ingressQueuePeakBytes=Math.max(counters.ingressQueuePeakBytes,s.peakBytes);
                 counters.ingressQueueFullCount+=s.fullCount-previousFull;previousFull=s.fullCount;
@@ -501,7 +510,6 @@ export function createLiveFanout({
                 await deliverBurst(row,Buffer.from(chunk));
                 if(row.controller.signal.aborted)return;
                 lastMediaAt=clock();everDelivered=true;
-                if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
               }
             });
             if(result.cleanEof&&row.viewers.size&&!row.controller.signal.aborted){
@@ -522,7 +530,7 @@ export function createLiveFanout({
                 break;
               }
               if(part.value?.length){
-                lastMediaAt=clock();row.lastSourceReadAt=lastMediaAt;
+                lastMediaAt=lastSourceAt=clock();row.lastSourceReadAt=lastSourceAt;
                 counters.sourceReadBytes+=part.value.byteLength;
                 await deliverBurst(row,Buffer.from(part.value));
                 if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
@@ -549,7 +557,9 @@ export function createLiveFanout({
             (transient.includes(reason)||reason==='fanout_upstream_ended');
           // Only a sustained interval of delivered media resets the retry budget.
           // Connection setup time and idle stalls are not healthy playback.
-          if(firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000)failedAttempts=0;
+          sustained=firstSourceAt!==null&&lastSourceAt-firstSourceAt>=8000;
+          cleanEof=reason==='fanout_upstream_ended';
+          if(sustained)failedAttempts=0;
           if(transientInitial){
             initialFailures++;retry=true;counters.initialRetries++;
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
@@ -594,7 +604,7 @@ export function createLiveFanout({
         }
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
-        const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
+        const delay=liveRecoveryDelayMs({retryNumber,cleanEof,sustained});
         try{await sleep(delay,undefined,{signal:row.controller.signal});}
         catch(error){if(!row.controller.signal.aborted)throw error;break;}
       }
