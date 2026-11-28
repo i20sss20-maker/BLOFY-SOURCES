@@ -94,6 +94,7 @@ export function createLiveFanout({
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
+    sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -276,8 +277,14 @@ export function createLiveFanout({
     for(let offset=0;offset<chunk.length;offset+=sliceBytes){
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
       const size=Math.min(sliceBytes,chunk.length-offset);
-      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes)
+      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes){
+        const started=performance.now();
         await paceSoleViewer(row,size);
+        const ms=Math.max(0,Math.round(performance.now()-started));
+        counters.downstreamPaceCount++;counters.downstreamPaceMs+=ms;
+        counters.maxDownstreamPaceMs=Math.max(counters.maxDownstreamPaceMs,ms);
+        row.downstreamPaceMs+=ms;
+      }
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
       deliver(row,chunk.length<=sliceBytes?chunk:Buffer.from(chunk.subarray(offset,offset+size)));
       if(offset+size<chunk.length)await yieldIo();
@@ -477,16 +484,21 @@ export function createLiveFanout({
           firstMediaAt=lastMediaAt=clock();
           if(!everDelivered)recordLatency('startup',row.admittedAt);
           else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
+          row.lastSourceReadAt=clock();counters.sourceReadBytes+=first.value.byteLength;
           await deliverBurst(row,Buffer.from(first.value));
           everDelivered=true;
           while(!row.controller.signal.aborted){
             const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
             if(part.done){
-              if(row.viewers.size)throw Error('fanout_upstream_ended');
+              if(row.viewers.size){
+                counters.sourceEofWhileViewing++;row.sourceEofs++;
+                throw Error('fanout_upstream_ended');
+              }
               break;
             }
             if(part.value?.length){
-              lastMediaAt=clock();
+              lastMediaAt=clock();row.lastSourceReadAt=lastMediaAt;
+              counters.sourceReadBytes+=part.value.byteLength;
               await deliverBurst(row,Buffer.from(part.value));
               if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
             }
@@ -720,6 +732,7 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
+        lastSourceReadAt:null,sourceEofs:0,downstreamPaceMs:0,
         state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
@@ -770,6 +783,8 @@ export function createLiveFanout({
     channels:[...feeds.values()].map(row=>({
       channel:row.channelNumber,state:row.state,viewers:row.viewers.size,
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
+      sourceEofs:row.sourceEofs,downstreamPaceMs:row.downstreamPaceMs,
+      lastSourceReadAgeMs:row.lastSourceReadAt===null?null:Math.max(0,now-row.lastSourceReadAt),
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
       activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
       trackInspectedAt:row.trackInspectedAt,
