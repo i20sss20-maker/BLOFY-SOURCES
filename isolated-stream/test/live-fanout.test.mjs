@@ -1069,14 +1069,14 @@ test('retired feed waiting for first bytes releases source without waiting for f
  }});
 });
 
-test('250 synthetic viewers keep healthy source running during isolated licensed source recovery',{timeout:20000},async()=>{
+for(const independentIngress of [false,true])test('250 synthetic viewers keep healthy source running during isolated licensed source recovery; independentIngress='+independentIngress,{timeout:20000},async()=>{
  const scopes={a:'550e8400-e29b-41d4-a716-446655440000',b:'550e8400-e29b-41d4-a716-446655440001'};
  const calls={a:0,b:0},writers={};
  const media=mark=>{const bytes=Buffer.alloc(188*3,mark);for(let i=0;i<bytes.length;i+=188)bytes[i]=0x47;return bytes};
  const aFirst=media(0x21),aRecovered=media(0x42),bFirst=media(0x31),bDuring=media(0x32),bAfter=media(0x33);
  let releaseRecovery;
  const recoveryGate=new Promise(resolve=>releaseRecovery=resolve);
- const fanout=createLiveFanout({maxFeeds:4,maxViewersPerFeed:128,
+ const fanout=createLiveFanout({maxFeeds:4,maxViewersPerFeed:128,independentIngress,
   reconnectOnUpstreamEnd:true,lookup:async()=>[{address:'8.8.8.8',family:4}],
   fetchImpl:async url=>{
    const key=url.pathname.endsWith('/b.ts')?'b':'a';
