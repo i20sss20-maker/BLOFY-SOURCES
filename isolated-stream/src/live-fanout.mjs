@@ -7,6 +7,7 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 import {runLiveIngressSession} from './live-ingress-session.mjs';
+import {createLiveTsClockMonitor} from './live-ts-clock-monitor.mjs';
 
 // Faster first retry only for clean EOF after sustained source progress.
 // Never change denial handling, sequential release, or the retry budget.
@@ -105,6 +106,7 @@ export function createLiveFanout({
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
     ingressQueuePeakBytes:0,ingressQueueFullCount:0,
+    tsClockSamples:0,tsClockBackwards:0,tsClockLargeForward:0,tsClockDiscontinuities:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -218,6 +220,20 @@ export function createLiveFanout({
   }
   function deliver(row,chunk){
     row.lastMediaAt=clock();
+    // QA only: observe a bounded initial sample of each upstream session.
+    // Never modify transport packets or use diagnostics to reject media.
+    if(row.clockMonitor&&row.clockBudget>0){
+      try{
+        const before=row.clockMonitor.stats();
+        const n=Math.min(chunk.length,row.clockBudget);
+        row.clockMonitor.push(chunk.subarray(0,n));row.clockBudget-=n;
+        const after=row.clockMonitor.stats();
+        counters.tsClockSamples+=after.clockSamples-before.clockSamples;
+        counters.tsClockBackwards+=after.backwards-before.backwards;
+        counters.tsClockLargeForward+=after.largeForward-before.largeForward;
+        counters.tsClockDiscontinuities+=after.declaredDiscontinuities-before.declaredDiscontinuities;
+      }catch{row.clockMonitor=null;row.clockBudget=0;}
+    }
     // Parse only in-flight MPEG-TS metadata, with a strict memory/CPU cap.
     // Never decode, change a byte, or open an extra connection to the provider.
     if(row.trackInspector&&!row.trackBudgetComplete){
@@ -471,6 +487,8 @@ export function createLiveFanout({
           // program/codec after a permitted reconnect. Evidence is scoped
           // to current publisher only, not the previously connected origin.
           row.trackInspector=createTsAudioInspector();
+          row.clockMonitor=independentIngress?createLiveTsClockMonitor():null;
+          row.clockBudget=independentIngress?8*1024*1024:0;
           row.trackInspectedAt=null;
           row.trackBudgetComplete=false;
           // Never replay bytes from a previous provider session into a new
@@ -768,7 +786,7 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
-        lastSourceReadAt:null,sourceEofs:0,downstreamPaceMs:0,
+        lastSourceReadAt:null,sourceEofs:0,downstreamPaceMs:0,clockMonitor:null,clockBudget:0,
         state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
@@ -820,6 +838,7 @@ export function createLiveFanout({
       channel:row.channelNumber,state:row.state,viewers:row.viewers.size,
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
       sourceEofs:row.sourceEofs,downstreamPaceMs:row.downstreamPaceMs,
+      tsClock:row.clockMonitor?.stats()??null,
       lastSourceReadAgeMs:row.lastSourceReadAt===null?null:Math.max(0,now-row.lastSourceReadAt),
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
       activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
