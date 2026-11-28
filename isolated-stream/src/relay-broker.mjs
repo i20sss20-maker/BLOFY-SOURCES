@@ -8,6 +8,7 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createLiveFanout} from './live-fanout.mjs';
 import {createRelayIngressFence} from './engine-ingress-fence.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
+import {createRelayRuntimeLease} from './relay-runtime-lease.mjs';
 
 const TTL=45_000,MAX_TICKETS=1024,MAX_ISSUE_BYTES=4096;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -68,7 +69,7 @@ export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
   sharedLiveEnabled=false,sharedLiveMaxFeeds=8,sharedLiveMaxViewersPerFeed=128,sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
-  onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold()
+  onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold(),runtimeLeaseEnv=process.env,terminateRuntime=()=>process.exit(1)
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
@@ -119,6 +120,7 @@ export function createRelayBroker({
     checkDrain();
   }
   async function acquireTrackedHold(){
+    if(!runtimeLease.allows())return {ok:false};
     pendingIngressHolds++;
     let hold;
     try{hold=await acquireIngressHold();}catch{
@@ -131,13 +133,15 @@ export function createRelayBroker({
       return {ok:false};
     }
     let closing;
-    return {ok:true,close(){
+    const tracked={ok:true,close(){
       closing??=Promise.resolve().then(()=>hold.close()).catch(()=>false).then(confirmed=>{
         ingressSettled(confirmed);
         return confirmed;
       });
       return closing;
     }};
+    if(!runtimeLease.allows()){void tracked.close();return {ok:false};}
+    return tracked;
   }
   const directControllers=new Set();
   const rejectDrain=res=>respond(res,503,{ok:false,code:'relay_draining'},{'retry-after':'3'});
@@ -188,7 +192,7 @@ export function createRelayBroker({
         ?error.message:'relay_issue_invalid';
       return respond(res,400,{ok:false,code});
     }
-    if(draining||!await allowIngress()||draining)return rejectDrain(res);
+    if(draining||!runtimeLease.allows()||!await allowIngress()||draining||!runtimeLease.allows())return rejectDrain(res);
     prune();
     if(tickets.size>=maxTickets){
       quota.capacityRejected++;
@@ -237,7 +241,7 @@ export function createRelayBroker({
       tickets.delete(match[1]);
       return respond(res,410,{ok:false,code:'relay_ticket_expired'});
     }
-    if(!await allowIngress()||draining)return rejectDrain(res);
+    if(!runtimeLease.allows()||!await allowIngress()||draining||!runtimeLease.allows())return rejectDrain(res);
     // Recheck after the asynchronous gate call, since concurrent redemption
     // or drain may have removed this capability in the meantime.
     if(tickets.get(match[1])!==row||row.expiresAt<=clock()||row.uses>=5)return respond(res,410,{ok:false,code:'relay_ticket_expired'});
@@ -394,12 +398,22 @@ export function createRelayBroker({
     }
   }
   function drain(){
+    runtimeLease.stop();
     draining=true;tickets.clear();fanout.drain();
     for(const controller of directControllers)controller.abort();
     checkDrain();
     return ingressDrained;
   }
-  return {enabled,issue,relay,drain,stats:()=>({enabled,activeTickets:tickets.size,
+  const runtimeLease=createRelayRuntimeLease({enabled:runtimeLeaseEnv.BLOFY_RELAY_RUNTIME_LEASE==='1',
+    configured:['BLOFY_RELAY_ENGINE_OWNERSHIP','BLOFY_RELAY_INGRESS_FENCE','BLOFY_RELAY_INGRESS_HOLDS'].every(k=>runtimeLeaseEnv[k]==='1'),
+    readPermit:allowIngress,onExpired:async()=>{
+      // Stop current connections and clear tickets before a systemd restart.
+      // The new process stays idle until its own central permit is valid.
+      const deadline=setTimeout(()=>terminateRuntime(),12000);
+      try{const result=await drain();console.warn('BLOFY_RELAY_RUNTIME_LEASE_REVOKED',JSON.stringify({unconfirmedIngressReleases:result.unconfirmedIngressReleases}));}
+      finally{clearTimeout(deadline);terminateRuntime()}
+    }});
+  return {enabled,issue,relay,drain,stats:()=>({enabled,activeTickets:tickets.size,runtimeLease:runtimeLease.status(),
     sharedLiveEnabled,activeDirectMediaClients,pendingIngressHolds,unconfirmedIngressReleases,fanout:fanout.stats(),
     security:{grantsIssued:quota.grantsIssued,
       issuerAuthDenied:quota.issuerAuthDenied,
