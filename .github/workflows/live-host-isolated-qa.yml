@@ -17,6 +17,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Test host procedure in a network-isolated container
         run: sh isolated-stream/tools/run-host-isolated-qa.sh
+      - name: Test offline health classification
+        run: python3 isolated-stream/tools/test-relay-health-summary.py
       - name: Package tested source only
         run: |
           mkdir -p out
