@@ -56,3 +56,15 @@ test('rejects oversize chunks and makes an owned copy',async()=>{
   const input=packet(1);await q.push(input);input.fill(9);
   assert.deepEqual(await q.take(),packet(1));q.finish();
 });
+
+test('chunk count bounds overhead even for tiny fragments',async()=>{
+  const q=createLiveIngressQueue({maxBytes:4096,maxChunks:1});
+  await q.push(new Uint8Array([1]));
+  const blocked=q.push(new Uint8Array([2]));
+  assert.equal(q.stats().queuedChunks,1);
+  assert.equal(q.stats().fullCount,1);
+  assert.deepEqual(await q.take(),new Uint8Array([1]));
+  await blocked;
+  assert.deepEqual(await q.take(),new Uint8Array([2]));
+  q.finish();
+});
