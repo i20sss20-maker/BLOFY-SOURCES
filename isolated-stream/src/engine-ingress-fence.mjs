@@ -4,11 +4,13 @@
 // A configured gate is fail-closed on timeouts or malformed replies.
 const ORIGIN='https://blofy-activation-portal-production.up.railway.app';
 export function createRelayIngressFence({env=process.env,fetchImpl=fetch}={}){
+ const owned=env.BLOFY_RELAY_ENGINE_OWNERSHIP==='1';
  const enabled=env.BLOFY_RELAY_INGRESS_FENCE==='1';
- const token=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const shared=env.BLOFY_STREAM_RELAY_SHARED_TOKEN||'';
+ const token=owned?(env.BLOFY_RELAY_ENGINE_HOLD_TOKEN||''):shared;
  return async function allow(){
-  if(!enabled)return true;
-  if(token.length<32)return false;
+  if(!enabled)return !owned;
+  if(token.length<32||(owned&&token===shared))return false;
   try{
    const r=await fetchImpl(ORIGIN+'/internal/legacy-ingress',{method:'GET',redirect:'error',signal:AbortSignal.timeout(2000),headers:{authorization:'Bearer '+token,accept:'application/json'}});
    if(r.status!==200){await r.body?.cancel().catch(()=>{});return false}
