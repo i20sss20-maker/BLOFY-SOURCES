@@ -7,6 +7,13 @@ import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
 
+// A clean EOF after sustained media is eligible for a faster first recovery.
+// Keep the existing backoff for short flaps and all other transport errors.
+export function liveRecoveryDelayMs({retryNumber,cleanEof=false,sustained=false}){
+  if(retryNumber===1&&cleanEof&&sustained)return 100;
+  return Math.min(2000,250*Math.pow(2,retryNumber-1));
+}
+
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,maxTotalViewers=maxFeeds*maxViewersPerFeed,
   minViewersToStart=1,
@@ -362,6 +369,7 @@ export function createLiveFanout({
       }
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
+        let cleanEof=false,sustained=false;
         const attemptController=new AbortController();
         let releaseStarted=null;
         const beginRelease=()=>{
@@ -511,7 +519,9 @@ export function createLiveFanout({
             (transient.includes(reason)||reason==='fanout_upstream_ended');
           // Only a sustained interval of delivered media resets the retry budget.
           // Connection setup time and idle stalls are not healthy playback.
-          if(firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000)failedAttempts=0;
+          sustained=firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000;
+          cleanEof=reason==='fanout_upstream_ended';
+          if(sustained)failedAttempts=0;
           if(transientInitial){
             initialFailures++;retry=true;counters.initialRetries++;
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
@@ -556,7 +566,7 @@ export function createLiveFanout({
         }
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
-        const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
+        const delay=liveRecoveryDelayMs({retryNumber,cleanEof,sustained});
         try{await sleep(delay,undefined,{signal:row.controller.signal});}
         catch(error){if(!row.controller.signal.aborted)throw error;break;}
       }

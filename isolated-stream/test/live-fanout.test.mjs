@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {once} from 'node:events';
-import {createLiveFanout} from '../src/live-fanout.mjs';
+import {createLiveFanout,liveRecoveryDelayMs} from '../src/live-fanout.mjs';
 
 const SOURCE='https://licensed.example/live/a/b/channel.ts';
 const packet=Buffer.alloc(188*3,0x11);
@@ -1242,4 +1242,13 @@ test('retired bootstrap bytes are released as soon as a reconnect begins',async(
    if(++calls===1)return new Response(initial);
    return new Response(new ReadableStream({start(c){c.enqueue(fresh)}}));
  }});
+});
+
+
+test('clean EOF recovery accelerates only the first retry after sustained media',()=>{
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:true,sustained:true}),100);
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:true,sustained:false}),250);
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:false,sustained:true}),250);
+  assert.equal(liveRecoveryDelayMs({retryNumber:2,cleanEof:true,sustained:true}),500);
+  assert.equal(liveRecoveryDelayMs({retryNumber:5,cleanEof:true,sustained:false}),2000);
 });
