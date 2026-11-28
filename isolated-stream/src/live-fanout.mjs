@@ -6,6 +6,7 @@ import {setTimeout as sleep,setImmediate as yieldIo} from 'node:timers/promises'
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
+import {runLiveIngressSession} from './live-ingress-session.mjs';
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,maxTotalViewers=maxFeeds*maxViewersPerFeed,
@@ -15,7 +16,7 @@ export function createLiveFanout({
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
   lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
-  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,acquireIngressHold=createRelayIngressHold()
+  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,independentIngress=false,acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -96,6 +97,7 @@ export function createLiveFanout({
     peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
+    ingressQueuePeakBytes:0,ingressQueueFullCount:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -485,23 +487,46 @@ export function createLiveFanout({
           firstMediaAt=lastMediaAt=clock();
           if(!everDelivered)recordLatency('startup',row.admittedAt);
           else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
-          row.lastSourceReadAt=clock();counters.sourceReadBytes+=first.value.byteLength;
-          await deliverBurst(row,Buffer.from(first.value));
-          everDelivered=true;
-          while(!row.controller.signal.aborted){
-            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
-            if(part.done){
-              if(row.viewers.size){
-                counters.sourceEofWhileViewing++;row.sourceEofs++;
-                throw Error('fanout_upstream_ended');
+          if(independentIngress){
+            let previousFull=0;
+            const result=await runLiveIngressSession({
+              first:first.value,signal:row.controller.signal,stopRead:stopAttempt,
+              read:()=>nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt),
+              onRead:n=>{row.lastSourceReadAt=clock();counters.sourceReadBytes+=n},
+              onQueue:s=>{
+                counters.ingressQueuePeakBytes=Math.max(counters.ingressQueuePeakBytes,s.peakBytes);
+                counters.ingressQueueFullCount+=s.fullCount-previousFull;previousFull=s.fullCount;
+              },
+              deliver:async chunk=>{
+                await deliverBurst(row,Buffer.from(chunk));
+                if(row.controller.signal.aborted)return;
+                lastMediaAt=clock();everDelivered=true;
+                if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
               }
-              break;
+            });
+            if(result.cleanEof&&row.viewers.size&&!row.controller.signal.aborted){
+              counters.sourceEofWhileViewing++;row.sourceEofs++;
+              throw Error('fanout_upstream_ended');
             }
-            if(part.value?.length){
-              lastMediaAt=clock();row.lastSourceReadAt=lastMediaAt;
-              counters.sourceReadBytes+=part.value.byteLength;
-              await deliverBurst(row,Buffer.from(part.value));
-              if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+          }else{
+            row.lastSourceReadAt=clock();counters.sourceReadBytes+=first.value.byteLength;
+            await deliverBurst(row,Buffer.from(first.value));
+            everDelivered=true;
+            while(!row.controller.signal.aborted){
+              const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
+              if(part.done){
+                if(row.viewers.size){
+                  counters.sourceEofWhileViewing++;row.sourceEofs++;
+                  throw Error('fanout_upstream_ended');
+                }
+                break;
+              }
+              if(part.value?.length){
+                lastMediaAt=clock();row.lastSourceReadAt=lastMediaAt;
+                counters.sourceReadBytes+=part.value.byteLength;
+                await deliverBurst(row,Buffer.from(part.value));
+                if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+              }
             }
           }
           if(!row.viewers.size||row.controller.signal.aborted)break;
@@ -794,7 +819,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,
+    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,independentIngress,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
