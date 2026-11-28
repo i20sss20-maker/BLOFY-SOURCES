@@ -1,0 +1,12 @@
+{
+  "name": "blofy-synthetic-decoder-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node src/smoke.mjs",
+    "start": "node src/server.mjs"
+  },
+  "engines": {"node": ">=22"}
+}

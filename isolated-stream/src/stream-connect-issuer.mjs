@@ -1,0 +1,60 @@
+// Browser pairing endpoint. No raw provider fetch, no query credentials,
+// no logs, no redirects. Off until a compatible app release is available.
+import {timingSafeEqual} from 'node:crypto';
+export function connectPilotAuthorized(req,token){
+ if(typeof token!=='string'||token.length<32)return false;
+ const header=req.headers?.authorization;
+ if(typeof header!=='string'||!header.startsWith('Basic ')||header.length>2048)return false;
+ try{const value=Buffer.from(header.slice(6),'base64').toString('utf8'),prefix='operator:';if(!value.startsWith(prefix))return false;const a=Buffer.from(value.slice(prefix.length)),b=Buffer.from(token);return a.length===b.length&&timingSafeEqual(a,b);}catch{return false;}
+}
+export function connectPilotChallenge(res){res.writeHead(401,{'www-authenticate':'Basic realm="BLOFY CONNECT Pilot", charset="UTF-8"','cache-control':'no-store, private','x-content-type-options':'nosniff'});res.end();}
+const ORIGINS=new Set(['https://blofy-stream-api-production.up.railway.app','https://connect.blofysat.com']);
+const ERRORS=new Set(['connect_host_invalid','connect_input_invalid','connect_capacity','connect_rate_limited','connect_disabled']);
+function json(res,status,data){
+ res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store, private','x-content-type-options':'nosniff','referrer-policy':'no-referrer'});res.end(JSON.stringify(data));
+}
+export function createConnectIssuer({bridge,enabled=false,publicEnabled=false,pilotToken='',clock=Date.now}={}){
+ let global={until:0,count:0};const clients=new Map();
+ function permit(req){
+  const now=clock(),key=String(req.socket?.remoteAddress||'unknown').slice(0,128)+'|'+String(req.headers?.['x-forwarded-for']||'').split(',')[0].trim().slice(0,128);
+  if(global.until<=now)global={until:now+60000,count:0};
+  if(++global.count>40)return false;
+  for(const [id,v] of clients)if(v.until<=now)clients.delete(id);
+  if(!clients.has(key)&&clients.size>=500)return false;
+  if(!clients.has(key))clients.set(key,{until:now+60000,count:0});
+  return ++clients.get(key).count<=5;
+ }
+ async function issue(req,res){
+  if(req.method!=='POST'||req.url!=='/connect/api/issue'){json(res,405,{ok:false,code:'connect_method_denied'});return}
+  if(enabled!==true||!bridge?.configured){json(res,503,{ok:false,code:'connect_disabled'});return}
+  if(!publicEnabled&&!connectPilotAuthorized(req,pilotToken)){json(res,401,{ok:false,code:'connect_pilot_unauthorized'});return}
+  const origin=String(req.headers?.origin||'');
+  if(!ORIGINS.has(origin)||origin!=='https://'+String(req.headers?.host||'')||
+     req.headers?.['x-blofy-connect-action']!=='issue'||
+     (req.headers?.['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin')){
+   json(res,403,{ok:false,code:'connect_origin_denied'});return
+  }
+  if(!permit(req)){json(res,429,{ok:false,code:'connect_rate_limited'});return}
+  if(!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.['content-type']||''))){json(res,415,{ok:false,code:'connect_json_required'});return}
+  try{
+   const chunks=[];let size=0;
+   for await(const raw of req){const buf=Buffer.from(raw);size+=buf.length;if(size>4096){json(res,413,{ok:false,code:'connect_payload_too_large'});return}chunks.push(buf)}
+   let data;try{data=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{json(res,400,{ok:false,code:'connect_input_invalid'});return}
+   if(!data||typeof data.host!=='string'||data.host.length>512||typeof data.username!=='string'||data.username.length<1||data.username.length>256||
+      typeof data.password!=='string'||data.password.length<1||data.password.length>256||data.authorized!==true||(publicEnabled&&data.compatibleApp!==true)){json(res,400,{ok:false,code:'connect_input_invalid'});return}
+   let provider;try{provider=new URL(data.host.trim())}catch{json(res,400,{ok:false,code:'connect_host_invalid'});return}
+   if(provider.protocol==='http:'&&data.allowHttp!==true){json(res,400,{ok:false,code:'connect_host_invalid'});return}
+   const result=await bridge.connectIssue({host:data.host,username:data.username,password:data.password,...(data.allowHttp===true?{allowHttp:true}:{}),...(data.numericCode===true?{numericCode:true}:{}),...(data.shortCode===true?{shortCode:true}:{})}),body=result.body||{};
+   if(result.status!==201||body.ok!==true){
+    const code=ERRORS.has(body.code)?body.code:'connect_pairing_unavailable';
+    json(res,[400,429,503].includes(result.status)?result.status:503,{ok:false,code});return
+   }
+   const remaining=Number(body.expiresAt)-clock();
+   if(!(data.shortCode===true?/^[0-9]{8}$/:/^(?:BC-[A-Za-z0-9_-]{24}|[0-9]{12})$/).test(String(body.code||''))||body.oneTime!==true||body.providerVerified!==false||!Number.isFinite(remaining)||remaining<=0||remaining>(data.shortCode===true?6:16)*60000){
+    json(res,503,{ok:false,code:'connect_pairing_unavailable'});return
+   }
+   json(res,201,{ok:true,code:body.code,expiresAt:body.expiresAt,oneTime:true,providerVerified:false});
+  }catch{json(res,503,{ok:false,code:'connect_pairing_unavailable'})}
+ }
+ return {handle(req,res){if((req.url||'').split('?')[0]!=='/connect/api/issue')return false;void issue(req,res);return true;}};
+}

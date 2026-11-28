@@ -1,0 +1,222 @@
+import {createServer} from 'node:http';
+import {createDistributorDashboard} from '../src/distributor-dashboard.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {once} from 'node:events';
+import vm from 'node:vm';
+import {createStreamServer} from '../src/server.mjs';
+const admin='Bearer '+ 'x'.repeat(45);
+async function withServer(work){
+ const {app}=createStreamServer({adminToken:'admin-a-very-long-secure-token-for-test'});
+ app.listen(0,'127.0.0.1');await once(app,'listening');
+ const base='http://127.0.0.1:'+app.address().port;
+ try{await work(base);}finally{await new Promise(resolve=>app.close(resolve))}
+}
+test('distributor portal is a separate page with code and Xtream issuance, not operator navigation',async()=>{
+ await withServer(async base=>{
+  const result=await fetch(base+'/distributor');assert.equal(result.status,200);
+  const html=await result.text();
+  assert.match(html,/<h1 class="page-title">لوحة توزيع<\/h1>/);
+  assert.match(html,/>كود<\/button>/);
+  assert.match(html,/>Xtream<\/button>/);
+  assert.match(html,/<small>الرصيد<\/small>/);
+  assert.match(html,/x-blofy-distributor-action/);
+  assert.doesNotMatch(html,/data-tab="sources"|data-tab="library"|data-tab="restream"/);
+  const nonce=html.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/);
+  assert.ok(nonce);assert.doesNotThrow(()=>new vm.Script(nonce[2]));
+  assert.match(result.headers.get('content-security-policy'),/script-src 'nonce-/);
+  assert.match(result.headers.get('cache-control'),/no-store/);
+ });
+});
+test('distributor APIs are POST-only, same-origin, and never inherit operator Basic privileges',async()=>{
+ await withServer(async base=>{
+  const req=await fetch(base+'/distributor/api/issue');
+  assert.equal(req.status,404);
+  const hostile=await fetch(base+'/distributor/api/issue',{
+   method:'POST',headers:{origin:'https://evil.example',
+    'x-blofy-distributor-action':'issue','content-type':'application/json'},
+   body:JSON.stringify({kind:'app',durationDays:365})
+  });
+  assert.equal(hostile.status,403);
+  const wrongHeader=await fetch(base+'/distributor/api/issue',{
+   method:'POST',headers:{origin:base,'x-blofy-distributor-action':'reveal',
+    'content-type':'application/json'},body:'{}'
+  });
+  assert.equal(wrongHeader.status,403);
+ });
+});
+test('owner panel offers create, credit, suspend and reset without exposing admin to resellers',async()=>{
+ await withServer(async base=>{
+  const auth='Basic '+Buffer.from('operator:admin-a-very-long-secure-token-for-test').toString('base64');
+  const r=await fetch(base+'/operator',{headers:{authorization:auth}});assert.equal(r.status,200);
+  const html=await r.text();
+  assert.match(html,/id="page-distributors"/);
+  assert.match(html,/data-tab="distributors"/);
+  assert.match(html,/id="dist-create-form"/);
+  assert.match(html,/distributor-create/);
+  assert.match(html,/distributor-credits/);
+  assert.match(html,/distributor-reset/);
+  assert.match(html,/\/distributor/);
+  const forbidden=await fetch(base+'/operator/api/distributors',{
+    method:'POST',headers:{'content-type':'application/json',
+      'x-blofy-operator-action':'distributor-create'},
+    body:JSON.stringify({name:'x',username:'reseller1'})
+  });
+  assert.equal(forbidden.status,401);
+ });
+});
+
+test('distributor login sets private cookie and never returns session token to browser scripts',async()=>{
+ const secretToken='A'.repeat(43),calls=[];
+ const bridge={async distributorRequest(action,data){
+   calls.push({action,data});
+   if(action==='login')return {status:200,body:{ok:true,token:secretToken,
+     expiresIn:43200,item:{name:'Distribution Test'}}};
+   if(action==='me')return {status:200,body:{ok:true,item:{
+     name:'Distribution Test',username:'dist-demo',credits:5,used:0,enabled:true}}};
+   if(action==='issue')return {status:200,body:{ok:true,code:'12345678'}};
+   return {status:404,body:{ok:false,code:'route_not_found'}};
+ }};
+ const dashboard=createDistributorDashboard({bridge});
+ const server=createServer((req,res)=>{
+  if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port;
+ const origin='https://127.0.0.1:'+server.address().port;
+ try{
+  const login=await fetch(base+'/distributor/api/login',{method:'POST',
+   headers:{origin,'content-type':'application/json','x-blofy-distributor-action':'login'},
+   body:JSON.stringify({username:'dist-demo',password:'not-logged-secret'})});
+  assert.equal(login.status,200);
+  const body=await login.text();
+  assert.doesNotMatch(body,/AAAAAA/);
+  assert.doesNotMatch(body,/not-logged-secret/);
+  const cookie=login.headers.get('set-cookie');
+  assert.match(cookie,/HttpOnly/);assert.match(cookie,/Secure/);
+  assert.match(cookie,/SameSite=Strict/);assert.match(cookie,/Path=\/distributor/);
+  const me=await fetch(base+'/distributor/api/me',{method:'POST',
+    headers:{origin,'content-type':'application/json',
+      'x-blofy-distributor-action':'me',cookie:cookie.split(';')[0]},body:'{}'});
+  assert.equal(me.status,200);
+  assert.equal(calls[1].data.sessionToken,secretToken);
+  const forbidden=await fetch(base+'/distributor/api/me',{method:'POST',
+    headers:{origin,'content-type':'application/json','x-blofy-distributor-action':'me'},
+    body:'{}'});
+  assert.equal(forbidden.status,401);
+ }finally{await new Promise(resolve=>server.close(resolve))}
+});
+
+test('distributor page shows month-credit pricing, free daily trial and own saleh library only',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');assert.equal(response.status,200);
+  const html=await response.text();
+  assert.match(html,/<small>الرصيد<\/small>/);
+  assert.match(html,/value="365">سنة · 12/);
+  assert.doesNotMatch(html,/<option[^>]*value="730"|id="connections"|maxConnections:/);
+  assert.match(html,/id="renew-days"/);
+  assert.match(html,/id="days"/);
+  assert.match(html,/value="1">تجريبي · مجاني/);
+  assert.match(html,/id="customer-phone"/);
+  assert.match(html,/trialPhone:cost===0/);
+  assert.doesNotMatch(html,/saleh فقط|XTREAM 2|خصم الرصيد بالأشهر:/);
+  assert.equal((html.match(/<h1 class="page-title">لوحة توزيع<\/h1>/g)||[]).length,1);
+  assert.doesNotMatch(html,/<span class="mark">|<strong>BLOFY STREAM<\/strong>|<h1>توزيع BLOFY STREAM<\/h1>/);
+  assert.doesNotMatch(html,/<small>حالة اللوحة<\/small>|<p class="muted" id="who">/);
+  assert.doesNotMatch(html,/id="kind-help"|id="credit-cost"/);
+  assert.doesNotMatch(html,/إصدار اشتراك من saleh وخصم/);
+  assert.match(html,/id="issue-button"/);
+  // Name/description is not a customer-facing field; historical records remain.
+  assert.doesNotMatch(html,/id="label"|<label for="label">اسم الاشتراك<\/label>|<th>الاشتراك<\/th>/);
+  assert.doesNotMatch(html,/tableCell\(row,item\.label\)/);
+  assert.match(html,/td\.colSpan=5;target\.appendChild\(tr\)/);
+  assert.match(html,/id="customer-name"/);
+  assert.match(html,/id="library-panel"/);
+  assert.match(html,/id="library-type"/);
+  assert.match(html,/library-go/);
+  assert.match(html,/organize/);
+  for(const id of ['issue-search','issue-status','stat-active','stat-expiring',
+    'stat-expired','expiry-alert','clients-rows','clients-search','renew-dialog','customer-dialog',
+    'customer-name','customer-phone','issues-more'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  for(const action of ['relogin','renew','customer','list'])
+    assert.match(html,new RegExp("request\\('"+action+"'"));
+  assert.doesNotMatch(html,/id="trial-phone"|id="trial-field"/);
+  assert.doesNotMatch(html,/data-tab="sources"/);
+  assert.doesNotMatch(html,/data-tab="restream"/);
+  const sc=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(sc);assert.doesNotThrow(()=>new vm.Script(sc[1]));
+ });
+});
+
+test('distributor all-in-one management is compact, accessible and scoped',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');assert.equal(response.status,200);
+  const html=await response.text();
+  for(const id of [
+   'manage-dialog','manage-info','manage-copy','manage-renew',
+   'manage-relogin','manage-customer','renew-dialog','customer-dialog',
+   'activity-rows','activity-more','stat-today','stat-month','stat-trials',
+   'stat-renewals','stat-converted','stat-quota','balance-alert','theme-toggle',
+   'export-csv','issue-search','clients-search','stat-top-plan',
+   'library-dialog','library-edit-form','library-edit-group','library-edit-name',
+   'library-edit-sort','library-edit-hidden','library-edit-save'
+  ])assert.ok(html.includes('id="'+id+'"'),'missing '+id);
+  assert.match(html,/rowButton\(actions,'إدارة'/);
+  assert.match(html,/item\.days===1&&!item\.converted\?'تحويل إلى مدفوع'/);
+  assert.match(html,/localStorage\.getItem\('distributor_theme'\)/);
+  assert.match(html,/function csvField/);
+  assert.match(html,/^\s*if\(\/\^\\s\*\[=\+\\-@\]/m);
+  assert.doesNotMatch(html,/<th>الاشتراك<\/th>|id="label"|id="connections"|value="730"/);
+  const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+  assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+ });
+});
+test('no privileged reseller route or source controls leak into distributor UI',async()=>{
+ await withServer(async base=>{
+  const response=await fetch(base+'/distributor');
+  const html=await response.text();
+  assert.doesNotMatch(html,/data-tab="sources"|data-tab="restream"/);
+  assert.doesNotMatch(html,/\/operator\/api\/sources|\/internal\/blofy-stream\/sources/);
+  const forbidden=await fetch(base+'/distributor/api/delete-source',{
+    method:'POST',headers:{origin:'https://'+new URL(base).host,
+      'x-blofy-distributor-action':'delete-source','content-type':'application/json'},
+    body:'{}'
+  });
+  assert.equal(forbidden.status,404);
+ });
+});
+
+test('customer directory lists each subscription, including trials sharing a phone, with duration and actions',async()=>{
+ await withServer(async base=>{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const header of ['الكود / Xtream','المدة الأساسية','الإصدار','الانتهاء','المتبقي','الحالة'])assert.ok(html.includes('<th>'+header+'</th>'));
+  for(const id of ['clients-rows','clients-count','clients-more'])assert.ok(html.includes('id="'+id+'"'));
+  assert.match(html,/تجريبي · 24 ساعة/);assert.match(html,/تبدأ عند التفعيل/);
+  assert.ok(html.includes("request('list',{q:$('clients-search').value.trim(),status:'all',offset})"));
+  assert.ok(html.includes('for(const item of clientRows)'));
+  assert.ok(html.includes("showIssue(await request('reveal',{issueId:item.id}))"));
+  assert.ok(html.includes("$(\'clients-search\').value=\'\'"));
+  assert.doesNotThrow(()=>new vm.Script(html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1]));
+ });
+});
+
+test('rewards and dual access UI use only authenticated, explicit, scoped actions',async()=>{
+ const calls=[],sessionToken='R'.repeat(43);
+ const dashboard=createDistributorDashboard({bridge:{async distributorRequest(action,data){
+  calls.push({action,data});return {status:200,body:{ok:true}};
+ }}});
+ const server=createServer((req,res)=>{if(!dashboard.handle(req,res)){res.writeHead(404);res.end()}});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ const base='http://127.0.0.1:'+server.address().port,origin='https://'+new URL(base).host;
+ try{
+  const html=await (await fetch(base+'/distributor')).text();
+  for(const id of ['reward-earned','reward-available','reward-redeem','reward-level','manage-dual','wallet-credits','wallet-pending','issue-bonus','renew-bonus'])assert.ok(html.includes('id="'+id+'"'));
+  const post=(action,body,withCookie=true)=>fetch(base+'/distributor/api/'+action,{method:'POST',headers:{origin,'content-type':'application/json','x-blofy-distributor-action':action,...(withCookie?{cookie:'blofy_dist='+sessionToken}:{})},body:JSON.stringify(body)});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req'},false)).status,401);
+  assert.equal((await post('reveal',{issueId:'owned',includeXtream:true,code:'foreign',accountId:'foreign'})).status,200);
+  assert.deepEqual(calls[0],{action:'reveal',data:{sessionToken,issueId:'owned',includeXtream:true}});
+  assert.equal((await post('redeem-rewards',{credits:1,requestId:'req',points:99999,distributorId:'foreign'})).status,200);
+  assert.deepEqual(calls[1],{action:'redeem-rewards',data:{sessionToken,credits:1,requestId:'req'}});
+ }finally{await new Promise(resolve=>server.close(resolve))}
+});
