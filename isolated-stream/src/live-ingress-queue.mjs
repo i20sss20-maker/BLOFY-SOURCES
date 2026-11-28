@@ -2,8 +2,9 @@
 // experimental ingress/delivery boundary, not a playout or rewind buffer.
 // A full queue applies backpressure; it never silently drops TS bytes.
 // No provider calls, credentials, quota decisions or cross-session state.
-export function createLiveIngressQueue({maxBytes=4*1024*1024}={}){
-  if(!Number.isSafeInteger(maxBytes)||maxBytes<188||maxBytes>16*1024*1024)
+export function createLiveIngressQueue({maxBytes=4*1024*1024,maxChunks=256}={}){
+  if(!Number.isSafeInteger(maxBytes)||maxBytes<188||maxBytes>16*1024*1024||
+     !Number.isSafeInteger(maxChunks)||maxChunks<1||maxChunks>4096)
     throw Error('ingress_queue_capacity_invalid');
   const items=[];
   let bytes=0,peakBytes=0,fullCount=0,finished=false,aborted=false;
@@ -19,7 +20,7 @@ export function createLiveIngressQueue({maxBytes=4*1024*1024}={}){
     if(finished)throw Error('ingress_queue_finished');
     // Caller transfers ownership of the chunk until push resolves.
     // At most one producer chunk may be waiting outside the byte budget.
-    while(bytes+chunk.byteLength>maxBytes){
+    while(bytes+chunk.byteLength>maxBytes||items.length>=maxChunks){
       fullCount++;
       await new Promise(resolve=>{producer=resolve});
       if(aborted)throw endError();
@@ -51,7 +52,7 @@ export function createLiveIngressQueue({maxBytes=4*1024*1024}={}){
     wakeConsumer();wakeProducer();
   }
   return {push,take,finish,abort,stats:()=>({
-    queuedBytes:bytes,peakBytes,fullCount,maxBytes,queuedChunks:items.length,
+    queuedBytes:bytes,peakBytes,fullCount,maxBytes,maxChunks,queuedChunks:items.length,
     finished,aborted
   })};
 }
