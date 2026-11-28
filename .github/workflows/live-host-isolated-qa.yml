@@ -1,0 +1,30 @@
+name: LIVE host isolated QA bundle
+on:
+  pull_request:
+    paths:
+      - 'isolated-stream/**'
+      - '.github/workflows/live-host-isolated-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test host procedure in a network-isolated container
+        run: sh isolated-stream/tools/run-host-isolated-qa.sh
+      - name: Package tested source only
+        run: |
+          mkdir -p out
+          git archive --format=tar.gz --prefix=blofy-relay-qa/ -o out/blofy-relay-qa.tar.gz HEAD isolated-stream
+          git rev-parse HEAD > out/COMMIT.txt
+          (cd out && sha256sum blofy-relay-qa.tar.gz > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blofy-relay-host-qa
+          path: out/
+          retention-days: 7
