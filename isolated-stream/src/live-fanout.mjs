@@ -15,7 +15,7 @@ export function createLiveFanout({
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
   lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
-  maxViewerQueueBytes=2*1024*1024,acquireIngressHold=createRelayIngressHold()
+  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -31,6 +31,7 @@ export function createLiveFanout({
        initialTransientRetries>2||
      !Number.isInteger(maxViewerQueueBytes)||maxViewerQueueBytes<512*1024||
        maxViewerQueueBytes>4*1024*1024||
+     !Number.isInteger(soleViewerPaceMs)||soleViewerPaceMs<0||soleViewerPaceMs>2000||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
        lateJoinReplayBytes>1024*1024||
      !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
@@ -262,7 +263,7 @@ export function createLiveFanout({
   // Never slow healthy peers: as soon as another live viewer joins, resume
   // normal isolation. Bound waiting and retain the same strict queue cap.
   async function paceSoleViewer(row,bytes){
-    const deadline=performance.now()+2000;
+    const deadline=performance.now()+soleViewerPaceMs;
     while(!row.controller.signal.aborted&&feeds.get(row.key)===row&&row.viewers.size===1){
       const viewer=row.viewers.values().next().value;
       if(viewer.destroyed||viewer.writableEnded||viewer.writableLength+bytes<=maxViewerQueueBytes)return;
@@ -277,7 +278,7 @@ export function createLiveFanout({
     for(let offset=0;offset<chunk.length;offset+=sliceBytes){
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
       const size=Math.min(sliceBytes,chunk.length-offset);
-      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes){
+      if(soleViewerPaceMs>0&&row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes){
         const started=performance.now();
         await paceSoleViewer(row,size);
         const ms=Math.max(0,Math.round(performance.now()-started));
@@ -793,7 +794,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,
+    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
