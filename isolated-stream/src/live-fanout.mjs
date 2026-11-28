@@ -6,6 +6,15 @@ import {setTimeout as sleep,setImmediate as yieldIo} from 'node:timers/promises'
 import {assertPublicMediaUrl} from './relay-guard.mjs';
 import {createTsAudioInspector} from './ts-audio-inspector.mjs';
 import {createRelayIngressHold} from './engine-ingress-hold.mjs';
+import {runLiveIngressSession} from './live-ingress-session.mjs';
+import {createLiveTsClockMonitor} from './live-ts-clock-monitor.mjs';
+
+// Faster first retry only for clean EOF after sustained source progress.
+// Never change denial handling, sequential release, or the retry budget.
+export function liveRecoveryDelayMs({retryNumber,cleanEof=false,sustained=false}){
+  if(retryNumber===1&&cleanEof&&sustained)return 100;
+  return Math.min(2000,250*Math.pow(2,retryNumber-1));
+}
 
 export function createLiveFanout({
   fetchImpl=fetch,lookup,maxFeeds=8,maxViewersPerFeed=128,maxTotalViewers=maxFeeds*maxViewersPerFeed,
@@ -15,7 +24,7 @@ export function createLiveFanout({
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
   lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
-  maxViewerQueueBytes=2*1024*1024,acquireIngressHold=createRelayIngressHold()
+  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,independentIngress=false,ingressMaxDeliveryAgeMs=0,acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -31,6 +40,8 @@ export function createLiveFanout({
        initialTransientRetries>2||
      !Number.isInteger(maxViewerQueueBytes)||maxViewerQueueBytes<512*1024||
        maxViewerQueueBytes>4*1024*1024||
+     !Number.isInteger(soleViewerPaceMs)||soleViewerPaceMs<0||soleViewerPaceMs>2000||
+     !Number.isInteger(ingressMaxDeliveryAgeMs)||ingressMaxDeliveryAgeMs<0||ingressMaxDeliveryAgeMs>30000||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
        lateJoinReplayBytes>1024*1024||
      !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
@@ -94,6 +105,9 @@ export function createLiveFanout({
     sourceBytesReceived:0,viewerBytesQueued:0,viewersAccepted:0,
     peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
+    sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
+    ingressQueuePeakBytes:0,ingressQueueFullCount:0,ingressStaleRetirements:0,ingressMaxObservedDeliveryAgeMs:0,
+    tsClockSamples:0,tsClockBackwards:0,tsClockLargeForward:0,tsClockDiscontinuities:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
   // Fixed allowlist of diagnostic categories. Never report upstream URL,
@@ -101,7 +115,7 @@ export function createLiveFanout({
   const failureReasons=Object.create(null);
   const allowedReasons=new Set(['provider_denied','provider_not_media',
     'provider_not_ts','provider_unavailable','fanout_upstream_ended',
-    'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
+    'fanout_read_idle_timeout','fanout_ingress_delivery_stale','relay_private_origin','relay_origin_unresolved',
     'provider_redirect_denied','relay_bad_origin']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   function admittedRetryAfterMs(header){
@@ -207,6 +221,20 @@ export function createLiveFanout({
   }
   function deliver(row,chunk){
     row.lastMediaAt=clock();
+    // QA only: observe a bounded initial sample of each upstream session.
+    // Never modify transport packets or use diagnostics to reject media.
+    if(row.clockMonitor&&row.clockBudget>0){
+      try{
+        const before=row.clockMonitor.stats();
+        const n=Math.min(chunk.length,row.clockBudget);
+        row.clockMonitor.push(chunk.subarray(0,n));row.clockBudget-=n;
+        const after=row.clockMonitor.stats();
+        counters.tsClockSamples+=after.clockSamples-before.clockSamples;
+        counters.tsClockBackwards+=after.backwards-before.backwards;
+        counters.tsClockLargeForward+=after.largeForward-before.largeForward;
+        counters.tsClockDiscontinuities+=after.declaredDiscontinuities-before.declaredDiscontinuities;
+      }catch{row.clockMonitor=null;row.clockBudget=0;}
+    }
     // Parse only in-flight MPEG-TS metadata, with a strict memory/CPU cap.
     // Never decode, change a byte, or open an extra connection to the provider.
     if(row.trackInspector&&!row.trackBudgetComplete){
@@ -261,7 +289,7 @@ export function createLiveFanout({
   // Never slow healthy peers: as soon as another live viewer joins, resume
   // normal isolation. Bound waiting and retain the same strict queue cap.
   async function paceSoleViewer(row,bytes){
-    const deadline=performance.now()+2000;
+    const deadline=performance.now()+soleViewerPaceMs;
     while(!row.controller.signal.aborted&&feeds.get(row.key)===row&&row.viewers.size===1){
       const viewer=row.viewers.values().next().value;
       if(viewer.destroyed||viewer.writableEnded||viewer.writableLength+bytes<=maxViewerQueueBytes)return;
@@ -276,8 +304,14 @@ export function createLiveFanout({
     for(let offset=0;offset<chunk.length;offset+=sliceBytes){
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
       const size=Math.min(sliceBytes,chunk.length-offset);
-      if(row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes)
+      if(soleViewerPaceMs>0&&row.viewers.size===1&&row.viewers.values().next().value.writableLength+size>maxViewerQueueBytes){
+        const started=performance.now();
         await paceSoleViewer(row,size);
+        const ms=Math.max(0,Math.round(performance.now()-started));
+        counters.downstreamPaceCount++;counters.downstreamPaceMs+=ms;
+        counters.maxDownstreamPaceMs=Math.max(counters.maxDownstreamPaceMs,ms);
+        row.downstreamPaceMs+=ms;
+      }
       if(row.controller.signal.aborted||feeds.get(row.key)!==row)return;
       deliver(row,chunk.length<=sliceBytes?chunk:Buffer.from(chunk.subarray(offset,offset+size)));
       if(offset+size<chunk.length)await yieldIo();
@@ -362,6 +396,7 @@ export function createLiveFanout({
       }
       while(!row.controller.signal.aborted&&row.viewers.size){
         let reader=null,response=null,retry=false,firstMediaAt=null,lastMediaAt=null;
+        let firstSourceAt=null,lastSourceAt=null,cleanEof=false,sustained=false;
         const attemptController=new AbortController();
         let releaseStarted=null;
         const beginRelease=()=>{
@@ -453,6 +488,8 @@ export function createLiveFanout({
           // program/codec after a permitted reconnect. Evidence is scoped
           // to current publisher only, not the previously connected origin.
           row.trackInspector=createTsAudioInspector();
+          row.clockMonitor=independentIngress?createLiveTsClockMonitor():null;
+          row.clockBudget=independentIngress?8*1024*1024:0;
           row.trackInspectedAt=null;
           row.trackBudgetComplete=false;
           // Never replay bytes from a previous provider session into a new
@@ -474,21 +511,55 @@ export function createLiveFanout({
               'referrer-policy':'no-referrer','x-frame-options':'DENY',
               'x-content-type-options':'nosniff'});
           }
-          firstMediaAt=lastMediaAt=clock();
+          firstMediaAt=lastMediaAt=firstSourceAt=lastSourceAt=clock();
           if(!everDelivered)recordLatency('startup',row.admittedAt);
           else if(row.lastMediaAt!==null)recordLatency('recovery',row.lastMediaAt);
-          await deliverBurst(row,Buffer.from(first.value));
-          everDelivered=true;
-          while(!row.controller.signal.aborted){
-            const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
-            if(part.done){
-              if(row.viewers.size)throw Error('fanout_upstream_ended');
-              break;
+          if(independentIngress){
+            let previousFull=0;
+            const result=await runLiveIngressSession({
+              first:first.value,signal:row.controller.signal,stopRead:stopAttempt,
+              maxDeliveryAgeMs:ingressMaxDeliveryAgeMs,
+              onDeliveryAge:age=>{
+                const ms=Math.round(age);
+                row.ingressMaxObservedDeliveryAgeMs=Math.max(row.ingressMaxObservedDeliveryAgeMs,ms);
+                counters.ingressMaxObservedDeliveryAgeMs=Math.max(counters.ingressMaxObservedDeliveryAgeMs,ms);
+              },
+              read:()=>nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt),
+              onRead:n=>{lastSourceAt=row.lastSourceReadAt=clock();counters.sourceReadBytes+=n;
+                if(lastSourceAt-firstSourceAt>=8000)cooldowns.delete(row.key);},
+              onQueue:s=>{
+                counters.ingressQueuePeakBytes=Math.max(counters.ingressQueuePeakBytes,s.peakBytes);
+                counters.ingressQueueFullCount+=s.fullCount-previousFull;previousFull=s.fullCount;
+              },
+              deliver:async chunk=>{
+                await deliverBurst(row,Buffer.from(chunk));
+                if(row.controller.signal.aborted)return;
+                lastMediaAt=clock();everDelivered=true;
+              }
+            });
+            if(result.cleanEof&&row.viewers.size&&!row.controller.signal.aborted){
+              counters.sourceEofWhileViewing++;row.sourceEofs++;
+              throw Error('fanout_upstream_ended');
             }
-            if(part.value?.length){
-              lastMediaAt=clock();
-              await deliverBurst(row,Buffer.from(part.value));
-              if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+          }else{
+            row.lastSourceReadAt=clock();counters.sourceReadBytes+=first.value.byteLength;
+            await deliverBurst(row,Buffer.from(first.value));
+            everDelivered=true;
+            while(!row.controller.signal.aborted){
+              const part=await nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt);
+              if(part.done){
+                if(row.viewers.size){
+                  counters.sourceEofWhileViewing++;row.sourceEofs++;
+                  throw Error('fanout_upstream_ended');
+                }
+                break;
+              }
+              if(part.value?.length){
+                lastMediaAt=lastSourceAt=clock();row.lastSourceReadAt=lastSourceAt;
+                counters.sourceReadBytes+=part.value.byteLength;
+                await deliverBurst(row,Buffer.from(part.value));
+                if(lastMediaAt-firstMediaAt>=8000)cooldowns.delete(row.key);
+              }
             }
           }
           if(!row.viewers.size||row.controller.signal.aborted)break;
@@ -511,7 +582,9 @@ export function createLiveFanout({
             (transient.includes(reason)||reason==='fanout_upstream_ended');
           // Only a sustained interval of delivered media resets the retry budget.
           // Connection setup time and idle stalls are not healthy playback.
-          if(firstMediaAt!==null&&lastMediaAt-firstMediaAt>=8000)failedAttempts=0;
+          sustained=firstSourceAt!==null&&lastSourceAt-firstSourceAt>=8000;
+          cleanEof=reason==='fanout_upstream_ended';
+          if(sustained)failedAttempts=0;
           if(transientInitial){
             initialFailures++;retry=true;counters.initialRetries++;
           }else if(canReconnect&&failedAttempts<maxReconnectAttempts){
@@ -526,7 +599,11 @@ export function createLiveFanout({
           }else{
             if(canReconnect)counters.reconnectExhaustions++;
             if(row.viewers.size){
-              noteProviderFailure(row.key,row.providerRetryAfterMs);counters.sourceOutages++;
+              if(reason==='fanout_ingress_delivery_stale'){
+                counters.ingressStaleRetirements++;discardRecent(row);
+              }else{
+                noteProviderFailure(row.key,row.providerRetryAfterMs);counters.sourceOutages++;
+              }
               event(row,'failed',reason);
             }
             for(const viewer of row.viewers){
@@ -534,7 +611,12 @@ export function createLiveFanout({
                 viewer.writeHead(502,{'content-type':'application/json',
                   'cache-control':'no-store'});
                 viewer.end('{"ok":false,"code":"fanout_source_unavailable"}');
-              }else if(!viewer.destroyed)viewer.end();
+              }else if(!viewer.destroyed){
+                // A stale local queue is not clean EOF. Do not deliberately
+                // flush the remaining HTTP write buffer into a lagged player.
+                if(reason==='fanout_ingress_delivery_stale')viewer.destroy();
+                else viewer.end();
+              }
             }
           }
         }finally{
@@ -556,7 +638,7 @@ export function createLiveFanout({
         }
         if(!retry)break;
         const retryNumber=everDelivered?failedAttempts:initialFailures;
-        const delay=Math.min(2000,250*Math.pow(2,retryNumber-1));
+        const delay=liveRecoveryDelayMs({retryNumber,cleanEof,sustained});
         try{await sleep(delay,undefined,{signal:row.controller.signal});}
         catch(error){if(!row.controller.signal.aborted)throw error;break;}
       }
@@ -720,6 +802,8 @@ export function createLiveFanout({
         // Numbers are temporary and reset on every deployment; the operator
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
+        lastSourceReadAt:null,sourceEofs:0,downstreamPaceMs:0,clockMonitor:null,clockBudget:0,
+        ingressMaxObservedDeliveryAgeMs:0,
         state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
@@ -770,6 +854,10 @@ export function createLiveFanout({
     channels:[...feeds.values()].map(row=>({
       channel:row.channelNumber,state:row.state,viewers:row.viewers.size,
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
+      sourceEofs:row.sourceEofs,downstreamPaceMs:row.downstreamPaceMs,
+      tsClock:row.clockMonitor?.stats()??null,
+      ingressMaxObservedDeliveryAgeMs:row.ingressMaxObservedDeliveryAgeMs,
+      lastSourceReadAgeMs:row.lastSourceReadAt===null?null:Math.max(0,now-row.lastSourceReadAt),
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
       activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
       trackInspectedAt:row.trackInspectedAt,
@@ -778,7 +866,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,
+    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,independentIngress,ingressMaxDeliveryAgeMs,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,

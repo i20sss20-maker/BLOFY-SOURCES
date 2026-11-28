@@ -1,0 +1,27 @@
+name: LIVE decoded transport QA
+on:
+  pull_request:
+    paths:
+      - 'isolated-stream/**'
+      - '.github/workflows/live-decoded-transport-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  decoded-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install mandatory decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+      - name: Decode two generated local channels and verify PCR diagnostics
+        working-directory: isolated-stream
+        run: node --test test/live-fanout-decoded-media.test.mjs test/live-ts-clock-monitor.test.mjs
