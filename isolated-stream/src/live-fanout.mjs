@@ -24,7 +24,7 @@ export function createLiveFanout({
   reconnectOnUpstreamEnd=false,maxReconnectAttempts=3,
   initialTransientRetries=0,redirectSourceOrigin='',onEvent=()=>{},
   lateJoinReplayBytes=256*1024,lateJoinReplayAgeMs=3000,
-  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,independentIngress=false,acquireIngressHold=createRelayIngressHold()
+  maxViewerQueueBytes=2*1024*1024,soleViewerPaceMs=2000,independentIngress=false,ingressMaxDeliveryAgeMs=0,acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(maxFeeds)||maxFeeds<1||maxFeeds>64||
      !Number.isInteger(maxViewersPerFeed)||maxViewersPerFeed<1||maxViewersPerFeed>512||
@@ -41,6 +41,7 @@ export function createLiveFanout({
      !Number.isInteger(maxViewerQueueBytes)||maxViewerQueueBytes<512*1024||
        maxViewerQueueBytes>4*1024*1024||
      !Number.isInteger(soleViewerPaceMs)||soleViewerPaceMs<0||soleViewerPaceMs>2000||
+     !Number.isInteger(ingressMaxDeliveryAgeMs)||ingressMaxDeliveryAgeMs<0||ingressMaxDeliveryAgeMs>30000||
      !Number.isInteger(lateJoinReplayBytes)||lateJoinReplayBytes<0||
        lateJoinReplayBytes>1024*1024||
      !Number.isInteger(lateJoinReplayAgeMs)||lateJoinReplayAgeMs<100||lateJoinReplayAgeMs>15000)
@@ -105,7 +106,7 @@ export function createLiveFanout({
     peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
-    ingressQueuePeakBytes:0,ingressQueueFullCount:0,
+    ingressQueuePeakBytes:0,ingressQueueFullCount:0,ingressStaleRetirements:0,
     tsClockSamples:0,tsClockBackwards:0,tsClockLargeForward:0,tsClockDiscontinuities:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
@@ -114,7 +115,7 @@ export function createLiveFanout({
   const failureReasons=Object.create(null);
   const allowedReasons=new Set(['provider_denied','provider_not_media',
     'provider_not_ts','provider_unavailable','fanout_upstream_ended',
-    'fanout_read_idle_timeout','relay_private_origin','relay_origin_unresolved',
+    'fanout_read_idle_timeout','fanout_ingress_delivery_stale','relay_private_origin','relay_origin_unresolved',
     'provider_redirect_denied','relay_bad_origin']);
   const keyOf=url=>createHash('sha256').update(url).digest('hex');
   function admittedRetryAfterMs(header){
@@ -517,6 +518,7 @@ export function createLiveFanout({
             let previousFull=0;
             const result=await runLiveIngressSession({
               first:first.value,signal:row.controller.signal,stopRead:stopAttempt,
+              maxDeliveryAgeMs:ingressMaxDeliveryAgeMs,
               read:()=>nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt),
               onRead:n=>{lastSourceAt=row.lastSourceReadAt=clock();counters.sourceReadBytes+=n;
                 if(lastSourceAt-firstSourceAt>=8000)cooldowns.delete(row.key);},
@@ -592,7 +594,11 @@ export function createLiveFanout({
           }else{
             if(canReconnect)counters.reconnectExhaustions++;
             if(row.viewers.size){
-              noteProviderFailure(row.key,row.providerRetryAfterMs);counters.sourceOutages++;
+              if(reason==='fanout_ingress_delivery_stale'){
+                counters.ingressStaleRetirements++;discardRecent(row);
+              }else{
+                noteProviderFailure(row.key,row.providerRetryAfterMs);counters.sourceOutages++;
+              }
               event(row,'failed',reason);
             }
             for(const viewer of row.viewers){
@@ -848,7 +854,7 @@ export function createLiveFanout({
         hasAudioStream:false,decodedAudio:false}
     })),
     events:recentEvents.map(item=>({...item})),
-    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,independentIngress,
+    maxFeeds,maxViewersPerFeed,maxTotalViewers,maxViewerQueueBytes,soleViewerPaceMs,independentIngress,ingressMaxDeliveryAgeMs,
     pendingSourceHandoffs:pendingSourceReleases.size,
     lateJoinReplayLimitBytes:lateJoinReplayBytes,
     lateJoinReplayAgeMs,
