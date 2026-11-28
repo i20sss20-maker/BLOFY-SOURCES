@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import {once,EventEmitter} from 'node:events';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {createLiveFanout} from '../src/live-fanout.mjs';
+import {createLiveFanout,liveRecoveryDelayMs} from '../src/live-fanout.mjs';
 
 const packet=mark=>{
   const b=Buffer.alloc(188*3,mark);
@@ -116,4 +116,13 @@ test('QA zero pacing isolates an overloaded viewer without changing source admis
     assert.equal(relay.stats().sourceLimitRejections,0);
     assert.deepEqual(calls,{a:1,b:1});
   }finally{relay.close();}
+});
+
+test('fast recovery is limited to first clean EOF after sustained source reads',()=>{
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:true,sustained:true}),100);
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:true,sustained:false}),250);
+  assert.equal(liveRecoveryDelayMs({retryNumber:1,cleanEof:false,sustained:true}),250);
+  assert.equal(liveRecoveryDelayMs({retryNumber:2,cleanEof:true,sustained:true}),500);
+  assert.equal(liveRecoveryDelayMs({retryNumber:3,cleanEof:true,sustained:false}),1000);
+  assert.equal(liveRecoveryDelayMs({retryNumber:5,cleanEof:false,sustained:false}),2000);
 });
