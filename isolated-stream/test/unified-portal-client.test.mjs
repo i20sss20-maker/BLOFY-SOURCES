@@ -1,0 +1,306 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {renderOperatorDashboard} from '../src/operator-unified-view.mjs';
+import {createUnifiedPortalClient} from '../src/unified-portal-client.mjs';
+
+const secret='railway-fixed-bridge-key-with-more-than-forty-characters';
+test('unified operator UI contains real source management, no legacy redirect or demo controls',()=>{
+  const html=renderOperatorDashboard('nonce123');
+  for(const item of ['id="source-form"','id="source-list"','id="account-list"',
+    'id="library-results"','id="stream-probe"','id="diagnostic-media"'])
+    assert.ok(html.includes(item),item);
+  // All subscription-code operations stay within the STREAM operator console.
+  // The protected backend bridge is internal; there must be no offsite admin link.
+  assert.equal(html.includes("location.href='/sources-admin'"),false);
+  assert.equal(html.includes('href="https://blofyplayer.com/sources-admin#xtream"'),false);
+  assert.ok(html.includes('id="codes-dialog"'));
+  assert.ok(html.includes('المميزات وإدارة الكود'));
+  assert.equal(html.includes('/admin#'),false);
+  assert.equal(html.includes('demo-start'),false);
+  assert.equal(html.includes('blofy-demo'),false);
+  const script=html.match(/<script nonce="nonce123">([\s\S]*?)<\/script>/);
+  assert.ok(script);
+  assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+test('unconfigured bridge refuses all source mutations without outbound requests',async()=>{
+  const client=createUnifiedPortalClient();
+  const result=await client.addSource({name:'source',username:'user',password:'secret'});
+  assert.equal(result.status,503);
+});
+test('bridge calls only the pinned authoritative HTTPS host and redacts auth to browser',async()=>{
+  const seen=[];
+  const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+    seen.push({url:String(input),header:init.headers.authorization,body:init.body});
+    return new Response(JSON.stringify({ok:true,sources:[],totals:{servers:0}}),{
+      status:200,headers:{'content-type':'application/json'}
+    });
+  }});
+  const reply=await client.overview();
+  assert.equal(reply.status,200);
+  await client.catalog({type:'live',q:'News',serverId:''});
+  assert.ok(seen.every(x=>x.url.startsWith('https://blofy-activation-portal-production.up.railway.app/internal/blofy-stream/')));
+  assert.ok(seen.every(x=>x.header==='Bearer '+secret));
+  assert.equal(JSON.stringify(reply.body).includes(secret),false);
+});
+test('arbitrary account or source actions cannot be sent to authoritative backend',async()=>{
+  const client=createUnifiedPortalClient({secret});
+  assert.equal((await client.sourceAction('invalid','test',{})).status,400);
+  assert.equal((await client.sourceAction('550e8400-e29b-41d4-a716-446655440000','delete',{})).status,400);
+  assert.equal((await client.accountAction('550e8400-e29b-41d4-a716-446655440000','reset')).status,400);
+});
+
+test('distributor customer directory route reaches the protected backend (regression: route_denied)',async()=>{
+ const calls=[];
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+  calls.push({path:new URL(input).pathname,method:init.method,body:JSON.parse(init.body)});
+  return new Response(JSON.stringify({ok:true,items:[{name:'Store client',phone:'966555555555',subscriptions:2}]}),{
+   status:200,headers:{'content-type':'application/json'}
+  });
+ }});
+ const result=await client.distributorRequest('clients',{sessionToken:'session',q:'555'});
+ assert.equal(result.status,200);
+ assert.equal(result.body.items[0].subscriptions,2);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].path,'/internal/blofy-stream/distributor/clients');
+ assert.equal(calls[0].method,'POST');
+ assert.equal(calls[0].body.q,'555');
+ assert.equal((await client.distributorRequest('sources',{sessionToken:'session'})).status,400);
+});
+
+test('operator non-distributor modules expose independent read-only health checks',()=>{
+ const html=renderOperatorDashboard('checknonce');
+ for(const id of ['home-checks-panel','home-check-all','check-api','check-sources',
+  'check-media','check-health','check-security','home-checks-time'])
+  assert.ok(html.includes('id="'+id+'"'),'missing '+id);
+ assert.match(html,/api\("overview"\),api\("state"\),api\("auto-health"\),api\("security"\)/);
+ assert.match(html,/state\.live\.overview\?"متصل":"آخر بيانات معروفة"/);
+ assert.match(html,/if\(current!==state\.refreshVersion\)return/);
+ assert.match(html,/لم تُحذف آخر البيانات المعروفة/);
+ const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
+ assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+test('operator catalog and code/account pagination cannot mix stale responses or invent host',()=>{
+ const html=renderOperatorDashboard('checknonce');
+ assert.match(html,/id="accounts-host-value"/);
+ assert.match(html,/bfy\.up\.railway\.app/);
+ assert.match(html,/state\.libEpoch/);
+ assert.match(html,/if\(requestEpoch!==state\.libEpoch\)return/);
+ assert.match(html,/state\.libLoading/);
+ assert.match(html,/if\(current!==state\.codesEpoch\)return/);
+ assert.match(html,/if\(current!==state\.accountsEpoch\)return/);
+ assert.match(html,/var seen=new Set\(state\.codes\.map/);
+ assert.match(html,/var seen=new Set\(state\.accounts\.map/);
+ assert.match(html,/state\.accountHost\|\|/);
+ const script=html.match(/<script nonce="checknonce">([\s\S]*?)<\/script>/);
+ assert.ok(script);assert.doesNotThrow(()=>new vm.Script(script[1]));
+});
+
+
+test('season health is protected read-only and SHA audit requires explicit owner action',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(input,init)=>{
+   seen.push({path:new URL(input).pathname,method:init.method,
+    auth:init.headers.authorization,body:init.body});
+   return new Response(JSON.stringify({ok:true,alerts:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const data=await client.contentHubSeasonHealth();
+ assert.equal(data.status,200);
+ assert.equal(seen[0].path,'/internal/blofy-stream/content-hub/seasons/health');
+ assert.equal(seen[0].method,'GET');
+ const bad=await client.contentHubSeasonAudit({
+  runId:'saleh_episode_127434_20261114',confirmed:false});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,1);
+ const runId='saleh_episode_127434_20261114';
+ const ok=await client.contentHubSeasonAudit({runId,confirmed:true});
+ assert.equal(ok.status,200);
+ assert.equal(seen[1].method,'POST');
+ assert.equal(seen[1].path,'/internal/blofy-stream/content-hub/seasons/audit');
+ assert.equal(seen[1].auth,'Bearer '+secret);
+ assert.deepEqual(JSON.parse(seen[1].body),{runId,confirmed:true});
+});
+
+
+test('manual season queue budget and dual-S3 read remain on the signed fixed bridge',async()=>{
+ const seen=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   seen.push({url:String(url),method:init.method,
+    header:init.headers.authorization,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,code:'test'}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const bad=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:999});
+ assert.equal(bad.status,400);
+ assert.equal(seen.length,0);
+ const good=await client.contentHubSeasonStart({
+  confirmed:true,licensedStorage:true,sourceIdle:true,maxBatches:12});
+ assert.equal(good.status,200);
+ assert.equal(seen[0].body.maxBatches,12);
+ assert.equal(seen[0].method,'POST');
+ const runIds=['saleh_episode_127434_20261114',
+  'season_0123456789abcdef01234567'];
+ assert.equal((await client.contentHubConcurrentRead({
+  runIds:[runIds[0],runIds[0]],confirmed:true})).status,400);
+ assert.equal(seen.length,1);
+ const read=await client.contentHubConcurrentRead({
+  runIds,confirmed:true});
+ assert.equal(read.status,200);
+ assert.equal(seen[1].url,'https://blofy-activation-portal-production.up.railway.app'+
+  '/internal/blofy-stream/content-hub/seasons/concurrent-read');
+ assert.deepEqual(seen[1].body,{runIds,confirmed:true});
+ assert.equal(seen[1].header,'Bearer '+secret);
+});
+
+
+test('manual failed-episode requeue requires source-idle and owner rights; never starts copy',async()=>{
+ const observed=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   observed.push({url,method:init.method,body:JSON.parse(init.body||'{}')});
+   return new Response(JSON.stringify({ok:true,automaticStart:false}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ const runId='season_0123456789abcdef01234567';
+ const denied=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:false});
+ assert.equal(denied.status,400);
+ assert.equal(observed.length,0);
+ const result=await client.contentHubSeasonRetry({runId,
+  confirmed:true,licensedStorage:true,sourceIdle:true});
+ assert.equal(result.status,200);
+ assert.equal(result.body.automaticStart,false);
+ assert.equal(observed.length,1);
+ assert.equal(observed[0].method,'POST');
+ assert.equal(new URL(observed[0].url).pathname,
+  '/internal/blofy-stream/content-hub/seasons/retry');
+ assert.deepEqual(observed[0].body,{runId,confirmed:true,
+  licensedStorage:true,sourceIdle:true});
+});
+
+
+test('paged season queue never permits unbounded query or malformed page',async()=>{
+ const calls=[],client=createUnifiedPortalClient({secret,
+  fetchImpl:async(url,init)=>{
+   calls.push({path:new URL(url).pathname,method:init.method,
+    auth:init.headers.authorization});
+   return new Response(JSON.stringify({ok:true,page:{number:2,pages:4,
+     pageSize:50,totalEpisodes:180},episodes:[]}),{
+    status:200,headers:{'content-type':'application/json'}});
+  }});
+ for(const page of [0,-1,20001,'2?token=bad',0.5]){
+  const bad=await client.contentHubSeasonQueuePage(page);
+  assert.equal(bad.status,400);
+ }
+ assert.equal(calls.length,0);
+ const result=await client.contentHubSeasonQueuePage(2);
+ assert.equal(result.status,200);
+ assert.equal(result.body.page.totalEpisodes,180);
+ assert.deepEqual(calls,[{path:'/internal/blofy-stream/content-hub/seasons/queue/status/all/page/2',
+  method:'GET',auth:'Bearer '+secret}]);
+ const failed=await client.contentHubSeasonQueuePage(3,{state:'failed'});
+ assert.equal(failed.status,200);
+ assert.equal(calls[1].path,
+  '/internal/blofy-stream/content-hub/seasons/queue/status/failed/page/3');
+ const invalid=await client.contentHubSeasonQueuePage(1,{state:'verified%2Fanything'});
+ assert.equal(invalid.status,400);
+ assert.equal(calls.length,2);
+});
+
+test('all existing distributor dashboard commands reach the fixed authenticated bridge',async()=>{
+ const calls=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{
+  calls.push({path:new URL(input).pathname,method:init.method,body:JSON.parse(init.body)});
+  return new Response(JSON.stringify({ok:true}),{status:200});
+ }});
+ for(const command of ['change-password','rotate-xtream','library-categories','organize-bulk','library-preview']){
+  assert.equal((await client.distributorRequest(command,{sessionToken:'scoped-test'})).status,200);
+  assert.deepEqual(calls.at(-1),{path:'/internal/blofy-stream/distributor/'+command,method:'POST',body:{sessionToken:'scoped-test'}});
+ }
+ const before=calls.length;for(const command of ['sources','../distributors','delete-source'])assert.equal((await client.distributorRequest(command,{})).status,400);
+ assert.equal(calls.length,before);
+});
+
+test('owner permission and report routes are fixed and never exposed through distributor bridge',async()=>{
+ const seen=[];const client=createUnifiedPortalClient({secret,fetchImpl:async(input,init)=>{seen.push(new URL(input).pathname);return new Response(JSON.stringify({ok:true}),{status:200})}});
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ for(const kind of ['permissions','report']){assert.equal((await client.distributorAdminAction(id,kind,{})).status,200);assert.equal(seen.at(-1),'/internal/blofy-stream/distributors/'+id+'/'+kind);assert.equal((await client.distributorRequest(kind,{})).status,400)}
+ assert.equal(seen.length,2);
+});
+
+test('identical concurrent owner catalog reads share one upstream call, without stale cache',async()=>{
+ let calls=0,release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>{
+  calls++;await gate;
+  return new Response(JSON.stringify({ok:true,items:[{id:1}]}),{status:200});
+ }});
+ const a=client.catalog({type:'movie',q:'same'});
+ const b=client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,1);
+ release();
+ const [x,y]=await Promise.all([a,b]);
+ assert.deepEqual(x,y);
+ x.body.items[0].id=99;
+ assert.equal(y.body.items[0].id,1);
+ await client.catalog({type:'movie',q:'same'});
+ assert.equal(calls,2,'completed results must not be cached');
+});
+test('catalog coalescing separates query scope and retries after failures',async()=>{
+ const calls=[];
+ let release;
+ const gate=new Promise(resolve=>release=resolve);
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url)=>{
+  calls.push(String(url));await gate;
+  return new Response(JSON.stringify({ok:false}),{status:503});
+ }});
+ const requests=[client.catalog({type:'live',offset:0}),client.catalog({type:'live',offset:20}),
+  client.catalog({type:'movie',offset:0}),client.catalog({type:'live',offset:0})];
+ assert.equal(calls.length,3);
+ release();
+ const results=await Promise.all(requests);
+ assert.ok(results.every(r=>r.status===503));
+ await client.catalog({type:'live',offset:0});
+ assert.equal(calls.length,4);
+});
+
+test('chunked oversized bridge responses are rejected before the full body is read',async()=>{
+ let pulls=0,cancelled=false,signal;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async(url,init)=>{
+  signal=init.signal;
+  return new Response(new ReadableStream({
+   pull(controller){pulls++;controller.enqueue(new Uint8Array(256001));},
+   cancel(){cancelled=true}
+  },{highWaterMark:0}));
+ }});
+ const result=await client.overview();
+ assert.equal(result.status,502);
+ assert.equal(result.body.code,'unified_bridge_large_response');
+ assert.equal(pulls,2);
+ assert.equal(signal.aborted,true);
+ assert.equal(cancelled,true);
+});
+test('bridge rejects oversized declared lengths and redirects without reading body',async()=>{
+ for(const [status,headers,code] of [
+  [200,{'content-length':'512001'},'unified_bridge_large_response'],
+  [302,{location:'https://example.test/'},'unified_bridge_redirect_denied']
+ ]){
+  let reads=0,cancelled=false;
+  const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+   pull(){reads++},cancel(){cancelled=true}
+  },{highWaterMark:0}),{status,headers})});
+  const result=await client.overview();
+  assert.equal(result.body.code,code);
+  assert.equal(reads,0);
+  assert.equal(cancelled,true);
+ }
+});
+test('bridge preserves split UTF-8 Arabic metadata in a valid bounded JSON response',async()=>{
+ const expected={ok:true,name:'القنوات والأفلام'};
+ const bytes=new TextEncoder().encode(JSON.stringify(expected));let index=0;
+ const client=createUnifiedPortalClient({secret,fetchImpl:async()=>new Response(new ReadableStream({
+  pull(controller){if(index===bytes.length)controller.close();else controller.enqueue(bytes.slice(index,index+=1));}
+ }))});
+ const result=await client.overview();
+ assert.equal(result.status,200);assert.deepEqual(result.body,expected);
+});

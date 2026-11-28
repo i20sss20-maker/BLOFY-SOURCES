@@ -1,0 +1,20 @@
+name: BLOFY CONNECT live synthetic smoke
+on:
+  pull_request:
+    paths:
+      - 'isolated-stream/scripts/connect-live-smoke.mjs'
+      - '.github/workflows/connect-live-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-pairing:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/connect-live-smoke-20261124'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node isolated-stream/scripts/connect-live-smoke.mjs
