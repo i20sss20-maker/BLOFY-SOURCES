@@ -303,6 +303,8 @@ export function createStreamServer({
           downstreamPaceCount:f.downstreamPaceCount,downstreamPaceMs:f.downstreamPaceMs,
           maxDownstreamPaceMs:f.maxDownstreamPaceMs,soleViewerPaceMs:f.soleViewerPaceMs,independentIngress:f.independentIngress,
           ingressQueuePeakBytes:f.ingressQueuePeakBytes,ingressQueueFullCount:f.ingressQueueFullCount,
+          tsClockSamples:f.tsClockSamples,tsClockBackwards:f.tsClockBackwards,
+          tsClockLargeForward:f.tsClockLargeForward,tsClockDiscontinuities:f.tsClockDiscontinuities,
           viewerBytesQueued:f.viewerBytesQueued,
           viewersAccepted:f.viewersAccepted,
           // Authenticated aggregate timings only; null without observations.
