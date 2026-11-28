@@ -68,7 +68,7 @@ export function createRelayBroker({
   sharedToken='',fetchImpl=fetch,lookup,clock=Date.now,issueToken=()=>randomBytes(24).toString('hex'),
   maxTickets=MAX_TICKETS,redirectSourceOrigin='',firstByteTimeoutMs=12000,
   sharedLiveEnabled=false,sharedLiveMaxFeeds=8,sharedLiveMaxViewersPerFeed=128,sharedLiveMaxTotalViewers=sharedLiveMaxFeeds*sharedLiveMaxViewersPerFeed,maxIssuesPerSecond=256,maxIssuesPerMinute=2400,
-  sharedLiveSoleViewerPaceMs=2000,sharedLiveIndependentIngress=false,onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold()
+  sharedLiveSoleViewerPaceMs=2000,sharedLiveIndependentIngress=false,sharedLiveIngressMaxDeliveryAgeMs=0,onSharedLiveEvent=()=>{},allowIngress=createRelayIngressFence(),acquireIngressHold=createRelayIngressHold()
 }={}){
   if(!Number.isInteger(firstByteTimeoutMs)||firstByteTimeoutMs<10||firstByteTimeoutMs>12000)
     throw new Error('relay_first_byte_timeout_invalid');
@@ -142,7 +142,7 @@ export function createRelayBroker({
   const directControllers=new Set();
   const rejectDrain=res=>respond(res,503,{ok:false,code:'relay_draining'},{'retry-after':'3'});
   const fanout=createLiveFanout({fetchImpl,lookup,firstByteTimeoutMs,maxFeeds:sharedLiveMaxFeeds,maxViewersPerFeed:sharedLiveMaxViewersPerFeed,maxTotalViewers:sharedLiveMaxTotalViewers,
-    redirectSourceOrigin,soleViewerPaceMs:sharedLiveSoleViewerPaceMs,independentIngress:sharedLiveIndependentIngress,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
+    redirectSourceOrigin,soleViewerPaceMs:sharedLiveSoleViewerPaceMs,independentIngress:sharedLiveIndependentIngress,ingressMaxDeliveryAgeMs:sharedLiveIngressMaxDeliveryAgeMs,reconnectOnUpstreamEnd:sharedLiveEnabled===true,
     initialTransientRetries:sharedLiveEnabled===true?1:0,
     onEvent:onSharedLiveEvent,acquireIngressHold:acquireTrackedHold});
   const enabled=typeof sharedToken==='string'&&sharedToken.length>=32;
