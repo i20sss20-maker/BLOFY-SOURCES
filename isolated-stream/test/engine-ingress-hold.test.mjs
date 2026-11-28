@@ -110,3 +110,16 @@ test('relay shutdown waits for acknowledgement after retiring the feed',async()=
   finishClose(false);srv.closeAllConnections();await new Promise(r=>srv.close(r));
  }
 });
+
+test('engine ownership uses distinct admission token for enter and close, never falls back',async()=>{
+ const env={BLOFY_RELAY_INGRESS_HOLDS:'1',BLOFY_RELAY_ENGINE_OWNERSHIP:'1',
+  BLOFY_STREAM_RELAY_SHARED_TOKEN:'s'.repeat(40),BLOFY_RELAY_ENGINE_HOLD_TOKEN:'h'.repeat(40)};
+ const calls=[];
+ const fetchImpl=async(url,opt)=>{calls.push({auth:opt.headers.authorization,operation:JSON.parse(opt.body).operation});return new Response('{"ok":true}')};
+ for(const patch of [{BLOFY_RELAY_ENGINE_HOLD_TOKEN:''},{BLOFY_RELAY_ENGINE_HOLD_TOKEN:env.BLOFY_STREAM_RELAY_SHARED_TOKEN},{BLOFY_RELAY_INGRESS_HOLDS:'0'}]){
+  assert.equal((await createRelayIngressHold({env:{...env,...patch},fetchImpl})()).ok,false);
+ }
+ assert.equal(calls.length,0);
+ const h=await createRelayIngressHold({env,fetchImpl})();assert.equal(h.ok,true);assert.equal(await h.close(),true);
+ assert.deepEqual(calls,['enter','close'].map(operation=>({auth:'Bearer '+env.BLOFY_RELAY_ENGINE_HOLD_TOKEN,operation})));
+});
