@@ -304,6 +304,7 @@ export function createStreamServer({
           maxDownstreamPaceMs:f.maxDownstreamPaceMs,soleViewerPaceMs:f.soleViewerPaceMs,independentIngress:f.independentIngress,
           ingressQueuePeakBytes:f.ingressQueuePeakBytes,ingressQueueFullCount:f.ingressQueueFullCount,
           ingressStaleRetirements:f.ingressStaleRetirements,ingressMaxDeliveryAgeMs:f.ingressMaxDeliveryAgeMs,
+          ingressMaxObservedDeliveryAgeMs:f.ingressMaxObservedDeliveryAgeMs,
           tsClockSamples:f.tsClockSamples,tsClockBackwards:f.tsClockBackwards,
           tsClockLargeForward:f.tsClockLargeForward,tsClockDiscontinuities:f.tsClockDiscontinuities,
           viewerBytesQueued:f.viewerBytesQueued,
