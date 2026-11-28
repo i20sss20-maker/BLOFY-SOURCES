@@ -5,9 +5,12 @@ import {createLiveIngressQueue} from './live-ingress-queue.mjs';
 // caller releases its existing upstream reservation. Never opens a socket.
 export async function runLiveIngressSession({
   first,read,deliver,signal,stopRead=()=>{},onRead=()=>{},onQueue=()=>{},
-  maxBytes=4*1024*1024,maxChunks=256
+  maxBytes=4*1024*1024,maxChunks=256,maxDeliveryAgeMs=0,clock=()=>performance.now()
 }){
+  if(!Number.isInteger(maxDeliveryAgeMs)||maxDeliveryAgeMs<0||maxDeliveryAgeMs>30000)
+    throw Error('ingress_delivery_age_invalid');
   const q=createLiveIngressQueue({maxBytes,maxChunks});
+  const arrivalTimes=[];
   let failure=null,cleanEof=false;
   const report=()=>onQueue(q.stats());
   const abort=error=>{
@@ -19,11 +22,13 @@ export async function runLiveIngressSession({
   if(signal?.aborted)onAbort();
   else signal?.addEventListener('abort',onAbort,{once:true});
   async function enqueue(value){
-    onRead(value.byteLength);
+    const receivedAt=clock();onRead(value.byteLength);
     // Split large native chunks to fit the configured queue. The producer
     // retains at most one original read chunk outside the queue budget.
     for(let i=0;i<value.byteLength;i+=Math.min(maxBytes,128*1024)){
       const n=Math.min(maxBytes,128*1024);
+      // Record arrival before any producer backpressure, not after enqueue.
+      arrivalTimes.push(receivedAt);
       await q.push(value.subarray(i,i+n));report();
     }
   }
@@ -46,6 +51,9 @@ export async function runLiveIngressSession({
         const chunk=await q.take();report();
         if(chunk===null)return;
         if(failure)throw failure;
+        const age=Math.max(0,clock()-arrivalTimes.shift());
+        if(maxDeliveryAgeMs>0&&age>maxDeliveryAgeMs)
+          throw Error('fanout_ingress_delivery_stale');
         await deliver(chunk);
       }
     }catch(error){abort(error)}
@@ -56,6 +64,6 @@ export async function runLiveIngressSession({
     return {cleanEof};
   }finally{
     signal?.removeEventListener('abort',onAbort);
-    q.abort();report();
+    q.abort();arrivalTimes.length=0;report();
   }
 }
