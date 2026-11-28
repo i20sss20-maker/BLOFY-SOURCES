@@ -298,6 +298,9 @@ export function createStreamServer({
           reconnectExhaustions:f.reconnectExhaustions,
           slowViewerDisconnects:f.slowViewerDisconnects,
           sourceBytesReceived:f.sourceBytesReceived,
+          sourceReadBytes:f.sourceReadBytes,sourceEofWhileViewing:f.sourceEofWhileViewing,
+          downstreamPaceCount:f.downstreamPaceCount,downstreamPaceMs:f.downstreamPaceMs,
+          maxDownstreamPaceMs:f.maxDownstreamPaceMs,
           viewerBytesQueued:f.viewerBytesQueued,
           viewersAccepted:f.viewersAccepted,
           // Authenticated aggregate timings only; null without observations.
