@@ -106,7 +106,7 @@ export function createLiveFanout({
     peakViewersOnOneFeed:0,viewerLimitRejections:0,totalViewerLimitRejections:0,peakTotalViewers:0,
     maxInputChunkBytes:0,maxQueuedAtSlowDisconnectBytes:0,
     sourceEofWhileViewing:0,sourceReadBytes:0,downstreamPaceCount:0,downstreamPaceMs:0,maxDownstreamPaceMs:0,
-    ingressQueuePeakBytes:0,ingressQueueFullCount:0,ingressStaleRetirements:0,
+    ingressQueuePeakBytes:0,ingressQueueFullCount:0,ingressStaleRetirements:0,ingressMaxObservedDeliveryAgeMs:0,
     tsClockSamples:0,tsClockBackwards:0,tsClockLargeForward:0,tsClockDiscontinuities:0,
     initialRetries:0,reconnectRecovered:0,sourceOutages:0,
     lateJoinReplays:0,lateJoinReplayBytes:0};
@@ -519,6 +519,11 @@ export function createLiveFanout({
             const result=await runLiveIngressSession({
               first:first.value,signal:row.controller.signal,stopRead:stopAttempt,
               maxDeliveryAgeMs:ingressMaxDeliveryAgeMs,
+              onDeliveryAge:age=>{
+                const ms=Math.round(age);
+                row.ingressMaxObservedDeliveryAgeMs=Math.max(row.ingressMaxObservedDeliveryAgeMs,ms);
+                counters.ingressMaxObservedDeliveryAgeMs=Math.max(counters.ingressMaxObservedDeliveryAgeMs,ms);
+              },
               read:()=>nextChunk(reader,readIdleTimeoutMs,attemptController,stopAttempt),
               onRead:n=>{lastSourceAt=row.lastSourceReadAt=clock();counters.sourceReadBytes+=n;
                 if(lastSourceAt-firstSourceAt>=8000)cooldowns.delete(row.key);},
@@ -606,7 +611,12 @@ export function createLiveFanout({
                 viewer.writeHead(502,{'content-type':'application/json',
                   'cache-control':'no-store'});
                 viewer.end('{"ok":false,"code":"fanout_source_unavailable"}');
-              }else if(!viewer.destroyed)viewer.end();
+              }else if(!viewer.destroyed){
+                // A stale local queue is not clean EOF. Do not deliberately
+                // flush the remaining HTTP write buffer into a lagged player.
+                if(reason==='fanout_ingress_delivery_stale')viewer.destroy();
+                else viewer.end();
+              }
             }
           }
         }finally{
@@ -793,6 +803,7 @@ export function createLiveFanout({
         // can spot failures without exposing sensitive provider credentials.
         channelNumber:++feedSequence,reconnects:0,sourceStarts:0,lastMediaAt:null,
         lastSourceReadAt:null,sourceEofs:0,downstreamPaceMs:0,clockMonitor:null,clockBudget:0,
+        ingressMaxObservedDeliveryAgeMs:0,
         state:'starting',idleTimer:null,startedAt:null,admittedAt:clock(),providerRetryAfterMs:0,
         trackInspector:createTsAudioInspector(),trackInspectedAt:null,
         trackBudgetComplete:false,recentChunks:[],recentBytes:0};
@@ -845,6 +856,7 @@ export function createLiveFanout({
       sourceStarts:row.sourceStarts,reconnects:row.reconnects,
       sourceEofs:row.sourceEofs,downstreamPaceMs:row.downstreamPaceMs,
       tsClock:row.clockMonitor?.stats()??null,
+      ingressMaxObservedDeliveryAgeMs:row.ingressMaxObservedDeliveryAgeMs,
       lastSourceReadAgeMs:row.lastSourceReadAt===null?null:Math.max(0,now-row.lastSourceReadAt),
       lastMediaAgeMs:row.lastMediaAt===null?null:Math.max(0,clock()-row.lastMediaAt),
       activeForMs:row.startedAt===null?null:Math.max(0,clock()-row.startedAt),
